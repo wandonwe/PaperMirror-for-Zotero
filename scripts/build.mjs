@@ -53,7 +53,9 @@ export async function buildAddon() {
 	const iconsDir = join(addonDir, 'content', 'icons');
 	mkdirSync(iconsDir, { recursive: true });
 	const srcIcons = join(root, 'assets', 'icons');
-	for (const name of ['icon48.png', 'icon96.png']) {
+	// icon.svg is the vector source; the PNGs are renders the manifest needs.
+	// Shipping the SVG too lets the preferences pane stay sharp on any display.
+	for (const name of ['icon.svg', 'icon48.png', 'icon96.png', 'icon128.png']) {
 		if (existsSync(join(srcIcons, name))) {
 			copyFileSync(join(srcIcons, name), join(iconsDir, name));
 		}

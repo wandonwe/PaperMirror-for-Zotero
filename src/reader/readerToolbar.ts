@@ -265,25 +265,25 @@ export class ReaderToolbarController {
 		grad.appendChild(el('stop', { offset: '1', 'stop-color': '#6f6ce8' }));
 		defs.appendChild(grad);
 		svg.appendChild(defs);
-		// Left half: light card
+		// Left sheet: the original
 		svg.appendChild(el('path', {
 			d: 'M8 2.4H3.9A1.9 1.9 0 0 0 2 4.3v7.4a1.9 1.9 0 0 0 1.9 1.9H8Z',
-			fill: '#f7f8fa', stroke: 'rgba(0,0,0,.28)', 'stroke-width': '.6'
+			fill: '#f7f8fa', stroke: 'rgba(0,0,0,.26)', 'stroke-width': '.6'
 		}));
-		// Right half: purple gradient card (slightly taller, like the icon)
+		// Right sheet: the translation
 		svg.appendChild(el('path', {
 			d: 'M8 1.9h4.1A1.9 1.9 0 0 1 14 3.8v7.9a1.9 1.9 0 0 1-1.9 1.9H8Z',
 			fill: 'url(#pm-cmp-grad)'
 		}));
-		// Left dark bar + text stubs
-		svg.appendChild(el('rect', { x: '3.4', y: '4.4', width: '3', height: '1.1', rx: '.55', fill: '#1c1e24' }));
-		svg.appendChild(el('rect', { x: '3.4', y: '7', width: '3.4', height: '.9', rx: '.45', fill: '#8b8f98' }));
-		svg.appendChild(el('rect', { x: '3.4', y: '8.9', width: '2.4', height: '.9', rx: '.45', fill: '#8b8f98' }));
-		// Right white bar + green dot + text stubs
-		svg.appendChild(el('circle', { cx: '9.3', cy: '3.3', r: '.55', fill: '#37c871' }));
-		svg.appendChild(el('rect', { x: '9', y: '4.4', width: '3.2', height: '1.1', rx: '.55', fill: '#4b50e6' }));
-		svg.appendChild(el('rect', { x: '9', y: '7', width: '3.6', height: '.9', rx: '.45', fill: 'rgba(255,255,255,.92)' }));
-		svg.appendChild(el('rect', { x: '9', y: '8.9', width: '2.7', height: '.9', rx: '.45', fill: 'rgba(255,255,255,.92)' }));
+		// Original: heading + two lines
+		svg.appendChild(el('rect', { x: '3.4', y: '4.25', width: '3', height: '1.13', rx: '.56', fill: '#1c1e24' }));
+		svg.appendChild(el('rect', { x: '3.4', y: '6.6', width: '3.4', height: '.88', rx: '.44', fill: '#9096a0' }));
+		svg.appendChild(el('rect', { x: '3.4', y: '8.5', width: '2.4', height: '.88', rx: '.44', fill: '#9096a0' }));
+		// Translation: live dot, heading, two lines
+		svg.appendChild(el('circle', { cx: '9.5', cy: '3.1', r: '.58', fill: '#37c871' }));
+		svg.appendChild(el('rect', { x: '9', y: '4.25', width: '3.2', height: '1.13', rx: '.56', fill: '#ffffff' }));
+		svg.appendChild(el('rect', { x: '9', y: '6.6', width: '3.6', height: '.88', rx: '.44', fill: 'rgba(255,255,255,.72)' }));
+		svg.appendChild(el('rect', { x: '9', y: '8.5', width: '2.7', height: '.88', rx: '.44', fill: 'rgba(255,255,255,.72)' }));
 		button.appendChild(svg);
 	}
 

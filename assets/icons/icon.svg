@@ -1,14 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <!-- PaperMirror brand mark — matches demo/styles.css .brand-mark
-       (rounded square, linear-gradient(145deg,#377df1,#2355ad), white serif P) -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"
+     role="img" aria-label="PaperMirror">
+  <title>PaperMirror</title>
+  <desc>Two sheets side by side: the original on the left, its translation on the right.</desc>
+
+  <!--
+    The mark IS the product: a spread. The left sheet is paper-coloured and
+    carries dark type; the right sheet is the translation, filled with the
+    plugin's purple, carrying light type and a live dot. The right sheet is a
+    little taller and starts a little higher so the pair reads as two sheets
+    rather than one rectangle cut in half.
+
+    No backdrop and no rounded-square canvas — the card is the whole icon,
+    which is what lets it sit cleanly in a toolbar, a settings list and a dock
+    alike. Coordinates are the 16px toolbar grid ×8, so the large mark and the
+    in-app miniature can never drift apart.
+  -->
+
   <defs>
-    <linearGradient id="pmBrand" x1="0" y1="0" x2="0.79" y2="1.19">
-      <stop offset="0" stop-color="#377df1"/>
-      <stop offset="1" stop-color="#2355ad"/>
+    <linearGradient id="pmSheet" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#96abf1"/>
+      <stop offset="1" stop-color="#6f6ce8"/>
     </linearGradient>
   </defs>
-  <rect x="0" y="0" width="128" height="128" rx="35" fill="url(#pmBrand)"/>
-  <text x="64" y="64" fill="#ffffff"
-        font-family="Georgia, 'Times New Roman', serif" font-size="82" font-weight="700"
-        text-anchor="middle" dominant-baseline="central">P</text>
+
+  <!-- Left sheet: the original. Rounded outside, square against the fold. -->
+  <path d="M64 19.2H31.2A15.2 15.2 0 0 0 16 34.4v59.2a15.2 15.2 0 0 0 15.2 15.2H64Z"
+        fill="#f7f8fa" stroke="rgba(0,0,0,.26)" stroke-width="1.6"/>
+
+  <!-- Right sheet: the translation. -->
+  <path d="M64 15.2h32.8A15.2 15.2 0 0 1 112 30.4v63.2a15.2 15.2 0 0 1-15.2 15.2H64Z"
+        fill="url(#pmSheet)"/>
+
+  <!-- Original: heading, then three lines of body type, the last one short. -->
+  <rect x="27.2" y="34" width="24" height="9" rx="4.5" fill="#1c1e24"/>
+  <rect x="27.2" y="53" width="27.2" height="7" rx="3.5" fill="#9096a0"/>
+  <rect x="27.2" y="66" width="27.2" height="7" rx="3.5" fill="#9096a0"/>
+  <rect x="27.2" y="79" width="17.6" height="7" rx="3.5" fill="#9096a0"/>
+
+  <!-- Translation: live dot, then the same block set in light type. -->
+  <circle cx="76" cy="25" r="4.6" fill="#37c871"/>
+  <rect x="86" y="21.6" width="15.2" height="6.8" rx="3.4" fill="rgba(255,255,255,.45)"/>
+  <rect x="72" y="34" width="25.6" height="9" rx="4.5" fill="#ffffff"/>
+  <rect x="72" y="53" width="28.8" height="7" rx="3.5" fill="rgba(255,255,255,.72)"/>
+  <rect x="72" y="66" width="28.8" height="7" rx="3.5" fill="rgba(255,255,255,.72)"/>
+  <rect x="72" y="79" width="20" height="7" rx="3.5" fill="rgba(255,255,255,.72)"/>
 </svg>

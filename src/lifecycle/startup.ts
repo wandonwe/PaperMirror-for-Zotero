@@ -87,7 +87,9 @@ export async function startup(params: StartupParams): Promise<void> {
 			label: getString('papermirror-prefpane-label') === 'papermirror-prefpane-label'
 				? 'PaperMirror'
 				: getString('papermirror-prefpane-label'),
-			image: params.rootURI + 'content/icons/icon48.png'
+			// Vector: the preferences list renders it at whatever size the
+			// platform and display scale ask for.
+			image: params.rootURI + 'content/icons/icon.svg'
 		});
 		addDisposer(() => {
 			try {

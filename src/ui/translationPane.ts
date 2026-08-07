@@ -229,17 +229,17 @@ export class TranslationPane {
 		svg.appendChild(defs);
 		svg.appendChild(node('path', {
 			d: 'M8 2.4H3.9A1.9 1.9 0 0 0 2 4.3v7.4a1.9 1.9 0 0 0 1.9 1.9H8Z',
-			fill: '#f7f8fa', stroke: 'rgba(0,0,0,.28)', 'stroke-width': '.6'
+			fill: '#f7f8fa', stroke: 'rgba(0,0,0,.26)', 'stroke-width': '.6'
 		}));
 		svg.appendChild(node('path', {
 			d: 'M8 1.9h4.1A1.9 1.9 0 0 1 14 3.8v7.9a1.9 1.9 0 0 1-1.9 1.9H8Z',
 			fill: 'url(#pm-brand-grad)'
 		}));
-		svg.appendChild(node('rect', { x: '3.4', y: '4.4', width: '3', height: '1.1', rx: '.55', fill: '#1c1e24' }));
-		svg.appendChild(node('rect', { x: '3.4', y: '7', width: '3.4', height: '.9', rx: '.45', fill: '#8b8f98' }));
-		svg.appendChild(node('circle', { cx: '9.3', cy: '3.3', r: '.55', fill: '#37c871' }));
-		svg.appendChild(node('rect', { x: '9', y: '4.4', width: '3.2', height: '1.1', rx: '.55', fill: '#4b50e6' }));
-		svg.appendChild(node('rect', { x: '9', y: '7', width: '3.6', height: '.9', rx: '.45', fill: 'rgba(255,255,255,.92)' }));
+		svg.appendChild(node('rect', { x: '3.4', y: '4.25', width: '3', height: '1.13', rx: '.56', fill: '#1c1e24' }));
+		svg.appendChild(node('rect', { x: '3.4', y: '6.6', width: '3.4', height: '.88', rx: '.44', fill: '#9096a0' }));
+		svg.appendChild(node('circle', { cx: '9.5', cy: '3.1', r: '.58', fill: '#37c871' }));
+		svg.appendChild(node('rect', { x: '9', y: '4.25', width: '3.2', height: '1.13', rx: '.56', fill: '#ffffff' }));
+		svg.appendChild(node('rect', { x: '9', y: '6.6', width: '3.6', height: '.88', rx: '.44', fill: 'rgba(255,255,255,.72)' }));
 		wrap.appendChild(svg);
 		return wrap;
 	}

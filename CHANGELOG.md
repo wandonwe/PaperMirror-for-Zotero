@@ -9,6 +9,22 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-07
+
+### Changed
+
+- The application icon is now **vector**. `assets/icons/icon.svg` is the single
+  source of truth; the PNGs the manifest needs are renders of it, and the
+  regeneration command is documented beside them. The preferences pane loads the
+  SVG directly, so it stays sharp at any display scale.
+- The mark itself was redrawn as the product it describes — two sheets side by
+  side, the original in paper and dark type, the translation in the plugin's
+  purple with light type and a live dot. No backdrop plate: the card is the whole
+  icon.
+- The in-app miniatures (reader toolbar button, pane brand) are drawn on the same
+  16px grid the SVG uses ×8, so the large mark and the small one cannot drift
+  apart.
+
 ## [0.1.9] — 2026-08-07
 
 ### Changed
@@ -163,7 +179,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.6...v0.1.7

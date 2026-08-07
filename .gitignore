@@ -16,3 +16,6 @@ dist/
 *.log
 tmp/
 _to_delete/
+_staging/
+_trash/
+_icon-sync.zip
