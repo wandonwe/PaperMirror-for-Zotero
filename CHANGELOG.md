@@ -9,6 +9,17 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-08-07
+
+### Fixed
+
+- The free Microsoft engine was slow for a structural reason: every
+  paragraph part was a separate HTTP round trip, awaited strictly one after
+  another — ~20 sequential round trips per page after region coalescing.
+  Requests now run through a small parallel pool (3 in flight, order
+  preserved, first failure aborts), collapsing a page into a few waves.
+  The Google engine's independent batches go through the same pool.
+
 ## [0.3.2] — 2026-08-07
 
 ### Fixed
@@ -409,7 +420,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.10...v0.3.0

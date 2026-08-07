@@ -268,3 +268,45 @@ export function resolveBingApiBase(userBaseURL: string | undefined, sessionOrigi
 	}
 	return cleaned;
 }
+
+
+/**
+ * Run `worker` over `items` with at most `concurrency` in flight, preserving
+ * result order. The free engines' big latency cost is REQUEST COUNT × round
+ * trip, fully serialised — a region split into parts used to await each part
+ * before sending the next. A small pool (the same order of parallelism the
+ * bing.com page itself uses) collapses a page from ~20 sequential round trips
+ * into ~5 waves. The first rejection aborts the pool.
+ */
+export async function runPool<T, R>(
+	items: T[],
+	concurrency: number,
+	worker: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+	const results = new Array<R>(items.length);
+	let next = 0;
+	let failed: unknown = null;
+	const lanes = Array.from({ length: Math.max(1, Math.min(concurrency, items.length)) }, async () => {
+		for (;;) {
+			if (failed) {
+				return;
+			}
+			const index = next++;
+			if (index >= items.length) {
+				return;
+			}
+			try {
+				results[index] = await worker(items[index]!, index);
+			}
+			catch (e) {
+				failed = failed ?? e;
+				return;
+			}
+		}
+	});
+	await Promise.all(lanes);
+	if (failed) {
+		throw failed;
+	}
+	return results;
+}

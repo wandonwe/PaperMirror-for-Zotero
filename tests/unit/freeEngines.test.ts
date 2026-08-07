@@ -9,6 +9,7 @@ import {
 	mapGoogleLang,
 	parseBingTranslatorPage,
 	resolveBingApiBase,
+	runPool,
 	splitLongText
 } from '../../src/translation/providers/freeEngineUtils';
 import { parseGoogleEntries } from '../../src/translation/providers/googleFree';
@@ -138,4 +139,41 @@ test('a genuine non-bing mirror IS an override', () => {
 
 test('garbage in the Base URL falls back to the session origin', () => {
 	assert.equal(resolveBingApiBase('not a url', 'https://cn.bing.com'), 'https://cn.bing.com');
+});
+
+// ---- the request pool -------------------------------------------------------
+
+test('runPool preserves order while running concurrently', async () => {
+	const started: number[] = [];
+	const results = await runPool([30, 10, 20], 3, async (delay, i) => {
+		started.push(i);
+		await new Promise(resolve => setTimeout(resolve, delay));
+		return `r${i}`;
+	});
+	assert.deepEqual(results, ['r0', 'r1', 'r2'], 'results in input order regardless of finish order');
+	assert.deepEqual(started.sort(), [0, 1, 2]);
+});
+
+test('runPool honours the concurrency cap', async () => {
+	let inFlight = 0;
+	let peak = 0;
+	await runPool([1, 2, 3, 4, 5, 6], 2, async () => {
+		inFlight++;
+		peak = Math.max(peak, inFlight);
+		await new Promise(resolve => setTimeout(resolve, 10));
+		inFlight--;
+	});
+	assert.equal(peak, 2, 'never more than the cap in flight');
+});
+
+test('runPool propagates the first failure', async () => {
+	await assert.rejects(
+		runPool([1, 2, 3], 2, async (n) => {
+			if (n === 2) {
+				throw new Error('boom');
+			}
+			return n;
+		}),
+		/boom/
+	);
 });

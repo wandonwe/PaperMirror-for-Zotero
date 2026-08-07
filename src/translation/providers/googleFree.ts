@@ -18,6 +18,7 @@ import {
 	cleanGoogleAnnotatedText,
 	escapeHTML,
 	mapGoogleLang,
+	runPool,
 	splitLongText
 } from './freeEngineUtils';
 import { requestJSON } from './httpClient';
@@ -169,11 +170,15 @@ export const googleFreeProvider: TranslationProvider = {
 		const tl = mapGoogleLang(request.targetLanguage);
 		const pieces = buildPieces(request.blocks);
 		const merged = new Map<string, string[]>();
-		for (const batch of batchPieces(pieces)) {
+		// Batches are independent (each carries its own tk) — run them through
+		// a small pool instead of one-after-another.
+		const results = await runPool(batchPieces(pieces), 3, async (batch) => {
 			if (options.signal?.aborted) {
 				throw new PaperMirrorError('CANCELLED', 'Cancelled.');
 			}
-			const result = await translateBatch(batch, sl, tl, settings, options.signal);
+			return translateBatch(batch, sl, tl, settings, options.signal);
+		});
+		for (const result of results) {
 			for (const [blockId, parts] of result) {
 				const list = merged.get(blockId) ?? [];
 				parts.forEach((part, i) => {

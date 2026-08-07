@@ -20,6 +20,7 @@ import {
 	parseBingTranslatorPage,
 	splitLongText,
 	resolveBingApiBase,
+	runPool,
 	unescapeHTML,
 	type BingSession
 } from './freeEngineUtils';
@@ -352,24 +353,42 @@ export const bingFreeProvider: TranslationProvider = {
 		const sl = mapBingLang(request.sourceLanguage || 'auto');
 		const tl = mapBingLang(request.targetLanguage);
 		const translations: { id: string; translatedText: string }[] = [];
-		for (const block of request.blocks) {
+		// Flatten every block's paragraphs and length-capped parts into one
+		// task list, run it through a small parallel pool, then reassemble.
+		// Serial awaiting was the whole slowness: ~20 round trips per page,
+		// one after another.
+		interface Task { block: number; paragraph: number; part: number; text: string }
+		const tasks: Task[] = [];
+		const shape: number[][] = [];
+		request.blocks.forEach((block, blockIndex) => {
+			const paragraphs = block.text.split(/\n{2,}/);
+			shape.push(paragraphs.map(() => 0));
+			paragraphs.forEach((paragraph, paragraphIndex) => {
+				const parts = splitLongText(paragraph, REQUEST_CHAR_LIMIT);
+				shape[blockIndex]![paragraphIndex] = parts.length;
+				parts.forEach((part, partIndex) => {
+					tasks.push({ block: blockIndex, paragraph: paragraphIndex, part: partIndex, text: part });
+				});
+			});
+		});
+		const translated = await runPool(tasks, 3, async (task) => {
 			if (options.signal?.aborted) {
 				throw new PaperMirrorError('CANCELLED', 'Cancelled.');
 			}
-			// A region block carries its paragraph structure as \n\n; translate
-			// paragraph by paragraph so the structure survives the round trip.
-			const paragraphs = block.text.split(/\n{2,}/);
-			const translatedParagraphs: string[] = [];
-			for (const paragraph of paragraphs) {
-				const parts = splitLongText(paragraph, REQUEST_CHAR_LIMIT);
-				const translatedParts: string[] = [];
-				for (const part of parts) {
-					translatedParts.push(await translateOne(part, sl, tl, settings, options.signal));
+			return translateOne(task.text, sl, tl, settings, options.signal);
+		});
+		request.blocks.forEach((block, blockIndex) => {
+			const paragraphs: string[][] = shape[blockIndex]!.map(count => new Array<string>(count));
+			tasks.forEach((task, taskIndex) => {
+				if (task.block === blockIndex) {
+					paragraphs[task.paragraph]![task.part] = translated[taskIndex]!;
 				}
-				translatedParagraphs.push(translatedParts.join(' ').trim());
-			}
-			translations.push({ id: block.id, translatedText: translatedParagraphs.join('\n\n').trim() });
-		}
+			});
+			translations.push({
+				id: block.id,
+				translatedText: paragraphs.map(parts => parts.join(' ').trim()).filter(Boolean).join('\n\n').trim()
+			});
+		});
 		return { translations };
 	}
 };
