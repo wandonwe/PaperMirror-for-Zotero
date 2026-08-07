@@ -651,6 +651,7 @@ export async function renderPageBitmap(
 	cssWidth: number,
 	oversample = 1.5
 ): Promise<PageRender | null> {
+	const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 	try {
 		const win = reader._internalReader?._primaryView?._iframeWindow;
 		const pdfDocument = win?.PDFViewerApplication?.pdfDocument;
@@ -658,7 +659,33 @@ export async function renderPageBitmap(
 		if (!pdfDocument?.getPage || !doc || cssWidth <= 0) {
 			return null;
 		}
-		const page = await pdfDocument.getPage(pageIndex + 1);
+
+		// NEVER await a content-compartment promise directly. This codebase
+		// already learned that lesson once with getPageData: a promise from the
+		// PDF.js compartment can simply never settle for a sandbox awaiter, and
+		// whoever awaits it hangs forever. Attach callbacks that set plain
+		// flags, and POLL the flags with a deadline.
+		const got: { page: any; failed: boolean } = { page: null, failed: false };
+		try {
+			pdfDocument.getPage(pageIndex + 1).then(
+				(p: unknown) => { got.page = p; },
+				() => { got.failed = true; }
+			);
+		}
+		catch {
+			return null;
+		}
+		{
+			const deadline = Date.now() + 5000;
+			while (!got.page && !got.failed && Date.now() < deadline) {
+				await sleep(60);
+			}
+		}
+		const page = got.page;
+		if (!page) {
+			return null;
+		}
+
 		const base = page.getViewport({ scale: 1 });
 		const scale = cssWidth / Number(base.width);
 		if (!Number.isFinite(scale) || scale <= 0) {
@@ -672,7 +699,74 @@ export async function renderPageBitmap(
 		if (!ctx) {
 			return null;
 		}
-		await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
+
+		const done: { ok: boolean; failed: boolean } = { ok: false, failed: false };
+		try {
+			page.render({ canvasContext: ctx, viewport: renderViewport }).promise.then(
+				() => { done.ok = true; },
+				() => { done.failed = true; }
+			);
+		}
+		catch {
+			return null;
+		}
+
+		// Completion: the promise flag when it works, and a pixel-stability
+		// heuristic when it does not — the canvas starts fully transparent, so
+		// once a sample of points is painted AND unchanged across two polls,
+		// the page is done for every practical purpose.
+		const sample = (): string => {
+			try {
+				const points: [number, number][] = [
+					[canvas.width >> 1, canvas.height >> 1],
+					[canvas.width >> 2, canvas.height >> 2],
+					[(canvas.width * 3) >> 2, (canvas.height * 3) >> 2],
+					[canvas.width >> 1, canvas.height - 4],
+					[canvas.width - 4, canvas.height >> 1]
+				];
+				let out = '';
+				let painted = false;
+				for (const [x, y] of points) {
+					const d = ctx.getImageData(Math.max(0, x), Math.max(0, y), 1, 1).data;
+					if (d[3] !== 0) {
+						painted = true;
+					}
+					out += `${d[0]},${d[1]},${d[2]},${d[3]};`;
+				}
+				return painted ? out : '';
+			}
+			catch {
+				return '';
+			}
+		};
+		const start = Date.now();
+		let lastSig = '';
+		let stable = 0;
+		for (;;) {
+			if (done.ok) {
+				break;
+			}
+			if (done.failed) {
+				return null;
+			}
+			if (Date.now() - start > 12000) {
+				// Whatever is on the canvas after 12s is not a page.
+				return null;
+			}
+			await sleep(150);
+			const sig = sample();
+			if (sig && sig === lastSig) {
+				stable++;
+				if (stable >= 2 && Date.now() - start > 450) {
+					break;
+				}
+			}
+			else {
+				stable = 0;
+			}
+			lastSig = sig;
+		}
+
 		const cssViewport = page.getViewport({ scale });
 		return {
 			canvas,

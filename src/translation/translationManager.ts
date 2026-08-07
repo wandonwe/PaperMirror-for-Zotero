@@ -106,6 +106,17 @@ export class TranslationManager {
 		await this.ensurePage(pageIndex, 20, { bypassCache: true });
 	}
 
+	/**
+	 * Forget every page's translation state (provider or language switched:
+	 * existing translations are in the wrong language/engine now). In-flight
+	 * work is cancelled; the persistent cache is untouched — it is keyed by
+	 * provider+language, so the old entries simply stop matching.
+	 */
+	resetAll(): void {
+		this.scheduler.cancelAll();
+		this.pages.clear();
+	}
+
 	cancelAll(): void {
 		this.scheduler.cancelAll();
 	}

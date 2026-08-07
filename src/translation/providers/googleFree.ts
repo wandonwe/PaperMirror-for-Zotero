@@ -125,7 +125,7 @@ async function translateBatch(
 
 export const googleFreeProvider: TranslationProvider = {
 	id: 'google-free',
-	displayName: 'Google Translate (free, no key)',
+	displayName: 'Google 谷歌翻译',
 	defaultBaseURL: BASE,
 	defaultModel: '',
 	requiresApiKey: false,

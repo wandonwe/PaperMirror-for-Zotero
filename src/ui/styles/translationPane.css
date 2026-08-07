@@ -1374,3 +1374,75 @@
 .pm-scroll[data-pm-view="page"] .pm-repage-page-label {
 	padding: 10px 0 4px;
 }
+
+
+/* ==========================================================================
+   In-bar dropdown menus (language pair, translation engine) + brand badges.
+   ========================================================================== */
+
+.pm-provider-badge {
+	width: 15px;
+	height: 15px;
+	flex: none;
+	display: block;
+	border-radius: 3px;
+}
+
+.pm-chip-provider .pm-provider-mark {
+	width: auto;
+	height: auto;
+	border-radius: 0;
+	background: none;
+	display: grid;
+	place-items: center;
+}
+
+.pm-bar-menu {
+	position: absolute;
+	z-index: 80;
+	min-width: 190px;
+	max-width: 280px;
+	max-height: 60vh;
+	overflow-y: auto;
+	padding: 5px;
+	border: 1px solid var(--pm-line);
+	border-radius: 9px;
+	background: var(--pm-panel);
+	box-shadow: 0 10px 34px rgba(0, 0, 0, .30);
+}
+
+.pm-bar-menu-title {
+	padding: 6px 9px 3px;
+	font-size: 9px;
+	font-weight: 800;
+	letter-spacing: .1em;
+	color: var(--pm-muted);
+}
+
+.pm-bar-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 9px;
+	border-radius: 6px;
+	font-size: 12px;
+	text-align: left;
+	color: var(--pm-ink);
+}
+
+.pm-bar-menu-item:hover {
+	background: var(--pm-soft);
+}
+
+.pm-bar-menu-item[aria-checked="true"] {
+	background: var(--pm-accent-soft);
+	color: var(--pm-accent);
+	font-weight: 600;
+}
+
+.pm-bar-menu-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

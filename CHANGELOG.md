@@ -9,6 +9,43 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.2.4] — 2026-08-07
+
+### Added
+
+- Brand badges for every translation service — Microsoft's four squares,
+  Google's four-colour G, coloured monograms for the LLM providers — drawn in
+  code and shared between the header chip and the switcher menu.
+- The header chips are now switchers: clicking the language pair opens a
+  source/target menu, clicking the engine opens the full provider roster with
+  badges. Switching restarts translation in place; no trip through the
+  settings pane. (Settings stays one entry away at the bottom of the menu.)
+
+### Fixed
+
+- Microsoft translation works again. The bing.com page-scrape session flow had
+  broken; the engine now uses the Edge browser's translator auth (a keyless
+  JWT from edge.microsoft.com, the flow current immersive-translate uses) as
+  the primary path, with the page scrape kept as a fallback.
+
+### Changed
+
+- Free engines are named plainly in the header — "Microsoft 微软翻译" and
+  "Google 谷歌翻译" — without the "(free, no key)" clutter.
+
+## [0.2.3] — 2026-08-07
+
+### Fixed
+
+- The pane no longer freezes on a page spinner. Core page rendering awaited a
+  promise from the PDF.js content compartment, which can simply never settle
+  for a sandbox awaiter — the same cross-compartment trap getPageData fell
+  into long ago — and the render pump hung on it forever. Completion is now
+  detected by polling plain flags plus a pixel-stability check on the canvas,
+  under a hard deadline; a failed page falls back to copying the left viewer's
+  canvas (scaled to fit), and failing slots retry with backoff instead of
+  spinning. A 20-second race in the pump is the final backstop.
+
 ## [0.2.2] — 2026-08-07
 
 ### Fixed
@@ -214,7 +251,9 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.9...v0.2.0

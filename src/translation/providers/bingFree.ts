@@ -31,6 +31,88 @@ const API_BASE = 'https://www.bing.com';
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const REQUEST_CHAR_LIMIT = 900;
 
+/**
+ * Primary flow since the bing.com page scrape broke: the Edge browser's own
+ * translator auth. GET /translate/auth hands back a JWT (plain text, ~10 min
+ * validity, no key, reachable from mainland China), which authorises the
+ * standard Cognitive Services translate API. This is the flow current
+ * immersive-translate uses; the page-scrape below stays as the fallback.
+ */
+const EDGE_AUTH_URL = 'https://edge.microsoft.com/translate/auth';
+const EDGE_API_URL = 'https://api-edge.cognitive.microsofttranslator.com/translate?api-version=3.0&includeSentenceLength=true';
+const EDGE_TOKEN_TTL_MS = 8 * 60 * 1000;
+
+let edgeToken: string | null = null;
+let edgeTokenAt = 0;
+let edgeTokenPromise: Promise<string> | null = null;
+/** Set after the edge flow fails hard, so we stop paying its latency. */
+let edgeDisabledUntil = 0;
+
+async function getEdgeToken(timeoutMs: number, signal?: AbortSignal, force = false): Promise<string> {
+	if (!force && edgeToken && Date.now() - edgeTokenAt < EDGE_TOKEN_TTL_MS) {
+		return edgeToken;
+	}
+	if (!edgeTokenPromise) {
+		edgeTokenPromise = requestText(EDGE_AUTH_URL, { timeoutMs, signal })
+			.then((text) => {
+				const token = text.trim();
+				if (token.split('.').length !== 3) {
+					throw new PaperMirrorError('BAD_RESPONSE', 'Edge auth did not return a JWT.', { retryable: true });
+				}
+				edgeToken = token;
+				edgeTokenAt = Date.now();
+				return token;
+			})
+			.finally(() => {
+				edgeTokenPromise = null;
+			});
+	}
+	return edgeTokenPromise;
+}
+
+async function translateViaEdge(
+	texts: string[],
+	sl: string,
+	tl: string,
+	settings: ProviderSettings,
+	signal: AbortSignal | undefined,
+	allowRetry = true
+): Promise<string[]> {
+	const token = await getEdgeToken(settings.timeoutMs, signal);
+	const from = sl === 'auto-detect' ? '' : `&from=${encodeURIComponent(sl)}`;
+	const url = `${EDGE_API_URL}${from}&to=${encodeURIComponent(tl)}`;
+	let json: unknown;
+	try {
+		({ json } = await requestJSON(url, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			},
+			body: texts.map(text => ({ Text: text })),
+			timeoutMs: settings.timeoutMs,
+			signal
+		}));
+	}
+	catch (e) {
+		if (allowRetry && e instanceof PaperMirrorError && (e.httpStatus === 401 || e.httpStatus === 403)) {
+			await getEdgeToken(settings.timeoutMs, signal, true);
+			return translateViaEdge(texts, sl, tl, settings, signal, false);
+		}
+		throw e;
+	}
+	if (!Array.isArray(json)) {
+		throw new PaperMirrorError('BAD_RESPONSE', 'Unexpected Edge translator response shape.', { retryable: true });
+	}
+	return json.map((entry) => {
+		const text = (entry as BingApiResult)?.translations?.[0]?.text;
+		if (typeof text !== 'string') {
+			throw new PaperMirrorError('BAD_RESPONSE', 'Edge translator entry missing text.', { retryable: true });
+		}
+		return text;
+	});
+}
+
 let cachedSession: BingSession | null = null;
 let cachedAt = 0;
 let sessionPromise: Promise<BingSession> | null = null;
@@ -67,6 +149,10 @@ export function resetBingSession(): void {
 	cachedSession = null;
 	cachedAt = 0;
 	sessionPromise = null;
+	edgeToken = null;
+	edgeTokenAt = 0;
+	edgeTokenPromise = null;
+	edgeDisabledUntil = 0;
 }
 
 interface BingApiResult {
@@ -82,6 +168,20 @@ async function translateOne(
 	signal: AbortSignal | undefined,
 	allowRetry = true
 ): Promise<string> {
+	// Edge auth first; the page scrape only when Edge is down or blocked.
+	if (Date.now() >= edgeDisabledUntil) {
+		try {
+			const [translated] = await translateViaEdge([text], sl, tl, settings, signal);
+			return translated!;
+		}
+		catch (e) {
+			if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
+				throw e;
+			}
+			logger.debug(MODULE, 'Edge translator failed; falling back to bing.com scrape', e);
+			edgeDisabledUntil = Date.now() + 5 * 60 * 1000;
+		}
+	}
 	const session = await getSession(settings.timeoutMs, signal);
 	const base = (settings.apiBaseURL || API_BASE).replace(/\/+$/, '');
 	const url = `${base}/ttranslatev3?isVertical=1&IG=${encodeURIComponent(session.ig)}&IID=${encodeURIComponent(session.iid)}`;
@@ -128,7 +228,7 @@ async function translateOne(
 
 export const bingFreeProvider: TranslationProvider = {
 	id: 'bing-free',
-	displayName: 'Bing / Microsoft Translator (free, no key)',
+	displayName: 'Microsoft 微软翻译',
 	defaultBaseURL: API_BASE,
 	defaultModel: '',
 	requiresApiKey: false,

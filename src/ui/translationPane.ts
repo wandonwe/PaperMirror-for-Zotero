@@ -77,6 +77,9 @@ export interface PaneCallbacks {
 	onSaveNote(): void;
 	onExportPdf(): void;
 	onToggleViewKind(kind: 'page' | 'article'): void;
+	/** 菜单栏直接切换 — no round-trip through the settings pane. */
+	onPickLanguages(source: string, target: string): void;
+	onPickProvider(providerId: string): void;
 	onOpenSettings(): void;
 	onClose(): void;
 	onSwapSides(): void;
@@ -137,6 +140,13 @@ export class TranslationPane {
 	private sideButton: HTMLElement | null = null;
 	private sideFill: HTMLElement | null = null;
 	private paneSide: 'left' | 'right' = 'right';
+	private providerPill: HTMLElement | null = null;
+	private barMenu: HTMLElement | null = null;
+	private barMenuDismiss: (() => void) | null = null;
+	private langSource = 'auto';
+	private langTarget = 'auto';
+	private providerChoices: { id: string; displayName: string }[] = [];
+	private currentProviderId = '';
 
 	// ---- full-document page list (整页对照) --------------------------------
 	/** Page boxes in PDF points, one per page, whether rendered or not. */
@@ -149,6 +159,8 @@ export class TranslationPane {
 	private slotDirty: boolean[] = [];
 	/** Monotonic token per slot — a stale async render must never land. */
 	private slotToken: number[] = [];
+	/** A failed slot is not retried before this timestamp (no hot spinning). */
+	private slotRetryAt: number[] = [];
 	/** One render at a time; re-prioritised between renders. */
 	private pumping = false;
 	private ensureTimer: ReturnType<typeof setTimeout> | null = null;
@@ -221,6 +233,214 @@ export class TranslationPane {
 	}
 
 	// ---- structure (demo/index.html) ----------------------------------------
+
+	/** Human label for a language code, for the in-bar menus. */
+	private static langLabel(code: string): string {
+		const MAP: Record<string, string> = {
+			'auto': '自动', 'en': 'English', 'zh-CN': '简体中文', 'zh-TW': '繁體中文',
+			'ja': '日本語', 'ko': '한국어', 'fr': 'Français', 'de': 'Deutsch',
+			'es': 'Español', 'ru': 'Русский'
+		};
+		return MAP[code] ?? code;
+	}
+
+	private closeBarMenu(): void {
+		this.barMenu?.remove();
+		this.barMenu = null;
+		if (this.barMenuDismiss) {
+			this.doc.removeEventListener('click', this.barMenuDismiss, true);
+			this.barMenuDismiss = null;
+		}
+	}
+
+	/**
+	 * One dropdown component for every bar chip. Anchored under its chip,
+	 * dismissed by any click elsewhere — switching language or engine is a
+	 * two-click affair, never a trip through the settings pane.
+	 */
+	private openBarMenu(
+		anchor: HTMLElement,
+		sections: { title?: string; items: { badge?: Element; label: string; checked: boolean; onPick(): void }[] }[]
+	): void {
+		if (this.barMenu?.getAttribute('data-pm-anchor') === anchor.className) {
+			this.closeBarMenu();
+			return;
+		}
+		this.closeBarMenu();
+		const menu = this.el('div', 'pm-bar-menu');
+		menu.setAttribute('data-pm-anchor', anchor.className);
+		for (const section of sections) {
+			if (section.title) {
+				menu.appendChild(this.el('div', 'pm-bar-menu-title', section.title));
+			}
+			for (const item of section.items) {
+				const row = this.el('button', 'pm-bar-menu-item');
+				row.setAttribute('role', 'menuitemradio');
+				row.setAttribute('aria-checked', String(item.checked));
+				if (item.badge) {
+					row.appendChild(item.badge);
+				}
+				row.appendChild(this.el('span', 'pm-bar-menu-label', item.label));
+				row.addEventListener('click', (event) => {
+					event.stopPropagation();
+					this.closeBarMenu();
+					item.onPick();
+				});
+				menu.appendChild(row);
+			}
+		}
+		const hostRect = this.host.getBoundingClientRect();
+		const anchorRect = anchor.getBoundingClientRect();
+		menu.style.top = `${anchorRect.bottom - hostRect.top + 4}px`;
+		menu.style.left = `${Math.max(6, anchorRect.left - hostRect.left)}px`;
+		this.host.appendChild(menu);
+		// Keep it on screen when the chip sits near the right edge.
+		const overflow = menu.getBoundingClientRect().right - hostRect.right + 8;
+		if (overflow > 0) {
+			menu.style.left = `${Math.max(6, anchorRect.left - hostRect.left - overflow)}px`;
+		}
+		this.barMenu = menu;
+		this.barMenuDismiss = () => this.closeBarMenu();
+		setTimeout(() => {
+			if (this.barMenuDismiss) {
+				this.doc.addEventListener('click', this.barMenuDismiss, true);
+			}
+		}, 0);
+	}
+
+	private openLanguageMenu(): void {
+		const SOURCES = ['auto', 'en', 'zh-CN', 'ja', 'ko', 'de', 'fr'];
+		const TARGETS = ['auto', 'zh-CN', 'zh-TW', 'en', 'ja', 'ko'];
+		this.openBarMenu(this.languagePill, [
+			{
+				title: '源语言',
+				items: SOURCES.map(code => ({
+					label: code === 'auto' ? '自动检测' : TranslationPane.langLabel(code),
+					checked: this.langSource === code,
+					onPick: () => this.callbacks.onPickLanguages(code, this.langTarget)
+				}))
+			},
+			{
+				title: '目标语言',
+				items: TARGETS.map(code => ({
+					label: code === 'auto' ? '自动（与源语言配对）' : TranslationPane.langLabel(code),
+					checked: this.langTarget === code,
+					onPick: () => this.callbacks.onPickLanguages(this.langSource, code)
+				}))
+			}
+		]);
+	}
+
+	private openProviderMenu(): void {
+		if (!this.providerPill || !this.providerChoices.length) {
+			this.callbacks.onOpenSettings();
+			return;
+		}
+		this.openBarMenu(this.providerPill, [
+			{
+				title: '翻译服务',
+				items: this.providerChoices.map(choice => ({
+					badge: this.providerBadge(choice.id),
+					label: choice.displayName,
+					checked: this.currentProviderId === choice.id,
+					onPick: () => this.callbacks.onPickProvider(choice.id)
+				}))
+			},
+			{
+				items: [{
+					label: this.strings.settings + '…',
+					checked: false,
+					onPick: () => this.callbacks.onOpenSettings()
+				}]
+			}
+		]);
+	}
+
+	/** The engine roster for the in-bar switcher, supplied by the session. */
+	setProviderChoices(choices: { id: string; displayName: string }[], currentId: string): void {
+		this.providerChoices = choices;
+		this.currentProviderId = currentId;
+	}
+
+	/** Current language codes, so the menus can mark the active entries. */
+	setLanguageCodes(source: string, target: string): void {
+		this.langSource = source;
+		this.langTarget = target;
+	}
+
+	/**
+	 * A small brand badge per translation service, drawn in code — Microsoft's
+	 * four squares, Google's four-colour ring, coloured monograms for the rest.
+	 * One function, used by the header chip and the switcher menu, so the two
+	 * can never disagree.
+	 */
+	private providerBadge(id: string): Element {
+		const svg = this.doc.createElementNS(SVG_NS, 'svg');
+		svg.setAttribute('viewBox', '0 0 16 16');
+		svg.setAttribute('class', 'pm-provider-badge');
+		const node = (name: string, attrs: Record<string, string>, text?: string): Element => {
+			const el = this.doc.createElementNS(SVG_NS, name);
+			for (const [k, v] of Object.entries(attrs)) {
+				el.setAttribute(k, v);
+			}
+			if (text !== undefined) {
+				el.textContent = text;
+			}
+			return el;
+		};
+		if (id === 'bing-free') {
+			svg.append(
+				node('rect', { x: '1.5', y: '1.5', width: '6', height: '6', fill: '#f25022' }),
+				node('rect', { x: '8.5', y: '1.5', width: '6', height: '6', fill: '#7fba00' }),
+				node('rect', { x: '1.5', y: '8.5', width: '6', height: '6', fill: '#00a4ef' }),
+				node('rect', { x: '8.5', y: '8.5', width: '6', height: '6', fill: '#ffb900' })
+			);
+			return svg;
+		}
+		if (id === 'google-free') {
+			// The four-colour "G": three arcs plus the blue bar.
+			svg.append(
+				node('path', { d: 'M14 8a6 6 0 0 1-6 6 6 6 0 0 1-4.24-1.76L6.1 9.9A3 3 0 0 0 8 11a3 3 0 0 0 2.83-2H8V8Z', fill: '#4285f4' }),
+				node('path', { d: 'M3.76 12.24A6 6 0 0 1 2 8c0-1.66.67-3.16 1.76-4.24L6.1 6.1A3 3 0 0 0 5 8c0 .83.34 1.58.88 2.12Z', fill: '#fbbc05' }),
+				node('path', { d: 'M3.76 3.76A6 6 0 0 1 8 2c1.66 0 3.16.67 4.24 1.76L10.12 5.88A3 3 0 0 0 8 5a3 3 0 0 0-2.12.88Z', fill: '#ea4335' }),
+				node('path', { d: 'M12.24 3.76 10.12 5.88c.34.34.6.76.71 1.24H14a6 6 0 0 0-1.76-3.36Z', fill: '#34a853' })
+			);
+			return svg;
+		}
+		if (id === 'gemini') {
+			const defs = node('defs', {});
+			const grad = node('linearGradient', { id: 'pm-gem', x1: '0', y1: '0', x2: '1', y2: '1' });
+			grad.append(node('stop', { offset: '0', 'stop-color': '#4796e3' }), node('stop', { offset: '1', 'stop-color': '#9177c7' }));
+			defs.appendChild(grad);
+			svg.append(defs, node('path', { d: 'M8 1c.6 3.7 2.6 5.9 7 7-4.4 1.1-6.4 3.3-7 7-.6-3.7-2.6-5.9-7-7 4.4-1.1 6.4-3.3 7-7Z', fill: 'url(#pm-gem)' }));
+			return svg;
+		}
+		const MONO: Record<string, [string, string, string]> = {
+			'openai': ['#10a37f', '#fff', 'AI'],
+			'anthropic': ['#d97757', '#fff', 'A'],
+			'deepseek': ['#4d6bfe', '#fff', 'D'],
+			'moonshot': ['#16191e', '#fff', 'K'],
+			'qwen': ['#6b4eff', '#fff', 'Q'],
+			'zhipu': ['#2d5cfe', '#fff', 'Z'],
+			'openrouter': ['#7c8cf8', '#fff', 'OR'],
+			'siliconflow': ['#895bf1', '#fff', 'SF'],
+			'groq': ['#f55036', '#fff', 'G'],
+			'ollama': ['#22262b', '#fff', 'o'],
+			'deepl': ['#0f2b46', '#fff', 'DL'],
+			'openai-compatible': ['#5b6472', '#fff', 'API'],
+			'custom': ['#5b6472', '#fff', '#']
+		};
+		const [bg, fg, label] = MONO[id] ?? ['#5b6472', '#fff', '?'];
+		svg.append(
+			node('rect', { x: '1', y: '1', width: '14', height: '14', rx: '3.5', fill: bg }),
+			node('text', {
+				x: '8', y: '8.5', fill: fg, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+				'font-family': 'Inter, system-ui, sans-serif', 'font-weight': '700',
+				'font-size': label.length >= 3 ? '5' : label.length === 2 ? '6.5' : '9'
+			}, label)
+		);
+		return svg;
+	}
 
 	/** The plugin mark — the split card, in miniature, in colour. */
 	private makeBrandIcon(): HTMLElement {
@@ -318,15 +538,22 @@ export class TranslationPane {
 		bar.appendChild(this.makeBrandIcon());
 
 		this.languagePill = this.el('button', 'pm-chip pm-chip-lang');
-		this.languagePill.setAttribute('title', this.strings.settings);
-		this.languagePill.addEventListener('click', () => this.callbacks.onOpenSettings());
+		this.languagePill.setAttribute('title', '切换语言');
+		this.languagePill.addEventListener('click', (event) => {
+			event.stopPropagation();
+			this.openLanguageMenu();
+		});
 
 		const providerPill = this.el('button', 'pm-chip pm-chip-provider');
-		providerPill.setAttribute('title', this.strings.settings);
+		this.providerPill = providerPill;
+		providerPill.setAttribute('title', '切换翻译服务');
 		this.providerMark = this.el('span', 'pm-provider-mark');
 		this.providerName = this.el('span', 'pm-provider-name', '');
 		providerPill.append(this.providerMark, this.providerName);
-		providerPill.addEventListener('click', () => this.callbacks.onOpenSettings());
+		providerPill.addEventListener('click', (event) => {
+			event.stopPropagation();
+			this.openProviderMenu();
+		});
 
 		this.statusRow = this.el('div', 'pm-status-row');
 		this.statusMain = this.el('span', 'pm-status-main');
@@ -451,9 +678,13 @@ export class TranslationPane {
 		);
 	}
 
-	setProviderInfo(displayName: string): void {
+	setProviderInfo(displayName: string, providerId?: string): void {
 		this.providerName.textContent = displayName;
-		this.providerMark.textContent = '';
+		this.providerMark.replaceChildren();
+		if (providerId) {
+			this.currentProviderId = providerId;
+			this.providerMark.appendChild(this.providerBadge(providerId));
+		}
 	}
 
 	setBusy(busy: boolean): void {
@@ -673,6 +904,7 @@ export class TranslationPane {
 		this.slotState = [];
 		this.slotDirty = [];
 		this.slotToken = [];
+		this.slotRetryAt = [];
 		this.refreshViewKindButton();
 		if (kind === 'page') {
 			this.initPageList();
@@ -779,6 +1011,7 @@ export class TranslationPane {
 		this.slotState = [];
 		this.slotDirty = [];
 		this.slotToken = [];
+		this.slotRetryAt = [];
 		const children: HTMLElement[] = [];
 		for (let i = 0; i < this.docPageSizes.length; i++) {
 			const slot = this.el('div', 'pm-repage-slot');
@@ -789,6 +1022,7 @@ export class TranslationPane {
 			this.slotState.push('empty');
 			this.slotDirty.push(false);
 			this.slotToken.push(0);
+			this.slotRetryAt.push(0);
 			children.push(
 				this.el('div', 'pm-repage-page-label',
 					`${this.strings.pagePrefix} ${i + 1} ${this.strings.pageSuffix}`.trim()),
@@ -876,14 +1110,25 @@ export class TranslationPane {
 		try {
 			for (let guard = 0; guard < 24; guard++) {
 				const [first, last] = this.visibleRange(1);
+				const now = Date.now();
 				let target = -1;
 				for (let i = first; i <= last; i++) {
-					if (this.slotState[i] === 'empty' || this.slotDirty[i]) {
+					if ((this.slotState[i] === 'empty' || this.slotDirty[i]) && now >= (this.slotRetryAt[i] ?? 0)) {
 						target = i;
 						break;
 					}
 				}
 				if (target < 0) {
+					// Anything left is only waiting out its retry backoff.
+					for (let i = first; i <= last; i++) {
+						if (this.slotState[i] === 'empty' || this.slotDirty[i]) {
+							this.ensureTimer ??= setTimeout(() => {
+								this.ensureTimer = null;
+								void this.pumpRenders();
+							}, 1500);
+							break;
+						}
+					}
 					break;
 				}
 				const token = ++this.slotToken[target]!;
@@ -891,7 +1136,14 @@ export class TranslationPane {
 				const slot = this.slots[target]!;
 				let result: 'translated' | 'original' | false = false;
 				try {
-					result = await this.pageRenderer(target, slot, this.layoutWidth);
+					// The renderer has its own timeouts; this race is the
+					// backstop that keeps the whole pump from freezing if it
+					// ever hangs anyway — the freeze bug, once, was the pane
+					// stuck on a spinner forever.
+					result = await Promise.race([
+						this.pageRenderer(target, slot, this.layoutWidth),
+						new Promise<false>(resolve => setTimeout(() => resolve(false), 20000))
+					]);
 				}
 				catch (e) {
 					logger.debug(MODULE, `page ${target + 1} render failed`, e);
@@ -900,12 +1152,14 @@ export class TranslationPane {
 					continue; // superseded while rendering
 				}
 				if (result === false) {
-					// Not renderable right now: keep the ghost, try again on the
-					// next ensure pass rather than spinning.
+					// Not renderable right now: keep the ghost, come back in a
+					// moment — never spin on the same failing page.
 					this.slotState[target] = 'empty';
+					this.slotRetryAt[target] = Date.now() + 2500;
 				}
 				else {
 					this.slotState[target] = result;
+					this.slotRetryAt[target] = 0;
 					this.applyCompareState();
 				}
 			}
@@ -1199,6 +1453,7 @@ export class TranslationPane {
 			clearTimeout(this.ensureTimer);
 			this.ensureTimer = null;
 		}
+		this.closeBarMenu();
 		this.resizeObserver?.disconnect();
 		this.resizeObserver = null;
 		this.pageRenderer = null;

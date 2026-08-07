@@ -12,7 +12,7 @@ import {
 	saveTranslationNote
 } from '../notes/noteService';
 import { getApiKey } from '../security/credentialStore';
-import { getProvider } from '../translation/providers/registry';
+import { getProvider, listProviders } from '../translation/providers/registry';
 import { endpointHost } from '../translation/providers/types';
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
 import { TranslationManager, type PageTranslationState } from '../translation/translationManager';
@@ -170,6 +170,8 @@ export class ReaderSession {
 			onOpenSettings: () => this.openSettings(),
 			onExportPdf: () => void this.exportTranslatedPdf(),
 			onToggleViewKind: kind => setPref('paneView', kind),
+			onPickLanguages: (source, target) => this.applyLanguagePick(source, target),
+			onPickProvider: providerId => this.applyProviderPick(providerId),
 			onClose: () => this.close(),
 			onSwapSides: () => this.swapSides(),
 			onBlockClick: (pageIndex, _blockId) => this.sync?.onPaneNavigated(pageIndex),
@@ -198,9 +200,14 @@ export class ReaderSession {
 		this.pane.setViewKind(getPref<'page' | 'article'>('paneView', 'page'));
 		{
 			const providerId = getPref<string>('provider', 'bing-free');
-			this.pane.setProviderInfo(getProvider(providerId).displayName);
+			this.pane.setProviderChoices(
+				listProviders().map(p => ({ id: p.id, displayName: p.displayName })),
+				providerId
+			);
+			this.pane.setProviderInfo(getProvider(providerId).displayName, providerId);
 			const prefSource = getPref<string>('sourceLanguage', 'auto');
 			const prefTarget = getPref<string>('targetLanguage', 'auto');
+			this.pane.setLanguageCodes(prefSource, prefTarget);
 			this.pane.setLanguagePair(languageLabel(prefSource), languageLabel(prefTarget));
 		}
 
@@ -523,10 +530,25 @@ export class ReaderSession {
 		// Supersample within a fixed pixel budget: sharp text without letting a
 		// tall page allocate an enormous canvas.
 		const oversample = Math.max(1, Math.min(1.8, Math.sqrt(3_200_000 / Math.max(1, width * width * 1.4))));
-		const render = await adapter.renderPageBitmap(this.reader, pageIndex, width, oversample);
+		let render = await adapter.renderPageBitmap(this.reader, pageIndex, width, oversample);
+		if (!render) {
+			// Core rendering unavailable (compartment quirk, worker busy):
+			// fall back to copying the LEFT viewer's canvas. It only exists for
+			// pages near the left viewport, and comes at the left zoom rather
+			// than the pane width — the element is scaled to fit below.
+			render = adapter.getPageRender(this.reader, pageIndex);
+		}
 		if (!render || this.destroyed) {
 			return false;
 		}
+		const fit = width / render.viewportWidth;
+		const applyFit = (el: HTMLElement): HTMLElement => {
+			if (Math.abs(fit - 1) > 0.01) {
+				el.style.transformOrigin = 'top left';
+				el.style.transform = `scale(${fit.toFixed(4)})`;
+			}
+			return el;
+		};
 		const doc = slot.ownerDocument!;
 		const state = this.manager?.getPageState(pageIndex);
 		if (state && state.status === 'done' && state.blocks.length) {
@@ -538,7 +560,7 @@ export class ReaderSession {
 				render
 			});
 			if (built) {
-				slot.replaceChildren(built.element);
+				slot.replaceChildren(applyFit(built.element));
 				settleTranslatedPage(built.element);
 				for (const node of Array.from(built.element.querySelectorAll('[data-pm-block]'))) {
 					node.addEventListener('click', () => {
@@ -554,7 +576,7 @@ export class ReaderSession {
 				return 'translated';
 			}
 		}
-		slot.replaceChildren(buildOriginalPage(doc, render));
+		slot.replaceChildren(applyFit(buildOriginalPage(doc, render)));
 		return 'original';
 	}
 
@@ -825,6 +847,39 @@ export class ReaderSession {
 			this.sync.enabled = enabled;
 		}
 		setPref('syncScroll', enabled);
+	}
+
+	/**
+	 * 菜单栏直接切换语言 — translations restart in the new pair; the persistent
+	 * cache keeps the old entries under their own key, so switching back is
+	 * instant.
+	 */
+	private applyLanguagePick(source: string, target: string): void {
+		setPref('sourceLanguage', source);
+		setPref('targetLanguage', target);
+		this.pane?.setLanguageCodes(source, target);
+		this.pane?.setLanguagePair(languageLabel(source), languageLabel(target));
+		this.restartAfterConfigChange();
+	}
+
+	/** 菜单栏直接切换翻译服务 — same restart contract as a language switch. */
+	private applyProviderPick(providerId: string): void {
+		setPref('provider', providerId);
+		// A provider carries its own base URL and model; stale per-provider
+		// overrides from the previous engine must not leak into the new one.
+		setPref('apiBaseURL', '');
+		setPref('model', '');
+		this.pane?.setProviderInfo(getProvider(providerId).displayName, providerId);
+		this.restartAfterConfigChange();
+	}
+
+	private restartAfterConfigChange(): void {
+		this.manager?.resetAll();
+		this.detectedSource = null;
+		if (getPref<boolean>('privacyNoticeAccepted', false)) {
+			const page = adapter.getCurrentPageIndex(this.reader);
+			this.manager?.setCurrentPage(page);
+		}
 	}
 
 	private async retranslateCurrent(): Promise<void> {
