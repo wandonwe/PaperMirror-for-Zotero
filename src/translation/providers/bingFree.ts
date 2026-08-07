@@ -54,6 +54,9 @@ let edgeTokenAt = 0;
 let edgeTokenPromise: Promise<string> | null = null;
 /** Set after the edge flow fails hard, so we stop paying its latency. */
 let edgeDisabledUntil = 0;
+/** The last Edge failure — reported even while the channel is skipped, so a
+ *  single test-connection screenshot always tells the whole story. */
+let lastEdgeError: string | null = null;
 
 async function getEdgeToken(timeoutMs: number, signal?: AbortSignal, force = false): Promise<string> {
 	if (!force && edgeToken && Date.now() - edgeTokenAt < EDGE_TOKEN_TTL_MS) {
@@ -133,9 +136,21 @@ let cachedSession: BingSession | null = null;
 let cachedOrigin = API_BASE;
 let cachedAt = 0;
 let sessionPromise: Promise<BingSession> | null = null;
+/** Bing's own client suffixes the IID with a per-session request counter. */
+let iidCounter = 0;
+
+/** Preferred page host; rotated when one host answers with silent-empty 200s. */
+let pageHost = PAGE_URL;
+
+function rotateHost(): void {
+	pageHost = pageHost.includes('cn.bing.com')
+		? 'https://www.bing.com/translator'
+		: 'https://cn.bing.com/translator';
+	iidCounter = 0;
+}
 
 async function fetchSession(timeoutMs: number, signal?: AbortSignal): Promise<BingSession> {
-	const { text: html, finalURL } = await requestTextWithURL(PAGE_URL, {
+	const { text: html, finalURL } = await requestTextWithURL(pageHost, {
 		timeoutMs,
 		signal,
 		headers: { 'User-Agent': EDGE_UA, Accept: 'text/html,application/xhtml+xml' }
@@ -176,6 +191,9 @@ export function resetBingSession(): void {
 	cachedSession = null;
 	cachedOrigin = API_BASE;
 	cachedAt = 0;
+	iidCounter = 0;
+	pageHost = PAGE_URL;
+	lastEdgeError = null;
 	sessionPromise = null;
 	edgeToken = null;
 	edgeTokenAt = 0;
@@ -197,20 +215,25 @@ async function translateOne(
 	allowRetry = true
 ): Promise<string> {
 	// Edge auth first; the page scrape only when Edge is down or blocked.
-	let edgeError: string | null = null;
+	let edgeNote: string | null = null;
 	if (Date.now() >= edgeDisabledUntil) {
 		try {
 			const [translated] = await translateViaEdge([text], sl, tl, settings, signal);
+			lastEdgeError = null;
 			return translated!;
 		}
 		catch (e) {
 			if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
 				throw e;
 			}
-			edgeError = e instanceof Error ? e.message : String(e);
+			lastEdgeError = e instanceof Error ? e.message : String(e);
+			edgeNote = lastEdgeError;
 			logger.debug(MODULE, 'Edge translator failed; falling back to bing.com scrape', e);
 			edgeDisabledUntil = Date.now() + 5 * 60 * 1000;
 		}
+	}
+	else if (lastEdgeError) {
+		edgeNote = `熔断中, 上次: ${lastEdgeError}`;
 	}
 	try {
 		return await translateViaScrape(text, sl, tl, settings, signal, allowRetry);
@@ -218,8 +241,8 @@ async function translateOne(
 	catch (e) {
 		// One error carrying BOTH paths — a screenshot of the test-connection
 		// line then says everything about what to fix next.
-		if (edgeError && e instanceof PaperMirrorError && e.code !== 'CANCELLED') {
-			throw new PaperMirrorError(e.code, `Edge通道: ${edgeError} ｜ Bing通道: ${e.message}`, {
+		if (edgeNote && e instanceof PaperMirrorError && e.code !== 'CANCELLED') {
+			throw new PaperMirrorError(e.code, `Edge通道: ${edgeNote} ｜ Bing通道: ${e.message}`, {
 				retryable: e.retryable,
 				httpStatus: e.httpStatus
 			});
@@ -239,7 +262,8 @@ async function translateViaScrape(
 	const session = await getSession(settings.timeoutMs, signal);
 	// Same-origin with the session page, or the token is rejected.
 	const base = (settings.apiBaseURL || cachedOrigin).replace(/\/+$/, '');
-	const url = `${base}/ttranslatev3?isVertical=1&IG=${encodeURIComponent(session.ig)}&IID=${encodeURIComponent(session.iid)}`;
+	const iid = `${session.iid}.${++iidCounter}`;
+	const url = `${base}/ttranslatev3?isVertical=1&IG=${encodeURIComponent(session.ig)}&IID=${encodeURIComponent(iid)}`;
 	const rawBody = `&fromLang=${encodeURIComponent(sl)}`
 		+ `&text=${encodeURIComponent(escapeHTML(text))}`
 		+ `&to=${encodeURIComponent(tl)}`
@@ -263,7 +287,15 @@ async function translateViaScrape(
 	catch (e) {
 		// Expired session → refresh once and retry
 		if (allowRetry && e instanceof PaperMirrorError && (e.httpStatus === 400 || e.httpStatus === 401 || e.httpStatus === 403 || e.code === 'BAD_RESPONSE')) {
-			logger.debug(MODULE, 'Bing session may have expired; refreshing');
+			// A silent-empty 200 is Bing rate-limiting/flagging THIS host for
+			// this client; the sibling host (www ↔ cn) often still answers.
+			if (/empty body/i.test(e.message)) {
+				logger.debug(MODULE, 'Bing answered empty; rotating host and retrying');
+				rotateHost();
+			}
+			else {
+				logger.debug(MODULE, 'Bing session may have expired; refreshing');
+			}
 			await getSession(settings.timeoutMs, signal, true);
 			return translateViaScrape(text, sl, tl, settings, signal, false);
 		}

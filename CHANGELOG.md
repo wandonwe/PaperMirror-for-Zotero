@@ -9,6 +9,21 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-08-07
+
+### Fixed
+
+- Microsoft engine, continued. The browser-identity fix moved the failure
+  from an HTML challenge page to a silent-empty HTTP 200 — Bing's
+  rate-limit/flag response for this host. Three counters:
+  - The request IID now carries the per-session counter suffix Bing's own
+    client sends.
+  - A silent-empty 200 rotates to the sibling host (www ↔ cn bing.com),
+    refreshes the session there and retries once.
+  - The Edge channel's last failure is reported even while the channel is in
+    its 5-minute breaker (`Edge通道: 熔断中, 上次: …`), so every
+    test-connection line carries both channels' truth.
+
 ## [0.3.0] — 2026-08-07
 
 Start of the 0.3 line.
@@ -377,7 +392,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.10...v0.3.0
 [0.2.10]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.8...v0.2.9
