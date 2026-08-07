@@ -1,21 +1,21 @@
 /**
  * Toolbar integration.
  *
- * The reader toolbar carries ONE button — 对照翻译 — registered through the
+ * The reader toolbar carries the 翻译 icon plus a caret, registered through the
  * official Zotero.Reader `renderToolbar` event.
  *
- * Pressed:  the reader splits. The original page stays on one side; the other
- *           side shows that same page rebuilt with the body text translated,
- *           rendered at exactly the same size, so the two read as a spread.
- *           The divider and Zotero's own zoom resize both together.
- * Released: the pane is hidden and the PDF is untouched. The session is kept
- *           alive, so pressing again is instant and costs no API calls.
- *
- * The on-page overlay mode still exists behind Zotero.PaperMirror.setMode()
- * for anyone who wants it; it is simply not on the toolbar.
+ * Icon click — turns translation on and off. On means 左右对照 by default:
+ *   the original PDF on the left, the same page re-flowed in Chinese on the
+ *   right, both at the same size. Off restores the plain reader. The session is
+ *   kept alive across toggles, so coming back is instant and costs no API calls.
+ * Caret — picks the state directly: 原文 | 覆盖翻译 | 左右对照. The two
+ *   translated states answer different questions, so neither is buried:
+ *   覆盖 is for reading the paper as printed, 左右对照 is for reading the
+ *   translation complete and unabridged in a side pane.
  */
 
 import { getString } from '../utils/l10n';
+import { getPref, setPref } from '../utils/prefs';
 import * as logger from '../utils/logger';
 import { ReaderSession, type ViewMode } from './readerSession';
 import { TextExtractor } from './textExtractor';
@@ -25,6 +25,8 @@ import type { ReaderLike } from './zoteroReaderAdapter';
 const MODULE = 'readerToolbar';
 const SWITCH_CLASS = 'pm-compare-wrap';
 const BUTTON_CLASS = 'pm-compare-btn';
+const CARET_CLASS = 'pm-compare-caret';
+const MENU_CLASS = 'pm-compare-menu';
 const STYLE_ID = 'pm-compare-style';
 
 const SWITCH_CSS = `
@@ -69,12 +71,83 @@ const SWITCH_CSS = `
 	opacity: .55;
 	cursor: progress;
 }
+
+/* Caret opening the three-state menu: 原文 | 覆盖翻译 | 左右对照. The icon
+   itself stays a one-click toggle — the caret is for choosing the mode. */
+.${CARET_CLASS} {
+	appearance: none;
+	-moz-appearance: none;
+	width: 13px;
+	height: 22px;
+	margin: 0 0 0 1px;
+	padding: 0;
+	border: 1px solid var(--fill-quinary, rgba(0, 0, 0, .16));
+	border-radius: 5px;
+	background: transparent;
+	color: inherit;
+	font: 9px/1 system-ui, sans-serif;
+	cursor: pointer;
+}
+.${CARET_CLASS}:hover {
+	background: var(--fill-quinary, rgba(0, 0, 0, .07));
+}
+.${SWITCH_CLASS} {
+	position: relative;
+}
+.${MENU_CLASS} {
+	position: absolute;
+	top: 25px;
+	right: 0;
+	z-index: 20;
+	min-width: 132px;
+	padding: 4px;
+	border: 1px solid var(--fill-quinary, rgba(0, 0, 0, .18));
+	border-radius: 7px;
+	background: var(--material-menu, var(--material-background, #fff));
+	box-shadow: 0 6px 20px rgba(0, 0, 0, .22);
+	font: 12px/1.4 system-ui, sans-serif;
+	color: var(--fill-primary, #1b1d21);
+}
+.${MENU_CLASS} button {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 5px 8px;
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.${MENU_CLASS} button:hover {
+	background: var(--fill-quinary, rgba(0, 0, 0, .08));
+}
+.${MENU_CLASS} button::before {
+	content: "";
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: transparent;
+}
+.${MENU_CLASS} button[aria-checked="true"]::before {
+	background: #6f6ce8;
+}
+.pm-compare-rule {
+	height: 1px;
+	margin: 4px 2px;
+	background: var(--fill-quinary, rgba(0, 0, 0, .14));
+}
 `;
 
 export class ReaderToolbarController {
 	private pluginID: string;
 	private sessions = new Map<string, ReaderSession>(); // key: tabID or itemID
 	private modes = new Map<string, ViewMode>();
+	/** Where the on/off button returns to, per reader. */
+	private lastTranslatedMode = new Map<string, ViewMode>();
 	private busy = new Set<string>();
 	private notifierID: string | null = null;
 	private handler: ((event: ZoteroReaderEvent) => void) | null = null;
@@ -228,15 +301,119 @@ export class ReaderToolbarController {
 		button.title = `${getString('papermirror-compare')} — ${getString('papermirror-compare-tip')}`;
 		button.setAttribute('aria-label', getString('papermirror-compare'));
 		button.setAttribute('tabindex', '-1');
-		button.setAttribute('aria-pressed', this.currentMode(reader) === 'split' ? 'true' : 'false');
+		button.setAttribute('aria-pressed', this.currentMode(reader) !== 'original' ? 'true' : 'false');
 		ReaderToolbarController.appendCompareIcon(doc, button);
+		// One click = 翻译开关. Off → back to whichever translated mode was last
+		// used (覆盖 by default), so the button never surprises the reader with
+		// a mode they did not pick.
 		button.addEventListener('click', () => {
-			const next: ViewMode = this.currentMode(reader) === 'split' ? 'original' : 'split';
-			logger.info(MODULE, `Compare view ${next === 'split' ? 'opened' : 'closed'}`);
+			const current = this.currentMode(reader);
+			const next: ViewMode = current === 'original' ? this.preferredMode(reader) : 'original';
+			logger.info(MODULE, `Translation view → ${next}`);
 			void this.setMode(reader, next);
 		});
 		wrap.appendChild(button);
+
+		const caret = doc.createElement('button');
+		caret.className = CARET_CLASS;
+		caret.textContent = '▾';
+		caret.title = getString('papermirror-mode-pick');
+		caret.setAttribute('tabindex', '-1');
+		caret.addEventListener('click', (event) => {
+			event.stopPropagation();
+			this.toggleModeMenu(doc, wrap, reader);
+		});
+		wrap.appendChild(caret);
 		return wrap;
+	}
+
+	/**
+	 * 原文 | 覆盖翻译 | 左右对照 — the three reading states.
+	 *
+	 * 覆盖 keeps the page exactly as printed and swaps the words in place;
+	 * 左右对照 gives the full, unabridged translation in a side pane. They
+	 * answer different questions, so both stay one click away.
+	 */
+	private toggleModeMenu(doc: Document, wrap: HTMLElement, reader: ReaderLike): void {
+		const existing = wrap.querySelector(`.${MENU_CLASS}`);
+		if (existing) {
+			existing.remove();
+			return;
+		}
+		doc.querySelectorAll(`.${MENU_CLASS}`).forEach(node => node.remove());
+		const menu = doc.createElement('div');
+		menu.className = MENU_CLASS;
+		const current = this.currentMode(reader);
+		const options: { mode: ViewMode; label: string }[] = [
+			{ mode: 'original', label: getString('papermirror-mode-original') },
+			{ mode: 'overlay', label: getString('papermirror-mode-overlay') },
+			{ mode: 'split', label: getString('papermirror-mode-split') }
+		];
+		for (const option of options) {
+			const item = doc.createElement('button');
+			item.textContent = option.label;
+			item.setAttribute('role', 'menuitemradio');
+			item.setAttribute('aria-checked', option.mode === current ? 'true' : 'false');
+			item.addEventListener('click', (event) => {
+				event.stopPropagation();
+				menu.remove();
+				if (option.mode !== 'original') {
+					this.lastTranslatedMode.set(this.sessionKey(reader), option.mode);
+				}
+				void this.setMode(reader, option.mode);
+			});
+			menu.appendChild(item);
+		}
+
+		// 覆盖模式下如何看原文 — without this the reader has no obvious way back
+		// to the source text, which is the first thing they ask for.
+		const rule = doc.createElement('div');
+		rule.className = 'pm-compare-rule';
+		menu.appendChild(rule);
+		const peekOn = getPref<boolean>('overlayPeekHover', true);
+		const peek = doc.createElement('button');
+		peek.textContent = getString('papermirror-peek-hover');
+		peek.title = getString('papermirror-peek-hover-tip');
+		peek.setAttribute('role', 'menuitemcheckbox');
+		peek.setAttribute('aria-checked', peekOn ? 'true' : 'false');
+		peek.addEventListener('click', (event) => {
+			event.stopPropagation();
+			menu.remove();
+			const next = !getPref<boolean>('overlayPeekHover', true);
+			setPref('overlayPeekHover', next);
+			this.sessions.get(this.sessionKey(reader))?.setPeekOnHover(next);
+		});
+		menu.appendChild(peek);
+
+		const dim = doc.createElement('button');
+		const dimOn = getPref<string>('overlayDisplayMode', 'translation-only') === 'dim-original';
+		dim.textContent = getString('papermirror-dim-original');
+		dim.title = getString('papermirror-dim-original-tip');
+		dim.setAttribute('role', 'menuitemcheckbox');
+		dim.setAttribute('aria-checked', dimOn ? 'true' : 'false');
+		dim.addEventListener('click', (event) => {
+			event.stopPropagation();
+			menu.remove();
+			const next = dimOn ? 'translation-only' : 'dim-original';
+			setPref('overlayDisplayMode', next);
+			this.sessions.get(this.sessionKey(reader))?.setOverlayDisplayMode(next);
+		});
+		menu.appendChild(dim);
+
+		wrap.appendChild(menu);
+		// Any click elsewhere dismisses it.
+		const dismiss = (): void => {
+			menu.remove();
+			doc.removeEventListener('click', dismiss, true);
+		};
+		doc.addEventListener('click', dismiss, true);
+	}
+
+	/** The translated mode this reader returns to when switched back on. */
+	private preferredMode(reader: ReaderLike): ViewMode {
+		const stored = getPref<ViewMode>('viewMode', 'split');
+		return this.lastTranslatedMode.get(this.sessionKey(reader))
+			?? (stored === 'overlay' ? 'overlay' : 'split');
 	}
 
 	/**
@@ -282,7 +459,7 @@ export class ReaderToolbarController {
 				return;
 			}
 			const key = this.sessionKey(reader);
-			const pressed = this.currentMode(reader) === 'split';
+			const pressed = this.currentMode(reader) !== 'original';
 			const isBusy = this.busy.has(key);
 			doc.querySelectorAll(`.${BUTTON_CLASS}`).forEach((node) => {
 				const button = node as HTMLElement;
@@ -353,10 +530,20 @@ export class ReaderToolbarController {
 			await created.open(mode);
 		}
 		catch (e) {
+			// Do NOT tear the session down silently. A vanished pane is the
+			// least debuggable failure there is — leave it on screen carrying
+			// the error, and keep the session so 「重试」 and the diagnostics
+			// still work.
 			logger.error(MODULE, 'Failed to open bilingual view', e);
-			created.destroy();
-			this.sessions.delete(key);
-			this.modes.set(key, 'original');
+			try {
+				created.showOpenFailure(e);
+			}
+			catch (inner) {
+				logger.error(MODULE, 'Could not surface the failure; tearing down', inner);
+				created.destroy();
+				this.sessions.delete(key);
+				this.modes.set(key, 'original');
+			}
 		}
 		finally {
 			this.busy.delete(key);
@@ -364,7 +551,7 @@ export class ReaderToolbarController {
 		}
 	}
 
-	/** Toggle between 原文 and 左右对照 on the current tab (manual/diagnostic entry). */
+	/** Toggle 翻译 on/off on the current tab (manual/diagnostic entry). */
 	async toggleCurrent(): Promise<string> {
 		const reader = this.activeReader();
 		if (!reader) {
@@ -376,9 +563,9 @@ export class ReaderToolbarController {
 		if (!adapter.supportsSplitView(reader)) {
 			return 'This reader does not support split view (standalone window?).';
 		}
-		const next: ViewMode = this.currentMode(reader) === 'original' ? 'split' : 'original';
+		const next: ViewMode = this.currentMode(reader) === 'original' ? this.preferredMode(reader) : 'original';
 		await this.setMode(reader, next);
-		return next === 'split' ? 'Bilingual view opened.' : 'Bilingual view closed.';
+		return next === 'original' ? 'Translation closed.' : `Translation opened (${next}).`;
 	}
 
 	/** Public entry for the switcher used from Run JavaScript / prefs. */
@@ -446,6 +633,16 @@ export class ReaderToolbarController {
 		return lines.join('\n');
 	}
 
+	/** 生成译文PDF for the active reader tab (API entry; no button any more). */
+	async exportCurrentPdf(): Promise<string> {
+		const session = this.activeSession();
+		if (!session) {
+			return 'Open the translation view first.';
+		}
+		await session.exportTranslatedPdf();
+		return 'Translated PDF generation started.';
+	}
+
 	/** Clear cached translations for the document in the active reader tab. */
 	async clearCurrentCache(): Promise<string> {
 		const session = this.activeSession();
@@ -458,7 +655,7 @@ export class ReaderToolbarController {
 
 	/** Backwards-compatible toggle used by the public API. */
 	async toggle(reader: ReaderLike): Promise<void> {
-		await this.setMode(reader, this.currentMode(reader) === 'original' ? 'split' : 'original');
+		await this.setMode(reader, this.currentMode(reader) === 'original' ? this.preferredMode(reader) : 'original');
 	}
 
 	dispose(): void {

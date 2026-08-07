@@ -26,6 +26,31 @@ export interface StartupParams {
 
 export let toolbarController: ReaderToolbarController | null = null;
 
+/**
+ * One-time migration to the overlay-renderer architecture.
+ *
+ * prefs.js defaults only apply to preferences that were never written, so a
+ * profile that used the plugin before a default changes never sees the new one.
+ * The default is 左右对照: 原版 PDF 在左, 版面级重排的整页译文在右 — reading a
+ * paper means checking the translation against the original, and a mode that
+ * hides the original cannot do that. 覆盖模式 stays one click away in the
+ * toolbar menu, and whatever the reader picks afterwards sticks.
+ */
+function migrateToOverlayArchitecture(): void {
+	if (getPref<number>('layoutMigration', 0) >= 3) {
+		return;
+	}
+	try {
+		setPref('viewMode', 'split');
+		setPref('paneView', 'page');
+		setPref('layoutMigration', 3);
+		logger.info(MODULE, 'Migrated reading defaults to the overlay architecture');
+	}
+	catch (e) {
+		logger.warn(MODULE, 'Layout migration failed (harmless)', e);
+	}
+}
+
 export async function startup(params: StartupParams): Promise<void> {
 	// The Zotero plugin sandbox lacks AbortController; install our
 	// cooperative-cancellation polyfill before anything can request one.
@@ -42,6 +67,8 @@ export async function startup(params: StartupParams): Promise<void> {
 
 	// The in-plugin PDF builder embeds this bundled CJK font (subset).
 	setFontSource(params.rootURI + 'content/fonts/NotoSansSC-PM.ttf');
+
+	migrateToOverlayArchitecture();
 
 	toolbarController = new ReaderToolbarController(params.id);
 	toolbarController.init();
@@ -94,6 +121,19 @@ export async function startup(params: StartupParams): Promise<void> {
 		 */
 		diagnoseExtraction: () =>
 			toolbarController?.diagnoseExtraction() ?? Promise.resolve('Plugin not initialized.'),
+		/**
+		 * The last warnings and errors, newest last. When anything misbehaves:
+		 *     return Zotero.PaperMirror.lastErrors();
+		 */
+		lastErrors: (): string => {
+			const lines = logger.recentProblems();
+			return lines.length ? lines.join('\n') : 'No warnings or errors recorded this session.';
+		},
+		/**
+		 * 生成译文PDF — no longer a button in the pane. Still available on
+		 * demand: Zotero.PaperMirror.exportTranslatedPdf()
+		 */
+		exportTranslatedPdf: () => toolbarController?.exportCurrentPdf() ?? Promise.resolve('Plugin not initialized.'),
 		/** Clear cached translations for the document in the active reader tab. */
 		clearCurrentCache: () => toolbarController?.clearCurrentCache() ?? Promise.resolve('Plugin not initialized.'),
 		/** Environment self-check; run in Tools → Developer → Run JavaScript:

@@ -762,9 +762,23 @@
 	background: var(--pm-page-backdrop, #eceef1);
 }
 
+/* In page view the rebuilt page is sized in pixels to the pane's width — the
+   article flow's 700px reading-measure cap MUST NOT clamp it. When it did,
+   the canvas (width:100%) shrank with the cap while the absolutely positioned
+   text layer kept its computed pixel coordinates: 译文 drifted right/down off
+   its mask and interleaved with the artwork. */
+.pm-scroll[data-pm-view="page"] .pm-article-host {
+	max-width: none;
+	width: 100%;
+	margin: 0;
+}
+
 .pm-repage {
 	position: relative;
-	margin: 14px auto 20px;
+	/* NOT auto margins. Centring inside a max-content host pushed the page
+	   sideways and off the visible area; the page starts at the pane's left
+	   edge, exactly like the original does on the other side. */
+	margin: 14px 0 20px;
 	background: #fff;
 	box-shadow: 0 1px 3px rgba(0, 0, 0, .16), 0 6px 22px rgba(0, 0, 0, .1);
 	overflow: hidden;
@@ -788,6 +802,9 @@
 .pm-repage-block {
 	position: absolute;
 	box-sizing: border-box;
+	/* No fixed height: the flow pass measures what the Chinese needs and moves
+	   whatever is below. Overflow must stay visible for the same reason. */
+	overflow: visible;
 	color: var(--pm-repage-ink);
 	/* A UI sans face stays even at small sizes; a serif turns to mush. */
 	font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
@@ -850,10 +867,12 @@
 /* --- 整页对照: mask layer & compare toggle ------------------------------- */
 
 .pm-repage {
-	/* Never wider than the pane. The page carries an explicit pixel width, so
-	   without this it becomes the pane's min-content width and pushes the
-	   reader browser off screen. */
-	max-width: 100%;
+	/* NEVER clamp this. The page carries pixel geometry for its text layer; a
+	   max-width squashes the bitmap out from under the text and produces the
+	   oversized-overlapping-cut-off mess. The scroll body scrolls instead —
+	   the same thing the PDF viewer on the left does at the same zoom. */
+	max-width: none;
+	flex: 0 0 auto;
 }
 
 .pm-repage-mask {
@@ -880,25 +899,20 @@
 .pm-repage-host {
 	display: flex;
 	flex-direction: column;
-	align-items: center;
+	align-items: flex-start;
+	width: max-content;
 	width: 100%;
 	min-width: 0;
 }
 
 .pm-scroll[data-pm-view="page"] {
-	overflow-x: hidden;
 	min-width: 0;
 }
 
-/* The rebuilt page is scaled to fit its half of the window, mirroring the
-   original page auto-fitted to the other half — same size, no sideways
-   scrolling. */
+/* The rebuilt page is rendered at the reader's own scale, so at high zoom it
+   can be wider than the pane — scroll, do not squash. */
 .pm-scroll[data-pm-view="page"] {
-	overflow-x: hidden;
-}
-.pm-repage {
-	max-width: 100%;
-	flex: 0 0 auto;
+	overflow-x: auto;
 }
 
 /* ==========================================================================
@@ -989,9 +1003,16 @@
 	gap: 6px;
 }
 
+/* 完整文章流 ⇄ 整页对照 — the pane's two readings of the same translation. */
+.pm-viewkind {
+	white-space: nowrap;
+}
+
 /* Strict-containment blocks: a translation that cannot fit its source rect
    even at the minimum font size shows a subtle edge fade and expands over the
    page on hover, in its own local paper colour. */
+/* Re-flowed blocks are no longer clipped, so the overflow marker means "this
+   column ran long", not "text was cut". Kept subtle. */
 .pm-repage-block[data-pm-overflow="true"]::after {
 	content: "";
 	position: absolute;
@@ -1022,4 +1043,287 @@
 }
 .pm-header .pm-export:hover {
 	background: rgba(111, 108, 232, .14);
+}
+
+
+/* ==========================================================================
+   Header bar — one row, fixed order:
+   icon · languages · engine · refresh · status · sync · save · layout ·
+   settings · close
+   ========================================================================== */
+
+.pm-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.pm-brand {
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	flex: none;
+}
+
+.pm-brand svg {
+	width: 18px;
+	height: 18px;
+	display: block;
+}
+
+.pm-bar .pm-pill {
+	height: 26px;
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 132px;
+}
+
+.pm-bar .pm-pill.pm-provider {
+	margin-left: 0;
+}
+
+/* The status text takes the slack, so the controls stay pinned right. */
+.pm-bar .pm-status-row {
+	margin: 0;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.pm-bar .pm-switch-label {
+	flex: none;
+}
+
+.pm-bar .pm-footer-button {
+	flex: none;
+	white-space: nowrap;
+}
+
+.pm-bar .pm-icon-button {
+	width: 26px;
+	height: 26px;
+	flex: none;
+}
+
+.pm-bar .pm-icon-button.pm-soft {
+	width: 26px;
+	height: 26px;
+}
+
+/* Layout toggle: the icon draws the current arrangement — two panels, the
+   translation's half filled — so it reads as state, not as a generic arrow. */
+.pm-side-toggle svg rect:first-of-type,
+.pm-side-toggle svg path {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.7;
+}
+
+.pm-side-toggle .pm-side-fill {
+	fill: currentColor;
+	opacity: .32;
+	stroke: none;
+}
+
+.pm-side-toggle:hover .pm-side-fill {
+	opacity: .5;
+}
+
+
+/* Floating status note — bottom-right, appears on a new action, then leaves. */
+.pm-status-note {
+	position: absolute;
+	right: 16px;
+	bottom: 16px;
+	z-index: 60;
+	max-width: 78%;
+	padding: 8px 13px;
+	border-radius: 9px;
+	background: rgba(28, 32, 39, .94);
+	box-shadow: 0 6px 24px rgba(0, 0, 0, .28);
+	opacity: 0;
+	transform: translateY(8px);
+	pointer-events: none;
+	transition: opacity .18s ease, transform .18s ease;
+}
+
+.pm-status-note.pm-show {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+.pm-status-note[data-pm-error="true"] {
+	background: rgba(74, 30, 32, .96);
+}
+
+.pm-status-note .pm-status-row {
+	margin: 0;
+	min-height: 0;
+	color: #7fd6ab;
+	font-size: 11px;
+}
+
+.pm-status-note .pm-status-row.pm-error {
+	color: #ffb4b4;
+}
+
+/* Takes the slack in the bar so the right-hand controls stay pinned right. */
+.pm-bar-spacer {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+/* The rebuilt page fills the pane via a transform; its host must not add
+   width of its own or the scaled page will be measured against the wrong box. */
+.pm-scroll[data-pm-view="page"] .pm-repage-host {
+	width: auto;
+}
+
+
+/* ==========================================================================
+   Header bar, redesigned.
+
+   One 40px row that reads in three zones — what is being translated, what to
+   do with it, what to do with the window — separated by hairlines rather than
+   by guesswork. Chips are borderless and quiet; only the primary action and
+   the live sync switch carry colour, so the eye lands on them first.
+   ========================================================================== */
+
+.pm-header {
+	padding: 0;
+}
+
+.pm-bar {
+	height: 40px;
+	padding: 0 8px 0 10px;
+	gap: 4px;
+}
+
+.pm-bar .pm-brand {
+	margin-right: 4px;
+}
+
+/* --- chips: language pair and engine --- */
+
+.pm-chip {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	height: 26px;
+	padding: 0 8px;
+	border-radius: 7px;
+	background: transparent;
+	color: var(--pm-muted);
+	font-size: 11.5px;
+	white-space: nowrap;
+	min-width: 0;
+	flex: 0 1 auto;
+	overflow: hidden;
+}
+
+.pm-chip:hover {
+	background: var(--pm-soft);
+	color: var(--pm-ink);
+}
+
+.pm-chip-lang {
+	flex-shrink: 3;
+}
+
+.pm-lang-from,
+.pm-lang-to {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.pm-lang-to {
+	color: var(--pm-ink);
+	font-weight: 500;
+}
+
+.pm-lang-arrow {
+	font-style: normal;
+	color: var(--pm-pill-arrow);
+	flex: none;
+}
+
+.pm-chip-provider .pm-provider-mark {
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: #43b784;
+	flex: none;
+}
+
+.pm-provider-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* --- separators --- */
+
+.pm-bar-sep {
+	width: 1px;
+	height: 18px;
+	margin: 0 4px;
+	background: var(--pm-line);
+	flex: none;
+}
+
+/* --- actions --- */
+
+.pm-bar .pm-icon-button {
+	width: 28px;
+	height: 28px;
+	border-radius: 7px;
+}
+
+.pm-bar .pm-icon-button svg {
+	width: 16px;
+	height: 16px;
+}
+
+.pm-bar-action {
+	height: 26px;
+	padding: 0 11px;
+	border-radius: 7px;
+	background: var(--pm-accent);
+	color: #fff;
+	font-size: 11.5px;
+	font-weight: 500;
+	white-space: nowrap;
+	flex: none;
+}
+
+.pm-bar-action:hover {
+	filter: brightness(1.08);
+}
+
+/* The sync switch sits between the two, so it stays quiet until it is on. */
+.pm-bar .pm-switch-label {
+	height: 26px;
+	padding: 0 6px;
+	border-radius: 7px;
+	font-size: 11.5px;
+	color: var(--pm-muted);
+	gap: 6px;
+}
+
+.pm-bar .pm-switch-label:hover {
+	background: var(--pm-soft);
+}
+
+.pm-bar .pm-switch-label[data-pm-on="true"] {
+	color: var(--pm-ink);
+}
+
+/* Narrow panes drop the labels rather than truncating everything. */
+@media (max-width: 620px) {
+	.pm-bar .pm-switch-label span:last-child {
+		display: none;
+	}
+	.pm-chip-provider .pm-provider-name {
+		display: none;
+	}
 }

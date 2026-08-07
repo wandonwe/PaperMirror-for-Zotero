@@ -24,6 +24,17 @@ export function isVerticalSliver(rect: Rect): boolean {
 }
 
 const RE_RECEIVED = /\b(received|revised|accepted|published online|available online|publish-ahead-of-print)\b.{0,60}\b(20\d\d|19\d\d)\b/i;
+// Front-matter labels journals set in the margin sidebar or above the title
+// (PLOS, Frontiers, MDPI…): "Citation:", "Academic Editor:", "Funding:" …
+// The colon is required so body prose starting with the same word survives.
+const RE_META_LABEL = /^(citation|(?:academic|handling|section|associate|guest)\s+editor|editor|received|accepted|published|posted|copyright|funding|competing interests?|conflicts? of interest|data availability(?: statement)?|abbreviations|author contributions?|provenance|peer review(?:er)?s?(?: information)?|ethics(?: statement)?|patient consent|trial registration)\s*[::]/i;
+// Standalone article-type banners and badges.
+const RE_ARTICLE_BANNER = /^(research article|review(?: article)?|original (?:article|research|investigation)|open access|case report|short communication|brief report|editorial|systematic review|meta-analysis|clinical trial|letter to the editor|perspective|commentary|rapid communication|technical note|crossmark|check for updates)$/i;
+// Funding boilerplate: grant numbers and the funders-had-no-role sentence.
+const RE_GRANT = /\bgrants?\s?(?:nos?|numbers?|#)\b\.?\s*:?\s*[\w-]/i;
+// Licence tails split off from the © head block ("…provided the original
+// author and source are credited.").
+const RE_LICENSE_TAIL = /provided the original (?:work|author|source)|source are credited|reproduction in any medium|funders? had no role|decision to publish|preparation of the manuscript/i;
 const RE_COPYRIGHT = /©|\(c\)\s?20\d\d|\bcopyright\b|creative\s?commons|open access article|all rights reserved|licen[cs]e|\breuse\b.{0,40}\bdistribution\b|non-?commercial/i;
 const RE_CORRESPONDENCE = /\b(corresponding author|correspondence to|e-?mail|电子邮件|通讯作者)\b|@[a-z0-9.-]+\.[a-z]{2,}/i;
 const RE_DOI_URL = /\b(doi|https?):|doi\.org|academic\.oup\.com|downloaded from/i;
@@ -80,15 +91,88 @@ function looksLikeAffiliation(text: string): boolean {
 }
 
 /**
+ * Running head / running foot: the journal's own furniture repeated on every
+ * page — the article title strip at the top, and the
+ * "PLOS ONE | DOI:10.1371/… March 17, 2015    1 / 13" line at the bottom.
+ *
+ * Purely geometric plus a shape test, because the text itself is often a
+ * verbatim copy of the paper's title and cannot be told apart by wording. Only
+ * SHORT runs in the top/bottom 8% band qualify: a body paragraph that happens
+ * to reach into the band is many lines long and stays.
+ */
+export function isRunningHeadOrFoot(
+	rect: Rect,
+	pageHeight: number,
+	lineCount: number,
+	text: string
+): boolean {
+	if (pageHeight <= 0) {
+		return false;
+	}
+	const band = pageHeight * 0.08;
+	const inTop = rect[1] > pageHeight - band;
+	const inBottom = rect[3] < band;
+	if (!inTop && !inBottom) {
+		return false;
+	}
+	const t = text.trim();
+	if (/^\d{1,4}$/.test(t) || /^\d{1,3}\s*[/／|]\s*\d{1,3}$/.test(t)) {
+		return true;
+	}
+	return lineCount <= 2 && t.length <= 140;
+}
+
+/**
+ * Narrow outer-margin sidebar column — the PLOS/Frontiers front-matter strip
+ * (citation, editor, dates, copyright, funding). Real reading columns are far
+ * wider: a two-column page's columns run ~0.44 of the page width, a
+ * three-column page's ~0.28.
+ */
+export function isMarginSidebar(rect: Rect, pageWidth: number): boolean {
+	const width = rect[2] - rect[0];
+	const height = rect[3] - rect[1];
+	if (width <= 0 || pageWidth <= 0) {
+		return false;
+	}
+	const narrow = width < pageWidth * 0.24;
+	// A sidebar entry is a stack of wrapped lines; a single short body line
+	// that happens to sit at the left margin is not (label-style one-liners
+	// like "Published: …" are caught by the text rules instead).
+	const tall = height >= 30;
+	const outerLeft = rect[2] < pageWidth * 0.34;
+	const outerRight = rect[0] > pageWidth * 0.66;
+	return narrow && tall && (outerLeft || outerRight);
+}
+
+/**
  * Should this block be excluded from translation and from the pane?
  * The original page keeps showing it either way.
  */
-export function isMetadataBlock(text: string, rect?: Rect): boolean {
+export function isMetadataBlock(text: string, rect?: Rect, pageWidth?: number): boolean {
 	const t = text.trim();
 	if (!t) {
 		return true;
 	}
 	if (rect && isVerticalSliver(rect)) {
+		return true;
+	}
+	// Anything living in the narrow outer sidebar is front matter, whatever it
+	// says — that strip is where journals put the citation/editor/funding
+	// stack, and its entries keep leaking past the text rules one novel
+	// format at a time.
+	if (rect && pageWidth && isMarginSidebar(rect, pageWidth) && t.length < 700) {
+		return true;
+	}
+	if (RE_META_LABEL.test(t) && t.length < 700) {
+		return true;
+	}
+	if (t.length < 40 && RE_ARTICLE_BANNER.test(t)) {
+		return true;
+	}
+	if (RE_GRANT.test(t) && t.length < 700) {
+		return true;
+	}
+	if (RE_LICENSE_TAIL.test(t) && t.length < 700) {
 		return true;
 	}
 	// Orphan digits/marks: stray superscript affiliation numbers or page

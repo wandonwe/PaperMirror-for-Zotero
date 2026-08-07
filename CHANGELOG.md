@@ -1,0 +1,176 @@
+# Changelog
+
+All notable changes to PaperMirror for Zotero are recorded here.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+While the version stays below `1.0.0`, the reading UI is still settling and
+minor releases may change defaults.
+
+## [Unreleased]
+
+## [0.1.9] — 2026-08-07
+
+### Changed
+
+- Redesigned the translation pane's header bar into three zones — what is being
+  translated, what to do with it, what to do with the window — separated by
+  hairlines. Chips are borderless and quiet; colour is reserved for the primary
+  action and the active sync switch.
+- The source and target languages share one chip (`English → 简体中文`) instead
+  of two chips that both truncated to `Eng… → 简体…`.
+- Narrow panes now drop control labels rather than truncating every element.
+
+## [0.1.8] — 2026-08-07
+
+### Changed
+
+- Translation status moved out of the header bar into a floating note in the
+  bottom-right corner: it appears on a new action, stays while work is running,
+  and leaves on its own. Repeating the same message no longer re-triggers it.
+- The rebuilt page now fills the pane in both directions (previously it would
+  only ever scale down, leaving empty space beside it).
+
+### Fixed
+
+- Corrected the sign of the transform footprint compensation, which left a band
+  of dead space below and to the right of a scaled page.
+
+## [0.1.7] — 2026-08-07
+
+### Added
+
+- The rebuilt page scales with the pane: dragging the divider resizes the
+  translation smoothly via a CSS transform, with no re-render and no way for the
+  text layer and the artwork to drift apart.
+- The layout-swap button draws the current arrangement — two panels with the
+  translation's half filled — so it reads as state rather than as a generic
+  arrow.
+
+### Changed
+
+- Header bar rebuilt in a fixed order: icon, languages, engine, refresh, status,
+  sync scroll, save to note, layout, settings, close.
+
+### Removed
+
+- The 生成译文PDF button. The capability remains available as
+  `Zotero.PaperMirror.exportTranslatedPdf()`.
+
+## [0.1.6] — 2026-08-07
+
+### Fixed
+
+- A final overlap-resolution pass guarantees no two blocks occupy the same
+  pixels, whatever the column analysis concluded. Blocks left in the original
+  (author lists, affiliations) participate as immovable obstacles — previously
+  translations could be printed straight over them.
+- The rebuilt page no longer sits offset and clipped inside its host.
+
+## [0.1.5] — 2026-08-07
+
+### Fixed
+
+- The rebuilt page is now built at the reader's own pixel geometry (1:1) instead
+  of being scaled to the pane's width. Every earlier formula failed the same
+  way: an ancestor would clamp the page's width, the bitmap scaled down with the
+  container while the text layer kept its pixel coordinates, and the result was
+  oversized type spilling past the edge with masks no longer covering the words
+  they were cut for. Zoom now propagates to both halves for free.
+
+### Removed
+
+- The width-cap, clamp-detection and resize-redraw machinery that existed only
+  to fight the clamping described above.
+
+## [0.1.4] — 2026-08-07
+
+### Changed
+
+- 左右对照 is the default reading mode again: the original PDF on the left, the
+  re-flowed translated page on the right. 覆盖模式 remains one click away in the
+  toolbar menu.
+
+## [0.1.3] — 2026-08-07
+
+### Added
+
+- Column-aware flow layout for the rebuilt page (`src/ui/pageFlow.ts`). Blocks
+  are set at one consistent size and take the height the Chinese needs; three
+  strict rules keep the page sane: a block never moves up, never leaves its
+  column, and never crosses an obstacle.
+- Obstacle detection reads the rendered bitmap directly — the page is
+  downsampled to a coarse grid, cells that contrast with the paper are marked,
+  the blocks being replaced are erased, and what remains (figures, plots, logos,
+  coloured bands) is what the flow hops over.
+
+### Fixed
+
+- A full-width title no longer merges the two text columns into one. Column
+  membership is measured against the wider span, not the narrower.
+
+## [0.1.2] — 2026-08-07
+
+### Added
+
+- 悬停看原文: hovering a translated paragraph in overlay mode lifts that
+  paragraph's masks and fades its text, revealing the source underneath.
+- Toolbar menu entries for 悬停看原文 and 原文淡化.
+
+### Fixed
+
+- Line rects handed back bottom-to-top no longer shatter a paragraph into one
+  fragment per source line. The reading direction is detected and normalised.
+
+## [0.1.1] — 2026-08-07
+
+### Fixed
+
+- The translation pane no longer flashes open and then vanishes: the pane's
+  visibility is settled when the split view is created rather than after text
+  extraction finishes, seconds later.
+- Overlay mode shows a progress chip on the page, so a click on 翻译 is
+  acknowledged immediately even though the side pane is hidden.
+- A failure while opening keeps the pane on screen carrying the error instead of
+  silently tearing the session down.
+
+### Added
+
+- An in-memory ring buffer of recent warnings and errors, readable at any time
+  via `Zotero.PaperMirror.lastErrors()` — no need to have enabled debug logging
+  beforehand.
+
+## [0.1.0] — 2026-08-07
+
+Initial working plugin for Zotero 9.0.x.
+
+### Added
+
+- Side-by-side bilingual reading in the built-in PDF reader, with synchronised
+  scrolling and a reader-toolbar toggle.
+- On-page overlay mode: the translation is painted onto the rendered page, one
+  mask per source line, with the page's own sampled paper colour.
+- Structured extraction: paragraph merging, de-hyphenation, two-column reading
+  order, heading and caption classification, formula protection, and a
+  metadata filter for author rosters, affiliations, copyright, DOI lines,
+  running heads and page feet.
+- Providers: Bing and Google free engines (no key), plus OpenAI-compatible,
+  Anthropic, DeepL and custom endpoints. BYOK only — no developer keys are
+  bundled, and keys are stored in the system credential store.
+- Deep explanation of a selected passage, a glossary, a persistent local cache
+  keyed by file hash and settings, and save-to-note.
+- In-plugin translated-PDF generation with pdf-lib and a build-time GB2312
+  subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
+  layout re-flow.
+
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.8...v0.1.9
+[0.1.8]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.6...v0.1.7
+[0.1.6]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/wandonwe/papermirror-zotero/releases/tag/v0.1.0

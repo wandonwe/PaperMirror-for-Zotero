@@ -13,10 +13,14 @@
  */
 
 import { isFormulaRun } from '../reader/formulaGuard';
+import * as logger from '../utils/logger';
 import type { ExplanationSection } from '../translation/explainer';
 import type { PageTranslationState } from '../translation/translationManager';
 import type { SourceBlock } from '../types/models';
 
+const MODULE = 'translationPane';
+/** How far the rebuilt page may be scaled up to fill the pane. */
+const PAGE_MAX_UPSCALE = 2.4;
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -53,8 +57,12 @@ export interface PaneStrings {
 	close: string;
 	swapSides: string;
 	pending: string;
+	/** Retained for the Zotero.PaperMirror.exportTranslatedPdf() entry point,
+	 *  which no longer has a button in the pane. */
 	exportPdf: string;
 	exportPdfTip: string;
+	viewArticle: string;
+	viewPage: string;
 	privacyNotice: string;
 	privacyAccept: string;
 }
@@ -70,6 +78,7 @@ export interface PaneCallbacks {
 	onCopy(mode: 'plain' | 'both'): void;
 	onSaveNote(): void;
 	onExportPdf(): void;
+	onToggleViewKind(kind: 'page' | 'article'): void;
 	onOpenSettings(): void;
 	onClose(): void;
 	onSwapSides(): void;
@@ -104,6 +113,9 @@ export class TranslationPane {
 	private toastEl!: HTMLElement;
 	private toastText!: HTMLElement;
 	private toastTimer: ReturnType<typeof setTimeout> | null = null;
+	private statusNote!: HTMLElement;
+	private statusTimer: ReturnType<typeof setTimeout> | null = null;
+	private lastStatusSignature = '';
 
 	private pages = new Map<number, PageSection>();
 	private selectedBlockId: string | null = null;
@@ -124,8 +136,12 @@ export class TranslationPane {
 	private resizeObserver: { disconnect(): void } | null = null;
 	private resizeTimer: ReturnType<typeof setTimeout> | null = null;
 	private lastWidth = 0;
-	/** Guard for the post-draw width recheck, so it can never oscillate. */
-	private widthRetry = 0;
+	private viewKindButton: HTMLElement | null = null;
+	private sideButton: HTMLElement | null = null;
+	private sideFill: HTMLElement | null = null;
+	private paneSide: 'left' | 'right' = 'right';
+	/** Circuit breaker: draw timestamps, newest last. */
+	private drawTimes: number[] = [];
 
 	constructor(host: HTMLElement, _title: string, strings: PaneStrings, callbacks: PaneCallbacks) {
 		this.host = host;
@@ -192,55 +208,119 @@ export class TranslationPane {
 
 	// ---- structure (demo/index.html) ----------------------------------------
 
+	/** The plugin mark — the split card, in miniature, in colour. */
+	private makeBrandIcon(): HTMLElement {
+		const wrap = this.el('span', 'pm-brand');
+		wrap.setAttribute('title', this.strings.title);
+		const svg = this.doc.createElementNS(SVG_NS, 'svg');
+		svg.setAttribute('viewBox', '0 0 16 16');
+		const node = (name: string, attrs: Record<string, string>): Element => {
+			const el = this.doc.createElementNS(SVG_NS, name);
+			for (const [k, v] of Object.entries(attrs)) {
+				el.setAttribute(k, v);
+			}
+			return el;
+		};
+		const defs = this.doc.createElementNS(SVG_NS, 'defs');
+		const grad = node('linearGradient', { id: 'pm-brand-grad', x1: '0', y1: '0', x2: '0', y2: '1' });
+		grad.appendChild(node('stop', { offset: '0', 'stop-color': '#96abf1' }));
+		grad.appendChild(node('stop', { offset: '1', 'stop-color': '#6f6ce8' }));
+		defs.appendChild(grad);
+		svg.appendChild(defs);
+		svg.appendChild(node('path', {
+			d: 'M8 2.4H3.9A1.9 1.9 0 0 0 2 4.3v7.4a1.9 1.9 0 0 0 1.9 1.9H8Z',
+			fill: '#f7f8fa', stroke: 'rgba(0,0,0,.28)', 'stroke-width': '.6'
+		}));
+		svg.appendChild(node('path', {
+			d: 'M8 1.9h4.1A1.9 1.9 0 0 1 14 3.8v7.9a1.9 1.9 0 0 1-1.9 1.9H8Z',
+			fill: 'url(#pm-brand-grad)'
+		}));
+		svg.appendChild(node('rect', { x: '3.4', y: '4.4', width: '3', height: '1.1', rx: '.55', fill: '#1c1e24' }));
+		svg.appendChild(node('rect', { x: '3.4', y: '7', width: '3.4', height: '.9', rx: '.45', fill: '#8b8f98' }));
+		svg.appendChild(node('circle', { cx: '9.3', cy: '3.3', r: '.55', fill: '#37c871' }));
+		svg.appendChild(node('rect', { x: '9', y: '4.4', width: '3.2', height: '1.1', rx: '.55', fill: '#4b50e6' }));
+		svg.appendChild(node('rect', { x: '9', y: '7', width: '3.6', height: '.9', rx: '.45', fill: 'rgba(255,255,255,.92)' }));
+		wrap.appendChild(svg);
+		return wrap;
+	}
+
+	/**
+	 * The layout-swap button. Not a generic arrow: it DRAWS the current
+	 * arrangement — two panels side by side, the translation's one filled —
+	 * so the button says which side the translation is on before you click it.
+	 */
+	private makeSideButton(): HTMLElement {
+		const btn = this.el('button', 'pm-icon-button pm-side-toggle');
+		btn.setAttribute('title', this.strings.swapSides);
+		btn.setAttribute('aria-label', this.strings.swapSides);
+		const svg = this.doc.createElementNS(SVG_NS, 'svg');
+		svg.setAttribute('viewBox', '0 0 24 24');
+		const frame = this.doc.createElementNS(SVG_NS, 'rect');
+		frame.setAttribute('x', '3');
+		frame.setAttribute('y', '5');
+		frame.setAttribute('width', '18');
+		frame.setAttribute('height', '14');
+		frame.setAttribute('rx', '2.5');
+		svg.appendChild(frame);
+		const divider = this.doc.createElementNS(SVG_NS, 'path');
+		divider.setAttribute('d', 'M12 5v14');
+		svg.appendChild(divider);
+		// The filled half marks where the translation lives.
+		const fill = this.doc.createElementNS(SVG_NS, 'rect');
+		fill.setAttribute('class', 'pm-side-fill');
+		fill.setAttribute('y', '5');
+		fill.setAttribute('width', '9');
+		fill.setAttribute('height', '14');
+		svg.appendChild(fill);
+		btn.appendChild(svg);
+		btn.addEventListener('click', () => this.callbacks.onSwapSides());
+		this.sideButton = btn;
+		this.sideFill = fill as unknown as HTMLElement;
+		this.setPaneSide(this.paneSide);
+		return btn;
+	}
+
+	/** Which side the translation pane is on — drives the swap button's icon. */
+	setPaneSide(side: 'left' | 'right'): void {
+		this.paneSide = side;
+		if (!this.sideFill || !this.sideButton) {
+			return;
+		}
+		this.sideFill.setAttribute('x', side === 'right' ? '12' : '3');
+		this.sideButton.setAttribute('data-pm-side', side);
+	}
+
 	private build(): void {
-		// --- header
+		// --- header: one row, fixed left-to-right order.
+		//   icon · languages · engine · refresh · status · sync · save ·
+		//   layout · settings · close
 		const header = this.el('div', 'pm-header');
+		const bar = this.el('div', 'pm-bar');
 
-		const titleRow = this.el('div', 'pm-title-row');
-		const titleCol = this.el('div', 'pm-title-col');
-		const eyebrow = this.el('div', 'pm-eyebrow');
-		eyebrow.append(this.el('span', 'pm-live-dot'), this.doc.createTextNode(this.strings.eyebrow));
-		titleCol.append(eyebrow, this.el('h2', 'pm-title', this.strings.title));
-		const actions = this.el('div', 'pm-header-actions');
-		actions.append(
-			this.iconButton(ICON_PATHS.swap, this.strings.swapSides, () => this.callbacks.onSwapSides()),
-			this.iconButton(ICON_PATHS.settings, this.strings.settings, () => this.callbacks.onOpenSettings()),
-			this.iconButton(ICON_PATHS.close, this.strings.close, () => this.callbacks.onClose())
-		);
-		titleRow.append(titleCol, actions);
+		// Three zones, in the fixed order 图标 · 语言 · 引擎 · 刷新 · 同步滚动 ·
+		// 保存到笔记 · 布局 · 设置 · 关闭 — but grouped so the eye can find
+		// things: what is being translated (left), what to do with it (middle),
+		// what to do with the window (right). Hairlines mark the seams.
+		bar.appendChild(this.makeBrandIcon());
 
-		const controls = this.el('div', 'pm-controls-row');
-		this.languagePill = this.el('button', 'pm-pill');
+		this.languagePill = this.el('button', 'pm-chip pm-chip-lang');
 		this.languagePill.setAttribute('title', this.strings.settings);
 		this.languagePill.addEventListener('click', () => this.callbacks.onOpenSettings());
-		const providerPill = this.el('button', 'pm-pill pm-provider');
+
+		const providerPill = this.el('button', 'pm-chip pm-chip-provider');
 		providerPill.setAttribute('title', this.strings.settings);
-		this.providerMark = this.el('span', 'pm-provider-mark', '·');
-		this.providerName = this.el('span', undefined, '');
-		providerPill.append(this.providerMark, this.providerName, this.el('b', undefined, '⌄'));
+		this.providerMark = this.el('span', 'pm-provider-mark');
+		this.providerName = this.el('span', 'pm-provider-name', '');
+		providerPill.append(this.providerMark, this.providerName);
 		providerPill.addEventListener('click', () => this.callbacks.onOpenSettings());
-		controls.append(
-			this.languagePill,
-			providerPill,
-			this.iconButton(ICON_PATHS.refresh, this.strings.retranslate, () => this.callbacks.onRetranslate(), 'pm-soft pm-refresh')
-		);
 
 		this.statusRow = this.el('div', 'pm-status-row');
 		this.statusMain = this.el('span', 'pm-status-main');
 		this.statusSub = this.el('span', 'pm-status-sub');
 		this.statusRow.append(this.statusMain, this.statusSub);
 
-		header.append(titleRow, controls, this.statusRow);
-
-		// --- scroll body
-		this.scroll = this.el('div', 'pm-scroll');
-		this.scroll.setAttribute('data-pm-view', this.viewKind);
-		this.articleHost = this.el('div', 'pm-article-host');
-		this.scroll.append(this.articleHost);
-		this.scrollHandler = () => this.handleScroll();
-		this.scroll.addEventListener('scroll', this.scrollHandler, { passive: true });
-
-		// --- controls live in the HEADER, not a footer bar (下面不要有按钮).
+		this.syncSwitch = this.switchControl(this.strings.syncScroll, true, on => this.callbacks.onToggleSync(on));
+		// Constructed but not mounted: session code still drives their state.
 		this.originalSwitch = this.switchControl(
 			this.strings.showOriginal,
 			this.host.getAttribute('data-pm-show-original') !== 'false',
@@ -252,23 +332,37 @@ export class TranslationPane {
 			})
 		);
 		this.overlaySwitch = this.switchControl(this.strings.overlay, false, on => this.callbacks.onToggleOverlay(on));
-		this.syncSwitch = this.switchControl(this.strings.syncScroll, true, on => this.callbacks.onToggleSync(on));
-		// Only 同步滚动 · 复制译文 · 保存到笔记 are mounted; the 显示原文对照 /
-		// PDF 叠加 switches stay constructed (session code drives their state)
-		// but have no UI entry.
-		actions.prepend(
+
+		bar.append(
+			this.languagePill,
+			providerPill,
+			this.iconButton(ICON_PATHS.refresh, this.strings.retranslate, () => this.callbacks.onRetranslate(), 'pm-refresh'),
+			this.el('span', 'pm-bar-spacer'),
 			this.syncSwitch,
-			this.textButton('pm-footer-button', this.strings.copy, this.strings.copy, () => this.callbacks.onCopy('plain')),
-			this.textButton('pm-footer-button pm-primary', this.strings.saveNote, this.strings.saveNote, () => this.callbacks.onSaveNote()),
-			this.textButton('pm-footer-button pm-export', this.strings.exportPdf, this.strings.exportPdfTip, () => this.callbacks.onExportPdf())
+			this.textButton('pm-bar-action', this.strings.saveNote, this.strings.saveNote, () => this.callbacks.onSaveNote()),
+			this.el('span', 'pm-bar-sep'),
+			this.makeSideButton(),
+			this.iconButton(ICON_PATHS.settings, this.strings.settings, () => this.callbacks.onOpenSettings()),
+			this.iconButton(ICON_PATHS.close, this.strings.close, () => this.callbacks.onClose())
 		);
 
-		// --- toast
+		header.append(bar);
+
+		// --- scroll body
+		this.scroll = this.el('div', 'pm-scroll');
+		this.scroll.setAttribute('data-pm-view', this.viewKind);
+		this.articleHost = this.el('div', 'pm-article-host');
+		this.scroll.append(this.articleHost);
+		this.scrollHandler = () => this.handleScroll();
+		this.scroll.addEventListener('scroll', this.scrollHandler, { passive: true });
+
+		// --- floating status note (bottom-right) + toast
+		this.statusNote = this.el('div', 'pm-status-note');
 		this.toastEl = this.el('div', 'pm-toast');
 		this.toastText = this.el('p');
 		this.toastEl.append(this.el('span', 'pm-toast-check', '✓'), this.toastText);
 
-		this.host.append(header, this.scroll, this.toastEl);
+		this.host.append(header, this.scroll, this.statusNote, this.toastEl);
 
 		this.keyHandler = (event: KeyboardEvent) => {
 			if (event.key === 'Escape') {
@@ -334,25 +428,39 @@ export class TranslationPane {
 	}
 
 	setLanguagePair(source: string, target: string): void {
+		// One chip, both languages. Two separate truncating pills turned this
+		// into "Eng… → 简体…", which tells the reader nothing.
 		this.languagePill.replaceChildren(
-			this.el('span', undefined, source),
-			this.el('i', undefined, '→'),
-			this.el('span', undefined, target),
-			this.el('b', undefined, '⌄')
+			this.el('span', 'pm-lang-from', source),
+			this.el('i', 'pm-lang-arrow', '→'),
+			this.el('span', 'pm-lang-to', target)
 		);
 	}
 
 	setProviderInfo(displayName: string): void {
 		this.providerName.textContent = displayName;
-		this.providerMark.textContent = (displayName.trim().charAt(0) || '·').toLowerCase();
+		this.providerMark.textContent = '';
 	}
 
 	setBusy(busy: boolean): void {
 		this.host.classList.toggle('pm-refreshing', busy);
 	}
 
-	/** demo .status-row — green main label plus a muted secondary label. */
+	/**
+	 * Transient status, shown as a floating note in the bottom-right corner.
+	 *
+	 * Only NEW information appears: repeating the same message does not
+	 * re-trigger it. Busy states stay up while the work runs, results fade
+	 * after a couple of seconds, errors linger long enough to be read.
+	 */
 	setStatus(main: string, options?: { sub?: string; error?: boolean; busy?: boolean; check?: boolean }): void {
+		const sub = options?.sub ?? '';
+		const signature = `${main}|${sub}|${options?.error ? 'e' : ''}${options?.busy ? 'b' : ''}`;
+		if (signature === this.lastStatusSignature) {
+			return;
+		}
+		this.lastStatusSignature = signature;
+
 		this.statusMain.replaceChildren();
 		if (options?.busy) {
 			this.statusMain.append(this.el('span', 'pm-bilingual-spinner'));
@@ -361,8 +469,22 @@ export class TranslationPane {
 			this.statusMain.append(this.el('i', 'pm-check', '✓'));
 		}
 		this.statusMain.append(this.doc.createTextNode(main));
-		this.statusSub.textContent = options?.sub ?? '';
+		this.statusSub.textContent = sub;
 		this.statusRow.classList.toggle('pm-error', !!options?.error);
+
+		this.statusNote.replaceChildren(this.statusRow);
+		this.statusNote.setAttribute('data-pm-error', String(!!options?.error));
+		this.statusNote.classList.add('pm-show');
+		if (this.statusTimer) {
+			clearTimeout(this.statusTimer);
+			this.statusTimer = null;
+		}
+		if (!options?.busy) {
+			this.statusTimer = setTimeout(
+				() => this.statusNote.classList.remove('pm-show'),
+				options?.error ? 7000 : 2400
+			);
+		}
 	}
 
 	toast(message: string): void {
@@ -531,6 +653,21 @@ export class TranslationPane {
 		this.articleHost.replaceChildren();
 		this.pages.clear();
 		this.pageHost = null;
+		this.refreshViewKindButton();
+	}
+
+	/**
+	 * The pane's two readings of the same text: 文章流 is complete and never
+	 * clips (this is the mode that guarantees 无删减); 整页对照 rebuilds the
+	 * page's own layout beside the original. The button offers the OTHER one.
+	 */
+	private refreshViewKindButton(): void {
+		if (!this.viewKindButton) {
+			return;
+		}
+		const label = this.viewKind === 'page' ? this.strings.viewArticle : this.strings.viewPage;
+		this.viewKindButton.textContent = label;
+		this.viewKindButton.setAttribute('title', label);
 	}
 
 	getViewKind(): 'page' | 'article' {
@@ -545,10 +682,46 @@ export class TranslationPane {
 	 * min-content width and shoves the reader off screen.
 	 */
 	private pageWidthAvailable(): number {
-		const width = this.scroll.clientWidth || this.host.clientWidth;
-		// Nearly edge to edge: the page must read as "the other half of the
-		// spread", so only a sliver of backdrop is kept around it.
-		return Math.max(160, width - 16);
+		// Informational only now: the rebuilt page is sized from the reader's
+		// own render, not from this number. It is still passed through so the
+		// renderer can centre small pages and log sensible diagnostics.
+		const scrollW = this.scroll.clientWidth || this.host.clientWidth;
+		return Math.max(160, (scrollW || 400) - 16);
+	}
+
+	/**
+	 * Fit the rebuilt page to the pane by SCALING it, never by rebuilding it.
+	 *
+	 * The page is built at the reader's own pixel geometry, which is what keeps
+	 * the text layer aligned with the bitmap. A CSS transform scales the
+	 * finished result as one piece, so dragging the divider resizes the
+	 * translation smoothly — no re-render, no canvas allocation, and no way for
+	 * the text and the artwork to disagree. Only ever scales DOWN: the
+	 * translated page must never end up larger than the original beside it.
+	 */
+	private fitPageToPane(): void {
+		const page = this.pageHost?.querySelector('.pm-repage') as HTMLElement | null;
+		if (!page) {
+			return;
+		}
+		const pageWidth = parseFloat(page.style.width) || page.offsetWidth;
+		const pageHeight = parseFloat(page.style.height) || page.offsetHeight;
+		if (!pageWidth || !pageHeight) {
+			return;
+		}
+		// FILL the pane, both directions. Scaling up is safe here in a way it
+		// never was before: a transform scales the bitmap and the text layer as
+		// one object, so they cannot drift apart. The bitmap is supersampled 2×,
+		// so it stays sharp well past 1.0.
+		const available = Math.max(120, (this.scroll.clientWidth || pageWidth) - 24);
+		const scale = Math.max(0.2, Math.min(PAGE_MAX_UPSCALE, available / pageWidth));
+		page.style.transformOrigin = 'top left';
+		page.style.transform = Math.abs(scale - 1) < 0.002 ? '' : `scale(${scale.toFixed(4)})`;
+		// A transform leaves the layout box untouched, so the footprint has to
+		// be corrected by hand or the scroll area is the wrong size — negative
+		// when shrinking, positive when growing.
+		page.style.marginRight = `${Math.round(pageWidth * (scale - 1))}px`;
+		page.style.marginBottom = `${Math.round(20 + pageHeight * (scale - 1))}px`;
 	}
 
 	private observeResize(): void {
@@ -560,17 +733,7 @@ export class TranslationPane {
 			if (this.viewKind !== 'page') {
 				return;
 			}
-			const width = this.pageWidthAvailable();
-			if (Math.abs(width - this.lastWidth) < 8) {
-				return;
-			}
-			if (this.resizeTimer) {
-				clearTimeout(this.resizeTimer);
-			}
-			this.resizeTimer = setTimeout(() => {
-				this.resizeTimer = null;
-				this.drawCurrentPage();
-			}, 140);
+			this.fitPageToPane();
 		});
 		observer.observe(this.scroll);
 		this.resizeObserver = observer;
@@ -606,8 +769,32 @@ export class TranslationPane {
 		return host;
 	}
 
+	/**
+	 * Hard stop on runaway redraws.
+	 *
+	 * Every 整页对照 draw allocates two full-page canvases at 2× supersampling —
+	 * tens of megabytes for a big page. A feedback loop between a draw and
+	 * anything that observes its result therefore does not merely stutter, it
+	 * exhausts memory and takes Zotero down with it. Whatever new loop a future
+	 * change introduces, this bounds it: more than 8 draws in 3 seconds and the
+	 * page freezes at its current size until something genuinely changes.
+	 */
+	private drawBudgetSpent(): boolean {
+		const now = Date.now();
+		this.drawTimes = this.drawTimes.filter(t => now - t < 3000);
+		this.drawTimes.push(now);
+		if (this.drawTimes.length > 8) {
+			logger.warn(MODULE, 'page redraw budget exhausted — freezing the rebuilt page');
+			return true;
+		}
+		return false;
+	}
+
 	private drawCurrentPage(): void {
 		if (!this.pageRenderer || this.viewKind !== 'page' || this.currentPage < 0) {
+			return;
+		}
+		if (this.drawBudgetSpent()) {
 			return;
 		}
 		const host = this.ensurePageHost();
@@ -634,25 +821,7 @@ export class TranslationPane {
 		host.insertBefore(label, host.firstChild);
 		this.applyCompareState();
 		this.scroll.scrollTop = Math.min(scrollTop, Math.max(0, this.scroll.scrollHeight - this.scroll.clientHeight));
-		// Self-healing width check: the first draw can race the 50/50 pixel
-		// split (and anything else that changes the pane's width without a
-		// resize event we catch), leaving the page rendered against a stale,
-		// narrower width — floating small with margins. One frame later the
-		// layout HAS settled; if the real width disagrees, redraw once with it.
-		const win = this.doc.defaultView;
-		win?.requestAnimationFrame?.(() => {
-			if (this.viewKind !== 'page') {
-				return;
-			}
-			const fresh = this.pageWidthAvailable();
-			if (Math.abs(fresh - this.lastWidth) > 12 && this.widthRetry < 2) {
-				this.widthRetry++;
-				this.drawCurrentPage();
-			}
-			else {
-				this.widthRetry = 0;
-			}
-		});
+		this.fitPageToPane();
 	}
 
 	/**
@@ -888,6 +1057,10 @@ export class TranslationPane {
 		if (this.toastTimer) {
 			clearTimeout(this.toastTimer);
 			this.toastTimer = null;
+		}
+		if (this.statusTimer) {
+			clearTimeout(this.statusTimer);
+			this.statusTimer = null;
 		}
 		if (this.resizeTimer) {
 			clearTimeout(this.resizeTimer);

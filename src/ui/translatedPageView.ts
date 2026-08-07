@@ -24,17 +24,40 @@
 import type { SourceBlock } from '../types/models';
 import * as adapter from '../reader/zoteroReaderAdapter';
 import type { ReaderLike } from '../reader/zoteroReaderAdapter';
+import { isMetadataBlock } from '../reader/metaFilter';
 import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
 import { translatedFontSize } from './pageLayout';
+import {
+	assignColumns,
+	inkToObstacles,
+	planFlow,
+	resolveOverlaps,
+	type FlowItem,
+	type FlowObstacle
+} from './pageFlow';
 
 const MODULE = 'translatedPageView';
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
 
-/** Supersampling for the page bitmap so text-free artwork stays crisp. */
-const BITMAP_SCALE = 2;
+/**
+ * Supersampling for the page bitmap so text-free artwork stays crisp.
+ *
+ * Two canvases are allocated per draw (artwork + mask), each pageWidth ×
+ * pageHeight × BITMAP_SCALE² × 4 bytes. At 2× a large page costs ~35 MB per
+ * draw, so the factor is stepped down on big pages: crispness is worth a lot
+ * less than not exhausting memory.
+ */
+const BITMAP_SCALE_MAX = 2;
+const BITMAP_PIXEL_BUDGET = 6_000_000; // per canvas, ≈24 MB at 4 bytes/px
+
+function bitmapScaleFor(widthPx: number, heightPx: number): number {
+	const area = Math.max(1, widthPx * heightPx);
+	const scale = Math.sqrt(BITMAP_PIXEL_BUDGET / area);
+	return Math.max(1, Math.min(BITMAP_SCALE_MAX, scale));
+}
 /** Paper-colour bleed around a blanked paragraph, in page pixels. */
-const MASK_PADDING = 1.5;
+const MASK_PADDING = 2;
 /** Below this the text is noise, not reading material. */
 const MIN_FONT_PX = 8.5;
 
@@ -203,17 +226,24 @@ export function buildTranslatedPage(
 		return null;
 	}
 
-	// Fill the pane's width, always. The split is pixel-locked at 50/50, so
-	// "as wide as the pane" IS "as wide as the original's half" — whatever
-	// zoom the left side happens to be at. The old never-upscale cap left the
-	// rebuilt page floating small with margins whenever the reader rendered
-	// below pane width (fit-page zoom, or a rebuild racing the left side's
-	// re-fit), shrinking every rect and font with it. A modest upscale bound
-	// keeps a pathological tiny render from blowing up into mush.
-	const pxPerViewport = Math.min(input.availableWidth / viewportWidth, 2.5);
+	// MIRROR THE READER, 1:1. The rebuilt page is rendered at exactly the size
+	// PDF.js just rendered the original at — same pixels, same scale.
+	//
+	// Every previous formula scaled the page to the pane's width instead, and
+	// each one failed the same way: the page element carries pixel geometry
+	// (block lefts, widths, font sizes), so the moment an ancestor clamps its
+	// width the bitmap scales down with the container while the text keeps its
+	// pixel coordinates — giant type spilling past the edge, masks no longer
+	// covering the words they were cut for. Deriving the size from the reader's
+	// own render also makes zoom work for free: zooming re-renders the left
+	// side, which fires pagerendered, which rebuilds the right side at the new
+	// size. Both halves change together, always.
+	const pxPerViewport = 1;
 	const pageWidthPx = viewportWidth * pxPerViewport;
 	const pageHeightPx = viewportHeight * pxPerViewport;
 	const pxPerPoint = scale * pxPerViewport;
+
+	const BITMAP_SCALE = bitmapScaleFor(pageWidthPx, pageHeightPx);
 
 	const page = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
 	page.className = 'pm-repage';
@@ -260,11 +290,15 @@ export function buildTranslatedPage(
 		if (input.translations.get(block.id) === undefined) {
 			continue; // not translated yet — leave the original visible
 		}
-		// Headings and titles keep the ORIGINAL text. They are the page's
-		// skeleton: leaving them intact keeps the frame recognisable, reads
-		// fine (short English labels), and removes a whole class of garbled
-		// heading translations. Body paragraphs carry the actual reading load.
-		if (block.type === 'heading' || block.type === 'title') {
+		// Titles and headings ARE translated here. The rebuilt page is meant to
+		// read as the paper in Chinese — a Chinese abstract under an English
+		// heading reads like a bug. (The on-PDF overlay keeps the title in the
+		// original, deliberately: there the English page is what you are
+		// looking at, and the title is how you recognise it.)
+		//
+		// Belt and braces: a translation cached from before the metadata
+		// filter learned a pattern must not resurface here.
+		if (isMetadataBlock(block.sourceText)) {
 			continue;
 		}
 		const box = pixelBox(block, render, pxPerViewport);
@@ -309,12 +343,16 @@ export function buildTranslatedPage(
 	page.style.setProperty('--pm-repage-ink', ink);
 	page.style.background = paper;
 
-	// ---- 4. place the translations, strictly in place -----------------------
+	// ---- 4. place the translations, re-flowed ------------------------------
 	const textLayer = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
 	textLayer.className = 'pm-repage-text';
 	page.appendChild(textLayer);
 
-	interface PlacedItem { node: HTMLElement; height: number }
+	interface PlacedItem {
+		node: HTMLElement;
+		box: PixelBox;
+		startSize: number;
+	}
 	const placed: PlacedItem[] = [];
 	for (const block of translatable) {
 		const translated = input.translations.get(block.id);
@@ -330,9 +368,11 @@ export function buildTranslatedPage(
 		node.style.left = `${box.left}px`;
 		node.style.top = `${box.top}px`;
 		node.style.width = `${box.width}px`;
-		node.style.height = `${box.height}px`;
-		node.style.overflow = 'hidden';
-		node.style.fontSize = `${translatedFontSize(block.fontSize ?? 0, pxPerPoint, bodyPt)}px`;
+		// Height is NOT set: the block takes what the Chinese needs, and the
+		// flow pass moves whatever is below it. That is the whole difference
+		// between a re-flowed page and text crammed back into English boxes.
+		const startSize = translatedFontSize(block.fontSize ?? 0, pxPerPoint, bodyPt);
+		node.style.fontSize = `${startSize}px`;
 		const bg = blockPaper.get(block.id);
 		if (bg) {
 			node.style.color = inkFor(bg);
@@ -344,45 +384,103 @@ export function buildTranslatedPage(
 		node.textContent = translated; // SAFE: text node only, never innerHTML
 		node.title = block.sourceText;
 		textLayer.appendChild(node);
-		placed.push({ node, height: box.height });
+		placed.push({ node, box, startSize });
 	}
 
 	if (!placed.length) {
 		return { element: page, hasArtwork, blocksPlaced: 0 };
 	}
 
+	// Blocks left in the original — author lists, affiliations, anything the
+	// metadata filter excluded. They stay exactly where the paper put them, so
+	// the flow must treat them as immovable.
+	const fixedBoxes = translatable
+		.filter(b => !replaceable.has(b.id))
+		.map(b => pixelBox(b, render, pxPerViewport))
+		.filter(b => b.width > 8 && b.height > 4);
+
+	// Obstacles: ink on the original page that is NOT one of our blocks —
+	// figures, plots, logos, stamps. Sampled from the artwork bitmap while it
+	// is still to hand.
+	const obstacles = ctx
+		? buildObstacles(ctx, BITMAP_SCALE, pageWidthPx, pageHeightPx, placed.map(p => p.box))
+		: [];
+
 	// The element must be in the document to be measurable; the caller inserts
-	// it and then calls settle(). Strict containment: binary-search the font
-	// down until the translation fits its source rect. A block that cannot fit
-	// even at the floor is flagged and expands over the page on hover.
+	// it and then calls settle().
 	(page as HTMLElement & { pmSettle?: () => void }).pmSettle = () => {
-		for (const item of placed) {
-			const { node, height } = item;
-			const fits = (size: number): boolean => {
-				node.style.fontSize = `${size}px`;
-				return node.scrollHeight <= height + 2;
-			};
-			const initial = parseFloat(node.style.fontSize) || 12;
-			if (fits(initial)) {
+		const columns = assignColumns(placed.map(p => ({ left: p.box.left, width: p.box.width })));
+		// Natural height at the source size — one measurement per block.
+		const items: FlowItem[] = placed.map((item, i) => ({
+			id: String(i),
+			column: columns[i] ?? 0,
+			left: item.box.left,
+			width: item.box.width,
+			sourceTop: item.box.top,
+			naturalHeight: item.node.scrollHeight
+		}));
+		let plan = planFlow(items, obstacles, {
+			pageHeight: pageHeightPx,
+			gap: Math.max(4, bodyPt * pxPerPoint * 0.55),
+			bottomMargin: pageHeightPx * 0.04
+		});
+
+		// If the column ran off the page, tighten that column and re-flow it —
+		// once. Shrinking everything because one paragraph is long is what made
+		// earlier versions look like a ransom note.
+		const overflowingColumns = new Set(
+			plan.filter(p => p.overflow).map(p => items[Number(p.id)]!.column)
+		);
+		if (overflowingColumns.size) {
+			for (let i = 0; i < placed.length; i++) {
+				if (!overflowingColumns.has(items[i]!.column)) {
+					continue;
+				}
+				const item = placed[i]!;
+				const tightened = Math.max(MIN_FONT_PX, item.startSize * 0.9);
+				item.node.style.fontSize = `${tightened.toFixed(1)}px`;
+				item.node.style.lineHeight = '1.34';
+				items[i]!.naturalHeight = item.node.scrollHeight;
+			}
+			plan = planFlow(items, obstacles, {
+				pageHeight: pageHeightPx,
+				gap: Math.max(3, bodyPt * pxPerPoint * 0.45),
+				bottomMargin: pageHeightPx * 0.02
+			});
+		}
+
+		// Last line of defence: whatever the column analysis decided, no two
+		// boxes may end up on the same pixels — and nothing may be printed over
+		// a piece of the original we chose to keep.
+		const gap = Math.max(4, bodyPt * pxPerPoint * 0.4);
+		const resolved = resolveOverlaps(
+			plan.map((placement) => {
+				const item = placed[Number(placement.id)]!;
+				return {
+					id: placement.id,
+					left: item.box.left,
+					top: placement.top,
+					width: item.box.width,
+					height: items[Number(placement.id)]!.naturalHeight
+				};
+			}),
+			fixedBoxes,
+			gap,
+			pageHeightPx
+		);
+
+		for (const placement of plan) {
+			const item = placed[Number(placement.id)];
+			if (!item) {
 				continue;
 			}
-			let lo = MIN_FONT_PX;
-			let hi = initial;
-			for (let i = 0; i < 8 && hi - lo > 0.25; i++) {
-				const mid = (hi + lo) / 2;
-				if (fits(mid)) {
-					lo = mid;
-				}
-				else {
-					hi = mid;
-				}
+			const top = resolved.get(placement.id) ?? placement.top;
+			item.node.style.top = `${top}px`;
+			if (top > item.box.top + 0.5) {
+				item.node.setAttribute('data-pm-displaced', 'true');
 			}
-			node.style.fontSize = `${lo.toFixed(1)}px`;
-			if (node.scrollHeight > height + 2) {
-				node.style.lineHeight = '1.32';
-			}
-			if (node.scrollHeight > height + 2) {
-				node.setAttribute('data-pm-overflow', 'true');
+			if (top + items[Number(placement.id)]!.naturalHeight > pageHeightPx) {
+				item.node.setAttribute('data-pm-overflow', 'true');
 			}
 		}
 	};
@@ -394,6 +492,107 @@ export function buildTranslatedPage(
 /** Run the deferred measurement pass once the page is in the document. */
 export function settleTranslatedPage(element: HTMLElement): void {
 	(element as HTMLElement & { pmSettle?: () => void }).pmSettle?.();
+}
+
+/**
+ * Where on the page may the flow NOT print?
+ *
+ * Everything the reader can see that we are not replacing: figures, plots,
+ * photographs, journal logos, coloured bands, tables. There is no layout model
+ * to ask, so this reads the artwork bitmap directly — downsample the page to a
+ * coarse grid, mark every cell whose contrast against the paper says "there is
+ * something here", erase the cells covered by the blocks we are about to
+ * replace, and hand the rest to the flow as obstacles.
+ *
+ * Coarse on purpose. The grid only has to answer "is there a figure roughly
+ * here", and a fine grid would turn every stray speck into a wall.
+ */
+function buildObstacles(
+	ctx: CanvasRenderingContext2D,
+	bitmapScale: number,
+	pageWidthPx: number,
+	pageHeightPx: number,
+	blockBoxes: PixelBox[]
+): FlowObstacle[] {
+	try {
+		const COLS = 40;
+		const ROWS = 80;
+		const cellW = pageWidthPx / COLS;
+		const cellH = pageHeightPx / ROWS;
+		const image = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+		const data = image.data;
+		const stride = image.width * 4;
+
+		// Paper reference: the median-ish corner sample already used elsewhere.
+		const paperAt = (x: number, y: number): number => {
+			const idx = Math.min(data.length - 4, (Math.round(y) * image.width + Math.round(x)) * 4);
+			return 0.2126 * data[idx]! + 0.7152 * data[idx + 1]! + 0.0722 * data[idx + 2]!;
+		};
+		const reference = paperAt(image.width * 0.02, image.height * 0.02);
+
+		const ink: boolean[][] = [];
+		for (let row = 0; row < ROWS; row++) {
+			const cells: boolean[] = [];
+			for (let col = 0; col < COLS; col++) {
+				// Sample a few points per cell rather than every pixel: this runs
+				// on every redraw and the answer is a yes/no.
+				let hits = 0;
+				for (let sy = 1; sy <= 3; sy++) {
+					for (let sx = 1; sx <= 3; sx++) {
+						const px = (col + sx / 4) * cellW * bitmapScale;
+						const py = (row + sy / 4) * cellH * bitmapScale;
+						if (px < 0 || py < 0 || px >= image.width || py >= image.height) {
+							continue;
+						}
+						const idx = Math.round(py) * stride + Math.round(px) * 4;
+						if (idx < 0 || idx + 2 >= data.length) {
+							continue;
+						}
+						const luminance = 0.2126 * data[idx]! + 0.7152 * data[idx + 1]! + 0.0722 * data[idx + 2]!;
+						if (Math.abs(luminance - reference) > 26) {
+							hits++;
+						}
+					}
+				}
+				cells.push(hits >= 4);
+			}
+			ink.push(cells);
+		}
+
+		// Erase the text we are replacing — its ink is about to be masked out.
+		for (const box of blockBoxes) {
+			const fromRow = Math.max(0, Math.floor((box.top - cellH) / cellH));
+			const toRow = Math.min(ROWS - 1, Math.ceil((box.top + box.height + cellH) / cellH));
+			const fromCol = Math.max(0, Math.floor((box.left - cellW) / cellW));
+			const toCol = Math.min(COLS - 1, Math.ceil((box.left + box.width + cellW) / cellW));
+			for (let row = fromRow; row <= toRow; row++) {
+				for (let col = fromCol; col <= toCol; col++) {
+					ink[row]![col] = false;
+				}
+			}
+		}
+
+		// One column range per distinct block column.
+		const columns = assignColumns(blockBoxes.map(b => ({ left: b.left, width: b.width })));
+		const ranges = new Map<number, { column: number; fromCol: number; toCol: number }>();
+		blockBoxes.forEach((box, i) => {
+			const column = columns[i] ?? 0;
+			const fromCol = Math.max(0, Math.floor(box.left / cellW));
+			const toCol = Math.min(COLS - 1, Math.ceil((box.left + box.width) / cellW));
+			const existing = ranges.get(column);
+			ranges.set(column, existing
+				? { column, fromCol: Math.min(existing.fromCol, fromCol), toCol: Math.max(existing.toCol, toCol) }
+				: { column, fromCol, toCol });
+		});
+
+		return inkToObstacles(ink, cellH, [...ranges.values()], 2);
+	}
+	catch (e) {
+		// No obstacle map is survivable — the flow simply keeps blocks in
+		// their source order and positions.
+		logger.debug(MODULE, 'obstacle map failed; flowing without it', e);
+		return [];
+	}
 }
 
 // ---- geometry helpers -------------------------------------------------------

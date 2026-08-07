@@ -23,7 +23,7 @@
  */
 
 import type { BlockType, SourceBlock } from '../types/models';
-import { isMetadataBlock } from './metaFilter';
+import { isMetadataBlock, isRunningHeadOrFoot } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -344,7 +344,14 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	const blocks: SourceBlock[] = [];
 	let order = 0;
 	for (const p of merged) {
-		if (p.type !== 'title' && p.type !== 'heading' && isMetadataBlock(p.text, p.rect)) {
+		if (p.type !== 'title' && p.type !== 'heading' && isMetadataBlock(p.text, p.rect, pageWidth)) {
+			continue;
+		}
+		// Running heads and page-foot lines repeat the journal's furniture on
+		// every page. Translating them is pure noise. `title` is exempt: on a
+		// cover page with no masthead the paper's own title can sit inside the
+		// band, and losing it is far worse than translating one running head.
+		if (p.type !== 'title' && isRunningHeadOrFoot(p.rect, options.pageHeight, p.group.length, p.text)) {
 			continue;
 		}
 		if ((p.type === 'heading' || p.type === 'title') && REFERENCES_HEADINGS.test(p.text)) {

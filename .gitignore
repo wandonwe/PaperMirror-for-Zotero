@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build output
+build/
+dist/
+*.xpi
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Logs and scratch
+*.log
+tmp/
+_to_delete/

@@ -104,12 +104,19 @@ papermirror-mode-split = Side by side
 papermirror-mode-split-tip = Original PDF on the left, translation pane on the right
 papermirror-extract-diagnose-title = Text-layer diagnostics
 
-papermirror-compare = Compare
-papermirror-compare-tip = Original and translation side by side at the same size; press again for the original only
+papermirror-compare = Translate
+papermirror-compare-tip = Paint the translation onto the page, keeping its layout; press again for the original
+papermirror-mode-pick = Choose reading mode
+papermirror-peek-hover = Peek original on hover
+papermirror-peek-hover-tip = Hovering a translated paragraph reveals its source; hold Option/Alt to hide the whole overlay
+papermirror-dim-original = Dim original
+papermirror-dim-original-tip = Translucent masks — the original stays faintly visible
 
 # Full-PDF translation (local BabelDOC service)
 papermirror-export-pdf = Translated PDF
 papermirror-export-pdf-tip = Layout-level translation of the whole PDF via the local BabelDOC service; results are attached to the item
+papermirror-view-article = Article flow
+papermirror-view-page = Page view
 papermirror-export-running = Generating translated PDF (%n%%)…
 papermirror-export-done = Translated PDF attached to the item
 papermirror-export-failed = Translated PDF generation failed

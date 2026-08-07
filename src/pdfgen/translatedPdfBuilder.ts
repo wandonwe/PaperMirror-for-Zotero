@@ -25,6 +25,7 @@ import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import type { SourceBlock } from '../types/models';
 import { PaperMirrorError } from '../types/models';
+import { isMetadataBlock } from '../reader/metaFilter';
 import * as logger from '../utils/logger';
 import { layoutBlock } from './textWrap';
 
@@ -88,6 +89,11 @@ function isReplaceable(block: SourceBlock, translation: string | undefined): boo
 		return false;
 	}
 	if (block.type !== 'paragraph' && block.type !== 'caption' && block.type !== 'list') {
+		return false;
+	}
+	// Cached translations of blocks the metadata filter has since learned to
+	// exclude must not end up in the generated file either.
+	if (isMetadataBlock(block.sourceText)) {
 		return false;
 	}
 	const [x1, y1, x2, y2] = block.lineRectsPdf.reduce(

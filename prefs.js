@@ -26,9 +26,11 @@ pref('extensions.zotero.bilingualReader.showOriginal', false);
 pref('extensions.zotero.bilingualReader.articleFontSize', 16);
 pref('extensions.zotero.bilingualReader.overlayEnabled', false);
 // 工具栏三态切换器的最后状态: original | overlay | split
+// 默认 split(左右对照): 左边原版 PDF, 右边版面级重排的整页译文。
+// 覆盖模式(译文直接盖在原页上)在工具栏 ▾ 菜单里随时可切。
 pref('extensions.zotero.bilingualReader.viewMode', 'split');
-// 右侧面板呈现方式: page = 整页对照(默认, 译文覆盖在原版排版上),
-// article = 结构化文章流(备选)
+// 右侧面板呈现方式: page = 整页对照(默认, 版面级重排的整页译文,
+// 左原文右译文), article = 结构化文章流(备选, 纯文本完整无删减)
 pref('extensions.zotero.bilingualReader.paneView', 'page');
 // 完整 PDF 翻译的本地桥接服务 (BabelDOC/pdf2zh), 仅允许 localhost
 pref('extensions.zotero.bilingualReader.pdfServiceURL', 'http://127.0.0.1:11017');
@@ -39,6 +41,10 @@ pref('extensions.zotero.bilingualReader.pdfExportMode', 'builtin');
 pref('extensions.zotero.bilingualReader.overlayDisplayMode', 'translation-only');
 // strict | expand
 pref('extensions.zotero.bilingualReader.overlayFitMode', 'expand');
+// 覆盖模式下鼠标悬停在译文段落上时,掀开该段遮罩显示原文
+pref('extensions.zotero.bilingualReader.overlayPeekHover', true);
+// 架构迁移标记: 1 = 已迁移到覆盖渲染器默认值
+pref('extensions.zotero.bilingualReader.layoutMigration', 0);
 pref('extensions.zotero.bilingualReader.debugLogging', false);
 pref('extensions.zotero.bilingualReader.privacyNoticeAccepted', false);
 pref('extensions.zotero.bilingualReader.allowHTTPEndpoint', false);

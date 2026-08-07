@@ -641,8 +641,21 @@ export function getRenderedPageIndexes(reader: ReaderLike): number[] {
  * after zooming, rotating or scrolling a page back into view.
  * Returns a disposer; never throws.
  */
-export function onPdfRenderEvents(reader: ReaderLike, handler: (pageIndex: number | null) => void): () => void {
-	const events = ['pagerendered', 'textlayerrendered', 'scalechanging', 'rotationchanging', 'updateviewarea'];
+export const PDF_RENDER_EVENTS = ['pagerendered', 'textlayerrendered', 'scalechanging', 'rotationchanging', 'updateviewarea'];
+
+/**
+ * `updateviewarea` fires on every scroll frame. A subscriber that only needs to
+ * follow real geometry changes (zoom, rotation, re-render) should pass
+ * PDF_GEOMETRY_EVENTS instead and save itself the storm.
+ */
+export const PDF_GEOMETRY_EVENTS = ['pagerendered', 'textlayerrendered', 'scalechanging', 'rotationchanging'];
+
+export function onPdfRenderEvents(
+	reader: ReaderLike,
+	handler: (pageIndex: number | null) => void,
+	eventNames: string[] = PDF_RENDER_EVENTS
+): () => void {
+	const events = eventNames;
 	let bus: { on?: (t: string, h: (e: unknown) => void) => void; off?: (t: string, h: (e: unknown) => void) => void } | null = null;
 	const wrapped = (event: unknown): void => {
 		const pageNumber = (event as { pageNumber?: number })?.pageNumber;

@@ -104,6 +104,57 @@ export function shrinkRatio(finalSize: number, boxHeight: number, lineCount: num
 	return max > 0 ? finalSize / max : 1;
 }
 
+/**
+ * The typographic ladder the overlay walks when Chinese runs longer than the
+ * English it replaces — and it usually does not: CJK is denser per character
+ * but the translation of a dense two-column paragraph still overshoots often
+ * enough that "shrink the font" alone produces either illegible text or
+ * constant overflow.
+ *
+ * Each rung relaxes ONE axis, cheapest-looking first:
+ *   1. line-height 1.42 → 1.18   (leading is the least noticeable; CJK does
+ *      not need Latin's generous leading — 1.2 is ordinary in Chinese print)
+ *   2. letter-spacing 0 → -0.02em (CJK tolerates slight tightening)
+ *   3. font-size, binary-searched, never below MIN_READABLE_PX
+ *
+ * The rungs are sized so the whole ladder buys back a little over one line in
+ * six — enough to absorb the overwhelmingly common "translation runs one line
+ * long" case without the type ever getting smaller.
+ *
+ * The renderer tries the whole ladder at the source size before shrinking the
+ * type, so the common "one line too many" case is solved without the reader
+ * ever seeing smaller text.
+ */
+export interface TypeStep {
+	lineHeight: number;
+	letterSpacingEm: number;
+}
+
+export const TYPE_LADDER: TypeStep[] = [
+	{ lineHeight: 1.42, letterSpacingEm: 0 },
+	{ lineHeight: 1.32, letterSpacingEm: 0 },
+	{ lineHeight: 1.32, letterSpacingEm: -0.01 },
+	{ lineHeight: 1.24, letterSpacingEm: -0.01 },
+	{ lineHeight: 1.18, letterSpacingEm: -0.02 }
+];
+
+/**
+ * Estimated height of `charCount` CJK characters set at `fontSize` in a box
+ * `width` wide. Used by tests and by the pre-pass that decides whether a box
+ * needs the ladder at all; the renderer still measures for real.
+ */
+export function estimateHeight(
+	charCount: number,
+	fontSize: number,
+	width: number,
+	step: TypeStep
+): number {
+	const advance = fontSize * (1 + step.letterSpacingEm);
+	const perLine = Math.max(1, Math.floor(width / Math.max(1, advance)));
+	const lines = Math.ceil(charCount / perLine);
+	return lines * fontSize * step.lineHeight;
+}
+
 /** Boxes that would overlap after expansion — used to bail out safely. */
 export function overlaps(a: CssBox, b: CssBox): boolean {
 	return !(

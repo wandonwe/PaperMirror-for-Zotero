@@ -30,13 +30,15 @@ export type PrefKey
 	| 'overlayEnabled'
 	| 'overlayDisplayMode'
 	| 'overlayFitMode'
+	| 'overlayPeekHover'
 	| 'debugLogging'
 	| 'privacyNoticeAccepted'
 	| 'allowHTTPEndpoint'
 	| 'localOnlyMode'
 	| 'glossaryGlobal'
 	| 'promptVersion'
-	| 'apiKeyFallback';
+	| 'apiKeyFallback'
+	| 'layoutMigration';
 
 export function getPref<T = unknown>(key: PrefKey, fallback?: T): T {
 	try {

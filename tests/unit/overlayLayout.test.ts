@@ -105,10 +105,12 @@ test('initialFontSize scales with the space per source line and is clamped', () 
 	assert.ok(initialFontSize(9999, 1) <= 28, 'ceiling');
 });
 
-test('only body text and headings are ever covered by the overlay', () => {
+test('only body text and section headings are ever covered by the overlay', () => {
 	assert.equal(isOverlayableType('paragraph'), true);
 	assert.equal(isOverlayableType('heading'), true);
-	assert.equal(isOverlayableType('title'), true);
+	// The paper's title stays in the original — it is what the reader
+	// recognises the page by, and what they will cite and search for.
+	assert.equal(isOverlayableType('title'), false);
 	// Captions hug artwork, lists are often figure legends, tables and
 	// unknown blocks are risky — all excluded by policy.
 	assert.equal(isOverlayableType('caption'), false);

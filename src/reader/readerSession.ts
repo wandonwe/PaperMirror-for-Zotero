@@ -76,6 +76,8 @@ function paneStrings(): PaneStrings {
 		pending: getString('papermirror-pending'),
 		exportPdf: getString('papermirror-export-pdf'),
 		exportPdfTip: getString('papermirror-export-pdf-tip'),
+		viewArticle: getString('papermirror-view-article'),
+		viewPage: getString('papermirror-view-page'),
 		privacyNotice: getString('papermirror-privacy-notice'),
 		privacyAccept: getString('papermirror-privacy-accept')
 	};
@@ -110,6 +112,7 @@ export class ReaderSession {
 	private onViewModeChanged: ((mode: ViewMode) => void) | null = null;
 	private disposePdfEvents: (() => void) | null = null;
 	private pageRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+	private statusHideTimer: ReturnType<typeof setTimeout> | null = null;
 	/** Last seen PDF.js scale, to tell a zoom from a scroll (both fire the same events). */
 	private lastScale = 0;
 	/** True while a full-PDF translation is running on the local bridge. */
@@ -139,6 +142,15 @@ export class ReaderSession {
 		const container = adapter.getTabContainer(this.reader);
 		const browser = adapter.getReaderBrowser(this.reader);
 		this.split = createSplitView(container, browser);
+		// Decide the pane's visibility NOW, not after priming.
+		//
+		// The pane is created visible, and applyViewMode() used to run only
+		// after `extractor.prime()` — seconds later. In 覆盖模式 that read as
+		// the translation panel popping open and then vanishing on its own,
+		// which is exactly what it looked like. Settle it before anything can
+		// be seen.
+		this.split.setPaneVisible(this.viewMode === 'split'
+			|| !getPref<boolean>('privacyNoticeAccepted', false));
 
 		const item = adapter.getReaderItem(this.reader);
 		const title = item?.getDisplayTitle?.() ?? (item ? String(item.getField('title') ?? '') : '') ?? 'PDF';
@@ -159,6 +171,7 @@ export class ReaderSession {
 			onSaveNote: () => void this.saveSelectionToNote(),
 			onOpenSettings: () => this.openSettings(),
 			onExportPdf: () => void this.exportTranslatedPdf(),
+			onToggleViewKind: kind => setPref('paneView', kind),
 			onClose: () => this.close(),
 			onSwapSides: () => this.swapSides(),
 			onBlockClick: (pageIndex, _blockId) => this.sync?.onPaneNavigated(pageIndex),
@@ -170,14 +183,18 @@ export class ReaderSession {
 			}
 		});
 		this.pane.setTheme(adapter.isDarkTheme(this.reader) ? 'dark' : 'light');
+		this.pane.setPaneSide(getPref<string>('paneSide', 'right') === 'left' ? 'left' : 'right');
 		this.pane.setShowOriginal(getPref<boolean>('showOriginal', false));
 		this.pane.setSyncEnabled(getPref<boolean>('syncScroll', true));
 		this.overlay = new PdfOverlay(this.reader);
 		this.overlay.setDisplayMode(getPref<OverlayDisplayMode>('overlayDisplayMode', 'translation-only'));
+		this.overlay.setPeekOnHover(getPref<boolean>('overlayPeekHover', true));
 		this.overlay.setFitMode(getPref<'strict' | 'expand'>('overlayFitMode', 'expand'));
 		this.pane.setArticleFontSize(getPref<number>('articleFontSize', 16));
 		// 整页对照: the pane rebuilds the page next to the original PDF.
 		this.pane.setPageRenderer((pageIndex, host, width) => this.renderTranslatedPage(pageIndex, host, width));
+		// 左右对照 = 原文左 / 版面级重排的整页译文右. 文章流 stays one click
+		// away in the pane header for anyone who wants plain continuous text.
 		this.pane.setViewKind(getPref<'page' | 'article'>('paneView', 'page'));
 		{
 			const providerId = getPref<string>('provider', 'bing-free');
@@ -212,6 +229,13 @@ export class ReaderSession {
 		}
 		else {
 			this.applyViewMode();
+			// Instant acknowledgement of the click: the first page's status
+			// only arrives once extraction finishes.
+			this.overlayStatus(
+				getString('papermirror-status-translating-page')
+					.replace('%n%', String(adapter.getCurrentPageIndex(this.reader) + 1)),
+				{ busy: true }
+			);
 			this.startTranslating();
 		}
 
@@ -389,26 +413,61 @@ export class ReaderSession {
 			const pageNo = String(state.pageIndex + 1);
 			switch (state.status) {
 				case 'translating':
-				case 'extracting':
-					this.pane?.setStatus(
-						getString('papermirror-status-translating-page').replace('%n%', pageNo),
-						{ busy: true }
-					);
+				case 'extracting': {
+					const text = getString('papermirror-status-translating-page').replace('%n%', pageNo);
+					this.pane?.setStatus(text, { busy: true });
+					this.overlayStatus(text, { busy: true });
 					break;
-				case 'done':
-					this.pane?.setStatus(
-						getString('papermirror-status-done-page').replace('%n%', pageNo),
-						{ check: true, sub: state.fromCache ? getString('papermirror-status-cached') : '' }
-					);
+				}
+				case 'done': {
+					const text = getString('papermirror-status-done-page').replace('%n%', pageNo);
+					this.pane?.setStatus(text, {
+						check: true,
+						sub: state.fromCache ? getString('papermirror-status-cached') : ''
+					});
+					// The page itself now shows the answer; the chip has done
+					// its job and gets out of the way.
+					this.overlayStatus(text, {});
+					this.hideOverlayStatusSoon();
 					break;
-				case 'error':
-					this.pane?.setStatus(state.error?.message ?? getString('papermirror-status-error'), { error: true });
+				}
+				case 'error': {
+					const text = state.error?.message ?? getString('papermirror-status-error');
+					this.pane?.setStatus(text, { error: true });
+					this.overlayStatus(text, { error: true });
 					break;
-				case 'no-text-layer':
-					this.pane?.setStatus(getString('papermirror-no-text-layer'), { error: true });
+				}
+				case 'no-text-layer': {
+					const text = getString('papermirror-no-text-layer');
+					this.pane?.setStatus(text, { error: true });
+					this.overlayStatus(text, { error: true });
 					break;
+				}
 			}
 		}
+	}
+
+	/** Status on the PDF page itself — only meaningful when the pane is hidden. */
+	private overlayStatus(text: string | null, options: { busy?: boolean; error?: boolean }): void {
+		if (this.viewMode !== 'overlay') {
+			this.overlay?.setStatus(null);
+			return;
+		}
+		if (this.statusHideTimer) {
+			clearTimeout(this.statusHideTimer);
+			this.statusHideTimer = null;
+		}
+		this.overlay?.setStatus(text, options);
+	}
+
+	private hideOverlayStatusSoon(): void {
+		if (this.statusHideTimer) {
+			clearTimeout(this.statusHideTimer);
+		}
+		this.statusHideTimer = setTimeout(() => {
+			this.statusHideTimer = null;
+			this.overlay?.setStatus(null);
+		}, 2200);
 	}
 
 	private startPolling(): void {
@@ -489,6 +548,28 @@ export class ReaderSession {
 			});
 		}
 		return true;
+	}
+
+	/**
+	 * Something went wrong while opening: show it where the reader is looking
+	 * instead of disappearing. Both surfaces get the message, because which one
+	 * is visible depends on the mode that failed to apply.
+	 */
+	showOpenFailure(error: unknown): void {
+		const message = error instanceof Error ? error.message : String(error);
+		this.split?.setPaneVisible(true);
+		this.pane?.setStatus(message, { error: true });
+		this.overlay?.setStatus(message, { error: true });
+	}
+
+	/** 悬停看原文 on/off, from the toolbar menu. */
+	setPeekOnHover(enabled: boolean): void {
+		this.overlay?.setPeekOnHover(enabled);
+	}
+
+	/** 仅译文 ⇄ 原文淡化, from the toolbar menu. */
+	setOverlayDisplayMode(mode: OverlayDisplayMode): void {
+		this.overlay?.setDisplayMode(mode);
 	}
 
 	getViewMode(): ViewMode {
@@ -963,7 +1044,9 @@ export class ReaderSession {
 
 	private swapSides(): void {
 		const current = getPref<string>('paneSide', 'right');
-		this.split?.setSide(current === 'right' ? 'left' : 'right');
+		const next = current === 'right' ? 'left' : 'right';
+		this.split?.setSide(next);
+		this.pane?.setPaneSide(next);
 	}
 
 	close(): void {
@@ -986,6 +1069,10 @@ export class ReaderSession {
 		}
 		this.disposePdfEvents?.();
 		this.disposePdfEvents = null;
+		if (this.statusHideTimer) {
+			clearTimeout(this.statusHideTimer);
+			this.statusHideTimer = null;
+		}
 		this.overlay?.destroy();
 		this.overlay = null;
 		this.manager?.dispose();

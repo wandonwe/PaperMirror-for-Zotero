@@ -16,6 +16,16 @@ export type PdfRect = [number, number, number, number];
 export interface OverlayRun {
 	/** Union rect of the lines in this run (PDF coords). */
 	rect: PdfRect;
+	/**
+	 * The individual source line rects making up this run.
+	 *
+	 * The mask is painted from THESE, one small rectangle per line — never from
+	 * the union. A union rect covers the ragged tail of the last line, the
+	 * indent of the first, and any inline artwork the paragraph flows around;
+	 * painting it is what makes an overlay look like a sticker slapped over the
+	 * page instead of a translation of it.
+	 */
+	lines: PdfRect[];
 	/** Number of source lines the run covers — used to weight text splitting. */
 	lineCount: number;
 	/** Total glyph area, a better weight than line count for ragged text. */
@@ -37,20 +47,59 @@ function area(rect: PdfRect): number {
  * the same column": either it moves right by more than half the current run's
  * width (column switch) or it jumps upward instead of downward.
  */
-export function groupLineRects(lineRects: PdfRect[]): OverlayRun[] {
+/**
+ * Put a block's line rects into reading order before they are grouped.
+ *
+ * The rects arrive from whichever extraction path ran, and one of them can
+ * hand back a column bottom-to-top. Grouping trusts the sequence — every line
+ * then looks like an upward jump, every line becomes its own run, and the
+ * translation gets sliced into one fragment per source line. That is the
+ * shredded-paragraph look. Detect the reversal by counting which way
+ * consecutive lines actually travel, and flip the whole list if the answer is
+ * "upward"; a genuine two-column flow still travels downward within each
+ * column and is untouched.
+ */
+export function normalizeReadingOrder(lineRects: PdfRect[]): PdfRect[] {
+	if (lineRects.length < 3) {
+		return lineRects;
+	}
+	let down = 0;
+	let up = 0;
+	for (let i = 1; i < lineRects.length; i++) {
+		const prev = lineRects[i - 1]!;
+		const cur = lineRects[i]!;
+		const lineHeight = Math.max(1, prev[3] - prev[1]);
+		const delta = cur[3] - prev[3];
+		if (Math.abs(delta) < lineHeight * 0.3) {
+			continue; // same line, split into pieces
+		}
+		if (delta < 0) {
+			down++;
+		}
+		else {
+			up++;
+		}
+	}
+	return up > down ? [...lineRects].reverse() : lineRects;
+}
+
+export function groupLineRects(inputRects: PdfRect[]): OverlayRun[] {
+	const lineRects = normalizeReadingOrder(inputRects);
 	const runs: OverlayRun[] = [];
 	let current: PdfRect | null = null;
 	let count = 0;
 	let glyphArea = 0;
 	let previous: PdfRect | null = null;
+	let members: PdfRect[] = [];
 
 	const flush = (): void => {
 		if (current) {
-			runs.push({ rect: current, lineCount: count, area: glyphArea });
+			runs.push({ rect: current, lines: members, lineCount: count, area: glyphArea });
 		}
 		current = null;
 		count = 0;
 		glyphArea = 0;
+		members = [];
 	};
 
 	for (const rect of lineRects) {
@@ -68,6 +117,7 @@ export function groupLineRects(lineRects: PdfRect[]): OverlayRun[] {
 			}
 		}
 		current = current ? union(current, rect) : [...rect] as PdfRect;
+		members.push([...rect] as PdfRect);
 		count++;
 		glyphArea += area(rect);
 		previous = rect;
@@ -283,5 +333,10 @@ export function initialFontSize(boxHeightPx: number, lineCount: number): number 
  * figure. They remain readable in the translation pane instead.
  */
 export function isOverlayableType(type: string): boolean {
-	return type === 'paragraph' || type === 'heading' || type === 'title';
+	// The paper's TITLE stays in the original, deliberately: it is how the
+	// reader recognises the page at a glance, it is what they will cite and
+	// search for, and a title is the single worst place for a translation
+	// wobble. Section headings are still translated — 方法 / 结果 in place is
+	// what makes the translated page navigable.
+	return type === 'paragraph' || type === 'heading';
 }

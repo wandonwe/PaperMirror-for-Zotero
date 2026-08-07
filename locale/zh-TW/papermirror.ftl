@@ -104,12 +104,19 @@ papermirror-mode-split = 左右對照
 papermirror-mode-split-tip = 左側原文 PDF,右側譯文面板
 papermirror-extract-diagnose-title = 文字層診斷
 
-papermirror-compare = 對照翻譯
-papermirror-compare-tip = 原文在左、譯文在右,兩頁大小完全一致;再按一次回到原文
+papermirror-compare = 翻譯
+papermirror-compare-tip = 就地覆蓋譯文,保留原版排版;再按一次回到原文
+papermirror-mode-pick = 選擇閱讀模式
+papermirror-peek-hover = 懸停看原文
+papermirror-peek-hover-tip = 滑鼠停在譯文段落上時顯示該段原文;按住 Option/Alt 可暫時隱藏全部譯文
+papermirror-dim-original = 原文淡化
+papermirror-dim-original-tip = 譯文半透明,原文始終隱約可見
 
 # 完整 PDF 翻譯 (BabelDOC 本地服務)
 papermirror-export-pdf = 產生譯文PDF
 papermirror-export-pdf-tip = 透過本地 BabelDOC 服務對整篇 PDF 做版面級翻譯,產生純譯文與雙語 PDF 並掛到條目下
+papermirror-view-article = 完整文章流
+papermirror-view-page = 整頁對照
 papermirror-export-running = 正在產生譯文PDF (%n%%)…
 papermirror-export-done = 譯文PDF已產生並加入為附件
 papermirror-export-failed = 譯文PDF產生失敗

@@ -49,6 +49,7 @@ import {
 	fontSizeBounds,
 	shrinkRatio,
 	MIN_READABLE_PX,
+	TYPE_LADDER,
 	type CssBox,
 	type FitMode
 } from './textFitter';
@@ -59,6 +60,13 @@ const MODULE = 'pdfOverlay';
 const STYLE_ID = 'pm-overlay-style';
 const LAYER_CLASS = 'pm-overlay-layer';
 const BOX_CLASS = 'pm-overlay-box';
+const MASK_CLASS = 'pm-overlay-mask';
+const STATUS_CLASS = 'pm-overlay-status';
+
+/** Attribute-selector escaping for block ids (they contain '#'). */
+function CSS_ESCAPE(value: string): string {
+	return value.replace(/["\\]/g, '\\$&');
+}
 
 export type OverlayDisplayMode = 'dim-original' | 'translation-only' | 'hover';
 
@@ -72,13 +80,23 @@ const OVERLAY_CSS = `
 	--pm-paper: #fff;
 	--pm-ink: #15171a;
 }
+/* One mask per SOURCE LINE — never one rectangle over the paragraph. The
+   union rect would swallow the last line's ragged tail, the first line's
+   indent and anything the text wraps around. */
+.${MASK_CLASS} {
+	position: absolute;
+	background: var(--pm-paper);
+	pointer-events: none;
+	transition: opacity .12s ease;
+}
 .${BOX_CLASS} {
 	position: absolute;
 	box-sizing: border-box;
 	display: block;
 	padding: 0 1px;
 	color: var(--pm-ink);
-	background: var(--pm-paper);
+	/* Transparent: the masks underneath supply the paper. */
+	background: transparent;
 	/* A UI sans face stays legible at 9px where a serif turns to mush. */
 	font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
 		"Noto Sans CJK SC", "Source Han Sans SC", "Segoe UI", system-ui, sans-serif;
@@ -101,49 +119,116 @@ const OVERLAY_CSS = `
 	font-style: italic;
 }
 
-/* --- 仅译文 (default): opaque paper-coloured mask --- */
-.pm-overlay-solid .${BOX_CLASS} { background: var(--pm-paper); }
+/* --- 仅译文 (default): opaque paper-coloured masks --- */
+.pm-overlay-solid .${MASK_CLASS} { opacity: 1; }
 
-/* --- 原文淡化: translucent mask, original faintly readable underneath.
-       The MASK is translucent — the page canvas is never touched, so figures,
-       tables and equations stay perfectly crisp. --- */
-.pm-overlay-dim .${BOX_CLASS} {
-	background: color-mix(in srgb, var(--pm-paper) 88%, transparent);
+/* --- 原文淡化: translucent masks, original faintly readable underneath.
+       Only the MASKS are translucent — the page canvas is never touched, so
+       figures, tables and equations stay perfectly crisp. --- */
+.pm-overlay-dim .${MASK_CLASS} { opacity: .88; }
+
+/* 悬停看原文 — the answer to 「原文没对照了」.
+   Covering the page is the whole point of 覆盖模式, but the reader still has
+   to be able to check a sentence against the original. Hovering a translated
+   paragraph fades ITS mask and ITS text (nothing else on the page moves), so
+   the English underneath is readable for as long as the pointer stays. This
+   is per-paragraph and instant — no mode switch, no round trip. */
+.${LAYER_CLASS}[data-pm-peekhover="true"] .${BOX_CLASS}:hover {
+	opacity: .06;
+}
+.${LAYER_CLASS}[data-pm-peekhover="true"] .${BOX_CLASS}:hover ~ .${BOX_CLASS} {
+	/* siblings unaffected — declared so the rule above cannot cascade */
+	opacity: inherit;
+}
+.${MASK_CLASS}[data-pm-lifted="true"] {
+	opacity: 0 !important;
 }
 
 /* --- 悬停显示: nothing is painted until the pointer arrives --- */
+.pm-overlay-hover .${MASK_CLASS} { opacity: 0; }
 .pm-overlay-hover .${BOX_CLASS} { opacity: 0; }
 .pm-overlay-hover .${BOX_CLASS}:hover {
 	opacity: 1;
+	background: var(--pm-paper);
 	box-shadow: 0 1px 8px rgba(0, 0, 0, .18);
 }
 
-/* Text that did not fit even at the minimum size: a subtle marker, and the
-   full text on hover instead of shrinking it into illegibility. */
+/* Text that did not fit even at the minimum size, after the whole type ladder
+   was spent: an ellipsis marker in the corner. CLICK pins the box open with
+   the full translation — hover-only was too easy to lose by accident while
+   reading, and impossible on a trackpad mid-scroll. */
+.${BOX_CLASS}[data-pm-overflow="true"] {
+	cursor: zoom-in;
+}
 .${BOX_CLASS}[data-pm-overflow="true"]::after {
-	content: "";
+	content: "…";
 	position: absolute;
-	right: 0;
-	bottom: 0;
-	width: 14px;
-	height: 6px;
-	background: linear-gradient(90deg, transparent, var(--pm-paper) 62%);
-	box-shadow: inset -3px 0 0 color-mix(in srgb, var(--pm-ink) 22%, transparent);
+	right: 1px;
+	bottom: -1px;
+	padding: 0 2px;
+	font-size: 11px;
+	line-height: 1;
+	color: color-mix(in srgb, var(--pm-ink) 55%, transparent);
+	background: var(--pm-paper);
+	border-radius: 3px;
+	box-shadow: -4px 0 6px var(--pm-paper);
 	pointer-events: none;
 }
-.pm-overlay-solid .${BOX_CLASS}[data-pm-overflow="true"]:hover,
-.pm-overlay-dim .${BOX_CLASS}[data-pm-overflow="true"]:hover {
+.${BOX_CLASS}[data-pm-expanded="true"] {
 	height: auto !important;
 	min-height: 0;
 	overflow: visible;
 	z-index: 9;
 	background: var(--pm-paper);
-	box-shadow: 0 2px 12px rgba(0, 0, 0, .22);
+	box-shadow: 0 2px 14px rgba(0, 0, 0, .24);
+	border-radius: 3px;
+	cursor: zoom-out;
 }
-.${BOX_CLASS}[data-pm-overflow="true"]:hover::after { content: none; }
+.${BOX_CLASS}[data-pm-expanded="true"]::after { content: none; }
 
 /* Alt held: hide the whole layer so the page can be selected/annotated */
 .${LAYER_CLASS}[data-pm-peek="true"] { opacity: 0; pointer-events: none; }
+
+/* Progress chip. In 覆盖模式 the side pane is hidden, so without this the
+   reader clicks 翻译 and sees an unchanged page for however long the first
+   request takes — indistinguishable from the plugin being broken. */
+.${STATUS_CLASS} {
+	position: fixed;
+	right: 14px;
+	bottom: 14px;
+	z-index: 2147483000;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	max-width: 320px;
+	padding: 7px 12px;
+	border-radius: 999px;
+	background: rgba(28, 30, 36, .92);
+	color: #f2f4f7;
+	font: 12px/1.35 -apple-system, "PingFang SC", "Segoe UI", system-ui, sans-serif;
+	box-shadow: 0 4px 18px rgba(0, 0, 0, .3);
+	cursor: default;
+	transition: opacity .18s ease;
+}
+.${STATUS_CLASS}[data-pm-hidden="true"] {
+	opacity: 0;
+	pointer-events: none;
+}
+.${STATUS_CLASS} i {
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: #37c871;
+	flex: 0 0 auto;
+}
+.${STATUS_CLASS}[data-pm-busy="true"] i {
+	background: transparent;
+	border: 2px solid rgba(255, 255, 255, .3);
+	border-top-color: #96abf1;
+	animation: pm-status-spin .8s linear infinite;
+}
+.${STATUS_CLASS}[data-pm-error="true"] i { background: #ff6b6b; }
+@keyframes pm-status-spin { to { transform: rotate(360deg); } }
 `;
 
 export interface OverlayPageData {
@@ -173,6 +258,18 @@ export class PdfOverlay {
 	private peekDoc: Document | null = null;
 	/** Fraction of boxes whose text had to be shrunk a lot (quality signal). */
 	private lastShrinkWarnings = 0;
+	/**
+	 * Geometry the currently drawn layer was built for, per page.
+	 *
+	 * PDF.js fires `updateviewarea` continuously while scrolling, and redrawing
+	 * every page on every frame both burns CPU and makes the text flicker. The
+	 * overlay only has to follow REAL geometry changes — zoom, rotation, a
+	 * re-render after virtualisation — and all of those change the page div's
+	 * pixel size or destroy our layer outright.
+	 */
+	private drawnSignature = new Map<number, string>();
+	/** 悬停看原文: hovering a paragraph reveals the source underneath it. */
+	private peekOnHover = true;
 
 	constructor(reader: ReaderLike) {
 		this.reader = reader;
@@ -203,6 +300,101 @@ export class PdfOverlay {
 		}
 	}
 
+	/**
+	 * Progress chip inside the PDF view — the only feedback 覆盖模式 has while
+	 * the pane is hidden. `null` hides it.
+	 */
+	setStatus(text: string | null, options: { busy?: boolean; error?: boolean } = {}): void {
+		if (this.destroyed) {
+			return;
+		}
+		try {
+			const doc = adapter.getPageView(this.reader, adapter.getCurrentPageIndex(this.reader))?.doc
+				?? adapter.getPageView(this.reader, 0)?.doc;
+			const body = doc?.body;
+			if (!body) {
+				return;
+			}
+			adapter.injectPdfStyle(this.reader, STYLE_ID, OVERLAY_CSS);
+			let chip = doc!.querySelector(`.${STATUS_CLASS}`) as HTMLElement | null;
+			if (!text) {
+				chip?.setAttribute('data-pm-hidden', 'true');
+				return;
+			}
+			if (!chip) {
+				chip = doc!.createElement('div');
+				chip.className = STATUS_CLASS;
+				chip.appendChild(doc!.createElement('i'));
+				chip.appendChild(doc!.createElement('span'));
+				body.appendChild(chip);
+			}
+			chip.removeAttribute('data-pm-hidden');
+			chip.setAttribute('data-pm-busy', String(!!options.busy));
+			chip.setAttribute('data-pm-error', String(!!options.error));
+			const label = chip.querySelector('span');
+			if (label) {
+				label.textContent = text; // SAFE: text node only
+			}
+		}
+		catch (e) {
+			logger.debug(MODULE, 'status chip failed', e);
+		}
+	}
+
+	private removeStatus(): void {
+		try {
+			const doc = adapter.getPageView(this.reader, 0)?.doc;
+			doc?.querySelectorAll(`.${STATUS_CLASS}`).forEach(node => node.remove());
+		}
+		catch {
+			// reader may be gone
+		}
+	}
+
+	/**
+	 * Hover a translated paragraph → its own masks lift and its text fades, so
+	 * the original shows through in place. Bound per box; the layer-level
+	 * attribute decides whether it is active.
+	 */
+	private bindPeekHover(layer: HTMLElement, box: HTMLElement): void {
+		const runKey = box.getAttribute('data-pm-run');
+		if (!runKey) {
+			return;
+		}
+		const lift = (on: boolean): void => {
+			if (!this.peekOnHover) {
+				return;
+			}
+			layer.querySelectorAll(`.${MASK_CLASS}[data-pm-run="${CSS_ESCAPE(runKey)}"]`).forEach((node) => {
+				if (on) {
+					node.setAttribute('data-pm-lifted', 'true');
+				}
+				else {
+					node.removeAttribute('data-pm-lifted');
+				}
+			});
+		};
+		box.addEventListener('mouseenter', () => lift(true));
+		box.addEventListener('mouseleave', () => lift(false));
+	}
+
+	/** 悬停看原文 on/off. */
+	setPeekOnHover(enabled: boolean): void {
+		this.peekOnHover = enabled;
+		try {
+			const doc = adapter.getPageView(this.reader, 0)?.doc;
+			doc?.querySelectorAll(`.${LAYER_CLASS}`).forEach((node) => {
+				node.setAttribute('data-pm-peekhover', String(enabled));
+				if (!enabled) {
+					node.querySelectorAll(`.${MASK_CLASS}[data-pm-lifted]`).forEach(m => m.removeAttribute('data-pm-lifted'));
+				}
+			});
+		}
+		catch {
+			// reader may be gone
+		}
+	}
+
 	setDisplayMode(mode: OverlayDisplayMode): void {
 		this.displayMode = mode;
 		if (this.enabled) {
@@ -219,6 +411,9 @@ export class PdfOverlay {
 
 	setPageData(pageIndex: number, data: OverlayPageData): void {
 		this.pages.set(pageIndex, data);
+		// New text for this page: the drawn layer is stale whatever the
+		// geometry says.
+		this.drawnSignature.delete(pageIndex);
 		if (this.enabled) {
 			this.scheduleRedraw(pageIndex);
 		}
@@ -227,6 +422,7 @@ export class PdfOverlay {
 	clearPage(pageIndex: number): void {
 		this.pages.delete(pageIndex);
 		this.paperColour.delete(pageIndex);
+		this.drawnSignature.delete(pageIndex);
 		this.removeLayer(pageIndex);
 	}
 
@@ -236,9 +432,13 @@ export class PdfOverlay {
 		if (!this.disposeEvents) {
 			// PDF.js virtualises pages: one that scrolls far out of view is
 			// destroyed and re-rendered on return, firing pagerendered again.
+			// Geometry events ONLY. The overlay layer is a child of the page
+			// div, so it scrolls with the page for free — subscribing to
+			// `updateviewarea` meant a full re-measure of every box on every
+			// scroll frame, for no visible benefit.
 			this.disposeEvents = adapter.onPdfRenderEvents(this.reader, (pageIndex) => {
 				this.scheduleRedraw(pageIndex ?? undefined);
-			});
+			}, adapter.PDF_GEOMETRY_EVENTS);
 		}
 		if (!this.peekHandler) {
 			const doc = adapter.getPageView(this.reader, 0)?.doc ?? null;
@@ -332,8 +532,17 @@ export class PdfOverlay {
 		if (!data || !view) {
 			return;
 		}
+		// Scroll-only events: same page size, our layer still attached →
+		// nothing to do. Zoom and rotation both change these numbers, and a
+		// re-render after virtualisation removes the layer, so every case that
+		// genuinely needs a redraw still gets one.
+		const signature = `${Math.round(view.div.clientWidth)}x${Math.round(view.div.clientHeight)}|${this.displayMode}|${this.fitMode}`;
+		if (this.drawnSignature.get(pageIndex) === signature && view.div.querySelector(`.${LAYER_CLASS}`)) {
+			return;
+		}
 		// PDF.js rebuilds page content on re-render, so always start clean.
 		this.removeLayer(pageIndex);
+		this.drawnSignature.set(pageIndex, signature);
 
 		const layer = view.doc.createElement('div');
 		layer.className = LAYER_CLASS;
@@ -344,6 +553,7 @@ export class PdfOverlay {
 		// expansion, which must know where the following block starts).
 		const pending: PendingBox[] = [];
 		const allBoxes: CssBox[] = [];
+		const masks: HTMLElement[] = [];
 
 		for (const block of data.blocks) {
 			if (!isOverlayableType(block.type) || block.isReference) {
@@ -359,7 +569,11 @@ export class PdfOverlay {
 
 			runs.forEach((run, i) => {
 				const text = parts[i] ?? '';
-				if (translated !== undefined && !text) {
+				// Until the translation for this block arrives, the page stays
+				// EXACTLY as printed. Masking a paragraph early — or dropping a
+				// placeholder "…" on it — blanks the page while the reader is
+				// still reading it, which is the opposite of what 覆盖模式 is for.
+				if (translated === undefined || !text) {
 					return;
 				}
 				const [x1, y1] = view.toCss(run.rect[0], run.rect[3]); // top-left
@@ -368,19 +582,33 @@ export class PdfOverlay {
 				if (box.width < 8 || box.height < 6) {
 					return;
 				}
+				// 局部遮盖: one mask per source line, sized to that line's own
+				// rect. Painted first so every text box sits above every mask.
+				const runKey = `${block.id}#${i}`;
+				for (const line of run.lines) {
+					const [lx1, ly1] = view.toCss(line[0], line[3]);
+					const [lx2, ly2] = view.toCss(line[2], line[1]);
+					const lineBox = rectToCssBox([lx1, ly1], [lx2, ly2], 1);
+					if (lineBox.width < 4 || lineBox.height < 3) {
+						continue;
+					}
+					const maskEl = view.doc.createElement('div');
+					maskEl.className = MASK_CLASS;
+					maskEl.setAttribute('data-pm-run', runKey);
+					maskEl.style.left = `${lineBox.left}px`;
+					maskEl.style.top = `${lineBox.top}px`;
+					maskEl.style.width = `${lineBox.width}px`;
+					maskEl.style.height = `${lineBox.height}px`;
+					masks.push(maskEl);
+				}
 				const el = view.doc.createElement('div');
 				el.className = BOX_CLASS;
+				el.setAttribute('data-pm-run', runKey);
 				if (block.type === 'heading' || block.type === 'title') {
 					el.setAttribute('data-pm-heading', 'true');
 				}
 				const span = view.doc.createElement('span');
-				if (translated === undefined) {
-					el.setAttribute('data-pm-pending', 'true');
-					span.textContent = '…';
-				}
-				else {
-					span.textContent = text; // SAFE: text node only
-				}
+				span.textContent = text; // SAFE: text node only, never innerHTML
 				el.appendChild(span);
 				el.title = block.sourceText;
 				pending.push({ el, span, box, lineCount: run.lineCount });
@@ -392,16 +620,22 @@ export class PdfOverlay {
 			return;
 		}
 
-		// Pass 2 — place, optionally expand, then fit the type.
+		// Pass 2 — masks first (they must sit under every text box), then
+		// place, optionally expand, and fit the type.
 		this.lastShrinkWarnings = 0;
+		for (const maskEl of masks) {
+			layer.appendChild(maskEl);
+		}
 		for (const item of pending) {
 			const height = availableHeight(item.box, allBoxes, pageHeight, this.fitMode);
 			item.el.style.left = `${item.box.left}px`;
 			item.el.style.top = `${item.box.top}px`;
 			item.el.style.width = `${item.box.width}px`;
 			item.el.style.height = `${height}px`;
+			this.bindPeekHover(layer, item.el);
 			layer.appendChild(item.el);
 		}
+		layer.setAttribute('data-pm-peekhover', String(this.peekOnHover));
 
 		// Measure only after everything is in the document.
 		for (const item of pending) {
@@ -427,41 +661,75 @@ export class PdfOverlay {
 	}
 
 	/**
-	 * Binary-search the largest font size whose text still fits — but never
-	 * below MIN_READABLE_PX. If the translation still does not fit at that
-	 * floor, the box is flagged `data-pm-overflow` and the reader can hover to
-	 * expand it. Shrinking text to 4–6px to make it "fit" is what made the
-	 * overlay unreadable; overflowing is the lesser evil.
+	 * Fit the translation into its box on three axes, in the order that costs
+	 * the reader least: leading, then letter-spacing, then — only if those are
+	 * exhausted — the font size, binary-searched and floored at
+	 * MIN_READABLE_PX.
+	 *
+	 * The ladder is walked AT THE SOURCE SIZE first. The common case is a
+	 * translation that runs one line long; tightening the leading absorbs that
+	 * invisibly, where the old size-only search would have shrunk the whole
+	 * paragraph. Only when no rung fits does the type get smaller.
+	 *
+	 * If even the floor overflows, the box keeps the readable size, is marked
+	 * `data-pm-overflow` (an "…" appears in the corner) and a click pins it
+	 * open with the full text. Shrinking to 4–6px to make it "fit" is what made
+	 * 覆盖翻译 unreadable in the first place.
 	 */
 	private fitFontSize(box: HTMLElement, span: HTMLElement, boxHeight: number, lineCount: number): number {
 		const { min, max } = fontSizeBounds(boxHeight, lineCount, MIN_READABLE_PX);
-		const fits = (size: number): boolean => {
+		const apply = (size: number, rung: number): void => {
+			const step = TYPE_LADDER[Math.min(rung, TYPE_LADDER.length - 1)]!;
 			span.style.fontSize = `${size}px`;
+			span.style.lineHeight = String(step.lineHeight);
+			span.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
+		};
+		const fits = (size: number, rung: number): boolean => {
+			apply(size, rung);
 			return span.scrollHeight <= boxHeight + 1 && span.scrollWidth <= box.clientWidth + 1;
 		};
-		let chosen = max;
-		if (!fits(max)) {
-			let lo = min;
-			let hi = max;
-			for (let i = 0; i < 9 && hi - lo > 0.25; i++) {
-				const mid = (hi + lo) / 2;
-				if (fits(mid)) {
-					lo = mid;
-				}
-				else {
-					hi = mid;
-				}
-			}
-			chosen = lo;
-			span.style.fontSize = `${lo.toFixed(1)}px`;
-			if (span.scrollHeight > boxHeight + 1) {
-				// One tightening step before giving up on the height.
-				span.style.lineHeight = '1.22';
+
+		// 1. the ladder, at full size
+		for (let rung = 0; rung < TYPE_LADDER.length; rung++) {
+			if (fits(max, rung)) {
+				return max;
 			}
 		}
+
+		// 2. shrink, with the ladder fully tightened
+		const lastRung = TYPE_LADDER.length - 1;
+		let lo = min;
+		let hi = max;
+		for (let i = 0; i < 9 && hi - lo > 0.25; i++) {
+			const mid = (hi + lo) / 2;
+			if (fits(mid, lastRung)) {
+				lo = mid;
+			}
+			else {
+				hi = mid;
+			}
+		}
+		apply(lo, lastRung);
+		const chosen = lo;
+
+		// 3. still over: keep it readable, offer the full text on click.
 		if (span.scrollHeight > boxHeight + 1) {
 			box.setAttribute('data-pm-overflow', 'true');
-			box.title = box.title || span.textContent || '';
+			const full = span.textContent ?? '';
+			box.title = full;
+			if (!box.dataset.pmExpandBound) {
+				box.dataset.pmExpandBound = '1';
+				box.addEventListener('click', (event) => {
+					// A click that is really a text selection must not toggle.
+					const selection = box.ownerDocument?.defaultView?.getSelection?.();
+					if (selection && String(selection).length > 1) {
+						return;
+					}
+					event.stopPropagation();
+					const open = box.getAttribute('data-pm-expanded') === 'true';
+					box.setAttribute('data-pm-expanded', String(!open));
+				});
+			}
 		}
 		return chosen;
 	}
@@ -545,6 +813,8 @@ export class PdfOverlay {
 		for (const pageIndex of adapter.getRenderedPageIndexes(this.reader)) {
 			this.removeLayer(pageIndex);
 		}
+		this.drawnSignature.clear();
+		this.removeStatus();
 		adapter.removePdfStyle(this.reader, STYLE_ID);
 	}
 
