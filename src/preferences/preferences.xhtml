@@ -180,6 +180,18 @@
 		<hbox class="pm-line">
 			<label class="pm-title" data-l10n-id="papermirror-prefs-reading"/>
 		</hbox>
+		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 4px;">
+			<label value="默认阅读模式" control="papermirror-default-mode"/>
+			<menulist id="papermirror-default-mode" preference="extensions.zotero.bilingualReader.viewMode" native="true">
+				<menupopup>
+					<menuitem label="左右对照(原文左、译文右)" value="split"/>
+					<menuitem label="覆盖翻译(译文覆盖在原PDF上)" value="overlay"/>
+				</menupopup>
+			</menulist>
+		</hbox>
+		<html:div class="pm-desc" style="margin-top: 2px;">点击工具栏翻译按钮时进入的模式;工具栏 ▾ 菜单可随时临时切换。</html:div>
+		<checkbox id="papermirror-peek-hover" preference="extensions.zotero.bilingualReader.overlayPeekHover" label="悬停看原文(覆盖模式下,鼠标停在译文段落上时显示该段原文)" native="true"/>
+		<checkbox id="papermirror-dim-original" label="原文淡化(覆盖模式下译文遮罩半透明,原文隐约可见)" native="true"/>
 		<checkbox id="papermirror-translate-captions" preference="extensions.zotero.bilingualReader.translateCaptions" data-l10n-id="papermirror-prefs-captions" native="true"/>
 		<checkbox id="papermirror-translate-references" preference="extensions.zotero.bilingualReader.translateReferences" data-l10n-id="papermirror-prefs-references" native="true"/>
 		<checkbox id="papermirror-use-context" preference="extensions.zotero.bilingualReader.useContext" data-l10n-id="papermirror-prefs-context" native="true"/>

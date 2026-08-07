@@ -37,8 +37,9 @@ pref('extensions.zotero.bilingualReader.pdfServiceURL', 'http://127.0.0.1:11017'
 // 译文PDF生成方式: builtin = 插件内置(默认, 无需任何外部依赖),
 // service = 本地 BabelDOC 服务(完整版面重排, 需自行启动)
 pref('extensions.zotero.bilingualReader.pdfExportMode', 'builtin');
-// dim-original | translation-only | hover
-pref('extensions.zotero.bilingualReader.overlayDisplayMode', 'translation-only');
+// dim-original | translation-only | hover — 默认原文淡化:
+// 译文遮罩半透明, 原文隐约可见, 对照阅读不需要任何操作
+pref('extensions.zotero.bilingualReader.overlayDisplayMode', 'dim-original');
 // strict | expand
 pref('extensions.zotero.bilingualReader.overlayFitMode', 'expand');
 // 覆盖模式下鼠标悬停在译文段落上时,掀开该段遮罩显示原文

@@ -386,7 +386,7 @@ export class ReaderToolbarController {
 		menu.appendChild(peek);
 
 		const dim = doc.createElement('button');
-		const dimOn = getPref<string>('overlayDisplayMode', 'translation-only') === 'dim-original';
+		const dimOn = getPref<string>('overlayDisplayMode', 'dim-original') === 'dim-original';
 		dim.textContent = getString('papermirror-dim-original');
 		dim.title = getString('papermirror-dim-original-tip');
 		dim.setAttribute('role', 'menuitemcheckbox');

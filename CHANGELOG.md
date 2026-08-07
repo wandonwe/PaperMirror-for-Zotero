@@ -9,6 +9,21 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.2.9] — 2026-08-07
+
+### Changed
+
+- 悬停看原文 and 原文淡化 are ON by default (one-time migration for existing
+  installs): in overlay mode the masks are translucent so the original stays
+  faintly visible, and hovering a paragraph reveals its source — comparison
+  reading needs no setup.
+
+### Added
+
+- The settings pane's 阅读 section now carries the same choices as the
+  toolbar menu: a 默认阅读模式 picker (左右对照 / 覆盖翻译 — the mode the
+  toolbar button opens), plus checkboxes for 悬停看原文 and 原文淡化.
+
 ## [0.2.8] — 2026-08-07
 
 ### Added
@@ -325,7 +340,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.5...v0.2.6

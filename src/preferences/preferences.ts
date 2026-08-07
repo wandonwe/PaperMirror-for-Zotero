@@ -130,11 +130,33 @@ interface PaperMirrorPublicAPI {
 			['papermirror-source-lang', 'sourceLanguage', 'auto'],
 			['papermirror-target-lang', 'targetLanguage', 'auto'],
 			['papermirror-provider', 'provider', 'bing-free'],
-			['papermirror-pdfmode', 'pdfExportMode', 'builtin']
+			['papermirror-pdfmode', 'pdfExportMode', 'builtin'],
+			['papermirror-default-mode', 'viewMode', 'split']
 		] as const) {
 			const list = byId<HTMLElement & { value: string }>(id);
 			if (list && !list.value) {
 				list.value = String(getPref(key) ?? fallback) || fallback;
+			}
+		}
+		// The default-mode pref can hold 'original' (the toolbar's off state);
+		// the picker only offers the two translated modes, so map it to split.
+		{
+			const modeList = byId<HTMLElement & { value: string }>('papermirror-default-mode');
+			if (modeList && modeList.value !== 'overlay' && modeList.value !== 'split') {
+				modeList.value = 'split';
+			}
+		}
+
+		// 原文淡化 is a boolean checkbox over a string pref
+		// (overlayDisplayMode: 'dim-original' | 'translation-only' | 'hover'),
+		// so the preference attribute cannot bind it — wire it by hand.
+		{
+			const dimBox = byId<HTMLElement & { checked: boolean }>('papermirror-dim-original');
+			if (dimBox) {
+				dimBox.checked = String(getPref('overlayDisplayMode') ?? 'dim-original') === 'dim-original';
+				dimBox.addEventListener('command', () => {
+					setPref('overlayDisplayMode', dimBox.checked ? 'dim-original' : 'translation-only');
+				});
 			}
 		}
 		const baseUrlInput = byId<HTMLInputElement>('papermirror-baseurl');

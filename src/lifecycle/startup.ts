@@ -37,13 +37,18 @@ export let toolbarController: ReaderToolbarController | null = null;
  * toolbar menu, and whatever the reader picks afterwards sticks.
  */
 function migrateToOverlayArchitecture(): void {
-	if (getPref<number>('layoutMigration', 0) >= 3) {
+	if (getPref<number>('layoutMigration', 0) >= 4) {
 		return;
 	}
 	try {
-		setPref('viewMode', 'split');
-		setPref('paneView', 'page');
-		setPref('layoutMigration', 3);
+		if (getPref<number>('layoutMigration', 0) < 3) {
+			setPref('viewMode', 'split');
+			setPref('paneView', 'page');
+		}
+		// v4: 悬停看原文 + 原文淡化 become the defaults.
+		setPref('overlayPeekHover', true);
+		setPref('overlayDisplayMode', 'dim-original');
+		setPref('layoutMigration', 4);
 		logger.info(MODULE, 'Migrated reading defaults to the overlay architecture');
 	}
 	catch (e) {

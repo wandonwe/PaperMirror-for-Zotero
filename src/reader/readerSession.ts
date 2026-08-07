@@ -191,7 +191,7 @@ export class ReaderSession {
 		this.pane.setShowOriginal(getPref<boolean>('showOriginal', false));
 		this.pane.setSyncEnabled(getPref<boolean>('syncScroll', true));
 		this.overlay = new PdfOverlay(this.reader);
-		this.overlay.setDisplayMode(getPref<OverlayDisplayMode>('overlayDisplayMode', 'translation-only'));
+		this.overlay.setDisplayMode(getPref<OverlayDisplayMode>('overlayDisplayMode', 'dim-original'));
 		this.overlay.setPeekOnHover(getPref<boolean>('overlayPeekHover', true));
 		this.overlay.setFitMode(getPref<'strict' | 'expand'>('overlayFitMode', 'expand'));
 		this.pane.setArticleFontSize(getPref<number>('articleFontSize', 16));
@@ -851,7 +851,7 @@ export class ReaderSession {
 	/** Cycle 覆盖模式: 原文淡化 → 仅译文 → 悬停显示. */
 	cycleOverlayMode(): OverlayDisplayMode {
 		const order: OverlayDisplayMode[] = ['translation-only', 'dim-original', 'hover'];
-		const current = getPref<OverlayDisplayMode>('overlayDisplayMode', 'translation-only');
+		const current = getPref<OverlayDisplayMode>('overlayDisplayMode', 'dim-original');
 		const next = order[(order.indexOf(current) + 1) % order.length]!;
 		setPref('overlayDisplayMode', next);
 		this.overlay?.setDisplayMode(next);
