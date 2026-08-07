@@ -236,3 +236,35 @@ export function mapGoogleLang(code: string): string {
 		default: return code;
 	}
 }
+
+
+/**
+ * Which origin the Bing ttranslatev3 call must target.
+ *
+ * The session token is only valid against the host that ISSUED it — and in
+ * mainland networks www.bing.com 302s the session page to cn.bing.com. The
+ * subtle failure: the settings pane auto-fills the provider's default Base
+ * URL (https://www.bing.com) into the preference, so "use apiBaseURL when
+ * set" silently overrode the learned cn origin on every install, and the
+ * token was posted to the wrong host by construction.
+ *
+ * Rule: any bing.com host in the user's Base URL means "no real override" —
+ * follow the session origin. Only a NON-bing host (a private mirror) is an
+ * actual override and wins.
+ */
+export function resolveBingApiBase(userBaseURL: string | undefined, sessionOrigin: string): string {
+	const cleaned = (userBaseURL ?? '').trim().replace(/\/+$/, '');
+	if (!cleaned) {
+		return sessionOrigin.replace(/\/+$/, '');
+	}
+	try {
+		const host = new URL(cleaned).hostname.toLowerCase();
+		if (host === 'bing.com' || host.endsWith('.bing.com')) {
+			return sessionOrigin.replace(/\/+$/, '');
+		}
+	}
+	catch {
+		return sessionOrigin.replace(/\/+$/, '');
+	}
+	return cleaned;
+}

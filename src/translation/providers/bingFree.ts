@@ -19,6 +19,7 @@ import {
 	mapBingLang,
 	parseBingTranslatorPage,
 	splitLongText,
+	resolveBingApiBase,
 	unescapeHTML,
 	type BingSession
 } from './freeEngineUtils';
@@ -68,6 +69,15 @@ async function getEdgeToken(timeoutMs: number, signal?: AbortSignal, force = fal
 			signal,
 			headers: { 'User-Agent': EDGE_UA, Accept: '*/*' }
 		})
+			.catch((e) => {
+				// 404 here means the ANONYMOUS AUTH ENDPOINT is gone, not that
+				// some model does not exist — mapHTTPError's generic 404 text
+				// ("model not found") was actively misleading in this spot.
+				if (e instanceof PaperMirrorError && e.httpStatus === 404) {
+					throw new PaperMirrorError('BAD_RESPONSE', 'Edge 匿名认证端点不可用 (HTTP 404)', { httpStatus: 404, retryable: true });
+				}
+				throw e;
+			})
 			.then((text) => {
 				const token = text.trim();
 				if (token.split('.').length !== 3) {
@@ -214,8 +224,21 @@ async function translateOne(
 	signal: AbortSignal | undefined,
 	allowRetry = true
 ): Promise<string> {
-	// Edge auth first; the page scrape only when Edge is down or blocked.
-	let edgeNote: string | null = null;
+	// The Bing web channel is the one that currently works — it goes FIRST.
+	// Edge anonymous auth (observed returning 404) is the fallback, behind a
+	// 5-minute breaker so a dead endpoint costs one probe, not one per block.
+	let scrapeError: string | null = null;
+	try {
+		return await translateViaScrape(text, sl, tl, settings, signal, allowRetry);
+	}
+	catch (e) {
+		if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
+			throw e;
+		}
+		scrapeError = e instanceof Error ? e.message : String(e);
+		logger.debug(MODULE, 'Bing web channel failed; trying Edge auth fallback', e);
+	}
+	let edgeNote: string;
 	if (Date.now() >= edgeDisabledUntil) {
 		try {
 			const [translated] = await translateViaEdge([text], sl, tl, settings, signal);
@@ -228,27 +251,13 @@ async function translateOne(
 			}
 			lastEdgeError = e instanceof Error ? e.message : String(e);
 			edgeNote = lastEdgeError;
-			logger.debug(MODULE, 'Edge translator failed; falling back to bing.com scrape', e);
 			edgeDisabledUntil = Date.now() + 5 * 60 * 1000;
 		}
 	}
-	else if (lastEdgeError) {
-		edgeNote = `熔断中, 上次: ${lastEdgeError}`;
+	else {
+		edgeNote = lastEdgeError ? `熔断中, 上次: ${lastEdgeError}` : '熔断中';
 	}
-	try {
-		return await translateViaScrape(text, sl, tl, settings, signal, allowRetry);
-	}
-	catch (e) {
-		// One error carrying BOTH paths — a screenshot of the test-connection
-		// line then says everything about what to fix next.
-		if (edgeNote && e instanceof PaperMirrorError && e.code !== 'CANCELLED') {
-			throw new PaperMirrorError(e.code, `Edge通道: ${edgeNote} ｜ Bing通道: ${e.message}`, {
-				retryable: e.retryable,
-				httpStatus: e.httpStatus
-			});
-		}
-		throw e;
-	}
+	throw new PaperMirrorError('BAD_RESPONSE', `Bing通道: ${scrapeError} ｜ Edge通道: ${edgeNote}`, { retryable: true });
 }
 
 async function translateViaScrape(
@@ -260,8 +269,10 @@ async function translateViaScrape(
 	allowRetry = true
 ): Promise<string> {
 	const session = await getSession(settings.timeoutMs, signal);
-	// Same-origin with the session page, or the token is rejected.
-	const base = (settings.apiBaseURL || cachedOrigin).replace(/\/+$/, '');
+	// Same-origin with wherever the session was ISSUED (www vs cn), or the
+	// token is rejected. A bing.com Base URL in settings is the auto-filled
+	// default, not a real override — resolveBingApiBase ignores it.
+	const base = resolveBingApiBase(settings.apiBaseURL, cachedOrigin);
 	const iid = `${session.iid}.${++iidCounter}`;
 	const url = `${base}/ttranslatev3?isVertical=1&IG=${encodeURIComponent(session.ig)}&IID=${encodeURIComponent(iid)}`;
 	const rawBody = `&fromLang=${encodeURIComponent(sl)}`

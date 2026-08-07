@@ -8,6 +8,7 @@ import {
 	mapBingLang,
 	mapGoogleLang,
 	parseBingTranslatorPage,
+	resolveBingApiBase,
 	splitLongText
 } from '../../src/translation/providers/freeEngineUtils';
 import { parseGoogleEntries } from '../../src/translation/providers/googleFree';
@@ -104,4 +105,37 @@ test('parses the CURRENT bing page variable (params_AbusePreventionHelper)', () 
 	assert.equal(session!.token, 'HgQ2rT9-tokenvalue_');
 	assert.equal(session!.ig, 'ABCDEF0123456789');
 	assert.equal(session!.iid, 'translator.5028');
+});
+
+// ---- Bing API host selection (the www/cn token-mismatch regression) ---------
+
+test('the API call follows the session-issuing host', () => {
+	// Mainland: page 302s to cn.bing.com; the token is only valid THERE.
+	assert.equal(resolveBingApiBase('', 'https://cn.bing.com'), 'https://cn.bing.com');
+	assert.equal(resolveBingApiBase(undefined, 'https://www.bing.com'), 'https://www.bing.com');
+});
+
+test('the auto-filled default Base URL is not a real override', () => {
+	// The settings pane writes the provider default (www.bing.com) into the
+	// preference on its own; treating that as an override posted cn-issued
+	// tokens to www — the exact bug that kept the engine dead.
+	assert.equal(resolveBingApiBase('https://www.bing.com', 'https://cn.bing.com'), 'https://cn.bing.com');
+	assert.equal(resolveBingApiBase('https://cn.bing.com/', 'https://www.bing.com'), 'https://www.bing.com');
+	assert.equal(resolveBingApiBase('https://www.bing.com/', 'https://cn.bing.com'), 'https://cn.bing.com');
+});
+
+test('a genuine non-bing mirror IS an override', () => {
+	assert.equal(
+		resolveBingApiBase('https://bing-mirror.example.com', 'https://cn.bing.com'),
+		'https://bing-mirror.example.com'
+	);
+	// Trailing slashes are normalised either way.
+	assert.equal(
+		resolveBingApiBase('https://bing-mirror.example.com/', 'https://cn.bing.com'),
+		'https://bing-mirror.example.com'
+	);
+});
+
+test('garbage in the Base URL falls back to the session origin', () => {
+	assert.equal(resolveBingApiBase('not a url', 'https://cn.bing.com'), 'https://cn.bing.com');
 });

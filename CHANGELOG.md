@@ -9,6 +9,23 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-08-07
+
+### Fixed
+
+- Microsoft engine: the real reason the www/cn fix never took effect. The
+  settings pane auto-fills the provider's default Base URL
+  (`https://www.bing.com`) into the preference, and "use apiBaseURL when
+  set" silently overrode the session origin learned from the redirect — so
+  cn-issued tokens were posted to www on every install, by construction.
+  `resolveBingApiBase` now treats ANY bing.com host in the Base URL as
+  "no override" and follows the session-issuing host; only a genuine
+  non-bing mirror wins. Covered by regression tests.
+- The Bing web channel now goes FIRST; Edge anonymous auth (observed
+  returning HTTP 404) is the fallback behind a 5-minute breaker.
+- An Edge auth 404 is reported as 「Edge 匿名认证端点不可用」 instead of the
+  generic — and here actively misleading — "Endpoint or model not found".
+
 ## [0.3.1] — 2026-08-07
 
 ### Fixed
@@ -392,7 +409,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.10...v0.3.0
 [0.2.10]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.9...v0.2.10
