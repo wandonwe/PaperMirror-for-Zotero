@@ -112,6 +112,7 @@ export async function startup(params: StartupParams): Promise<void> {
 	// Public helper API for the preferences pane script (runs in the prefs
 	// window, which has the Zotero global but not our sandbox scope).
 	const publicAPI = {
+		version: params.version,
 		/** Toggle bilingual view on the current reader tab (manual entry). */
 		toggle: () => toolbarController?.toggleCurrent() ?? Promise.resolve('Plugin not initialized.'),
 		/** Overlay coordinate self-check (Run JavaScript): verifyOverlay() */

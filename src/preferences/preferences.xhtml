@@ -161,12 +161,6 @@
 				</menulist>
 			</hbox>
 		</hbox>
-		<hbox class="pm-line" style="margin-top: 9px; justify-content: flex-start;">
-			<label data-l10n-id="papermirror-prefs-timeout" control="papermirror-timeout"/>
-			<html:input type="number" id="papermirror-timeout" min="5000" max="600000" step="1000"/>
-			<label data-l10n-id="papermirror-prefs-concurrency" control="papermirror-concurrency"/>
-			<html:input type="number" id="papermirror-concurrency" min="1" max="2" style="width: 4.5em;"/>
-		</hbox>
 		<hbox class="pm-line" style="margin-top: 9px;">
 			<label class="pm-title" data-l10n-id="papermirror-prefs-custom-prompt" control="papermirror-custom-prompt"/>
 		</hbox>
@@ -178,7 +172,7 @@
 	<!-- ======================= 阅读 ======================= -->
 	<vbox class="pm-section">
 		<hbox class="pm-line">
-			<label class="pm-title" data-l10n-id="papermirror-prefs-reading"/>
+			<label class="pm-title" value="阅读界面"/>
 		</hbox>
 		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 4px;">
 			<label value="默认阅读模式" control="papermirror-default-mode"/>
@@ -192,17 +186,8 @@
 		<html:div class="pm-desc" style="margin-top: 2px;">点击工具栏翻译按钮时进入的模式;工具栏 ▾ 菜单可随时临时切换。</html:div>
 		<checkbox id="papermirror-peek-hover" preference="extensions.zotero.bilingualReader.overlayPeekHover" label="悬停看原文(覆盖模式下,鼠标停在译文段落上时显示该段原文)" native="true"/>
 		<checkbox id="papermirror-dim-original" label="原文淡化(覆盖模式下译文遮罩半透明,原文隐约可见)" native="true"/>
-		<checkbox id="papermirror-translate-captions" preference="extensions.zotero.bilingualReader.translateCaptions" data-l10n-id="papermirror-prefs-captions" native="true"/>
-		<checkbox id="papermirror-translate-references" preference="extensions.zotero.bilingualReader.translateReferences" data-l10n-id="papermirror-prefs-references" native="true"/>
-		<checkbox id="papermirror-use-context" preference="extensions.zotero.bilingualReader.useContext" data-l10n-id="papermirror-prefs-context" native="true"/>
-		<checkbox id="papermirror-auto-prefetch" preference="extensions.zotero.bilingualReader.autoPrefetch" data-l10n-id="papermirror-prefs-prefetch" native="true"/>
-		<checkbox id="papermirror-sync-scroll" preference="extensions.zotero.bilingualReader.syncScroll" data-l10n-id="papermirror-prefs-syncscroll" native="true"/>
-		<checkbox id="papermirror-show-original" preference="extensions.zotero.bilingualReader.showOriginal" data-l10n-id="papermirror-show-original" native="true"/>
-		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 6px;">
-			<label data-l10n-id="papermirror-prefs-fontsize" control="papermirror-font-size"/>
-			<html:input type="range" id="papermirror-font-size" min="12" max="22" step="1" style="width: 11em;"/>
-			<label id="papermirror-font-size-value" class="pm-desc" style="margin-top: 0;" value="16 px"/>
-		</hbox>
+		<checkbox id="papermirror-translate-captions" preference="extensions.zotero.bilingualReader.translateCaptions" label="翻译图表标题" native="true"/>
+		<checkbox id="papermirror-translate-references" preference="extensions.zotero.bilingualReader.translateReferences" label="翻译参考文献部分" native="true"/>
 	</vbox>
 
 	<!-- ======================= 术语表 ======================= -->
@@ -235,31 +220,13 @@
 		<html:div class="pm-desc" data-l10n-id="papermirror-prefs-privacy-note"></html:div>
 	</vbox>
 
-	<!-- ======================= 完整 PDF 翻译 ======================= -->
-	<vbox class="pm-section">
-		<hbox class="pm-line">
-			<label class="pm-title" value="生成译文 PDF"/>
-			<menulist id="papermirror-pdfmode" preference="extensions.zotero.bilingualReader.pdfExportMode" native="true">
-				<menupopup>
-					<menuitem label="插件内置(默认,无需外部依赖)" value="builtin"/>
-					<menuitem label="本地 BabelDOC 服务(完整重排)" value="service"/>
-				</menupopup>
-			</menulist>
-		</hbox>
-		<html:div class="pm-field">
-			<html:div><html:input type="text" id="papermirror-pdfservice" preference="extensions.zotero.bilingualReader.pdfServiceURL" placeholder="http://127.0.0.1:11017" spellcheck="false"/></html:div>
-		</html:div>
-		<html:div class="pm-desc">内置模式直接在插件里把译文写回一份新 PDF(正文按原位置原字号替换,标题/图表/公式保留原样),零依赖。BabelDOC 模式做完整版面重排,效果更好但需先启动本地服务:pip install babeldoc,再运行插件源码 tools/babeldoc_server.py;下方地址仅允许 localhost——请求携带 API 密钥,绝不发往其他主机。</html:div>
-	</vbox>
-
 	<!-- ======================= 高级 ======================= -->
 	<vbox class="pm-section">
 		<hbox class="pm-line">
 			<label class="pm-title" data-l10n-id="papermirror-prefs-advanced"/>
 		</hbox>
-		<checkbox id="papermirror-debug-logging" preference="extensions.zotero.bilingualReader.debugLogging" data-l10n-id="papermirror-prefs-debug" native="true"/>
-		<checkbox id="papermirror-allow-http" preference="extensions.zotero.bilingualReader.allowHTTPEndpoint" data-l10n-id="papermirror-prefs-allow-http" native="true"/>
-		<checkbox id="papermirror-local-only" preference="extensions.zotero.bilingualReader.localOnlyMode" data-l10n-id="papermirror-prefs-local-only" native="true"/>
-		<html:div class="pm-desc">PaperMirror for Zotero 0.1.0 — AGPL-3.0</html:div>
+		<checkbox id="papermirror-debug-logging" preference="extensions.zotero.bilingualReader.debugLogging" label="开启调试日志(永不记录 API Key 或完整论文文本)" native="true"/>
+		<checkbox id="papermirror-allow-http" preference="extensions.zotero.bilingualReader.allowHTTPEndpoint" label="允许不安全的 HTTP 接口(不推荐)" native="true"/>
+		<html:div class="pm-desc" id="papermirror-version-note">PaperMirror for Zotero — AGPL-3.0</html:div>
 	</vbox>
 </vbox>

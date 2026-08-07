@@ -9,6 +9,23 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.2.10] — 2026-08-07
+
+### Removed
+
+- Settings the reader never needed to see: request timeout and concurrency,
+  send-adjacent-context, auto-prefetch, sync-scroll (lives in the header
+  bar), 显示原文对照, the article font-size slider, the 生成译文PDF section
+  (the capability stays behind `Zotero.PaperMirror.exportTranslatedPdf()`),
+  and 仅本地服务模式. Every removed knob keeps working at its default.
+
+### Fixed
+
+- Six checkboxes rendered as bare text with no box (Fluent value-style
+  labels): all checkboxes now carry explicit labels.
+- The footer version was hardcoded "0.1.0"; it now reads the installed
+  version from the plugin.
+
 ## [0.2.9] — 2026-08-07
 
 ### Changed
@@ -340,7 +357,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.9...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.10...HEAD
+[0.2.10]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.6...v0.2.7

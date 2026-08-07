@@ -27,6 +27,7 @@ interface ProviderInfo {
 }
 
 interface PaperMirrorPublicAPI {
+	version?: string;
 	listProviders(): ProviderInfo[];
 	getApiKey(providerId: string): Promise<string>;
 	setApiKey(providerId: string, key: string): Promise<void>;
@@ -90,34 +91,7 @@ interface PaperMirrorPublicAPI {
 
 		// ---- integer prefs (declarative binding would store strings) --------
 
-		function bindInt(id: string, key: string, fallback: number, onRender?: (v: number) => void): void {
-			const el = byId<HTMLInputElement>(id);
-			if (!el) {
-				return;
-			}
-			const current = Number(getPref(key));
-			const value = Number.isFinite(current) && current > 0 ? current : fallback;
-			el.value = String(value);
-			onRender?.(value);
-			const commit = (): void => {
-				const next = Number(el.value);
-				if (Number.isFinite(next) && next > 0) {
-					setPref(key, Math.round(next));
-					onRender?.(Math.round(next));
-				}
-			};
-			el.addEventListener('change', commit);
-			el.addEventListener('input', () => onRender?.(Number(el.value)));
-		}
 
-		const fontValue = byId<HTMLElement & { value: string }>('papermirror-font-size-value');
-		bindInt('papermirror-timeout', 'timeoutMs', 60000);
-		bindInt('papermirror-concurrency', 'maxConcurrentRequests', 2);
-		bindInt('papermirror-font-size', 'articleFontSize', 16, (v) => {
-			if (fontValue) {
-				fontValue.value = `${v} px`;
-			}
-		});
 
 		// ---- provider defaults / endpoint hint ------------------------------
 
@@ -130,7 +104,6 @@ interface PaperMirrorPublicAPI {
 			['papermirror-source-lang', 'sourceLanguage', 'auto'],
 			['papermirror-target-lang', 'targetLanguage', 'auto'],
 			['papermirror-provider', 'provider', 'bing-free'],
-			['papermirror-pdfmode', 'pdfExportMode', 'builtin'],
 			['papermirror-default-mode', 'viewMode', 'split']
 		] as const) {
 			const list = byId<HTMLElement & { value: string }>(id);
@@ -144,6 +117,16 @@ interface PaperMirrorPublicAPI {
 			const modeList = byId<HTMLElement & { value: string }>('papermirror-default-mode');
 			if (modeList && modeList.value !== 'overlay' && modeList.value !== 'split') {
 				modeList.value = 'split';
+			}
+		}
+
+		// Footer: the real installed version, not a hardcoded string that
+		// went stale the day after it was written.
+		{
+			const note = byId<HTMLElement>('papermirror-version-note');
+			const version = api()?.version;
+			if (note && version) {
+				note.textContent = `PaperMirror for Zotero ${version} — AGPL-3.0`;
 			}
 		}
 
