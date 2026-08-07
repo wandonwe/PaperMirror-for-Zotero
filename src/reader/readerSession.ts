@@ -259,6 +259,8 @@ export class ReaderSession {
 			if (this.destroyed || pageIndex !== null) {
 				return;
 			}
+			// Zoom on the left → the right pages match the new glyph size.
+			this.pane?.setDisplayScale(adapter.getViewerPxPerPoint(this.reader));
 			if (this.sync?.enabled) {
 				const current = adapter.getCurrentPageIndex(this.reader);
 				const fraction = adapter.getPageScrollFraction(this.reader, current);
@@ -508,6 +510,7 @@ export class ReaderSession {
 		const trySizes = (): boolean => {
 			const sizes = adapter.getAllPageSizes(this.reader);
 			if (sizes?.length) {
+				this.pane?.setDisplayScale(adapter.getViewerPxPerPoint(this.reader));
 				this.pane?.setDocumentPages(sizes);
 				// Open the pane at the page the reader is on.
 				this.pane?.scrollToPage(adapter.getCurrentPageIndex(this.reader));
@@ -568,6 +571,13 @@ export class ReaderSession {
 			if (built) {
 				slot.replaceChildren(applyFit(built.element));
 				settleTranslatedPage(built.element);
+				// A long translation may have grown the page below the artwork;
+				// the slot must carry the real footprint or the next page will
+				// be drawn over the tail.
+				const grownHeight = parseFloat(built.element.style.height) || built.element.offsetHeight;
+				if (grownHeight > 0) {
+					slot.style.height = `${Math.ceil(grownHeight * fit)}px`;
+				}
 				for (const node of Array.from(built.element.querySelectorAll('[data-pm-block]'))) {
 					node.addEventListener('click', () => {
 						const id = node.getAttribute('data-pm-block');

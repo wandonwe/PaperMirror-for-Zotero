@@ -625,6 +625,18 @@ export function getViewerInsetWidth(reader: ReaderLike): number {
 	}
 }
 
+/** CSS px per PDF point at the reader's current zoom (viewport.scale). */
+export function getViewerPxPerPoint(reader: ReaderLike): number {
+	try {
+		const viewer = reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication?.pdfViewer;
+		const scale = Number(viewer?._pages?.[0]?.viewport?.scale);
+		return Number.isFinite(scale) && scale > 0 ? scale : 0;
+	}
+	catch {
+		return 0;
+	}
+}
+
 /**
  * Sizes of EVERY page, in PDF points (scale 1), whether rendered or not.
  *

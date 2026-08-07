@@ -168,6 +168,13 @@ export class TranslationPane {
 	private suppressScrollUntil = 0;
 	/** Width the slots were laid out for. */
 	private layoutWidth = 0;
+	/**
+	 * CSS px per PDF point at the LEFT reader's current zoom. The translated
+	 * page renders at this scale (capped by the pane), so its glyphs are the
+	 * same size as the original's — never larger because the pane happens to
+	 * be wider than the reader's page display.
+	 */
+	private displayPxPerPoint = 0;
 
 	constructor(host: HTMLElement, _title: string, strings: PaneStrings, callbacks: PaneCallbacks) {
 		this.host = host;
@@ -1065,9 +1072,9 @@ export class TranslationPane {
 		this.resizeObserver = observer;
 	}
 
-	private relayoutSlots(): void {
+	private relayoutSlots(force = false): void {
 		const fresh = this.pageWidthAvailable();
-		if (Math.abs(fresh - this.layoutWidth) < 8) {
+		if (!force && Math.abs(fresh - this.layoutWidth) < 8) {
 			return;
 		}
 		// Keep the same document position through the resize.
@@ -1100,6 +1107,30 @@ export class TranslationPane {
 		if (this.viewKind === 'page') {
 			this.initPageList();
 		}
+	}
+
+	/** The reader zoomed — match it. */
+	setDisplayScale(pxPerPoint: number): void {
+		if (!Number.isFinite(pxPerPoint) || pxPerPoint <= 0) {
+			return;
+		}
+		if (Math.abs(pxPerPoint - this.displayPxPerPoint) < 0.005) {
+			return;
+		}
+		this.displayPxPerPoint = pxPerPoint;
+		if (this.viewKind === 'page' && this.slots.length) {
+			this.relayoutSlots(true);
+		}
+	}
+
+	/** Target CSS width for one page: the reader's display width, pane-capped. */
+	private slotWidthFor(pageIndex: number): number {
+		const available = this.pageWidthAvailable();
+		const size = this.docPageSizes[pageIndex];
+		if (!size || this.displayPxPerPoint <= 0) {
+			return available;
+		}
+		return Math.min(available, Math.round(size.width * this.displayPxPerPoint));
 	}
 
 	private initPageList(): void {
@@ -1136,7 +1167,7 @@ export class TranslationPane {
 
 	private sizeSlot(slot: HTMLElement, pageIndex: number): void {
 		const size = this.docPageSizes[pageIndex]!;
-		const width = this.layoutWidth;
+		const width = this.slotWidthFor(pageIndex);
 		slot.style.width = `${width}px`;
 		slot.style.height = `${Math.round(width * (size.height / size.width))}px`;
 	}
@@ -1242,7 +1273,7 @@ export class TranslationPane {
 					// ever hangs anyway — the freeze bug, once, was the pane
 					// stuck on a spinner forever.
 					result = await Promise.race([
-						this.pageRenderer(target, slot, this.layoutWidth),
+						this.pageRenderer(target, slot, this.slotWidthFor(target)),
 						new Promise<false>(resolve => setTimeout(() => resolve(false), 20000))
 					]);
 				}

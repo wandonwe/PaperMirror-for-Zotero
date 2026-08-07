@@ -237,7 +237,7 @@ export function resolveOverlaps(
 	movable: (Box & { id: string })[],
 	fixed: Box[],
 	gap: number,
-	pageHeight: number
+	_pageHeight: number
 ): Map<string, number> {
 	const horizontallyClear = (a: Box, b: Box): boolean => {
 		const overlap = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
@@ -270,9 +270,10 @@ export function resolveOverlaps(
 				break;
 			}
 		}
-		// Never push a block clean off the page: better a tight fit at the
-		// bottom than a translation nobody can see.
-		top = Math.min(top, Math.max(item.top, pageHeight - item.height));
+		// NO bottom clamp. Clamping blocks back inside the page height made
+		// every overflowing block pile onto the same strip at the bottom — the
+		// garbled overlap band. A block that runs long keeps going; the caller
+		// GROWS the page below the original artwork instead.
 		result.set(item.id, top);
 		settled.push({ ...item, top });
 	}

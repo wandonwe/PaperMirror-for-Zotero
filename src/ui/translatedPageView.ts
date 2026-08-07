@@ -479,6 +479,7 @@ export function buildTranslatedPage(
 			pageHeightPx
 		);
 
+		let maxBottom = pageHeightPx;
 		for (const placement of plan) {
 			const item = placed[Number(placement.id)];
 			if (!item) {
@@ -489,9 +490,16 @@ export function buildTranslatedPage(
 			if (top > item.box.top + 0.5) {
 				item.node.setAttribute('data-pm-displaced', 'true');
 			}
-			if (top + items[Number(placement.id)]!.naturalHeight > pageHeightPx) {
+			const bottom = top + items[Number(placement.id)]!.naturalHeight;
+			if (bottom > pageHeightPx) {
 				item.node.setAttribute('data-pm-overflow', 'true');
 			}
+			maxBottom = Math.max(maxBottom, bottom);
+		}
+		// Long translations extend the page below the artwork rather than
+		// piling up on the bottom edge. The extension is plain paper.
+		if (maxBottom > pageHeightPx + 1) {
+			page.style.height = `${Math.ceil(maxBottom + 14)}px`;
 		}
 	};
 

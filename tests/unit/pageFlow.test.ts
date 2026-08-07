@@ -186,9 +186,13 @@ test('a chain of collisions settles in order', () => {
 	assert.equal(tops.get('c'), 260);
 });
 
-test('a block is never pushed off the bottom of the page', () => {
+test('a block pushed past the bottom keeps going — the page grows instead of clipping', () => {
+	// Clamping overflow back inside the page height piled every long block
+	// onto the same bottom strip: the garbled overlap band. The block lands
+	// fully below the fixed obstacle, off the original page height, and the
+	// renderer extends the page to fit it.
 	const fixed = [{ left: 40, top: 100, width: 200, height: 800 }];
 	const movable = [{ id: 'a', left: 40, top: 120, width: 200, height: 100 }];
 	const tops = resolveOverlaps(movable, fixed, 6, 1000);
-	assert.equal(tops.get('a'), 900, 'clamped to the last position that still shows it');
+	assert.equal(tops.get('a'), 906, 'below the fixed block, past the old page bottom');
 });

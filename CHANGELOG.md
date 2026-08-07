@@ -9,6 +9,23 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.2.7] — 2026-08-07
+
+### Fixed
+
+- Translated text is no longer larger than the original. The right pane
+  always filled its own width, so whenever the reader displayed the original
+  smaller than the pane (fit-page zoom, wide windows) the rebuilt page — and
+  every glyph on it — rendered bigger than the page beside it. Pages now
+  render at the READER's own zoom (CSS px per PDF point), capped by the pane
+  width, and follow zoom changes live.
+- The garbled overlap band at the bottom of dense pages is gone. Overflowing
+  blocks used to be clamped back inside the page height, piling every long
+  translation onto the same bottom strip over unmasked original text. A block
+  that runs long now keeps flowing downward and the page GROWS below the
+  artwork (plain paper extension); the slot carries the real footprint so the
+  next page never overlaps the tail.
+
 ## [0.2.6] — 2026-08-07
 
 ### Fixed
@@ -286,7 +303,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.3...v0.2.4
