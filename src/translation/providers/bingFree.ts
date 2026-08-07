@@ -39,6 +39,13 @@ const REQUEST_CHAR_LIMIT = 900;
  * immersive-translate uses; the page-scrape below stays as the fallback.
  */
 const EDGE_AUTH_URL = 'https://edge.microsoft.com/translate/auth';
+/**
+ * Microsoft's endpoints bot-check unfamiliar clients: the Zotero user agent
+ * gets an HTML challenge page with HTTP 200 where a browser gets JSON.
+ * Privileged XHR is allowed to set User-Agent, so every request to a
+ * Microsoft host introduces itself as Edge.
+ */
+const EDGE_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0';
 const EDGE_API_URL = 'https://api-edge.cognitive.microsofttranslator.com/translate?api-version=3.0&includeSentenceLength=true';
 const EDGE_TOKEN_TTL_MS = 8 * 60 * 1000;
 
@@ -53,7 +60,11 @@ async function getEdgeToken(timeoutMs: number, signal?: AbortSignal, force = fal
 		return edgeToken;
 	}
 	if (!edgeTokenPromise) {
-		edgeTokenPromise = requestText(EDGE_AUTH_URL, { timeoutMs, signal })
+		edgeTokenPromise = requestText(EDGE_AUTH_URL, {
+			timeoutMs,
+			signal,
+			headers: { 'User-Agent': EDGE_UA, Accept: '*/*' }
+		})
 			.then((text) => {
 				const token = text.trim();
 				if (token.split('.').length !== 3) {
@@ -87,6 +98,7 @@ async function translateViaEdge(
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
+				'User-Agent': EDGE_UA,
 				Authorization: `Bearer ${token}`
 			},
 			body: texts.map(text => ({ Text: text })),
@@ -123,7 +135,11 @@ let cachedAt = 0;
 let sessionPromise: Promise<BingSession> | null = null;
 
 async function fetchSession(timeoutMs: number, signal?: AbortSignal): Promise<BingSession> {
-	const { text: html, finalURL } = await requestTextWithURL(PAGE_URL, { timeoutMs, signal });
+	const { text: html, finalURL } = await requestTextWithURL(PAGE_URL, {
+		timeoutMs,
+		signal,
+		headers: { 'User-Agent': EDGE_UA, Accept: 'text/html,application/xhtml+xml' }
+	});
 	const session = parseBingTranslatorPage(html);
 	if (!session) {
 		throw new PaperMirrorError('BAD_RESPONSE', 'Could not obtain a Bing Translator session (page layout changed?).', { retryable: true });
@@ -181,6 +197,7 @@ async function translateOne(
 	allowRetry = true
 ): Promise<string> {
 	// Edge auth first; the page scrape only when Edge is down or blocked.
+	let edgeError: string | null = null;
 	if (Date.now() >= edgeDisabledUntil) {
 		try {
 			const [translated] = await translateViaEdge([text], sl, tl, settings, signal);
@@ -190,10 +207,35 @@ async function translateOne(
 			if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
 				throw e;
 			}
+			edgeError = e instanceof Error ? e.message : String(e);
 			logger.debug(MODULE, 'Edge translator failed; falling back to bing.com scrape', e);
 			edgeDisabledUntil = Date.now() + 5 * 60 * 1000;
 		}
 	}
+	try {
+		return await translateViaScrape(text, sl, tl, settings, signal, allowRetry);
+	}
+	catch (e) {
+		// One error carrying BOTH paths — a screenshot of the test-connection
+		// line then says everything about what to fix next.
+		if (edgeError && e instanceof PaperMirrorError && e.code !== 'CANCELLED') {
+			throw new PaperMirrorError(e.code, `Edge通道: ${edgeError} ｜ Bing通道: ${e.message}`, {
+				retryable: e.retryable,
+				httpStatus: e.httpStatus
+			});
+		}
+		throw e;
+	}
+}
+
+async function translateViaScrape(
+	text: string,
+	sl: string,
+	tl: string,
+	settings: ProviderSettings,
+	signal: AbortSignal | undefined,
+	allowRetry = true
+): Promise<string> {
 	const session = await getSession(settings.timeoutMs, signal);
 	// Same-origin with the session page, or the token is rejected.
 	const base = (settings.apiBaseURL || cachedOrigin).replace(/\/+$/, '');
@@ -207,7 +249,12 @@ async function translateOne(
 	try {
 		({ json } = await requestJSON(url, {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded',
+				'User-Agent': EDGE_UA,
+				Accept: '*/*',
+				Referer: `${base}/translator`
+			},
 			rawBody,
 			timeoutMs: settings.timeoutMs,
 			signal
@@ -218,7 +265,7 @@ async function translateOne(
 		if (allowRetry && e instanceof PaperMirrorError && (e.httpStatus === 400 || e.httpStatus === 401 || e.httpStatus === 403 || e.code === 'BAD_RESPONSE')) {
 			logger.debug(MODULE, 'Bing session may have expired; refreshing');
 			await getSession(settings.timeoutMs, signal, true);
-			return translateOne(text, sl, tl, settings, signal, false);
+			return translateViaScrape(text, sl, tl, settings, signal, false);
 		}
 		throw e;
 	}
@@ -227,7 +274,7 @@ async function translateOne(
 	if (typeof statusCode === 'number' && statusCode >= 400) {
 		if (allowRetry) {
 			await getSession(settings.timeoutMs, signal, true);
-			return translateOne(text, sl, tl, settings, signal, false);
+			return translateViaScrape(text, sl, tl, settings, signal, false);
 		}
 		throw new PaperMirrorError('BAD_RESPONSE', `Bing returned status ${statusCode}.`, { retryable: true });
 	}

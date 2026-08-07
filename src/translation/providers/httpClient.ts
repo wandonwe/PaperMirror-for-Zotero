@@ -213,7 +213,15 @@ export async function requestJSON(url: string, options: HttpJSONOptions): Promis
 		return { status, json: JSON.parse(text), elapsedMs };
 	}
 	catch {
-		throw new PaperMirrorError('BAD_RESPONSE', 'The service returned a non-JSON response.', { httpStatus: status });
+		// Say WHAT came back instead — an HTML bot-check page and an empty
+		// body need entirely different fixes, and "non-JSON" hides both.
+		const head = text.trim().slice(0, 40).toLowerCase();
+		const kind = !text.trim()
+			? 'an empty body'
+			: head.startsWith('<!doctype') || head.startsWith('<html')
+				? 'an HTML page (likely a bot check or a redirect)'
+				: 'a non-JSON body';
+		throw new PaperMirrorError('BAD_RESPONSE', `The service returned ${kind}.`, { httpStatus: status });
 	}
 }
 

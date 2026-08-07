@@ -9,6 +9,26 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-07
+
+Start of the 0.3 line.
+
+### Fixed
+
+- Microsoft translation, round three — the user's screenshot finally carried
+  the decisive clue: **HTTP 200 with a non-JSON body**, which is Microsoft's
+  bot check answering an unfamiliar client with an HTML challenge page.
+  - Every request to a Microsoft host now introduces itself with a browser
+    User-Agent (privileged XHR may set one); the translate POST also carries
+    the Referer the endpoint expects.
+  - Non-JSON responses are now diagnosed precisely: an HTML page, an empty
+    body and other garbage each get their own message.
+  - When both paths fail, the error carries BOTH: `Edge通道: … ｜ Bing通道:
+    …` — one screenshot of the test-connection line now tells the whole
+    story.
+  - The scrape path's internal session-refresh retry no longer restarts from
+    the Edge path.
+
 ## [0.2.10] — 2026-08-07
 
 ### Removed
@@ -357,7 +377,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.10...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.10...v0.3.0
 [0.2.10]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.7...v0.2.8
