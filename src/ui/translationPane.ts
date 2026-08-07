@@ -19,8 +19,6 @@ import type { PageTranslationState } from '../translation/translationManager';
 import type { SourceBlock } from '../types/models';
 
 const MODULE = 'translationPane';
-/** How far the rebuilt page may be scaled up to fill the pane. */
-const PAGE_MAX_UPSCALE = 2.4;
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -129,19 +127,35 @@ export class TranslationPane {
 	 * 'article' 流式译文 — the translation as a continuous article.
 	 */
 	private viewKind: 'page' | 'article' = 'page';
-	private pageRenderer: ((pageIndex: number, host: HTMLElement, width: number) => boolean) | null = null;
+	private pageRenderer: ((pageIndex: number, slot: HTMLElement, width: number) => Promise<'translated' | 'original' | false>) | null = null;
 	private pageHost: HTMLElement | null = null;
 	private currentPage = -1;
 	private compareOriginal = false;
 	private resizeObserver: { disconnect(): void } | null = null;
 	private resizeTimer: ReturnType<typeof setTimeout> | null = null;
-	private lastWidth = 0;
 	private viewKindButton: HTMLElement | null = null;
 	private sideButton: HTMLElement | null = null;
 	private sideFill: HTMLElement | null = null;
 	private paneSide: 'left' | 'right' = 'right';
-	/** Circuit breaker: draw timestamps, newest last. */
-	private drawTimes: number[] = [];
+
+	// ---- full-document page list (整页对照) --------------------------------
+	/** Page boxes in PDF points, one per page, whether rendered or not. */
+	private docPageSizes: { width: number; height: number }[] = [];
+	/** One slot element per page, alive for the whole session. */
+	private slots: HTMLElement[] = [];
+	/** What each slot currently shows. */
+	private slotState: ('empty' | 'original' | 'translated')[] = [];
+	/** Set when a slot's content is stale (translation arrived, resize…). */
+	private slotDirty: boolean[] = [];
+	/** Monotonic token per slot — a stale async render must never land. */
+	private slotToken: number[] = [];
+	/** One render at a time; re-prioritised between renders. */
+	private pumping = false;
+	private ensureTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Echo guard: ignore our own programmatic scrolls. */
+	private suppressScrollUntil = 0;
+	/** Width the slots were laid out for. */
+	private layoutWidth = 0;
 
 	constructor(host: HTMLElement, _title: string, strings: PaneStrings, callbacks: PaneCallbacks) {
 		this.host = host;
@@ -635,11 +649,13 @@ export class TranslationPane {
 	// ---- 整页对照 -----------------------------------------------------------
 
 	/**
-	 * Install the page-rebuilding renderer. The session owns it because it
-	 * needs the reader; the pane only decides when to call it.
-	 * Returning false means the page is not rendered by PDF.js yet.
+	 * Install the page renderer. The session owns it because rendering needs
+	 * the reader and the translation state; the pane only decides WHICH pages
+	 * to render and when. The renderer resolves to what the slot now shows —
+	 * 'translated', 'original' (translation not finished yet), or false when
+	 * the page could not be rendered at all.
 	 */
-	setPageRenderer(renderer: (pageIndex: number, host: HTMLElement, width: number) => boolean): void {
+	setPageRenderer(renderer: (pageIndex: number, slot: HTMLElement, width: number) => Promise<'translated' | 'original' | false>): void {
 		this.pageRenderer = renderer;
 		this.observeResize();
 	}
@@ -653,13 +669,20 @@ export class TranslationPane {
 		this.articleHost.replaceChildren();
 		this.pages.clear();
 		this.pageHost = null;
+		this.slots = [];
+		this.slotState = [];
+		this.slotDirty = [];
+		this.slotToken = [];
 		this.refreshViewKindButton();
+		if (kind === 'page') {
+			this.initPageList();
+		}
 	}
 
 	/**
 	 * The pane's two readings of the same text: 文章流 is complete and never
-	 * clips (this is the mode that guarantees 无删减); 整页对照 rebuilds the
-	 * page's own layout beside the original. The button offers the OTHER one.
+	 * clips; 整页对照 rebuilds the page's own layout beside the original. The
+	 * button offers the OTHER one.
 	 */
 	private refreshViewKindButton(): void {
 		if (!this.viewKindButton) {
@@ -674,89 +697,123 @@ export class TranslationPane {
 		return this.viewKind;
 	}
 
-	/**
-	 * Width available to a rebuilt page, in CSS px.
-	 *
-	 * Clamped hard. The rebuilt page carries an explicit pixel width, so an
-	 * over-large value here does not just look wrong — it becomes the pane's
-	 * min-content width and shoves the reader off screen.
-	 */
+	/** Width a page gets, in CSS px — nearly edge to edge of the pane. */
 	private pageWidthAvailable(): number {
-		// Informational only now: the rebuilt page is sized from the reader's
-		// own render, not from this number. It is still passed through so the
-		// renderer can centre small pages and log sensible diagnostics.
 		const scrollW = this.scroll.clientWidth || this.host.clientWidth;
-		return Math.max(160, (scrollW || 400) - 16);
+		return Math.max(160, (scrollW || 400) - 20);
 	}
 
 	/**
-	 * Fit the rebuilt page to the pane by SCALING it, never by rebuilding it.
-	 *
-	 * The page is built at the reader's own pixel geometry, which is what keeps
-	 * the text layer aligned with the bitmap. A CSS transform scales the
-	 * finished result as one piece, so dragging the divider resizes the
-	 * translation smoothly — no re-render, no canvas allocation, and no way for
-	 * the text and the artwork to disagree. Only ever scales DOWN: the
-	 * translated page must never end up larger than the original beside it.
+	 * Pane resized: re-lay the slots out at the new width and re-render what
+	 * is on screen. Debounced — a divider drag fires continuously, and each
+	 * re-render costs real canvases.
 	 */
-	private fitPageToPane(): void {
-		const page = this.pageHost?.querySelector('.pm-repage') as HTMLElement | null;
-		if (!page) {
-			return;
-		}
-		const pageWidth = parseFloat(page.style.width) || page.offsetWidth;
-		const pageHeight = parseFloat(page.style.height) || page.offsetHeight;
-		if (!pageWidth || !pageHeight) {
-			return;
-		}
-		// FILL the pane, both directions. Scaling up is safe here in a way it
-		// never was before: a transform scales the bitmap and the text layer as
-		// one object, so they cannot drift apart. The bitmap is supersampled 2×,
-		// so it stays sharp well past 1.0.
-		const available = Math.max(120, (this.scroll.clientWidth || pageWidth) - 24);
-		const scale = Math.max(0.2, Math.min(PAGE_MAX_UPSCALE, available / pageWidth));
-		page.style.transformOrigin = 'top left';
-		page.style.transform = Math.abs(scale - 1) < 0.002 ? '' : `scale(${scale.toFixed(4)})`;
-		// A transform leaves the layout box untouched, so the footprint has to
-		// be corrected by hand or the scroll area is the wrong size — negative
-		// when shrinking, positive when growing.
-		page.style.marginRight = `${Math.round(pageWidth * (scale - 1))}px`;
-		page.style.marginBottom = `${Math.round(20 + pageHeight * (scale - 1))}px`;
-	}
-
 	private observeResize(): void {
 		const view = this.doc.defaultView as (Window & { ResizeObserver?: new (cb: () => void) => { observe(el: Element): void; disconnect(): void } }) | null;
 		if (!view?.ResizeObserver || this.resizeObserver) {
 			return;
 		}
 		const observer = new view.ResizeObserver(() => {
-			if (this.viewKind !== 'page') {
+			if (this.viewKind !== 'page' || !this.slots.length) {
 				return;
 			}
-			this.fitPageToPane();
+			if (Math.abs(this.pageWidthAvailable() - this.layoutWidth) < 8) {
+				return;
+			}
+			if (this.resizeTimer) {
+				clearTimeout(this.resizeTimer);
+			}
+			this.resizeTimer = setTimeout(() => {
+				this.resizeTimer = null;
+				this.relayoutSlots();
+			}, 180);
 		});
 		observer.observe(this.scroll);
 		this.resizeObserver = observer;
 	}
 
-	/**
-	 * 整页对照 shows exactly ONE page: the one the reader is on.
-	 *
-	 * Two reasons it cannot be a scrolling list of pages. PDF.js virtualises —
-	 * only the pages near the viewport are rendered, and the rebuilt page copies
-	 * that render, so every other page would be a blank placeholder. And the
-	 * point of the spread is that the translated page sits beside the original
-	 * page it belongs to; a second scrollable column of pages fights the PDF's
-	 * own scrolling instead of matching it.
-	 */
-	setCurrentPage(pageIndex: number): void {
-		if (this.currentPage === pageIndex) {
+	private relayoutSlots(): void {
+		const fresh = this.pageWidthAvailable();
+		if (Math.abs(fresh - this.layoutWidth) < 8) {
 			return;
 		}
-		this.currentPage = pageIndex;
-		if (this.viewKind === 'page') {
-			this.drawCurrentPage();
+		// Keep the same document position through the resize.
+		const anchorFraction = this.scroll.scrollHeight > 0
+			? this.scroll.scrollTop / this.scroll.scrollHeight
+			: 0;
+		this.layoutWidth = fresh;
+		for (let i = 0; i < this.slots.length; i++) {
+			this.sizeSlot(this.slots[i]!, i);
+			// Content was built for the old width: release it.
+			if (this.slotState[i] !== 'empty') {
+				this.slotToken[i]!++;
+				this.slotState[i] = 'empty';
+				this.slots[i]!.replaceChildren(this.makeGhost(i));
+			}
 		}
+		this.scroll.scrollTop = anchorFraction * this.scroll.scrollHeight;
+		this.scheduleEnsure();
+	}
+
+	/**
+	 * 整页对照 now shows the WHOLE document: one slot per page, laid out from
+	 * the page boxes before anything is rendered, so the scrollbar and page
+	 * positions are correct from the first frame. Pages render lazily around
+	 * the viewport — the original page while its translation is pending, the
+	 * rebuilt translated page once it is done.
+	 */
+	setDocumentPages(sizes: { width: number; height: number }[]): void {
+		this.docPageSizes = sizes;
+		if (this.viewKind === 'page') {
+			this.initPageList();
+		}
+	}
+
+	private initPageList(): void {
+		if (!this.docPageSizes.length) {
+			return;
+		}
+		const host = this.ensurePageHost();
+		this.layoutWidth = this.pageWidthAvailable();
+		this.slots = [];
+		this.slotState = [];
+		this.slotDirty = [];
+		this.slotToken = [];
+		const children: HTMLElement[] = [];
+		for (let i = 0; i < this.docPageSizes.length; i++) {
+			const slot = this.el('div', 'pm-repage-slot');
+			slot.setAttribute('data-pm-slot', String(i));
+			this.sizeSlot(slot, i);
+			slot.appendChild(this.makeGhost(i));
+			this.slots.push(slot);
+			this.slotState.push('empty');
+			this.slotDirty.push(false);
+			this.slotToken.push(0);
+			children.push(
+				this.el('div', 'pm-repage-page-label',
+					`${this.strings.pagePrefix} ${i + 1} ${this.strings.pageSuffix}`.trim()),
+				slot
+			);
+		}
+		host.replaceChildren(...children);
+		this.scheduleEnsure();
+	}
+
+	private sizeSlot(slot: HTMLElement, pageIndex: number): void {
+		const size = this.docPageSizes[pageIndex]!;
+		const width = this.layoutWidth;
+		slot.style.width = `${width}px`;
+		slot.style.height = `${Math.round(width * (size.height / size.width))}px`;
+	}
+
+	/** Placeholder shown before a page renders and after it is released. */
+	private makeGhost(pageIndex: number): HTMLElement {
+		const ghost = this.el('div', 'pm-repage-ghost');
+		ghost.append(
+			this.el('span', 'pm-bilingual-spinner'),
+			this.el('span', undefined, String(pageIndex + 1))
+		);
+		return ghost;
 	}
 
 	private ensurePageHost(): HTMLElement {
@@ -769,102 +826,175 @@ export class TranslationPane {
 		return host;
 	}
 
+	// ---- virtualisation -----------------------------------------------------
+
+	/** Slots intersecting the viewport, expanded by `buffer` pages each way. */
+	private visibleRange(buffer: number): [number, number] {
+		const top = this.scroll.scrollTop;
+		const bottom = top + this.scroll.clientHeight;
+		let first = -1;
+		let last = -1;
+		for (let i = 0; i < this.slots.length; i++) {
+			const slot = this.slots[i]!;
+			const slotTop = slot.offsetTop;
+			const slotBottom = slotTop + slot.offsetHeight;
+			if (slotBottom > top && slotTop < bottom) {
+				if (first < 0) {
+					first = i;
+				}
+				last = i;
+			}
+		}
+		if (first < 0) {
+			return [0, Math.min(this.slots.length - 1, buffer)];
+		}
+		return [Math.max(0, first - buffer), Math.min(this.slots.length - 1, last + buffer)];
+	}
+
+	private scheduleEnsure(): void {
+		if (this.ensureTimer) {
+			return;
+		}
+		this.ensureTimer = setTimeout(() => {
+			this.ensureTimer = null;
+			void this.pumpRenders();
+		}, 60);
+	}
+
 	/**
-	 * Hard stop on runaway redraws.
-	 *
-	 * Every 整页对照 draw allocates two full-page canvases at 2× supersampling —
-	 * tens of megabytes for a big page. A feedback loop between a draw and
-	 * anything that observes its result therefore does not merely stutter, it
-	 * exhausts memory and takes Zotero down with it. Whatever new loop a future
-	 * change introduces, this bounds it: more than 8 draws in 3 seconds and the
-	 * page freezes at its current size until something genuinely changes.
+	 * Render what the reader is looking at, one page at a time, nearest first.
+	 * Between pages the priorities are recomputed, so a fast scroll does not
+	 * queue up a wake of stale work. Pages far outside the window release
+	 * their canvases — with several supersampled canvases per page, an
+	 * unbounded list is an out-of-memory crash on a long paper.
 	 */
-	private drawBudgetSpent(): boolean {
-		const now = Date.now();
-		this.drawTimes = this.drawTimes.filter(t => now - t < 3000);
-		this.drawTimes.push(now);
-		if (this.drawTimes.length > 8) {
-			logger.warn(MODULE, 'page redraw budget exhausted — freezing the rebuilt page');
-			return true;
+	private async pumpRenders(): Promise<void> {
+		if (this.pumping || this.viewKind !== 'page' || !this.pageRenderer || !this.slots.length) {
+			return;
 		}
-		return false;
+		this.pumping = true;
+		try {
+			for (let guard = 0; guard < 24; guard++) {
+				const [first, last] = this.visibleRange(1);
+				let target = -1;
+				for (let i = first; i <= last; i++) {
+					if (this.slotState[i] === 'empty' || this.slotDirty[i]) {
+						target = i;
+						break;
+					}
+				}
+				if (target < 0) {
+					break;
+				}
+				const token = ++this.slotToken[target]!;
+				this.slotDirty[target] = false;
+				const slot = this.slots[target]!;
+				let result: 'translated' | 'original' | false = false;
+				try {
+					result = await this.pageRenderer(target, slot, this.layoutWidth);
+				}
+				catch (e) {
+					logger.debug(MODULE, `page ${target + 1} render failed`, e);
+				}
+				if (this.slotToken[target] !== token || this.viewKind !== 'page') {
+					continue; // superseded while rendering
+				}
+				if (result === false) {
+					// Not renderable right now: keep the ghost, try again on the
+					// next ensure pass rather than spinning.
+					this.slotState[target] = 'empty';
+				}
+				else {
+					this.slotState[target] = result;
+					this.applyCompareState();
+				}
+			}
+			this.releaseFarSlots();
+		}
+		finally {
+			this.pumping = false;
+		}
 	}
 
-	private drawCurrentPage(): void {
-		if (!this.pageRenderer || this.viewKind !== 'page' || this.currentPage < 0) {
-			return;
+	private releaseFarSlots(): void {
+		const [first, last] = this.visibleRange(2);
+		for (let i = 0; i < this.slots.length; i++) {
+			if (i >= first && i <= last) {
+				continue;
+			}
+			if (this.slotState[i] !== 'empty') {
+				this.slotToken[i]!++;
+				this.slotState[i] = 'empty';
+				this.slotDirty[i] = false;
+				this.slots[i]!.replaceChildren(this.makeGhost(i));
+			}
 		}
-		if (this.drawBudgetSpent()) {
-			return;
-		}
-		const host = this.ensurePageHost();
-		this.lastWidth = this.pageWidthAvailable();
-		const label = this.el('div', 'pm-repage-page-label',
-			`${this.strings.pagePrefix} ${this.currentPage + 1} ${this.strings.pageSuffix}`.trim());
-		const scrollTop = this.scroll.scrollTop;
-		const ok = this.pageRenderer(this.currentPage, host, this.lastWidth);
-		if (!ok) {
-			const pending = this.el('div', 'pm-repage-pending');
-			pending.style.width = `${this.lastWidth}px`;
-			pending.style.height = '140px';
-			pending.append(
-				this.el('span', 'pm-bilingual-spinner'),
-				this.doc.createTextNode(
-					this.strings.statusTranslating.replace('%n%', String(this.currentPage + 1))
-				)
-			);
-			host.replaceChildren(label, pending);
-			return;
-		}
-		// Exactly one page label, whatever the renderer kept or replaced.
-		host.querySelectorAll('.pm-repage-page-label').forEach(n => n.remove());
-		host.insertBefore(label, host.firstChild);
-		this.applyCompareState();
-		this.scroll.scrollTop = Math.min(scrollTop, Math.max(0, this.scroll.scrollHeight - this.scroll.clientHeight));
-		this.fitPageToPane();
 	}
 
 	/**
-	 * PDF.js virtualises pages and re-renders on zoom. The rebuilt page copies
-	 * that bitmap, so it has to be redrawn when the source page changes.
+	 * The reader moved to another page. The fraction-level scroll sync handles
+	 * following; this only records the position and nudges rendering priority.
+	 */
+	setCurrentPage(pageIndex: number): void {
+		if (this.currentPage === pageIndex) {
+			return;
+		}
+		this.currentPage = pageIndex;
+		if (this.viewKind === 'page') {
+			this.scheduleEnsure();
+		}
+	}
+
+	/**
+	 * A page's translation state changed. Only completion is worth a rebuild:
+	 * re-rendering on every intermediate state would repaint the original page
+	 * over and over while the provider streams in.
 	 */
 	refreshPage(pageIndex: number): void {
-		if (this.viewKind !== 'page' || pageIndex !== this.currentPage) {
+		if (this.viewKind !== 'page' || !this.slots[pageIndex]) {
 			return;
 		}
-		this.drawCurrentPage();
+		this.slotDirty[pageIndex] = true;
+		this.scheduleEnsure();
 	}
 
 	/**
-	 * 同步滚动 (page view): mirror the reader's position WITHIN the page.
-	 * `fraction` is how far down the original page the left viewport sits;
-	 * the rebuilt page scrolls to the same relative spot.
+	 * 同步滚动: mirror the reader's position — page AND the fraction within
+	 * it. This is what keeps 原文第 2 页 from sitting beside 译文第 1 页: the
+	 * pane follows the document position continuously, not per page.
 	 */
 	setPdfScrollFraction(pageIndex: number, fraction: number): void {
-		if (this.viewKind !== 'page' || pageIndex !== this.currentPage || !this.pageHost) {
+		if (this.viewKind !== 'page') {
 			return;
 		}
-		const pageEl = this.pageHost.querySelector('.pm-repage') as HTMLElement | null;
-		if (!pageEl) {
+		const slot = this.slots[pageIndex];
+		if (!slot) {
 			return;
 		}
-		const target = pageEl.offsetTop + fraction * pageEl.offsetHeight;
+		const target = slot.offsetTop + fraction * slot.offsetHeight - 6;
 		const max = Math.max(0, this.scroll.scrollHeight - this.scroll.clientHeight);
+		this.suppressScrollUntil = Date.now() + 300;
 		this.scroll.scrollTop = Math.max(0, Math.min(target, max));
+		this.scheduleEnsure();
 	}
 
 	/**
-	 * 显示原文对照 — hide the mask so the original text shows through the
-	 * rebuilt page, for a direct read against the source.
+	 * 显示原文对照 — hide the masks so the original text shows through the
+	 * rebuilt pages, for a direct read against the source.
 	 */
 	private applyCompareState(): void {
-		this.pageHost?.querySelector('.pm-repage')
-			?.setAttribute('data-pm-compare', String(this.compareOriginal));
+		this.pageHost?.querySelectorAll('.pm-repage').forEach((page) => {
+			page.setAttribute('data-pm-compare', String(this.compareOriginal));
+		});
 	}
 
 	renderPage(state: PageTranslationState): void {
 		if (this.viewKind === 'page') {
-			this.renderPageAsPage(state);
+			// Show the original until the translation is COMPLETE; swap the
+			// slot to the rebuilt page only on 'done'.
+			if (state.status === 'done') {
+				this.refreshPage(state.pageIndex);
+			}
 			return;
 		}
 		const section = this.ensurePageSection(state.pageIndex);
@@ -893,27 +1023,6 @@ export class TranslationPane {
 				section.status.textContent = '';
 		}
 		this.renderBlocks(section, state);
-	}
-
-	private renderPageAsPage(state: PageTranslationState): void {
-		if (state.pageIndex !== this.currentPage) {
-			return; // only the page the reader is on is shown
-		}
-		if (state.status === 'no-text-layer' || state.status === 'error') {
-			const message = state.status === 'no-text-layer'
-				? this.strings.noTextLayer
-				: `${this.strings.statusError}: ${state.error?.message ?? ''}`;
-			const box = this.el('div', 'pm-repage-pending', message);
-			box.style.width = `${this.pageWidthAvailable()}px`;
-			box.style.height = '110px';
-			this.ensurePageHost().replaceChildren(
-				this.el('div', 'pm-repage-page-label',
-					`${this.strings.pagePrefix} ${state.pageIndex + 1} ${this.strings.pageSuffix}`.trim()),
-				box
-			);
-			return;
-		}
-		this.drawCurrentPage();
 	}
 
 	/** Incremental update — existing nodes are patched, never rebuilt. */
@@ -999,6 +1108,7 @@ export class TranslationPane {
 
 	scrollToPage(pageIndex: number): void {
 		if (this.viewKind === 'page') {
+			this.setPdfScrollFraction(pageIndex, 0);
 			this.setCurrentPage(pageIndex);
 			return;
 		}
@@ -1013,7 +1123,26 @@ export class TranslationPane {
 		const rect = this.scroll.getBoundingClientRect();
 		let best: number | null = null;
 		if (this.viewKind === 'page') {
-			return; // one page at a time; the PDF drives which one
+			// Full-document list: keep the window rendered, and tell the
+			// session which page leads the viewport — unless this scroll is
+			// the echo of our own 同步滚动 write.
+			this.scheduleEnsure();
+			if (Date.now() < this.suppressScrollUntil) {
+				return;
+			}
+			const anchor = this.scroll.scrollTop + this.scroll.clientHeight * 0.35;
+			for (let i = 0; i < this.slots.length; i++) {
+				const slot = this.slots[i]!;
+				if (slot.offsetTop <= anchor && slot.offsetTop + slot.offsetHeight > anchor) {
+					best = i;
+					break;
+				}
+			}
+			if (best !== null && best !== this.currentPage) {
+				this.currentPage = best;
+				this.callbacks.onScrolledToPage(best);
+			}
+			return;
 		}
 		const sections: [number, HTMLElement][] =
 			[...this.pages.entries()].map(([p, s]) => [p, s.blocksHost] as [number, HTMLElement]);
@@ -1065,6 +1194,10 @@ export class TranslationPane {
 		if (this.resizeTimer) {
 			clearTimeout(this.resizeTimer);
 			this.resizeTimer = null;
+		}
+		if (this.ensureTimer) {
+			clearTimeout(this.ensureTimer);
+			this.ensureTimer = null;
 		}
 		this.resizeObserver?.disconnect();
 		this.resizeObserver = null;

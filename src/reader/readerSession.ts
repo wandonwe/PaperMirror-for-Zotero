@@ -21,7 +21,7 @@ import { parseGlossaryJSON } from '../translation/glossary';
 import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationResponse } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
-import { buildTranslatedPage, settleTranslatedPage } from '../ui/translatedPageView';
+import { buildOriginalPage, buildTranslatedPage, settleTranslatedPage } from '../ui/translatedPageView';
 import { translateFullPdf, bytesToBase64, type TranslateSubmission } from '../translation/pdfService';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
@@ -113,8 +113,6 @@ export class ReaderSession {
 	private disposePdfEvents: (() => void) | null = null;
 	private pageRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 	private statusHideTimer: ReturnType<typeof setTimeout> | null = null;
-	/** Last seen PDF.js scale, to tell a zoom from a scroll (both fire the same events). */
-	private lastScale = 0;
 	/** True while a full-PDF translation is running on the local bridge. */
 	private exportingPdf = false;
 	/** Most recent deep explanation, for copy / save-to-note. */
@@ -191,8 +189,10 @@ export class ReaderSession {
 		this.overlay.setPeekOnHover(getPref<boolean>('overlayPeekHover', true));
 		this.overlay.setFitMode(getPref<'strict' | 'expand'>('overlayFitMode', 'expand'));
 		this.pane.setArticleFontSize(getPref<number>('articleFontSize', 16));
-		// 整页对照: the pane rebuilds the page next to the original PDF.
-		this.pane.setPageRenderer((pageIndex, host, width) => this.renderTranslatedPage(pageIndex, host, width));
+		// 整页对照: the pane shows the whole document; each page renders as
+		// the original until its translation completes, then swaps.
+		this.pane.setPageRenderer((pageIndex, slot, width) => this.renderDocPage(pageIndex, slot, width));
+		this.installDocumentLayout();
 		// 左右对照 = 原文左 / 版面级重排的整页译文右. 文章流 stays one click
 		// away in the pane header for anyone who wants plain continuous text.
 		this.pane.setViewKind(getPref<'page' | 'article'>('paneView', 'page'));
@@ -239,43 +239,17 @@ export class ReaderSession {
 			this.startTranslating();
 		}
 
-		// PDF.js event fan-out. Two very different cases share one event stream:
-		//  - pagerendered/textlayerrendered (pageIndex given) → the bitmap we
-		//    copy changed: REBUILD the translated page (debounced).
-		//  - scalechanging/updateviewarea (no pageIndex) → fired on every left
-		//    scroll tick. Rebuilding here made the pane repaint constantly; a
-		//    scroll only needs the cheap 同步滚动 follow. A zoom is detected by
-		//    comparing the viewport scale and does rebuild.
+		// PDF.js events: the pane renders its pages itself now, so left-side
+		// re-renders and zooms no longer force a rebuild. The only thing the
+		// stream drives is 同步滚动 — following the reader's position (page AND
+		// fraction within it) continuously, which is what keeps 原文第 2 页
+		// from sitting beside 译文第 1 页.
 		this.disposePdfEvents = adapter.onPdfRenderEvents(this.reader, (pageIndex) => {
-			if (this.destroyed) {
+			if (this.destroyed || pageIndex !== null) {
 				return;
 			}
-			if (pageIndex !== null) {
-				if (this.pageRefreshTimer) {
-					clearTimeout(this.pageRefreshTimer);
-				}
-				this.pageRefreshTimer = setTimeout(() => {
-					this.pageRefreshTimer = null;
-					this.pane?.refreshPage(pageIndex);
-				}, 120);
-				return;
-			}
-			const current = adapter.getCurrentPageIndex(this.reader);
-			const scale = adapter.getPageRender(this.reader, current)?.scale ?? this.lastScale;
-			if (this.lastScale !== 0 && Math.abs(scale - this.lastScale) > 0.001) {
-				this.lastScale = scale;
-				if (this.pageRefreshTimer) {
-					clearTimeout(this.pageRefreshTimer);
-				}
-				this.pageRefreshTimer = setTimeout(() => {
-					this.pageRefreshTimer = null;
-					this.pane?.refreshPage(adapter.getCurrentPageIndex(this.reader));
-				}, 150);
-				return;
-			}
-			this.lastScale = scale;
-			// 同步滚动: follow the reader's position inside the page.
 			if (this.sync?.enabled) {
+				const current = adapter.getCurrentPageIndex(this.reader);
 				const fraction = adapter.getPageScrollFraction(this.reader, current);
 				if (fraction !== null) {
 					this.pane?.setPdfScrollFraction(current, fraction);
@@ -513,41 +487,75 @@ export class ReaderSession {
 	}
 
 	/**
-	 * Rebuild one page with translated body text into the pane.
-	 * Returns false when PDF.js has not rendered that page yet, so the pane can
-	 * show a placeholder instead of an empty rectangle.
+	 * Hand the pane the whole document's page boxes so it can lay out every
+	 * page before anything renders. PDF.js populates its page list slightly
+	 * after the reader opens, so poll briefly instead of giving up.
 	 */
-	private renderTranslatedPage(pageIndex: number, host: HTMLElement, width: number): boolean {
+	private installDocumentLayout(): void {
+		const trySizes = (): boolean => {
+			const sizes = adapter.getAllPageSizes(this.reader);
+			if (sizes?.length) {
+				this.pane?.setDocumentPages(sizes);
+				// Open the pane at the page the reader is on.
+				this.pane?.scrollToPage(adapter.getCurrentPageIndex(this.reader));
+				return true;
+			}
+			return false;
+		};
+		if (trySizes()) {
+			return;
+		}
+		let tries = 0;
+		const timer = setInterval(() => {
+			if (this.destroyed || trySizes() || ++tries > 25) {
+				clearInterval(timer);
+			}
+		}, 400);
+	}
+
+	/**
+	 * Render one page into its slot: the rebuilt translated page when that
+	 * page's translation is COMPLETE, the original page otherwise. Rendering
+	 * goes through pdf.js core (adapter.renderPageBitmap), so any page works —
+	 * not just the ones the left viewer keeps on screen.
+	 */
+	private async renderDocPage(pageIndex: number, slot: HTMLElement, width: number): Promise<'translated' | 'original' | false> {
+		// Supersample within a fixed pixel budget: sharp text without letting a
+		// tall page allocate an enormous canvas.
+		const oversample = Math.max(1, Math.min(1.8, Math.sqrt(3_200_000 / Math.max(1, width * width * 1.4))));
+		const render = await adapter.renderPageBitmap(this.reader, pageIndex, width, oversample);
+		if (!render || this.destroyed) {
+			return false;
+		}
+		const doc = slot.ownerDocument!;
 		const state = this.manager?.getPageState(pageIndex);
-		if (!state || !state.blocks.length) {
-			return false;
-		}
-		const built = buildTranslatedPage(host.ownerDocument!, this.reader, {
-			blocks: state.blocks,
-			translations: state.translations,
-			pageIndex,
-			availableWidth: width
-		});
-		if (!built) {
-			return false;
-		}
-		const label = host.querySelector('.pm-repage-page-label');
-		host.replaceChildren(...(label ? [label] : []), built.element);
-		// Measurement must happen after insertion — the reflow pass needs real
-		// rendered heights to know whether a paragraph pushes the next one down.
-		settleTranslatedPage(built.element);
-		for (const node of Array.from(built.element.querySelectorAll('[data-pm-block]'))) {
-			node.addEventListener('click', () => {
-				const id = node.getAttribute('data-pm-block');
-				if (id) {
-					this.sync?.onPaneNavigated(pageIndex);
-					void this.explainSelection(
-						state.blocks.find(b => b.id === id)?.sourceText ?? ''
-					);
-				}
+		if (state && state.status === 'done' && state.blocks.length) {
+			const built = buildTranslatedPage(doc, this.reader, {
+				blocks: state.blocks,
+				translations: state.translations,
+				pageIndex,
+				availableWidth: width,
+				render
 			});
+			if (built) {
+				slot.replaceChildren(built.element);
+				settleTranslatedPage(built.element);
+				for (const node of Array.from(built.element.querySelectorAll('[data-pm-block]'))) {
+					node.addEventListener('click', () => {
+						const id = node.getAttribute('data-pm-block');
+						if (id) {
+							this.sync?.onPaneNavigated(pageIndex);
+							void this.explainSelection(
+								state.blocks.find(b => b.id === id)?.sourceText ?? ''
+							);
+						}
+					});
+				}
+				return 'translated';
+			}
 		}
-		return true;
+		slot.replaceChildren(buildOriginalPage(doc, render));
+		return 'original';
 	}
 
 	/**

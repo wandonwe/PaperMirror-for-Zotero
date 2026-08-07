@@ -1327,3 +1327,44 @@
 		display: none;
 	}
 }
+
+
+/* ==========================================================================
+   Full-document page list (整页对照 shows every page).
+   ========================================================================== */
+
+.pm-repage-slot {
+	position: relative;
+	margin: 0 auto 4px;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, .16), 0 6px 22px rgba(0, 0, 0, .1);
+	overflow: hidden;
+}
+
+/* Inside a slot the page fills it exactly; the slot carries the frame. */
+.pm-repage-slot .pm-repage {
+	margin: 0;
+	box-shadow: none;
+}
+
+/* Placeholder before a page renders / after a far page is released. */
+.pm-repage-ghost {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	background: #fdfdfe;
+	color: #b3bac4;
+	font: 500 13px/1 Inter, system-ui, sans-serif;
+}
+
+.pm-bilingual-pane[data-pm-theme="dark"] .pm-repage-ghost {
+	background: #2b2f36;
+	color: #6c7480;
+}
+
+.pm-scroll[data-pm-view="page"] .pm-repage-page-label {
+	padding: 10px 0 4px;
+}

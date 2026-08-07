@@ -49,7 +49,9 @@ const HTML_NS = 'http://www.w3.org/1999/xhtml';
  * less than not exhausting memory.
  */
 const BITMAP_SCALE_MAX = 2;
-const BITMAP_PIXEL_BUDGET = 6_000_000; // per canvas, ≈24 MB at 4 bytes/px
+// Lowered from 6M when the pane became a full-document list: several pages
+// are alive at once, and each page carries TWO canvases at this budget.
+const BITMAP_PIXEL_BUDGET = 3_200_000; // per canvas, ≈13 MB at 4 bytes/px
 
 function bitmapScaleFor(widthPx: number, heightPx: number): number {
 	const area = Math.max(1, widthPx * heightPx);
@@ -67,6 +69,14 @@ export interface TranslatedPageInput {
 	pageIndex: number;
 	/** Width available in the pane, in CSS px. */
 	availableWidth: number;
+	/**
+	 * A page render supplied by the caller (from adapter.renderPageBitmap).
+	 * When present it is used directly, which frees this builder from the left
+	 * viewer's virtualisation — any page can be rebuilt, not just the ones
+	 * PDF.js keeps on screen. Absent, the live viewer render is copied as
+	 * before.
+	 */
+	render?: adapter.PageRender;
 }
 
 export interface TranslatedPageResult {
@@ -217,7 +227,7 @@ export function buildTranslatedPage(
 	reader: ReaderLike,
 	input: TranslatedPageInput
 ): TranslatedPageResult | null {
-	const render = adapter.getPageRender(reader, input.pageIndex);
+	const render = input.render ?? adapter.getPageRender(reader, input.pageIndex);
 	if (!render) {
 		return null;
 	}
@@ -593,6 +603,36 @@ function buildObstacles(
 		logger.debug(MODULE, 'obstacle map failed; flowing without it', e);
 		return [];
 	}
+}
+
+/**
+ * The untranslated counterpart: the page exactly as rendered, wrapped in the
+ * same .pm-repage shell so the full-document list is visually uniform while a
+ * page's translation is still on its way. The moment the translation lands,
+ * the caller swaps this element for buildTranslatedPage's.
+ */
+export function buildOriginalPage(
+	doc: Document,
+	render: adapter.PageRender
+): HTMLElement {
+	const page = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
+	page.className = 'pm-repage';
+	page.setAttribute('data-pm-original', 'true');
+	page.style.width = `${render.viewportWidth}px`;
+	page.style.height = `${render.viewportHeight}px`;
+	const canvas = doc.createElementNS(HTML_NS, 'canvas') as HTMLCanvasElement;
+	canvas.className = 'pm-repage-canvas';
+	canvas.width = render.canvas.width;
+	canvas.height = render.canvas.height;
+	const ctx = canvas.getContext('2d');
+	try {
+		ctx?.drawImage(render.canvas, 0, 0);
+	}
+	catch (e) {
+		logger.debug(MODULE, 'original page bitmap copy failed', e);
+	}
+	page.appendChild(canvas);
+	return page;
 }
 
 // ---- geometry helpers -------------------------------------------------------

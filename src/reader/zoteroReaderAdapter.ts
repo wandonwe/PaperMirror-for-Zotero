@@ -597,6 +597,101 @@ export function getPageRender(reader: ReaderLike, pageIndex: number): PageRender
 }
 
 /**
+ * Sizes of EVERY page, in PDF points (scale 1), whether rendered or not.
+ *
+ * PDF.js creates a PDFPageView per page as soon as the document loads, each
+ * carrying a viewport at the current viewer scale — dividing that scale out
+ * gives the page box without waiting for any rendering. This is what lets the
+ * pane lay out the whole document up front.
+ */
+export function getAllPageSizes(reader: ReaderLike): { width: number; height: number }[] | null {
+	try {
+		const viewer = reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication?.pdfViewer;
+		const pages = viewer?._pages;
+		if (!pages?.length) {
+			return null;
+		}
+		const out: { width: number; height: number }[] = [];
+		for (const page of pages) {
+			const viewport = page?.viewport;
+			const scale = Number(viewport?.scale) > 0 ? Number(viewport.scale) : 1;
+			const width = Number(viewport?.width) / scale;
+			const height = Number(viewport?.height) / scale;
+			if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+				return null;
+			}
+			out.push({ width, height });
+		}
+		return out;
+	}
+	catch (e) {
+		logger.debug(MODULE, 'getAllPageSizes failed', e);
+		return null;
+	}
+}
+
+/**
+ * Render ONE page ourselves, at a chosen CSS width, independent of what the
+ * viewer happens to have on screen.
+ *
+ * getPageRender() can only copy pages PDF.js currently keeps rendered — the
+ * ones near the left viewport. A full-document translated pane needs every
+ * page, so this goes to the pdf.js core API directly: getPage → getViewport →
+ * render into a canvas of our own. `oversample` renders at a higher pixel
+ * density than the CSS size for sharpness; the returned viewport numbers are
+ * CSS px regardless, so callers never see the difference.
+ *
+ * The canvas is created in the INNER iframe document — pdf.js renders into a
+ * context of its own compartment without Xray friction, and the outer pane can
+ * still drawImage() from it (the copy path has always done exactly that).
+ */
+export async function renderPageBitmap(
+	reader: ReaderLike,
+	pageIndex: number,
+	cssWidth: number,
+	oversample = 1.5
+): Promise<PageRender | null> {
+	try {
+		const win = reader._internalReader?._primaryView?._iframeWindow;
+		const pdfDocument = win?.PDFViewerApplication?.pdfDocument;
+		const doc = win?.document as Document | undefined;
+		if (!pdfDocument?.getPage || !doc || cssWidth <= 0) {
+			return null;
+		}
+		const page = await pdfDocument.getPage(pageIndex + 1);
+		const base = page.getViewport({ scale: 1 });
+		const scale = cssWidth / Number(base.width);
+		if (!Number.isFinite(scale) || scale <= 0) {
+			return null;
+		}
+		const renderViewport = page.getViewport({ scale: scale * oversample });
+		const canvas = doc.createElement('canvas') as HTMLCanvasElement;
+		canvas.width = Math.max(1, Math.ceil(Number(renderViewport.width)));
+		canvas.height = Math.max(1, Math.ceil(Number(renderViewport.height)));
+		const ctx = canvas.getContext('2d');
+		if (!ctx) {
+			return null;
+		}
+		await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
+		const cssViewport = page.getViewport({ scale });
+		return {
+			canvas,
+			viewportWidth: Number(cssViewport.width),
+			viewportHeight: Number(cssViewport.height),
+			scale,
+			toViewport: (x: number, y: number) => {
+				const [vx, vy] = cssViewport.convertToViewportPoint(x, y);
+				return [Number(vx), Number(vy)];
+			}
+		};
+	}
+	catch (e) {
+		logger.debug(MODULE, `renderPageBitmap(${pageIndex}) failed`, e);
+		return null;
+	}
+}
+
+/**
  * Where inside the current page the PDF viewport sits, as a 0–1 fraction of
  * the page's height (0 = page top at viewport top). Lets the rebuilt page
  * follow the reader's scrolling WITHIN a page, not just at page boundaries.

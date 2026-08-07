@@ -9,6 +9,31 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-08-07
+
+### Changed
+
+- 整页对照 now shows the **whole document**, not just the page the reader is
+  on: one slot per page, laid out from the page boxes before anything renders,
+  so the scrollbar and page positions are correct from the first frame. A page
+  shows the **original** until its translation completes, then swaps to the
+  rebuilt translated page.
+- Pages render through pdf.js core directly (`adapter.renderPageBitmap`), so
+  the right pane no longer depends on which pages the left viewer happens to
+  keep rendered — and no longer needs to rebuild on left-side re-renders or
+  zooms at all.
+
+### Fixed
+
+- 同步滚动 offset (原文第 2 页对着译文第 1 页): the pane now follows the
+  reader's document position continuously — page **and** fraction within the
+  page — instead of snapping per page. Scrolling the pane drives the reader
+  the same way, with echo suppression in both directions.
+- Memory bounded: only pages near the viewport hold canvases (rendered one at
+  a time, nearest first, re-prioritised between renders); far pages release
+  back to sized placeholders. The per-canvas supersampling budget was halved
+  to match.
+
 ## [0.2.0] — 2026-08-07
 
 ### Changed
@@ -179,7 +204,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.7...v0.1.8
