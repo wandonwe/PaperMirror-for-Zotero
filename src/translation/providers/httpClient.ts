@@ -55,6 +55,9 @@ interface RawResponse {
 	status: number;
 	text: string;
 	elapsedMs: number;
+	/** URL after redirects — a mainland bing.com 302s to cn.bing.com, and the
+	 *  session scraped there is only valid against that same host. */
+	finalURL?: string;
 }
 
 function zoteroHTTP(): ZoteroHTTPAPI | null {
@@ -117,6 +120,9 @@ async function send(
 			return {
 				status: response.status,
 				text: typeof response.responseText === 'string' ? response.responseText : String(response.response ?? ''),
+				finalURL: typeof (response as { responseURL?: string }).responseURL === 'string'
+					? (response as { responseURL?: string }).responseURL
+					: undefined,
 				elapsedMs: Date.now() - started
 			};
 		}
@@ -216,10 +222,15 @@ export async function requestJSON(url: string, options: HttpJSONOptions): Promis
  * session token from the translator page). GET only, HTTPS only.
  */
 export async function requestText(url: string, options: { timeoutMs: number; signal?: AbortSignal; headers?: Record<string, string> }): Promise<string> {
+	return (await requestTextWithURL(url, options)).text;
+}
+
+/** Like requestText, but also reports where redirects actually landed. */
+export async function requestTextWithURL(url: string, options: { timeoutMs: number; signal?: AbortSignal; headers?: Record<string, string> }): Promise<{ text: string; finalURL: string }> {
 	checkEndpointURL(url, false);
-	const { status, text } = await send('GET', url, options.headers ?? {}, null, options.timeoutMs, options.signal);
+	const { status, text, finalURL } = await send('GET', url, options.headers ?? {}, null, options.timeoutMs, options.signal);
 	if (status < 200 || status >= 300) {
 		throw mapHTTPError(status, text);
 	}
-	return text;
+	return { text, finalURL: finalURL || url };
 }

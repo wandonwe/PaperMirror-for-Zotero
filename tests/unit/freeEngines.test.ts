@@ -93,3 +93,15 @@ test('bing/google language mapping', () => {
 	assert.equal(mapGoogleLang('zh'), 'zh-CN');
 	assert.equal(mapGoogleLang('auto'), 'auto');
 });
+
+test('parses the CURRENT bing page variable (params_AbusePreventionHelper)', () => {
+	const html = `<html><div id="tta_input" data-iid="translator.5028"></div>
+	<script>var params_AbusePreventionHelper = [1700000000000,"HgQ2rT9-tokenvalue_",3600000];</script>
+	<script>_G={IG:"ABCDEF0123456789"};</script></html>`;
+	const session = parseBingTranslatorPage(html);
+	assert.ok(session, 'new variable name must parse');
+	assert.equal(session!.key, '1700000000000');
+	assert.equal(session!.token, 'HgQ2rT9-tokenvalue_');
+	assert.equal(session!.ig, 'ABCDEF0123456789');
+	assert.equal(session!.iid, 'translator.5028');
+});

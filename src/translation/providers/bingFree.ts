@@ -22,7 +22,7 @@ import {
 	unescapeHTML,
 	type BingSession
 } from './freeEngineUtils';
-import { requestJSON, requestText } from './httpClient';
+import { requestJSON, requestText, requestTextWithURL } from './httpClient';
 import type { TranslateOptions, TranslationProvider } from './types';
 
 const MODULE = 'bingFree';
@@ -114,14 +114,25 @@ async function translateViaEdge(
 }
 
 let cachedSession: BingSession | null = null;
+/** Origin the session page ACTUALLY came from after redirects. In mainland
+ *  China www.bing.com 302s to cn.bing.com, and the scraped IG/IID/token are
+ *  only valid against that same host — posting them back to www.bing.com is
+ *  a guaranteed 400, which is exactly how the engine looked "broken". */
+let cachedOrigin = API_BASE;
 let cachedAt = 0;
 let sessionPromise: Promise<BingSession> | null = null;
 
 async function fetchSession(timeoutMs: number, signal?: AbortSignal): Promise<BingSession> {
-	const html = await requestText(PAGE_URL, { timeoutMs, signal });
+	const { text: html, finalURL } = await requestTextWithURL(PAGE_URL, { timeoutMs, signal });
 	const session = parseBingTranslatorPage(html);
 	if (!session) {
 		throw new PaperMirrorError('BAD_RESPONSE', 'Could not obtain a Bing Translator session (page layout changed?).', { retryable: true });
+	}
+	try {
+		cachedOrigin = new URL(finalURL).origin;
+	}
+	catch {
+		cachedOrigin = API_BASE;
 	}
 	return session;
 }
@@ -147,6 +158,7 @@ async function getSession(timeoutMs: number, signal?: AbortSignal, forceRefresh 
 /** Exposed for tests/shutdown hygiene. */
 export function resetBingSession(): void {
 	cachedSession = null;
+	cachedOrigin = API_BASE;
 	cachedAt = 0;
 	sessionPromise = null;
 	edgeToken = null;
@@ -183,7 +195,8 @@ async function translateOne(
 		}
 	}
 	const session = await getSession(settings.timeoutMs, signal);
-	const base = (settings.apiBaseURL || API_BASE).replace(/\/+$/, '');
+	// Same-origin with the session page, or the token is rejected.
+	const base = (settings.apiBaseURL || cachedOrigin).replace(/\/+$/, '');
 	const url = `${base}/ttranslatev3?isVertical=1&IG=${encodeURIComponent(session.ig)}&IID=${encodeURIComponent(session.iid)}`;
 	const rawBody = `&fromLang=${encodeURIComponent(sl)}`
 		+ `&text=${encodeURIComponent(escapeHTML(text))}`
@@ -241,7 +254,7 @@ export const bingFreeProvider: TranslationProvider = {
 		}
 		catch (e) {
 			const err = e instanceof PaperMirrorError ? e : new PaperMirrorError('UNKNOWN', String(e));
-			return { ok: false, message: err.code, httpStatus: err.httpStatus };
+			return { ok: false, message: `${err.code}: ${err.message}`, httpStatus: err.httpStatus };
 		}
 	},
 

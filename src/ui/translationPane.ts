@@ -388,58 +388,159 @@ export class TranslationPane {
 			}
 			return el;
 		};
-		if (id === 'bing-free') {
-			svg.append(
-				node('rect', { x: '1.5', y: '1.5', width: '6', height: '6', fill: '#f25022' }),
-				node('rect', { x: '8.5', y: '1.5', width: '6', height: '6', fill: '#7fba00' }),
-				node('rect', { x: '1.5', y: '8.5', width: '6', height: '6', fill: '#00a4ef' }),
-				node('rect', { x: '8.5', y: '8.5', width: '6', height: '6', fill: '#ffb900' })
-			);
-			return svg;
+		const tile = (fill: string): Element => node('rect', { x: '.5', y: '.5', width: '15', height: '15', rx: '3.5', fill });
+
+		switch (id) {
+			case 'bing-free':
+				// Microsoft: the four squares.
+				svg.append(
+					node('rect', { x: '1.5', y: '1.5', width: '6', height: '6', fill: '#f25022' }),
+					node('rect', { x: '8.5', y: '1.5', width: '6', height: '6', fill: '#7fba00' }),
+					node('rect', { x: '1.5', y: '8.5', width: '6', height: '6', fill: '#00a4ef' }),
+					node('rect', { x: '8.5', y: '8.5', width: '6', height: '6', fill: '#ffb900' })
+				);
+				return svg;
+			case 'google-free': {
+				// Google: the sign-in "G", the canonical four-colour path
+				// (24×24 artwork, scaled to fit).
+				const g = node('g', { transform: 'translate(1.4 1.4) scale(0.55)' });
+				g.append(
+					node('path', { fill: '#4285F4', d: 'M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z' }),
+					node('path', { fill: '#34A853', d: 'M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z' }),
+					node('path', { fill: '#FBBC05', d: 'M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z' }),
+					node('path', { fill: '#EA4335', d: 'M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z' })
+				);
+				svg.appendChild(g);
+				return svg;
+			}
+			case 'openai': {
+				// The hexagonal knot: six identical petals, rotated 60° apart.
+				const g = node('g', {});
+				for (let i = 0; i < 6; i++) {
+					g.appendChild(node('path', {
+						d: 'M8 1.4c1.5 0 2.7 1.2 2.7 2.7v3.2L8 8.9 5.3 7.3V4.1C5.3 2.6 6.5 1.4 8 1.4Z',
+						fill: 'none', stroke: 'currentColor', 'stroke-width': '1.15',
+						'stroke-linejoin': 'round',
+						transform: `rotate(${i * 60} 8 8)`
+					}));
+				}
+				svg.appendChild(g);
+				return svg;
+			}
+			case 'anthropic':
+				// Anthropic: the dark A on the warm cream tile.
+				svg.append(
+					tile('#F0EEE5'),
+					node('path', {
+						d: 'M6.9 3.6h2.2L13.2 12.4h-2.2l-.84-2.16H6.0L5.16 12.4H3.0Zm-.24 4.9h2.84L8.08 4.86Z',
+						fill: '#181818'
+					})
+				);
+				return svg;
+			case 'gemini': {
+				// Gemini: the four-point gradient star (the real mark).
+				const defs = node('defs', {});
+				const grad = node('linearGradient', { id: 'pm-gem', x1: '0', y1: '1', x2: '1', y2: '0' });
+				grad.append(
+					node('stop', { offset: '0', 'stop-color': '#1C7DFF' }),
+					node('stop', { offset: '.52', 'stop-color': '#4796E3' }),
+					node('stop', { offset: '1', 'stop-color': '#9177C7' })
+				);
+				defs.appendChild(grad);
+				svg.append(defs, node('path', {
+					d: 'M8 1c.55 3.8 2.65 5.9 6.5 6.5-3.85.6-5.95 2.7-6.5 6.5-.55-3.8-2.65-5.9-6.5-6.5C5.35 6.9 7.45 4.8 8 1Z',
+					fill: 'url(#pm-gem)'
+				}));
+				return svg;
+			}
+			case 'deepseek':
+				// DeepSeek: the blue whale swoosh.
+				svg.append(node('path', {
+					d: 'M14.6 4.2c-.5 2.1-1.7 3.5-3.2 4.5.1.5.1 1-.05 1.6-.4 1.7-1.7 3-3.6 3.4-1.9.4-3.9-.2-5.5-1.7-.4-.4-.8-.9-1-1.4.9.5 1.8.7 2.6.6-.9-.7-1.5-1.6-1.8-2.7-.3-1.2-.1-2.4.5-3.5.7 1.4 1.7 2.4 3 3 .9.4 1.9.6 2.9.5.6-1.5 1.7-2.7 3.2-3.6-.5-.2-1-.3-1.6-.3.7-.5 1.5-.8 2.3-.8.8-.1 1.5 0 2.25.4Z',
+					fill: '#4D6BFE'
+				}));
+				return svg;
+			case 'deepl':
+				// DeepL: the navy tile with the white dart.
+				svg.append(
+					tile('#0F2B46'),
+					node('path', { d: 'M4.4 3.6 12.4 8l-8 4.4v-3.1L8.6 8 4.4 6.7Z', fill: '#fff' })
+				);
+				return svg;
+			case 'moonshot':
+				// Kimi: the black tile with the crescent-cut K.
+				svg.append(
+					tile('#101418'),
+					node('path', { d: 'M4.6 3.4h2.1v3.9L10 3.4h2.7L9.2 7.6l3.6 5h-2.6L7.7 9.1l-1 1.1v2.4H4.6Z', fill: '#fff' })
+				);
+				return svg;
+			case 'qwen': {
+				// 通义千问: the violet interlocking hexagram.
+				const defs = node('defs', {});
+				const grad = node('linearGradient', { id: 'pm-qwen', x1: '0', y1: '0', x2: '1', y2: '1' });
+				grad.append(node('stop', { offset: '0', 'stop-color': '#7B5CFF' }), node('stop', { offset: '1', 'stop-color': '#4735D9' }));
+				defs.appendChild(grad);
+				svg.append(defs, tile('url(#pm-qwen)'),
+					node('path', { d: 'M8 2.8 12.5 10.6H3.5Z', fill: 'none', stroke: '#fff', 'stroke-width': '1.2', 'stroke-linejoin': 'round' }),
+					node('path', { d: 'M8 13.2 3.5 5.4h9Z', fill: 'none', stroke: '#fff', 'stroke-width': '1.2', 'stroke-linejoin': 'round', opacity: '.85' })
+				);
+				return svg;
+			}
+			case 'zhipu':
+				svg.append(tile('#2D5CFE'), node('path', { d: 'M4.4 3.6h7.2v1.9L7.4 10.5h4.4v1.9H4.2v-1.9l4.2-5H4.4Z', fill: '#fff' }));
+				return svg;
+			case 'siliconflow': {
+				// SiliconFlow: the purple pinwheel.
+				const g = node('g', {});
+				for (let i = 0; i < 4; i++) {
+					g.appendChild(node('path', {
+						d: 'M8 8C8 4.7 9.6 2.4 12.6 1.6 12.2 4.9 10.7 7 8 8Z',
+						fill: '#8A5BF6', transform: `rotate(${i * 90} 8 8)`
+					}));
+				}
+				svg.appendChild(g);
+				return svg;
+			}
+			case 'groq':
+				svg.append(tile('#F55036'), node('path', {
+					d: 'M11.4 7.9a3.4 3.4 0 1 0-3.4 3.4h1.5v1.9H8a5.3 5.3 0 1 1 5.3-5.3v3.3h-1.9Z',
+					fill: '#fff'
+				}));
+				return svg;
+			case 'ollama':
+				// Ollama: the llama face.
+				svg.append(
+					tile('#ffffff'),
+					node('path', {
+						d: 'M5.1 2.2c.7 0 1.2 1 1.3 2.2a4 4 0 0 1 3.2 0c.1-1.2.6-2.2 1.3-2.2s1.3 1.3 1.2 2.7c0 .3-.1.6-.2.9a4 4 0 0 1 1 2.7c0 1-.3 1.8-.9 2.5.2.4.3.9.3 1.4 0 .5-.1.9-.3 1.3h-1.3c.2-.4.4-.8.4-1.3 0-.4-.1-.8-.3-1.1a4 4 0 0 1-5.6 0c-.2.3-.3.7-.3 1.1 0 .5.2.9.4 1.3H4.0a3.1 3.1 0 0 1 0-2.7c-.6-.7-.9-1.5-.9-2.5a4 4 0 0 1 1-2.7c-.1-.3-.2-.6-.2-.9-.1-1.4.5-2.7 1.2-2.7Z',
+						fill: 'none', stroke: '#111', 'stroke-width': '.9', 'stroke-linejoin': 'round'
+					}),
+					node('circle', { cx: '6.6', cy: '8.3', r: '.55', fill: '#111' }),
+					node('circle', { cx: '9.4', cy: '8.3', r: '.55', fill: '#111' })
+				);
+				return svg;
+			case 'openrouter':
+				svg.append(tile('#20242C'), node('path', {
+					d: 'M3 6.2h2.4c1 0 1.7.4 2.5 1 .8-.6 1.5-1 2.5-1h.9V4.6L13.9 7 11.3 9.4V7.8h-.9c-.7 0-1.2.3-2 .9-.8.6-1.6 1.1-2.9 1.1H3Z',
+					fill: '#fff'
+				}));
+				return svg;
+			case 'openai-compatible':
+			case 'custom': {
+				// No brand to borrow: a neutral endpoint glyph.
+				svg.append(tile('#3A4150'),
+					node('circle', { cx: '8', cy: '8', r: '4.4', fill: 'none', stroke: '#fff', 'stroke-width': '1.1' }),
+					node('path', { d: 'M3.6 8h8.8M8 3.6c1.5 1.3 1.5 7.5 0 8.8M8 3.6c-1.5 1.3-1.5 7.5 0 8.8', fill: 'none', stroke: '#fff', 'stroke-width': '.9' })
+				);
+				return svg;
+			}
+			default:
+				svg.append(tile('#5b6472'), node('text', {
+					x: '8', y: '8.5', fill: '#fff', 'text-anchor': 'middle', 'dominant-baseline': 'central',
+					'font-family': 'Inter, system-ui, sans-serif', 'font-weight': '700', 'font-size': '8'
+				}, (id[0] ?? '?').toUpperCase()));
+				return svg;
 		}
-		if (id === 'google-free') {
-			// The four-colour "G": three arcs plus the blue bar.
-			svg.append(
-				node('path', { d: 'M14 8a6 6 0 0 1-6 6 6 6 0 0 1-4.24-1.76L6.1 9.9A3 3 0 0 0 8 11a3 3 0 0 0 2.83-2H8V8Z', fill: '#4285f4' }),
-				node('path', { d: 'M3.76 12.24A6 6 0 0 1 2 8c0-1.66.67-3.16 1.76-4.24L6.1 6.1A3 3 0 0 0 5 8c0 .83.34 1.58.88 2.12Z', fill: '#fbbc05' }),
-				node('path', { d: 'M3.76 3.76A6 6 0 0 1 8 2c1.66 0 3.16.67 4.24 1.76L10.12 5.88A3 3 0 0 0 8 5a3 3 0 0 0-2.12.88Z', fill: '#ea4335' }),
-				node('path', { d: 'M12.24 3.76 10.12 5.88c.34.34.6.76.71 1.24H14a6 6 0 0 0-1.76-3.36Z', fill: '#34a853' })
-			);
-			return svg;
-		}
-		if (id === 'gemini') {
-			const defs = node('defs', {});
-			const grad = node('linearGradient', { id: 'pm-gem', x1: '0', y1: '0', x2: '1', y2: '1' });
-			grad.append(node('stop', { offset: '0', 'stop-color': '#4796e3' }), node('stop', { offset: '1', 'stop-color': '#9177c7' }));
-			defs.appendChild(grad);
-			svg.append(defs, node('path', { d: 'M8 1c.6 3.7 2.6 5.9 7 7-4.4 1.1-6.4 3.3-7 7-.6-3.7-2.6-5.9-7-7 4.4-1.1 6.4-3.3 7-7Z', fill: 'url(#pm-gem)' }));
-			return svg;
-		}
-		const MONO: Record<string, [string, string, string]> = {
-			'openai': ['#10a37f', '#fff', 'AI'],
-			'anthropic': ['#d97757', '#fff', 'A'],
-			'deepseek': ['#4d6bfe', '#fff', 'D'],
-			'moonshot': ['#16191e', '#fff', 'K'],
-			'qwen': ['#6b4eff', '#fff', 'Q'],
-			'zhipu': ['#2d5cfe', '#fff', 'Z'],
-			'openrouter': ['#7c8cf8', '#fff', 'OR'],
-			'siliconflow': ['#895bf1', '#fff', 'SF'],
-			'groq': ['#f55036', '#fff', 'G'],
-			'ollama': ['#22262b', '#fff', 'o'],
-			'deepl': ['#0f2b46', '#fff', 'DL'],
-			'openai-compatible': ['#5b6472', '#fff', 'API'],
-			'custom': ['#5b6472', '#fff', '#']
-		};
-		const [bg, fg, label] = MONO[id] ?? ['#5b6472', '#fff', '?'];
-		svg.append(
-			node('rect', { x: '1', y: '1', width: '14', height: '14', rx: '3.5', fill: bg }),
-			node('text', {
-				x: '8', y: '8.5', fill: fg, 'text-anchor': 'middle', 'dominant-baseline': 'central',
-				'font-family': 'Inter, system-ui, sans-serif', 'font-weight': '700',
-				'font-size': label.length >= 3 ? '5' : label.length === 2 ? '6.5' : '9'
-			}, label)
-		);
-		return svg;
 	}
 
 	/** The plugin mark — the split card, in miniature, in colour. */

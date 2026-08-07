@@ -188,15 +188,22 @@ export interface BingSession {
 	token: string;
 }
 
-/** Parse IG/IID/key/token out of the bing.com/translator page HTML. */
+/**
+ * Parse IG/IID/key/token out of the bing.com/translator page HTML.
+ *
+ * Bing has shipped the credentials under two different variable names over the
+ * years — `params_RichTranslateHelper` (old) and `params_AbusePreventionHelper`
+ * (current). Both carry [key, "token", …]; accept either, so a Bing redesign
+ * that merely renames the variable does not kill the engine again.
+ */
 export function parseBingTranslatorPage(html: string): BingSession | null {
-	const helper = html.match(/params_RichTranslateHelper\s=\s\[[^\]]+/);
+	const helper = html.match(/params_(?:RichTranslateHelper|AbusePreventionHelper)\s*=\s*\[[^\]]+/);
 	const iidMatch = html.match(/data-iid="([a-zA-Z0-9.]+)/);
 	const igMatch = html.match(/IG:"([a-zA-Z0-9.]+)/);
-	if (!helper || !helper[0] || helper[0].length <= 50 || !iidMatch?.[1] || !igMatch?.[1]) {
+	if (!helper || !helper[0] || helper[0].length <= 30 || !iidMatch?.[1] || !igMatch?.[1]) {
 		return null;
 	}
-	const parts = helper[0].substring('params_RichTranslateHelper = ['.length).split(',');
+	const parts = helper[0].slice(helper[0].indexOf('[') + 1).split(',');
 	const key = parts[0]?.trim();
 	const rawToken = parts[1]?.trim();
 	if (!key || !parseInt(key, 10) || !rawToken || rawToken.length < 3) {
@@ -206,7 +213,7 @@ export function parseBingTranslatorPage(html: string): BingSession | null {
 		ig: igMatch[1],
 		iid: iidMatch[1],
 		key: String(parseInt(key, 10)),
-		token: rawToken.slice(1, -1) // strip surrounding quotes
+		token: rawToken.replace(/^["']|["']$/g, '')
 	};
 }
 

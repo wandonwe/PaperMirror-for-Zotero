@@ -9,6 +9,28 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.2.5] — 2026-08-07
+
+### Fixed
+
+- Microsoft translation, round two — two independent breakages found:
+  - In mainland networks www.bing.com 302s to cn.bing.com; the session was
+    scraped from the redirected page but the API call went back to
+    www.bing.com, where the token is invalid by construction. The engine now
+    tracks where the redirect landed and keeps every call same-origin.
+  - Bing renamed the credentials variable from `params_RichTranslateHelper`
+    to `params_AbusePreventionHelper`; the parser accepts both.
+  - Engine self-test errors now carry the underlying message, not just a code.
+
+### Changed
+
+- Provider badges upgraded to faithful vector reproductions of the real
+  marks: Microsoft's four squares, Google's four-colour G (canonical path),
+  the OpenAI hexagonal knot, Anthropic's dark A on cream, the Gemini gradient
+  star, the DeepSeek whale, the DeepL dart, Kimi's black K tile, the 通义
+  hexagram, the SiliconFlow pinwheel, the Ollama llama face, Groq's G ring
+  and the OpenRouter fork.
+
 ## [0.2.4] — 2026-08-07
 
 ### Added
@@ -251,7 +273,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.1...v0.2.2
