@@ -140,6 +140,10 @@ export class ReaderSession {
 		const container = adapter.getTabContainer(this.reader);
 		const browser = adapter.getReaderBrowser(this.reader);
 		this.split = createSplitView(container, browser);
+		// 缩略图 | 原文 | 译文: the reader's own sidebar width is measured and
+		// excluded from the split, so 原文 and 译文 divide the REMAINING space
+		// equally — not "sidebar+original = translation".
+		this.split.setInsetProvider(() => adapter.getViewerInsetWidth(this.reader));
 		// Decide the pane's visibility NOW, not after priming.
 		//
 		// The pane is created visible, and applyViewMode() used to run only
@@ -456,6 +460,8 @@ export class ReaderSession {
 			if (this.destroyed) {
 				return;
 			}
+			// Sidebar opened/closed/resized → re-balance the split.
+			this.split?.refreshLayout();
 			const page = adapter.getCurrentPageIndex(this.reader);
 			if (page !== this.lastPageIndex) {
 				this.lastPageIndex = page;

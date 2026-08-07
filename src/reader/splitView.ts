@@ -30,6 +30,8 @@ export interface SplitViewHandles {
 	 */
 	setPaneVisible(visible: boolean): void;
 	isPaneVisible(): boolean;
+	setInsetProvider(provider: () => number): void;
+	refreshLayout(): void;
 }
 
 export function ensureStyleInjected(doc: Document): void {
@@ -96,7 +98,18 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 	// 对照翻译 ALWAYS opens at 50/50 — 原文和译文各占一半, same size. The
 	// divider still lets the reader rebalance during the session, but that
 	// adjustment is deliberately not persisted: next open is a clean spread.
+	//
+	// `ratio` is the VIEWER's share — the visible PDF page area, NOT the
+	// whole reader browser. The browser also contains Zotero's own sidebar
+	// (thumbnails/annotations), and splitting the raw browser 50/50 gave the
+	// layout the user rightly rejected: sidebar+original == translation, so
+	// the translation ran wider than the original and its typography was set
+	// for the wrong measure. The sidebar's width is measured (insetProvider)
+	// and granted to the browser ON TOP of its viewer share, so 原文 and 译文
+	// end up pixel-equal.
 	let ratio = 50;
+	let insetProvider: (() => number) | null = null;
+	let lastInset = 0;
 
 	/**
 	 * Pixel sizing, not percentage flex.
@@ -125,7 +138,16 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 			(doc.defaultView ?? globalThis).setTimeout(() => applyRatio(ratio), 50);
 			return;
 		}
-		const px = Math.round(total * (ratio / 100)) - 3;
+		let inset = 0;
+		try {
+			inset = Math.max(0, Math.min(total * 0.5, insetProvider?.() ?? 0));
+		}
+		catch {
+			inset = 0;
+		}
+		lastInset = inset;
+		const contentTotal = Math.max(50, total - 7 - inset);
+		const px = Math.round(inset + contentTotal * (ratio / 100)) - 3;
 		browserEl.style.setProperty('flex', '0 0 auto', 'important');
 		browserEl.style.setProperty('width', `${px}px`, 'important');
 		browserEl.style.setProperty('min-width', `${px}px`, 'important');
@@ -188,11 +210,15 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 		if (rect.width <= 0) {
 			return;
 		}
-		let percent = ((event.clientX - rect.left) / rect.width) * 100;
+		// The divider position marks the edge of the VIEWER area; the
+		// sidebar inset sits before it and does not participate in the ratio.
+		const inset = lastInset;
+		const contentTotal = Math.max(50, rect.width - 7 - inset);
+		let x = event.clientX - rect.left;
 		if (getPref<string>('paneSide', 'right') === 'left') {
-			percent = 100 - percent;
+			x = rect.width - x;
 		}
-		applyRatio(percent);
+		applyRatio(((x - inset) / contentTotal) * 100);
 	};
 	const onPointerUp = (event: PointerEvent): void => {
 		if (!dragging) {
@@ -251,6 +277,27 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 		divider,
 		destroy,
 		setRatio: applyRatio,
+		/** Supply the width of the reader's own sidebar (thumbnails etc.). */
+		setInsetProvider(provider: () => number): void {
+			insetProvider = provider;
+			applyRatio(ratio);
+		},
+		/** Cheap periodic check: re-split when the sidebar opens/closes/resizes. */
+		refreshLayout(): void {
+			if (!paneVisible) {
+				return;
+			}
+			let inset = 0;
+			try {
+				inset = insetProvider?.() ?? 0;
+			}
+			catch {
+				return;
+			}
+			if (Math.abs(inset - lastInset) > 2) {
+				applyRatio(ratio);
+			}
+		},
 		setSide(side: 'left' | 'right'): void {
 			setPref('paneSide', side);
 			applySide(side);

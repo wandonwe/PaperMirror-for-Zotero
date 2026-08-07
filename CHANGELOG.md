@@ -9,6 +9,19 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.2.6] — 2026-08-07
+
+### Fixed
+
+- The split now reads 缩略图 | 原文 | 译文 with the original and the
+  translation dividing the space AFTER the thumbnails equally. Previously the
+  raw reader browser was split 50/50, so the left half was sidebar+original
+  while the right half was all translation — the translated page ran wider
+  than the original and its typography was set for the wrong measure. The
+  sidebar's width is measured (browser minus the PDF iframe, so it survives
+  Zotero renames) and granted to the reader's side on top of its half; the
+  divider drag and the periodic sidebar open/close check both honour it.
+
 ## [0.2.5] — 2026-08-07
 
 ### Fixed
@@ -273,7 +286,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.2...v0.2.3

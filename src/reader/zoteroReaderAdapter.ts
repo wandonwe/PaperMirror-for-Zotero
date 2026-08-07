@@ -597,6 +597,35 @@ export function getPageRender(reader: ReaderLike, pageIndex: number): PageRender
 }
 
 /**
+ * Width of everything inside the reader browser that is NOT the PDF viewer —
+ * Zotero's own sidebar (thumbnails, annotations) plus its resizer.
+ *
+ * Measured, not looked up: the PDF.js viewer lives in an iframe, and the
+ * difference between the browser element's width and that iframe's width IS
+ * the sidebar, whatever Zotero calls its elements this release. The split
+ * view grants this inset to the browser on top of its half, so the visible
+ * original page area and the translation pane end up pixel-equal.
+ */
+export function getViewerInsetWidth(reader: ReaderLike): number {
+	try {
+		const frame = (reader._internalReader?._primaryView?._iframeWindow as (Window & { frameElement?: Element }) | undefined)?.frameElement as HTMLElement | null;
+		const browser = getReaderBrowser(reader) as HTMLElement | null;
+		if (!frame || !browser) {
+			return 0;
+		}
+		const browserWidth = browser.getBoundingClientRect().width;
+		const viewerWidth = frame.getBoundingClientRect().width;
+		if (browserWidth <= 0 || viewerWidth <= 0 || viewerWidth > browserWidth) {
+			return 0;
+		}
+		return Math.round(browserWidth - viewerWidth);
+	}
+	catch {
+		return 0;
+	}
+}
+
+/**
  * Sizes of EVERY page, in PDF points (scale 1), whether rendered or not.
  *
  * PDF.js creates a PDFPageView per page as soon as the document loads, each
