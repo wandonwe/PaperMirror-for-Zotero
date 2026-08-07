@@ -120,6 +120,79 @@ interface PaperMirrorPublicAPI {
 			}
 		}
 
+		// ---- 性能与并行 -----------------------------------------------------
+		{
+			const concurrencyInput = byId<HTMLInputElement>('papermirror-concurrency');
+			if (concurrencyInput) {
+				const current = Number(getPref('maxConcurrentRequests') ?? 2);
+				concurrencyInput.value = String(Math.min(6, Math.max(1, Number.isFinite(current) ? current : 2)));
+				concurrencyInput.addEventListener('change', () => {
+					const next = Math.min(6, Math.max(1, Math.round(Number(concurrencyInput.value) || 2)));
+					concurrencyInput.value = String(next);
+					setPref('maxConcurrentRequests', next);
+				});
+			}
+
+			// The provider-pool checkboxes: one per service that could pull its
+			// weight — key already stored, or no key needed. Rendered from the
+			// live roster so a newly added provider shows up without UI edits.
+			const poolHost = byId<HTMLElement>('papermirror-pool');
+			if (poolHost) {
+				void (async () => {
+					let checked: string[] = [];
+					try {
+						const raw = JSON.parse(String(getPref('parallelProviders') ?? '[]'));
+						checked = Array.isArray(raw) ? raw.filter((x: unknown): x is string => typeof x === 'string') : [];
+					}
+					catch {
+						checked = [];
+					}
+					const providers = api()?.listProviders() ?? [];
+					const primary = String(getPref('provider') ?? 'bing-free');
+					const rows: HTMLElement[] = [];
+					for (const provider of providers) {
+						if (provider.id === primary || provider.id === 'custom') {
+							continue;
+						}
+						let usable = !provider.requiresApiKey;
+						if (!usable) {
+							try {
+								usable = ((await api()?.getApiKey(provider.id)) ?? '').length > 0;
+							}
+							catch {
+								usable = false;
+							}
+						}
+						const row = document.createElement('label');
+						row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:1px 0;';
+						const box = document.createElement('input');
+						box.type = 'checkbox';
+						box.checked = checked.includes(provider.id);
+						box.disabled = !usable;
+						box.addEventListener('change', () => {
+							const next = new Set(checked);
+							if (box.checked) {
+								next.add(provider.id);
+							}
+							else {
+								next.delete(provider.id);
+							}
+							checked = [...next];
+							setPref('parallelProviders', JSON.stringify(checked));
+						});
+						const text = document.createElement('span');
+						text.textContent = usable ? provider.displayName : `${provider.displayName}(未配置密钥)`;
+						if (!usable) {
+							text.style.opacity = '.5';
+						}
+						row.append(box, text);
+						rows.push(row);
+					}
+					poolHost.replaceChildren(...rows);
+				})();
+			}
+		}
+
 		// Footer: the real installed version, not a hardcoded string that
 		// went stale the day after it was written.
 		{

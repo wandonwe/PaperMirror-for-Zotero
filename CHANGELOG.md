@@ -9,6 +9,27 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.3.4] — 2026-08-07
+
+### Added
+
+- **多服务商并行 (provider pool).** Settings gains a 性能与并行 section: check
+  any additional configured services and the document's pages are dealt
+  round-robin between the primary and every checked provider, each using its
+  own key. Throughput multiplies by the number of independent services
+  without touching any single provider's rate limits. Sharding is by page
+  and deterministic, so each page's cache entry stays with its provider.
+  Providers without a stored key are skipped (and shown disabled). The
+  section states plainly that text is sent to every checked service.
+- 并发请求数 returns to settings (1–6). Key-based providers may run up to 6
+  page requests in flight; the free engines stay clamped at 2 internally.
+
+### Notes
+
+- Multi-key rotation on a SINGLE provider is deliberately not offered:
+  extra keys of one account share that account's limits, and using multiple
+  accounts to evade limits violates provider terms.
+
 ## [0.3.3] — 2026-08-07
 
 ### Fixed
@@ -420,7 +441,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.0...v0.3.1

@@ -13,6 +13,7 @@ import {
 } from '../notes/noteService';
 import { getApiKey } from '../security/credentialStore';
 import { getProvider, listProviders } from '../translation/providers/registry';
+import { buildPool, pickProviderForPage } from '../translation/providerPool';
 import { endpointHost } from '../translation/providers/types';
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
 import { TranslationManager, type PageTranslationState } from '../translation/translationManager';
@@ -113,6 +114,8 @@ export class ReaderSession {
 	private disposePdfEvents: (() => void) | null = null;
 	private pageRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 	private statusHideTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Provider pool (primary first). Rebuilt when translation (re)starts. */
+	private pool: string[] = [];
 	/** True while a full-PDF translation is running on the local bridge. */
 	private exportingPdf = false;
 	/** Most recent deep explanation, for copy / save-to-note. */
@@ -275,6 +278,7 @@ export class ReaderSession {
 	}
 
 	private startTranslating(): void {
+		void this.rebuildPool();
 		if (this.manager || this.destroyed) {
 			if (this.manager) {
 				this.manager.setCurrentPage(adapter.getCurrentPageIndex(this.reader));
@@ -308,7 +312,12 @@ export class ReaderSession {
 				onPageUpdate: state => this.onPageUpdate(state)
 			},
 			{
-				maxConcurrent: getPref<number>('maxConcurrentRequests', 2),
+				// Free engines stay at ≤2 (scrape bot-risk); key providers may
+				// go to 6 — modern tier-1 rate limits take that comfortably.
+				maxConcurrent: Math.min(
+					getProvider(getPref<string>('provider', 'bing-free')).requiresApiKey ? 6 : 2,
+					Math.max(1, getPref<number>('maxConcurrentRequests', 2))
+				),
 				prefetch: getPref<boolean>('autoPrefetch', true)
 			}
 		);
@@ -335,21 +344,68 @@ export class ReaderSession {
 	}
 
 	private async providerSettings(): Promise<ProviderSettings & { allowInsecureHTTP?: boolean }> {
-		const providerId = getPref<string>('provider', 'bing-free');
+		return this.providerSettingsFor(getPref<string>('provider', 'bing-free'));
+	}
+
+	/**
+	 * Settings for one pool member. The PRIMARY provider carries the user's
+	 * Base URL / model overrides; extras run on their own defaults with their
+	 * own stored keys — the overrides belong to the provider they were typed
+	 * for, and leaking an OpenAI base URL into a DeepSeek request would be a
+	 * silent misroute.
+	 */
+	private async providerSettingsFor(providerId: string): Promise<ProviderSettings & { allowInsecureHTTP?: boolean }> {
+		const primary = getPref<string>('provider', 'bing-free');
+		const isPrimary = providerId === primary;
 		const apiKey = await getApiKey(providerId);
 		return {
 			providerId,
-			apiBaseURL: getPref<string>('apiBaseURL', ''),
+			apiBaseURL: isPrimary ? getPref<string>('apiBaseURL', '') : '',
 			apiKey,
-			model: getPref<string>('model', ''),
+			model: isPrimary ? getPref<string>('model', '') : '',
 			timeoutMs: getPref<number>('timeoutMs', 60000),
 			customPrompt: getPref<string>('customPrompt', ''),
 			allowInsecureHTTP: getPref<boolean>('allowHTTPEndpoint', false)
 		};
 	}
 
+	/** Rebuild the pool: primary + every checked extra that is actually usable. */
+	private async rebuildPool(): Promise<void> {
+		const primary = getPref<string>('provider', 'bing-free');
+		let extras: string[] = [];
+		try {
+			const raw = JSON.parse(getPref<string>('parallelProviders', '[]'));
+			extras = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [];
+		}
+		catch {
+			extras = [];
+		}
+		const usable: string[] = [];
+		for (const id of extras) {
+			try {
+				const provider = getProvider(id);
+				if (!provider.requiresApiKey || (await getApiKey(id)).length > 0) {
+					usable.push(id);
+				}
+				else {
+					logger.warn(MODULE, `并行服务商 ${id} 未配置密钥, 已跳过`);
+				}
+			}
+			catch {
+				// unknown id in the pref — ignore
+			}
+		}
+		this.pool = buildPool(primary, usable);
+		if (this.pool.length > 1) {
+			logger.info(MODULE, `Provider pool: ${this.pool.join(' + ')}`);
+		}
+	}
+
 	private async translateRequest(request: TranslationRequest, signal: AbortSignal): Promise<TranslationResponse> {
-		const settings = await this.providerSettings();
+		const chosen = this.pool.length > 1 && typeof request.pageIndex === 'number'
+			? pickProviderForPage(this.pool, request.pageIndex)
+			: getPref<string>('provider', 'bing-free');
+		const settings = await this.providerSettingsFor(chosen);
 		const provider = getProvider(settings.providerId);
 		if (provider.requiresApiKey && !settings.apiKey) {
 			throw new PaperMirrorError('NO_API_KEY', getString('papermirror-error-no-api-key'), { retryable: false });
@@ -368,7 +424,10 @@ export class ReaderSession {
 		if (!item) {
 			return null;
 		}
-		const settings = await this.providerSettings();
+		const chosen = this.pool.length > 1
+			? pickProviderForPage(this.pool, pageIndex)
+			: getPref<string>('provider', 'bing-free');
+		const settings = await this.providerSettingsFor(chosen);
 		const { source, target } = this.resolveLanguages(texts.join('\n').slice(0, 2000));
 		return {
 			attachmentKey: item.key,
@@ -890,6 +949,7 @@ export class ReaderSession {
 	}
 
 	private restartAfterConfigChange(): void {
+		void this.rebuildPool();
 		this.manager?.resetAll();
 		this.detectedSource = null;
 		if (getPref<boolean>('privacyNoticeAccepted', false)) {

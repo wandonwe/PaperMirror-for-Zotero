@@ -76,7 +76,10 @@ export class TranslationManager {
 		this.events = events;
 		this.prefetchEnabled = options?.prefetch ?? true;
 		this.scheduler = new RequestScheduler({
-			maxConcurrent: Math.min(2, Math.max(1, options?.maxConcurrent ?? 2)),
+			// Up to 6: LLM providers at tier-1 rate limits handle several
+			// page-sized requests in flight; the free engines stay at 2 (the
+			// session clamps before it gets here).
+			maxConcurrent: Math.min(6, Math.max(1, options?.maxConcurrent ?? 2)),
 			delayFn: options?.delayFn
 		});
 	}
@@ -262,6 +265,7 @@ export class TranslationManager {
 				throw new PaperMirrorError('CANCELLED', 'cancelled');
 			}
 			const request: TranslationRequest = {
+				pageIndex,
 				sourceLanguage: source,
 				targetLanguage: target,
 				documentTitle: this.deps.getDocumentTitle(),

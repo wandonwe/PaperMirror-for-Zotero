@@ -57,6 +57,8 @@ export interface TranslatedBlock {
 export type LanguageCode = 'en' | 'zh-CN' | 'zh-TW' | 'auto' | string;
 
 export interface TranslationRequest {
+	/** Page this request belongs to — the provider pool shards on it. */
+	pageIndex?: number;
 	sourceLanguage: LanguageCode;
 	targetLanguage: LanguageCode;
 	documentTitle: string;

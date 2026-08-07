@@ -169,6 +169,23 @@
 		</html:div>
 	</vbox>
 
+	<!-- ======================= 性能与并行 ======================= -->
+	<vbox class="pm-section">
+		<hbox class="pm-line">
+			<label class="pm-title" value="性能与并行"/>
+		</hbox>
+		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 4px;">
+			<label value="并发请求数" control="papermirror-concurrency"/>
+			<html:input type="number" id="papermirror-concurrency" min="1" max="6" style="width: 4.5em;"/>
+			<label class="pm-desc" style="margin-top: 0;" value="LLM 服务商可到 6;免费引擎内部限 2"/>
+		</hbox>
+		<hbox class="pm-line" style="margin-top: 8px;">
+			<label value="并行翻译服务商(与主服务商轮流分担页面)"/>
+		</hbox>
+		<html:div id="papermirror-pool" class="pm-field" style="flex-direction: column; align-items: stretch; gap: 2px;"></html:div>
+		<html:div class="pm-desc">勾选后,文档的页面会在主服务商和勾选的服务商之间轮流分配,各自使用自己的密钥——吞吐量按家数相乘,且不触碰任何单家的限速。注意:论文文本会被发送给每一家勾选的服务商;不同服务商的译文风格可能略有差异(术语表对所有家生效)。未配置密钥的服务商会被自动跳过。</html:div>
+	</vbox>
+
 	<!-- ======================= 阅读 ======================= -->
 	<vbox class="pm-section">
 		<hbox class="pm-line">

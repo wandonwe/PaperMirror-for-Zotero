@@ -38,6 +38,7 @@ export type PrefKey
 	| 'glossaryGlobal'
 	| 'promptVersion'
 	| 'apiKeyFallback'
+	| 'parallelProviders'
 	| 'layoutMigration';
 
 export function getPref<T = unknown>(key: PrefKey, fallback?: T): T {

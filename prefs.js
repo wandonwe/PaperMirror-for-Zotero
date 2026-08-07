@@ -46,6 +46,9 @@ pref('extensions.zotero.bilingualReader.overlayFitMode', 'expand');
 pref('extensions.zotero.bilingualReader.overlayPeekHover', true);
 // 架构迁移标记: 1 = 已迁移到覆盖渲染器默认值
 pref('extensions.zotero.bilingualReader.layoutMigration', 0);
+// 并行翻译服务商 (JSON 数组): 与主服务商轮流分担页面, 各自使用自己的密钥。
+// 文本会被发送给列表中的每一家 — 仅在你明确勾选后生效。
+pref('extensions.zotero.bilingualReader.parallelProviders', '[]');
 pref('extensions.zotero.bilingualReader.debugLogging', false);
 pref('extensions.zotero.bilingualReader.privacyNoticeAccepted', false);
 pref('extensions.zotero.bilingualReader.allowHTTPEndpoint', false);
