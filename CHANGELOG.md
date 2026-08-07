@@ -9,6 +9,16 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-08-07
+
+### Fixed
+
+- The header bar now spreads edge to edge. A legacy compact-header rule made
+  the header a row flex container, so the bar was sized to its content and the
+  flexible gap had no room to grow — every control clustered on the left. The
+  bar claims the full line; the left group sits at the left edge and the
+  layout/settings/close group is pinned to the right.
+
 ## [0.2.1] — 2026-08-07
 
 ### Changed
@@ -204,7 +214,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/wandonwe/papermirror-zotero/compare/v0.1.8...v0.1.9

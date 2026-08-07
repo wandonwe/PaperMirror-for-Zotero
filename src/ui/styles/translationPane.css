@@ -1195,6 +1195,12 @@
 }
 
 .pm-bar {
+	/* .pm-header is itself a row flex container (legacy compact-header rule),
+	   which sized this bar to its CONTENT — the spacer had no room to grow and
+	   everything clustered left. Claim the full line explicitly. */
+	flex: 1 1 auto;
+	width: 100%;
+	box-sizing: border-box;
 	height: 40px;
 	padding: 0 8px 0 10px;
 	gap: 4px;
