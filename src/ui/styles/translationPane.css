@@ -1,0 +1,1025 @@
+/* PaperMirror translation pane.
+ *
+ * This file is a faithful port of demo/styles.css (translation side only).
+ * Values — paddings, font stacks, sizes, colours, radii — are copied from the
+ * demo so the plugin pane renders identically. Selectors are prefixed pm- to
+ * avoid leaking into Zotero's global stylesheet.
+ *
+ * Layout reminder: the split is produced by flexing <tab-content>; the reader
+ * <browser> is never reparented (see splitView.ts).
+ */
+
+/* ===== splitter (demo .splitter) ===== */
+
+.pm-bilingual-divider {
+	flex: 0 0 7px;
+	order: 1;
+	position: relative;
+	cursor: col-resize;
+	background: var(--pm-splitter);
+	border-left: 1px solid var(--pm-splitter-line);
+	border-right: 1px solid var(--pm-splitter-line);
+	z-index: 8;
+}
+
+.pm-bilingual-divider::after {
+	content: "";
+	position: absolute;
+	width: 3px;
+	height: 34px;
+	top: 50%;
+	left: 1px;
+	transform: translateY(-50%);
+	border-left: 1px solid var(--pm-splitter-grip);
+	border-right: 1px solid var(--pm-splitter-grip);
+}
+
+.pm-bilingual-divider:hover,
+.pm-bilingual-divider.pm-dragging {
+	background: #cbdafe;
+}
+
+/* ===== pane shell (demo .translation-side) ===== */
+
+.pm-bilingual-pane {
+	position: relative;
+	min-width: 390px;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+	background: var(--pm-panel);
+	color: var(--pm-ink);
+	font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI",
+		"PingFang SC", "Microsoft YaHei", sans-serif;
+	--pm-article-size: 16px;
+}
+
+.pm-bilingual-pane[data-pm-theme="light"] {
+	--pm-panel: #fff;
+	--pm-ink: #1d232f;
+	--pm-muted: #737b89;
+	--pm-line: #dfe3e8;
+	--pm-soft: #f5f7f9;
+	--pm-accent: #2f6fed;
+	--pm-accent-soft: #edf3ff;
+	--pm-green: #258b61;
+	--pm-original: #9299a3;
+	--pm-heading: #203862;
+	--pm-caption-line: #cbd1da;
+	--pm-caption-ink: #6d7480;
+	--pm-card-border: #c9d8f7;
+	--pm-card-a: #f6f9ff;
+	--pm-card-b: #edf4ff;
+	--pm-card-cell: rgba(255, 255, 255, .7);
+	--pm-card-label: #385f9f;
+	--pm-cache-label: #99a0aa;
+	--pm-icon: #697381;
+	--pm-pill-hover: #aeb6c1;
+	--pm-pill-arrow: #a1a8b2;
+	--pm-pill-caret: #9aa2ad;
+	--pm-marker: #9aa1ab;
+	--pm-switch-off: #c4cad2;
+	--pm-switch-ink: #636c79;
+	--pm-splitter: #e1e4e8;
+	--pm-splitter-line: #cbd0d6;
+	--pm-splitter-grip: #aab1bb;
+	--pm-error: #b23b3b;
+}
+
+.pm-bilingual-pane[data-pm-theme="dark"] {
+	--pm-panel: #24282f;
+	--pm-ink: #e8ebef;
+	--pm-muted: #9ba3af;
+	--pm-line: #393f48;
+	--pm-soft: #2d323a;
+	--pm-accent: #73a2ff;
+	--pm-accent-soft: #2b3a58;
+	--pm-green: #62c99a;
+	--pm-original: #8b93a0;
+	--pm-heading: #aec9ff;
+	--pm-caption-line: #454c57;
+	--pm-caption-ink: #a2aab6;
+	--pm-card-border: #3a4a68;
+	--pm-card-a: #262c38;
+	--pm-card-b: #232936;
+	--pm-card-cell: rgba(255, 255, 255, .05);
+	--pm-card-label: #9fc0ff;
+	--pm-cache-label: #8b929c;
+	--pm-icon: #9ba3af;
+	--pm-pill-hover: #5b6472;
+	--pm-pill-arrow: #7d8593;
+	--pm-pill-caret: #7d8593;
+	--pm-marker: #808894;
+	--pm-switch-off: #4b525c;
+	--pm-switch-ink: #9ba3af;
+	--pm-splitter: #2a2f36;
+	--pm-splitter-line: #1f2329;
+	--pm-splitter-grip: #4a515b;
+	--pm-error: #e08e8e;
+}
+
+.pm-bilingual-pane button {
+	font: inherit;
+	border: 0;
+	background: none;
+	color: inherit;
+	cursor: pointer;
+}
+
+/* ===== header (demo .translation-header) ===== */
+
+.pm-header {
+	flex: none;
+	padding: 20px 24px 13px;
+	border-bottom: 1px solid var(--pm-line);
+}
+
+.pm-title-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	min-width: 0;
+}
+
+.pm-title-col {
+	min-width: 0;
+}
+
+.pm-eyebrow {
+	font-size: 9px;
+	font-weight: 800;
+	letter-spacing: .16em;
+	color: var(--pm-accent);
+}
+
+.pm-live-dot {
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: #43b784;
+	margin-right: 5px;
+	box-shadow: 0 0 0 3px rgba(67, 183, 132, .12);
+}
+
+.pm-title {
+	font: 700 21px/1.2 Georgia, "Noto Serif SC", "Songti SC", serif;
+	margin: 3px 0 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.pm-header-actions {
+	display: flex;
+	gap: 3px;
+	flex: none;
+}
+
+.pm-icon-button {
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 7px;
+	color: var(--pm-icon);
+	flex: none;
+}
+
+.pm-icon-button:hover {
+	background: var(--pm-soft);
+	color: var(--pm-ink);
+}
+
+.pm-icon-button svg {
+	width: 17px;
+	height: 17px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.pm-controls-row {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	margin-top: 17px;
+	min-width: 0;
+}
+
+.pm-pill {
+	height: 32px;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 0 10px;
+	border: 1px solid var(--pm-line);
+	border-radius: 7px;
+	background: var(--pm-panel);
+	font-size: 11px;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.pm-pill:hover {
+	border-color: var(--pm-pill-hover);
+}
+
+.pm-pill span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.pm-pill i {
+	font-style: normal;
+	color: var(--pm-pill-arrow);
+	flex: none;
+}
+
+.pm-pill b {
+	font-size: 10px;
+	color: var(--pm-pill-caret);
+	margin-left: 3px;
+	font-weight: 400;
+	flex: none;
+}
+
+.pm-pill.pm-provider {
+	margin-left: auto;
+	max-width: 48%;
+}
+
+.pm-provider-mark {
+	font: bold italic 16px Georgia, serif;
+	color: #198c86;
+	flex: none;
+}
+
+.pm-icon-button.pm-soft {
+	background: var(--pm-soft);
+	border: 1px solid var(--pm-line);
+	width: 32px;
+	height: 32px;
+}
+
+.pm-refreshing .pm-refresh svg {
+	animation: pm-spin .8s linear infinite;
+}
+
+.pm-refreshing .pm-article-host {
+	opacity: .45;
+}
+
+.pm-status-row {
+	display: flex;
+	gap: 10px;
+	margin-top: 12px;
+	font-size: 10px;
+	color: var(--pm-green);
+	min-height: 13px;
+	min-width: 0;
+}
+
+.pm-status-main,
+.pm-status-sub {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pm-status-row .pm-check {
+	font-style: normal;
+	font-weight: bold;
+	margin-right: 4px;
+}
+
+.pm-status-sub {
+	color: var(--pm-cache-label);
+}
+
+.pm-status-row.pm-error {
+	color: var(--pm-error);
+}
+
+/* ===== scroll body (demo .translation-scroll) ===== */
+
+.pm-scroll {
+	flex: 1;
+	overflow-y: auto;
+	overflow-x: hidden;
+	scroll-behavior: smooth;
+	padding: 0 30px 60px;
+	overscroll-behavior: contain;
+}
+
+.pm-page-marker {
+	display: flex;
+	align-items: center;
+	gap: 13px;
+	margin: 23px 0;
+	color: var(--pm-marker);
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: .12em;
+}
+
+.pm-page-marker i {
+	height: 1px;
+	background: var(--pm-line);
+	flex: 1;
+}
+
+/* demo .translated-article */
+.pm-article-host {
+	max-width: 700px;
+	margin: auto;
+	font: var(--pm-article-size)/1.85 Georgia, "Noto Serif SC", "Songti SC",
+		"Noto Serif CJK SC", "Source Han Serif SC", serif;
+	transition: opacity .2s;
+}
+
+/* ===== blocks (demo .translation-block) ===== */
+
+.pm-block {
+	position: relative;
+	margin: 0 -11px 17px;
+	padding: 4px 11px;
+	border-radius: 7px;
+	transition: .15s;
+	overflow-wrap: anywhere;
+}
+
+.pm-block:hover {
+	background: var(--pm-soft);
+}
+
+.pm-block.pm-focused {
+	background: var(--pm-accent-soft);
+	box-shadow: inset 3px 0 0 var(--pm-accent);
+}
+
+.pm-block p {
+	margin: 0;
+}
+
+/* demo .translation-block .original */
+.pm-block-original {
+	margin: 0 0 6px;
+	color: var(--pm-original);
+	font: 10px/1.55 Inter, -apple-system, "PingFang SC", sans-serif;
+}
+
+/* demo .no-original .original { display: none } */
+.pm-bilingual-pane[data-pm-show-original="false"] .pm-block-original {
+	display: none;
+}
+
+.pm-block-text {
+	margin: 0;
+	min-height: 1em;
+	white-space: pre-wrap;
+}
+
+/* demo .heading-block h1 / h2 */
+.pm-block[data-pm-type="title"] .pm-block-text,
+.pm-block[data-pm-type="heading"] .pm-block-text {
+	margin: 0;
+	color: var(--pm-heading);
+	line-height: 1.45;
+	font-weight: 700;
+	font-size: 17px;
+}
+
+.pm-block[data-pm-type="title"] .pm-block-text {
+	font-size: 20px;
+}
+
+/* demo .caption-block */
+.pm-block[data-pm-type="caption"],
+.pm-block[data-pm-type="table"] {
+	border-left: 2px solid var(--pm-caption-line);
+	padding-left: 13px;
+}
+
+.pm-block[data-pm-type="caption"] .pm-block-text,
+.pm-block[data-pm-type="table"] .pm-block-text {
+	font-size: 13px;
+	color: var(--pm-caption-ink);
+}
+
+/* demo .formula-card — standalone equations */
+.pm-block[data-pm-formula="true"] {
+	margin: 23px -11px;
+	padding: 18px 12px;
+	text-align: center;
+	border-radius: 8px;
+	background: var(--pm-soft);
+	border: 1px solid var(--pm-line);
+	font: italic 15px Georgia, serif;
+}
+
+.pm-block[data-pm-formula="true"] .pm-block-text {
+	white-space: pre-wrap;
+}
+
+.pm-block[data-pm-formula="true"] .pm-block-original {
+	text-align: center;
+	font-style: normal;
+}
+
+.pm-block .pm-pending {
+	color: var(--pm-muted);
+	font-style: italic;
+	font-size: 12px;
+}
+
+/* demo .mini-explain */
+.pm-mini-explain {
+	position: absolute;
+	right: 7px;
+	bottom: -12px;
+	z-index: 2;
+	padding: 4px 8px;
+	border-radius: 99px;
+	background: var(--pm-accent);
+	color: #fff;
+	font: 9px Inter, "PingFang SC", sans-serif;
+	opacity: 0;
+	transform: translateY(3px);
+	transition: .15s;
+	pointer-events: none;
+}
+
+.pm-block.pm-focused .pm-mini-explain,
+.pm-block:hover .pm-mini-explain {
+	opacity: 1;
+	transform: none;
+	pointer-events: auto;
+}
+
+/* ===== explain card (demo .explain-card) ===== */
+
+.pm-explain-card {
+	margin: 20px 0 5px;
+	padding: 17px;
+	border: 1px solid var(--pm-card-border);
+	border-radius: 11px;
+	background: linear-gradient(145deg, var(--pm-card-a), var(--pm-card-b));
+	box-shadow: 0 7px 25px rgba(47, 111, 237, .08);
+	font-family: Inter, -apple-system, "PingFang SC", sans-serif;
+}
+
+.pm-card-head {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+}
+
+.pm-sparkle {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
+	background: var(--pm-accent);
+	color: #fff;
+	flex: none;
+}
+
+.pm-card-titles {
+	display: flex;
+	flex-direction: column;
+	font-size: 12px;
+	min-width: 0;
+}
+
+.pm-card-titles strong {
+	font-weight: 700;
+}
+
+.pm-card-titles small {
+	font-size: 9px;
+	color: #7f8998;
+	margin-top: 2px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pm-card-close {
+	margin-left: auto;
+	font-size: 18px;
+	line-height: 1;
+	color: #7d8692;
+	flex: none;
+}
+
+.pm-explain-grid {
+	margin-top: 13px;
+	display: grid;
+	gap: 10px;
+}
+
+.pm-explain-section {
+	padding: 9px 11px;
+	border-radius: 7px;
+	background: var(--pm-card-cell);
+	font-size: 11px;
+}
+
+.pm-explain-section b {
+	display: block;
+	font-size: 10px;
+	color: var(--pm-card-label);
+}
+
+.pm-explain-section p {
+	margin: 4px 0 0;
+	line-height: 1.7;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.pm-explain-section.pm-error p {
+	color: var(--pm-error);
+}
+
+.pm-explain-actions {
+	display: flex;
+	gap: 6px;
+	margin-top: 12px;
+}
+
+/* ===== footer (demo .translation-footer) ===== */
+
+.pm-footer {
+	min-height: 48px;
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 15px;
+	padding: 8px 20px;
+	border-top: 1px solid var(--pm-line);
+	background: var(--pm-panel);
+}
+
+.pm-switch-label {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	font-size: 10px;
+	color: var(--pm-switch-ink);
+	cursor: pointer;
+	user-select: none;
+	white-space: nowrap;
+}
+
+.pm-switch {
+	position: relative;
+	width: 27px;
+	height: 16px;
+	border-radius: 99px;
+	background: var(--pm-switch-off);
+	transition: .2s;
+	flex: none;
+}
+
+.pm-switch::after {
+	content: "";
+	position: absolute;
+	width: 12px;
+	height: 12px;
+	left: 2px;
+	top: 2px;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+	transition: .2s;
+}
+
+.pm-switch-label[data-pm-on="true"] .pm-switch {
+	background: var(--pm-accent);
+}
+
+.pm-switch-label[data-pm-on="true"] .pm-switch::after {
+	transform: translateX(11px);
+}
+
+.pm-footer-spacer {
+	flex: 1;
+	min-width: 0;
+}
+
+.pm-footer-button {
+	height: 30px;
+	padding: 0 11px;
+	border: 1px solid var(--pm-line);
+	border-radius: 6px;
+	background: var(--pm-panel);
+	font-size: 10px;
+	white-space: nowrap;
+	flex: none;
+}
+
+.pm-footer-button:hover {
+	background: var(--pm-soft);
+}
+
+.pm-footer-button.pm-primary {
+	background: var(--pm-accent);
+	color: #fff;
+	border-color: var(--pm-accent);
+}
+
+/* ===== toast (demo .toast) ===== */
+
+.pm-toast {
+	position: absolute;
+	left: 50%;
+	bottom: 60px;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 230px;
+	max-width: 86%;
+	padding: 11px 15px;
+	border-radius: 9px;
+	background: #242a32;
+	color: #fff;
+	box-shadow: 0 18px 50px rgba(31, 39, 51, .12);
+	opacity: 0;
+	transform: translate(-50%, 15px);
+	pointer-events: none;
+	transition: .22s;
+}
+
+.pm-toast.pm-show {
+	opacity: 1;
+	transform: translate(-50%, 0);
+}
+
+.pm-toast .pm-toast-check {
+	color: #62d69d;
+	flex: none;
+}
+
+.pm-toast p {
+	margin: 0;
+	font-size: 12px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* ===== privacy notice / per-page status ===== */
+
+.pm-bilingual-notice {
+	margin: 20px 0 5px;
+	padding: 17px;
+	border: 1px solid var(--pm-card-border);
+	border-radius: 11px;
+	background: linear-gradient(145deg, var(--pm-card-a), var(--pm-card-b));
+	font-size: 11px;
+	line-height: 1.7;
+	font-family: Inter, -apple-system, "PingFang SC", sans-serif;
+}
+
+.pm-bilingual-notice .pm-notice-host {
+	margin-top: 4px;
+	color: var(--pm-muted);
+	overflow-wrap: anywhere;
+}
+
+.pm-bilingual-notice .pm-footer-button {
+	margin-top: 11px;
+}
+
+.pm-status-inline {
+	padding: 5px 0;
+	font-size: 11px;
+	color: var(--pm-muted);
+	font-family: Inter, -apple-system, "PingFang SC", sans-serif;
+}
+
+.pm-status-inline:empty {
+	display: none;
+}
+
+.pm-status-inline.pm-error {
+	color: var(--pm-error);
+}
+
+.pm-bilingual-spinner {
+	display: inline-block;
+	inline-size: 10px;
+	block-size: 10px;
+	border: 2px solid currentColor;
+	border-top-color: transparent;
+	border-radius: 50%;
+	animation: pm-spin .9s linear infinite;
+	vertical-align: -1px;
+	margin-inline-end: 5px;
+	flex: none;
+}
+
+@keyframes pm-spin {
+	to { transform: rotate(360deg); }
+}
+
+/* demo @media(max-width:900px) equivalent for a narrow pane */
+@media (max-width: 430px) {
+	.pm-header {
+		padding: 16px;
+	}
+	.pm-scroll {
+		padding: 0 20px 50px;
+	}
+	.pm-footer {
+		padding: 8px 12px;
+		gap: 10px;
+	}
+	.pm-footer-spacer {
+		display: none;
+	}
+}
+
+/* ==========================================================================
+   整页对照 (page-reconstruction view)
+
+   The pane shows the page rebuilt with translated body text — same page size,
+   same column grid, same figures and running head — so it reads as a spread
+   beside the original PDF. In this mode the scroll body drops the article
+   padding: the page IS the content.
+   ========================================================================== */
+
+.pm-scroll[data-pm-view="page"] {
+	padding: 0 0 40px;
+	background: var(--pm-page-backdrop, #eceef1);
+}
+
+.pm-repage {
+	position: relative;
+	margin: 14px auto 20px;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, .16), 0 6px 22px rgba(0, 0, 0, .1);
+	overflow: hidden;
+	--pm-repage-ink: #14171a;
+}
+
+.pm-repage-canvas {
+	display: block;
+	width: 100%;
+	height: auto;
+	/* Artwork copied from the rendered page; text areas are blanked. */
+	user-select: none;
+	pointer-events: none;
+}
+
+.pm-repage-text {
+	position: absolute;
+	inset: 0;
+}
+
+.pm-repage-block {
+	position: absolute;
+	box-sizing: border-box;
+	color: var(--pm-repage-ink);
+	/* A UI sans face stays even at small sizes; a serif turns to mush. */
+	font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+		"Noto Sans CJK SC", "Source Han Sans SC", "Segoe UI", system-ui, sans-serif;
+	line-height: 1.5;
+	text-align: justify;
+	text-justify: inter-ideograph;
+	word-break: normal;
+	overflow-wrap: break-word;
+	user-select: text;
+	transition: background-color .12s ease;
+}
+
+.pm-repage-block[data-pm-strong="true"] {
+	font-weight: 600;
+	line-height: 1.36;
+}
+
+.pm-repage-block[data-pm-type="caption"] {
+	line-height: 1.4;
+}
+
+.pm-repage-block:hover {
+	background: rgba(64, 122, 255, .09);
+	border-radius: 2px;
+}
+
+.pm-repage-block.pm-focused {
+	background: rgba(64, 122, 255, .15);
+	border-radius: 2px;
+}
+
+.pm-repage-page-label {
+	margin: 0 auto;
+	padding: 6px 0 0;
+	width: 100%;
+	text-align: center;
+	font: 500 11px/1 Inter, system-ui, sans-serif;
+	letter-spacing: .06em;
+	color: #97a0ad;
+	text-transform: uppercase;
+}
+
+.pm-repage-pending {
+	margin: 14px auto 20px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 9px;
+	background: #fff;
+	color: #8a93a0;
+	font: 400 13px/1.5 Inter, system-ui, sans-serif;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+}
+
+.pm-bilingual-pane[data-pm-theme="dark"] .pm-scroll[data-pm-view="page"] {
+	--pm-page-backdrop: #1b1d21;
+}
+
+/* --- 整页对照: mask layer & compare toggle ------------------------------- */
+
+.pm-repage {
+	/* Never wider than the pane. The page carries an explicit pixel width, so
+	   without this it becomes the pane's min-content width and pushes the
+	   reader browser off screen. */
+	max-width: 100%;
+}
+
+.pm-repage-mask {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: auto;
+	pointer-events: none;
+	transition: opacity .12s ease;
+}
+
+/* 显示原文对照 on — lift the mask and fade the translation, so the original
+   page underneath can be read directly. */
+.pm-repage[data-pm-compare="true"] .pm-repage-mask {
+	opacity: 0;
+}
+.pm-repage[data-pm-compare="true"] .pm-repage-text {
+	opacity: 0;
+}
+.pm-repage[data-pm-compare="true"] .pm-repage-block:hover {
+	background: none;
+}
+
+.pm-repage-host {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	width: 100%;
+	min-width: 0;
+}
+
+.pm-scroll[data-pm-view="page"] {
+	overflow-x: hidden;
+	min-width: 0;
+}
+
+/* The rebuilt page is scaled to fit its half of the window, mirroring the
+   original page auto-fitted to the other half — same size, no sideways
+   scrolling. */
+.pm-scroll[data-pm-view="page"] {
+	overflow-x: hidden;
+}
+.pm-repage {
+	max-width: 100%;
+	flex: 0 0 auto;
+}
+
+/* ==========================================================================
+   Compact single-row header — same visual weight as the reader toolbar on
+   the left, so the spread starts at the same height on both sides.
+   ========================================================================== */
+
+.pm-header {
+	display: flex;
+	align-items: center;
+	flex-wrap: nowrap;
+	gap: 8px;
+	padding: 4px 10px 4px 12px;
+	min-height: 40px;
+	box-sizing: border-box;
+}
+
+/* The old stacked rows flatten into the one flex line. */
+.pm-title-row,
+.pm-title-col,
+.pm-controls-row {
+	display: contents;
+}
+
+.pm-eyebrow {
+	display: none;
+}
+
+.pm-title {
+	font: 600 13px/1.2 Inter, system-ui, sans-serif;
+	margin: 0;
+	flex: none;
+}
+
+.pm-controls-row .pm-pill,
+.pm-pill {
+	height: 26px;
+	padding: 0 9px;
+	font-size: 11px;
+}
+
+.pm-header .pm-icon-button {
+	width: 26px;
+	height: 26px;
+}
+
+.pm-status-row {
+	order: 1;
+	flex: 1 1 auto;
+	align-items: center;
+	margin: 0;
+	min-width: 0;
+	overflow: hidden;
+	gap: 6px;
+}
+
+.pm-header-actions {
+	order: 2;
+	margin-left: auto;
+}
+
+@media (max-width: 430px) {
+	.pm-header {
+		padding: 4px 8px;
+	}
+	.pm-title {
+		display: none;
+	}
+}
+
+/* Header-mounted controls (the footer bar is gone) */
+.pm-header .pm-footer-button {
+	height: 26px;
+	padding: 0 10px;
+	font-size: 11px;
+	line-height: 1;
+	white-space: nowrap;
+}
+
+.pm-header .pm-switch-label {
+	font-size: 11px;
+	gap: 5px;
+	white-space: nowrap;
+}
+
+.pm-header-actions {
+	align-items: center;
+	gap: 6px;
+}
+
+/* Strict-containment blocks: a translation that cannot fit its source rect
+   even at the minimum font size shows a subtle edge fade and expands over the
+   page on hover, in its own local paper colour. */
+.pm-repage-block[data-pm-overflow="true"]::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 12px;
+	background: linear-gradient(180deg, transparent, var(--pm-block-paper, #fff));
+	pointer-events: none;
+}
+.pm-repage-block[data-pm-overflow="true"]:hover {
+	height: auto !important;
+	min-height: 0;
+	overflow: visible;
+	z-index: 9;
+	background: var(--pm-block-paper, #fff);
+	box-shadow: 0 2px 14px rgba(0, 0, 0, .28);
+}
+.pm-repage-block[data-pm-overflow="true"]:hover::after {
+	content: none;
+}
+
+/* 生成译文PDF button: quiet accent so it reads as the "big action" */
+.pm-header .pm-export {
+	border: 1px solid #6f6ce8;
+	color: #6f6ce8;
+	border-radius: 6px;
+}
+.pm-header .pm-export:hover {
+	background: rgba(111, 108, 232, .14);
+}

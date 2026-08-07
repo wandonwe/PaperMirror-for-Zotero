@@ -1,0 +1,12 @@
+Use case: background-extraction
+Asset type: final transparent PNG iOS icon artwork
+Primary request: Preserve the complete PaperMirror bilingual split-view icon subject from the input image, but remove every pixel of the pale lavender/off-white canvas background outside the two joined content panels. Output true native transparency outside the subject.
+
+Keep the subject exactly: the adjacent left white paper panel and right cobalt-to-violet frosted glass panel, their softly rounded outer corners, the cyan vertical translation seam and central sparkle, green status dot, black and blue heading bars, both formula cards and their thin borders, glass lighting, shadows contained inside the subject, and the exact bilingual text.
+
+Exact left text: "让知识跨越语言"
+Exact right text: "Let knowledge cross languages"
+
+The pixels beyond the outer silhouette of the two joined panels must have alpha 0. Do not include a background color, background card, outer frame, outer glow cloud, floor, platform, drop-shadow field, or square tile. Preserve soft anti-aliased edges and the right panel's translucent glass rim without white or colored fringe. Keep the subject centered and large with modest transparent padding on all sides.
+
+Text accuracy is mandatory: no punctuation; no missing, added, duplicated, or garbled characters. Do not change the internal layout, colors, typography, formula symbols, proportions, or lighting. No watermark and no additional objects.

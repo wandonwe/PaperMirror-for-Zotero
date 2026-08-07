@@ -1,0 +1,177 @@
+<vbox id="papermirror-prefs" class="papermirror-prefs">
+	<linkset>
+		<html:link rel="localization" href="papermirror.ftl"/>
+	</linkset>
+
+	<html:style>
+		/* Scoped to this pane; all selectors are prefixed to avoid leaking. */
+		#papermirror-prefs { max-width: 100%; }
+		#papermirror-prefs .pm-row {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			margin-block: 4px;
+			min-width: 0;
+		}
+		#papermirror-prefs .pm-row > label:first-child {
+			flex: 0 0 8.5em;
+			text-align: end;
+			white-space: nowrap;
+		}
+		#papermirror-prefs .pm-grow { flex: 1 1 auto; min-width: 0; }
+		#papermirror-prefs input[type="text"],
+		#papermirror-prefs input[type="password"],
+		#papermirror-prefs textarea {
+			box-sizing: border-box;
+			width: 100%;
+			min-width: 0;
+			min-height: 1.8em;
+			padding: 3px 6px;
+		}
+		#papermirror-prefs input[type="number"] { width: 7em; min-height: 1.8em; }
+		#papermirror-prefs menulist { min-width: 14em; max-width: 22em; }
+		#papermirror-prefs .pm-hint { opacity: .7; font-size: .9em; }
+		#papermirror-prefs .pm-result { font-size: .9em; }
+		#papermirror-prefs .pm-result[data-state="ok"] { color: #1a7f4b; }
+		#papermirror-prefs .pm-result[data-state="fail"] { color: #b23b3b; }
+		#papermirror-prefs textarea { font-family: ui-monospace, Menlo, Consolas, monospace; }
+	</html:style>
+
+	<groupbox>
+		<label><html:h2 data-l10n-id="papermirror-prefs-service"></html:h2></label>
+		<hbox class="pm-row">
+			<label data-l10n-id="papermirror-prefs-provider" control="papermirror-provider"/>
+			<menulist id="papermirror-provider" native="true">
+				<menupopup>
+					<menuitem label="必应翻译 Bing(免费,无需 Key)" value="bing-free"/>
+					<menuitem label="谷歌翻译 Google(免费,无需 Key)" value="google-free"/>
+					<menuitem label="DeepSeek 深度求索" value="deepseek"/>
+					<menuitem label="Kimi (Moonshot AI)" value="moonshot"/>
+					<menuitem label="通义千问 Qwen(阿里云百炼)" value="qwen"/>
+					<menuitem label="智谱 GLM" value="zhipu"/>
+					<menuitem label="Anthropic Claude" value="anthropic"/>
+					<menuitem label="OpenAI" value="openai"/>
+					<menuitem label="Google Gemini" value="gemini"/>
+					<menuitem label="OpenRouter" value="openrouter"/>
+					<menuitem label="硅基流动 SiliconFlow" value="siliconflow"/>
+					<menuitem label="Groq" value="groq"/>
+					<menuitem label="Ollama(本地,无需 Key)" value="ollama"/>
+					<menuitem label="OpenAI-compatible API" value="openai-compatible"/>
+					<menuitem label="DeepL" value="deepl"/>
+					<menuitem label="Custom HTTP endpoint" value="custom"/>
+				</menupopup>
+			</menulist>
+			<spacer flex="1"/>
+		</hbox>
+		<hbox class="pm-row">
+			<label data-l10n-id="papermirror-prefs-baseurl" control="papermirror-baseurl"/>
+			<html:div class="pm-grow"><html:input type="text" id="papermirror-baseurl" placeholder="https://…"/></html:div>
+		</hbox>
+		<hbox class="pm-row">
+			<label data-l10n-id="papermirror-prefs-apikey" control="papermirror-apikey"/>
+			<html:div class="pm-grow"><html:input type="password" id="papermirror-apikey" autocomplete="off" spellcheck="false"/></html:div>
+		</hbox>
+		<hbox class="pm-row">
+			<label data-l10n-id="papermirror-prefs-model" control="papermirror-model"/>
+			<html:div class="pm-grow"><html:input type="text" id="papermirror-model" spellcheck="false"/></html:div>
+		</hbox>
+		<hbox class="pm-row">
+			<label value=""/>
+			<button id="papermirror-test-connection" data-l10n-id="papermirror-prefs-test"/>
+			<label id="papermirror-test-result" class="pm-result" value=""/>
+			<spacer flex="1"/>
+		</hbox>
+		<hbox class="pm-row">
+			<label value=""/>
+			<label id="papermirror-endpoint-note" class="pm-hint" value=""/>
+		</hbox>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2 data-l10n-id="papermirror-prefs-language"></html:h2></label>
+		<hbox class="pm-row">
+			<label data-l10n-id="papermirror-prefs-source-lang" control="papermirror-source-lang"/>
+			<menulist id="papermirror-source-lang" native="true">
+				<menupopup>
+					<menuitem data-l10n-id="papermirror-lang-auto" value="auto"/>
+					<menuitem label="English" value="en"/>
+					<menuitem label="中文" value="zh"/>
+				</menupopup>
+			</menulist>
+			<label data-l10n-id="papermirror-prefs-target-lang" control="papermirror-target-lang"/>
+			<menulist id="papermirror-target-lang" native="true">
+				<menupopup>
+					<menuitem data-l10n-id="papermirror-lang-auto" value="auto"/>
+					<menuitem label="简体中文" value="zh-CN"/>
+					<menuitem label="繁體中文" value="zh-TW"/>
+					<menuitem label="English" value="en"/>
+				</menupopup>
+			</menulist>
+			<spacer flex="1"/>
+		</hbox>
+		<hbox class="pm-row">
+			<label data-l10n-id="papermirror-prefs-timeout" control="papermirror-timeout"/>
+			<html:input type="number" id="papermirror-timeout" min="5000" max="600000" step="1000"/>
+			<label data-l10n-id="papermirror-prefs-concurrency" control="papermirror-concurrency"/>
+			<html:input type="number" id="papermirror-concurrency" min="1" max="2" style="width: 4em;"/>
+			<spacer flex="1"/>
+		</hbox>
+		<vbox>
+			<label data-l10n-id="papermirror-prefs-custom-prompt" control="papermirror-custom-prompt"/>
+			<html:textarea id="papermirror-custom-prompt" rows="3"></html:textarea>
+		</vbox>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2 data-l10n-id="papermirror-prefs-reading"></html:h2></label>
+		<checkbox id="papermirror-translate-captions" data-l10n-id="papermirror-prefs-captions" native="true"/>
+		<checkbox id="papermirror-translate-references" data-l10n-id="papermirror-prefs-references" native="true"/>
+		<checkbox id="papermirror-use-context" data-l10n-id="papermirror-prefs-context" native="true"/>
+		<checkbox id="papermirror-auto-prefetch" data-l10n-id="papermirror-prefs-prefetch" native="true"/>
+		<checkbox id="papermirror-sync-scroll" data-l10n-id="papermirror-prefs-syncscroll" native="true"/>
+		<checkbox id="papermirror-show-original" data-l10n-id="papermirror-show-original" native="true"/>
+		<hbox class="pm-row">
+			<label data-l10n-id="papermirror-prefs-fontsize" control="papermirror-font-size"/>
+			<html:input type="range" id="papermirror-font-size" min="12" max="22" step="1" style="width: 11em;"/>
+			<label id="papermirror-font-size-value" class="pm-hint" value="16 px"/>
+			<spacer flex="1"/>
+		</hbox>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2 data-l10n-id="papermirror-prefs-glossary"></html:h2></label>
+		<label data-l10n-id="papermirror-prefs-glossary-hint" class="pm-hint"/>
+		<html:textarea id="papermirror-glossary" rows="6"></html:textarea>
+		<hbox class="pm-row">
+			<button id="papermirror-glossary-save" data-l10n-id="papermirror-prefs-glossary-save"/>
+			<button id="papermirror-glossary-import" data-l10n-id="papermirror-prefs-glossary-import"/>
+			<button id="papermirror-glossary-export" data-l10n-id="papermirror-prefs-glossary-export"/>
+			<label id="papermirror-glossary-status" class="pm-result" value=""/>
+			<spacer flex="1"/>
+		</hbox>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2 data-l10n-id="papermirror-prefs-cache"></html:h2></label>
+		<hbox class="pm-row">
+			<label id="papermirror-cache-size" value="…"/>
+			<button id="papermirror-cache-refresh" data-l10n-id="papermirror-prefs-cache-refresh"/>
+			<button id="papermirror-cache-clear" data-l10n-id="papermirror-prefs-cache-clear"/>
+			<spacer flex="1"/>
+		</hbox>
+		<label data-l10n-id="papermirror-prefs-privacy-note" class="pm-hint"/>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2 data-l10n-id="papermirror-prefs-advanced"></html:h2></label>
+		<checkbox id="papermirror-debug-logging" data-l10n-id="papermirror-prefs-debug" native="true"/>
+		<checkbox id="papermirror-allow-http" data-l10n-id="papermirror-prefs-allow-http" native="true"/>
+		<checkbox id="papermirror-local-only" data-l10n-id="papermirror-prefs-local-only" native="true"/>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2 data-l10n-id="papermirror-prefs-about"></html:h2></label>
+		<label value="PaperMirror for Zotero 0.1.0 — AGPL-3.0"/>
+		<label data-l10n-id="papermirror-prefs-about-byok" class="pm-hint"/>
+	</groupbox>
+</vbox>

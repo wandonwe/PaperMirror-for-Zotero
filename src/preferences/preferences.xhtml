@@ -1,0 +1,253 @@
+<vbox id="papermirror-prefs" class="papermirror-prefs">
+	<linkset>
+		<html:link rel="localization" href="papermirror.ftl"/>
+	</linkset>
+
+	<html:style>
+		/* Scoped to this pane; all selectors are prefixed to avoid leaking.
+		   Flat sectioned layout: bold label row (control right-aligned), a
+		   full-width field where needed, a muted description under it, and a
+		   hairline between sections. Follows the pane's own light/dark colors. */
+		#papermirror-prefs { max-width: 720px; }
+		#papermirror-prefs .pm-section {
+			padding: 14px 2px 16px;
+			border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+		}
+		#papermirror-prefs .pm-section:last-child { border-bottom: none; }
+		#papermirror-prefs .pm-line {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 10px;
+			min-width: 0;
+			margin-block: 2px;
+		}
+		#papermirror-prefs .pm-title {
+			font-weight: 600;
+			font-size: 1.06em;
+		}
+		#papermirror-prefs .pm-desc {
+			opacity: .62;
+			font-size: .9em;
+			line-height: 1.55;
+			margin-top: 5px;
+			white-space: normal;
+		}
+		#papermirror-prefs .pm-field { margin-top: 7px; display: flex; gap: 6px; align-items: center; }
+		#papermirror-prefs .pm-field > div, #papermirror-prefs .pm-grow { flex: 1 1 auto; min-width: 0; }
+		#papermirror-prefs input[type="text"],
+		#papermirror-prefs input[type="password"],
+		#papermirror-prefs textarea {
+			box-sizing: border-box;
+			width: 100%;
+			min-width: 0;
+			min-height: 2.1em;
+			padding: 5px 10px;
+			border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+			border-radius: 7px;
+			background: color-mix(in srgb, currentColor 5%, transparent);
+			color: inherit;
+		}
+		#papermirror-prefs input:focus-visible, #papermirror-prefs textarea:focus-visible {
+			outline: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+			outline-offset: 0;
+		}
+		#papermirror-prefs input[type="number"] {
+			width: 7em; min-height: 2.1em; padding: 4px 8px;
+			border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+			border-radius: 7px;
+			background: color-mix(in srgb, currentColor 5%, transparent);
+			color: inherit;
+		}
+		#papermirror-prefs menulist { min-width: 13em; max-width: 24em; }
+		#papermirror-prefs .pm-eye {
+			flex: none;
+			min-width: 2.4em;
+			min-height: 2.1em;
+			border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+			border-radius: 7px;
+			background: color-mix(in srgb, currentColor 5%, transparent);
+			color: inherit;
+			cursor: pointer;
+			font-size: 1em;
+		}
+		#papermirror-prefs .pm-result { font-size: .9em; }
+		#papermirror-prefs .pm-result[data-state="ok"] { color: #2f9e63; }
+		#papermirror-prefs .pm-result[data-state="fail"] { color: #d16060; }
+		#papermirror-prefs textarea { font-family: ui-monospace, Menlo, Consolas, monospace; }
+		#papermirror-prefs checkbox { margin-block: 3px; }
+	</html:style>
+
+	<!-- ======================= 翻译服务 ======================= -->
+	<vbox class="pm-section">
+		<hbox class="pm-line">
+			<label class="pm-title" data-l10n-id="papermirror-prefs-provider" control="papermirror-provider"/>
+			<menulist id="papermirror-provider" preference="extensions.zotero.bilingualReader.provider" native="true">
+				<menupopup>
+					<menuitem label="必应翻译 Bing(免费,无需 Key)" value="bing-free"/>
+					<menuitem label="谷歌翻译 Google(免费,无需 Key)" value="google-free"/>
+					<menuitem label="DeepSeek 深度求索" value="deepseek"/>
+					<menuitem label="Kimi (Moonshot AI)" value="moonshot"/>
+					<menuitem label="通义千问 Qwen(阿里云百炼)" value="qwen"/>
+					<menuitem label="智谱 GLM" value="zhipu"/>
+					<menuitem label="Anthropic Claude" value="anthropic"/>
+					<menuitem label="OpenAI" value="openai"/>
+					<menuitem label="Google Gemini" value="gemini"/>
+					<menuitem label="OpenRouter" value="openrouter"/>
+					<menuitem label="硅基流动 SiliconFlow" value="siliconflow"/>
+					<menuitem label="Groq" value="groq"/>
+					<menuitem label="Ollama(本地,无需 Key)" value="ollama"/>
+					<menuitem label="OpenAI-compatible API" value="openai-compatible"/>
+					<menuitem label="DeepL" value="deepl"/>
+					<menuitem label="Custom HTTP endpoint" value="custom"/>
+				</menupopup>
+			</menulist>
+		</hbox>
+		<html:div class="pm-desc" data-l10n-id="papermirror-prefs-about-byok"></html:div>
+	</vbox>
+
+	<!-- ======================= API Key ======================= -->
+	<vbox class="pm-section">
+		<hbox class="pm-line">
+			<label class="pm-title" data-l10n-id="papermirror-prefs-apikey" control="papermirror-apikey"/>
+			<hbox align="center">
+				<button id="papermirror-test-connection" data-l10n-id="papermirror-prefs-test"/>
+				<label id="papermirror-test-result" class="pm-result" value=""/>
+			</hbox>
+		</hbox>
+		<html:div class="pm-field">
+			<html:div><html:input type="password" id="papermirror-apikey" autocomplete="off" spellcheck="false"/></html:div>
+		</html:div>
+		<html:div class="pm-desc">密钥保存在系统凭据库(Mozilla Login Manager),不写入任何配置文件,也绝不会随日志或导出泄露。免费引擎与 Ollama 无需填写。</html:div>
+	</vbox>
+
+	<!-- ======================= 模型 / 地址 ======================= -->
+	<vbox class="pm-section">
+		<hbox class="pm-line">
+			<label class="pm-title" data-l10n-id="papermirror-prefs-model" control="papermirror-model"/>
+		</hbox>
+		<html:div class="pm-field">
+			<html:div><html:input type="text" id="papermirror-model" preference="extensions.zotero.bilingualReader.model" spellcheck="false" placeholder="留空使用该服务商的默认模型"/></html:div>
+		</html:div>
+		<hbox class="pm-line" style="margin-top: 12px;">
+			<label class="pm-title" data-l10n-id="papermirror-prefs-baseurl" control="papermirror-baseurl"/>
+		</hbox>
+		<html:div class="pm-field">
+			<html:div><html:input type="text" id="papermirror-baseurl" preference="extensions.zotero.bilingualReader.apiBaseURL" placeholder="留空使用官方地址 https://…"/></html:div>
+		</html:div>
+		<html:div class="pm-desc"><html:span id="papermirror-endpoint-note"></html:span></html:div>
+	</vbox>
+
+	<!-- ======================= 语言与请求 ======================= -->
+	<vbox class="pm-section">
+		<hbox class="pm-line">
+			<label class="pm-title" data-l10n-id="papermirror-prefs-language"/>
+			<hbox align="center">
+				<menulist id="papermirror-source-lang" preference="extensions.zotero.bilingualReader.sourceLanguage" native="true">
+					<menupopup>
+						<menuitem label="自动检测" value="auto"/>
+						<menuitem label="English" value="en"/>
+						<menuitem label="中文" value="zh"/>
+					</menupopup>
+				</menulist>
+				<label value="→"/>
+				<menulist id="papermirror-target-lang" preference="extensions.zotero.bilingualReader.targetLanguage" native="true">
+					<menupopup>
+						<menuitem label="自动(与源语言配对)" value="auto"/>
+						<menuitem label="简体中文" value="zh-CN"/>
+						<menuitem label="繁體中文" value="zh-TW"/>
+						<menuitem label="English" value="en"/>
+					</menupopup>
+				</menulist>
+			</hbox>
+		</hbox>
+		<hbox class="pm-line" style="margin-top: 9px; justify-content: flex-start;">
+			<label data-l10n-id="papermirror-prefs-timeout" control="papermirror-timeout"/>
+			<html:input type="number" id="papermirror-timeout" min="5000" max="600000" step="1000"/>
+			<label data-l10n-id="papermirror-prefs-concurrency" control="papermirror-concurrency"/>
+			<html:input type="number" id="papermirror-concurrency" min="1" max="2" style="width: 4.5em;"/>
+		</hbox>
+		<hbox class="pm-line" style="margin-top: 9px;">
+			<label class="pm-title" data-l10n-id="papermirror-prefs-custom-prompt" control="papermirror-custom-prompt"/>
+		</hbox>
+		<html:div class="pm-field">
+			<html:div><html:textarea id="papermirror-custom-prompt" preference="extensions.zotero.bilingualReader.customPrompt" rows="3"></html:textarea></html:div>
+		</html:div>
+	</vbox>
+
+	<!-- ======================= 阅读 ======================= -->
+	<vbox class="pm-section">
+		<hbox class="pm-line">
+			<label class="pm-title" data-l10n-id="papermirror-prefs-reading"/>
+		</hbox>
+		<checkbox id="papermirror-translate-captions" preference="extensions.zotero.bilingualReader.translateCaptions" data-l10n-id="papermirror-prefs-captions" native="true"/>
+		<checkbox id="papermirror-translate-references" preference="extensions.zotero.bilingualReader.translateReferences" data-l10n-id="papermirror-prefs-references" native="true"/>
+		<checkbox id="papermirror-use-context" preference="extensions.zotero.bilingualReader.useContext" data-l10n-id="papermirror-prefs-context" native="true"/>
+		<checkbox id="papermirror-auto-prefetch" preference="extensions.zotero.bilingualReader.autoPrefetch" data-l10n-id="papermirror-prefs-prefetch" native="true"/>
+		<checkbox id="papermirror-sync-scroll" preference="extensions.zotero.bilingualReader.syncScroll" data-l10n-id="papermirror-prefs-syncscroll" native="true"/>
+		<checkbox id="papermirror-show-original" preference="extensions.zotero.bilingualReader.showOriginal" data-l10n-id="papermirror-show-original" native="true"/>
+		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 6px;">
+			<label data-l10n-id="papermirror-prefs-fontsize" control="papermirror-font-size"/>
+			<html:input type="range" id="papermirror-font-size" min="12" max="22" step="1" style="width: 11em;"/>
+			<label id="papermirror-font-size-value" class="pm-desc" style="margin-top: 0;" value="16 px"/>
+		</hbox>
+	</vbox>
+
+	<!-- ======================= 术语表 ======================= -->
+	<vbox class="pm-section">
+		<hbox class="pm-line">
+			<label class="pm-title" data-l10n-id="papermirror-prefs-glossary"/>
+			<hbox align="center">
+				<button id="papermirror-glossary-save" data-l10n-id="papermirror-prefs-glossary-save"/>
+				<button id="papermirror-glossary-import" data-l10n-id="papermirror-prefs-glossary-import"/>
+				<button id="papermirror-glossary-export" data-l10n-id="papermirror-prefs-glossary-export"/>
+				<label id="papermirror-glossary-status" class="pm-result" value=""/>
+			</hbox>
+		</hbox>
+		<html:div class="pm-desc" data-l10n-id="papermirror-prefs-glossary-hint"></html:div>
+		<html:div class="pm-field">
+			<html:div><html:textarea id="papermirror-glossary" rows="6"></html:textarea></html:div>
+		</html:div>
+	</vbox>
+
+	<!-- ======================= 缓存 ======================= -->
+	<vbox class="pm-section">
+		<hbox class="pm-line">
+			<label class="pm-title" data-l10n-id="papermirror-prefs-cache"/>
+			<hbox align="center">
+				<label id="papermirror-cache-size" class="pm-desc" style="margin-top: 0;" value="…"/>
+				<button id="papermirror-cache-refresh" data-l10n-id="papermirror-prefs-cache-refresh"/>
+				<button id="papermirror-cache-clear" data-l10n-id="papermirror-prefs-cache-clear"/>
+			</hbox>
+		</hbox>
+		<html:div class="pm-desc" data-l10n-id="papermirror-prefs-privacy-note"></html:div>
+	</vbox>
+
+	<!-- ======================= 完整 PDF 翻译 ======================= -->
+	<vbox class="pm-section">
+		<hbox class="pm-line">
+			<label class="pm-title" value="生成译文 PDF"/>
+			<menulist id="papermirror-pdfmode" preference="extensions.zotero.bilingualReader.pdfExportMode" native="true">
+				<menupopup>
+					<menuitem label="插件内置(默认,无需外部依赖)" value="builtin"/>
+					<menuitem label="本地 BabelDOC 服务(完整重排)" value="service"/>
+				</menupopup>
+			</menulist>
+		</hbox>
+		<html:div class="pm-field">
+			<html:div><html:input type="text" id="papermirror-pdfservice" preference="extensions.zotero.bilingualReader.pdfServiceURL" placeholder="http://127.0.0.1:11017" spellcheck="false"/></html:div>
+		</html:div>
+		<html:div class="pm-desc">内置模式直接在插件里把译文写回一份新 PDF(正文按原位置原字号替换,标题/图表/公式保留原样),零依赖。BabelDOC 模式做完整版面重排,效果更好但需先启动本地服务:pip install babeldoc,再运行插件源码 tools/babeldoc_server.py;下方地址仅允许 localhost——请求携带 API 密钥,绝不发往其他主机。</html:div>
+	</vbox>
+
+	<!-- ======================= 高级 ======================= -->
+	<vbox class="pm-section">
+		<hbox class="pm-line">
+			<label class="pm-title" data-l10n-id="papermirror-prefs-advanced"/>
+		</hbox>
+		<checkbox id="papermirror-debug-logging" preference="extensions.zotero.bilingualReader.debugLogging" data-l10n-id="papermirror-prefs-debug" native="true"/>
+		<checkbox id="papermirror-allow-http" preference="extensions.zotero.bilingualReader.allowHTTPEndpoint" data-l10n-id="papermirror-prefs-allow-http" native="true"/>
+		<checkbox id="papermirror-local-only" preference="extensions.zotero.bilingualReader.localOnlyMode" data-l10n-id="papermirror-prefs-local-only" native="true"/>
+		<html:div class="pm-desc">PaperMirror for Zotero 0.1.0 — AGPL-3.0</html:div>
+	</vbox>
+</vbox>
