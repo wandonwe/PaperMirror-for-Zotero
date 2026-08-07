@@ -22,6 +22,7 @@ import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
 import { buildBlocks, buildBlocksFromPlainText, medianFontSize } from './blockBuilder';
 import { buildBlocksFromSpans } from './spanBlockBuilder';
+import { coalesceRegions } from './regionCoalescer';
 import * as adapter from './zoteroReaderAdapter';
 import type { ReaderLike } from './zoteroReaderAdapter';
 
@@ -107,6 +108,7 @@ export class TextExtractor {
 					includeReferences: this.includeReferences,
 					referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex)
 				});
+				result.blocks = coalesceRegions(result.blocks);
 				if (result.blocks.length) {
 					this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
 					return result.blocks;
@@ -163,6 +165,9 @@ export class TextExtractor {
 				includeReferences: this.includeReferences,
 				referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex)
 			});
+			// Rebuild semantic regions from whatever fragments extraction
+			// produced: whole regions translate as whole sentences.
+			result.blocks = coalesceRegions(result.blocks);
 			this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
 			logger.info(MODULE, `Page ${pageIndex + 1}: extracted ${result.blocks.length} block(s) from the text layer`);
 			return result.blocks;

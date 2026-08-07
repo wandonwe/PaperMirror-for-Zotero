@@ -419,6 +419,33 @@ export function buildTranslatedPage(
 	// The element must be in the document to be measurable; the caller inserts
 	// it and then calls settle().
 	(page as HTMLElement & { pmSettle?: () => void }).pmSettle = () => {
+		// ---- containment first: fit each region into ITS OWN box -----------
+		// The translation belongs inside the region it replaces. Before the
+		// flow is allowed to move anything, each block walks a typographic
+		// ladder — leading 1.5 → 1.34 → 1.24, then the type down to 88% of the
+		// source size (never below 8.5px) — and only what STILL does not fit
+		// spills into the flow/growth machinery. 中文通常更短, so most regions
+		// settle at 1:1 and the page keeps its exact shape.
+		for (const item of placed) {
+			const node = item.node;
+			const boxHeight = item.box.height;
+			if (node.scrollHeight <= boxHeight + 2) {
+				continue;
+			}
+			for (const leading of ['1.34', '1.24']) {
+				node.style.lineHeight = leading;
+				if (node.scrollHeight <= boxHeight + 2) {
+					break;
+				}
+			}
+			let size = item.startSize;
+			const floor = Math.max(8.5, item.startSize * 0.88);
+			while (node.scrollHeight > boxHeight + 2 && size > floor) {
+				size = Math.max(floor, size * 0.96);
+				node.style.fontSize = `${size.toFixed(1)}px`;
+			}
+		}
+
 		const columns = assignColumns(placed.map(p => ({ left: p.box.left, width: p.box.width })));
 		// Natural height at the source size — one measurement per block.
 		const items: FlowItem[] = placed.map((item, i) => ({

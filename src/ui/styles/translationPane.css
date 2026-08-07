@@ -805,6 +805,10 @@
 	/* No fixed height: the flow pass measures what the Chinese needs and moves
 	   whatever is below. Overflow must stay visible for the same reason. */
 	overflow: visible;
+	/* Regions carry their paragraph structure as \n\n — Background / Methods
+	   and Results / Conclusions / Key Words render as separate paragraphs,
+	   not one wall of text. */
+	white-space: pre-line;
 	color: var(--pm-repage-ink);
 	/* A UI sans face stays even at small sizes; a serif turns to mush. */
 	font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",

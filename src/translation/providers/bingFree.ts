@@ -266,12 +266,19 @@ export const bingFreeProvider: TranslationProvider = {
 			if (options.signal?.aborted) {
 				throw new PaperMirrorError('CANCELLED', 'Cancelled.');
 			}
-			const parts = splitLongText(block.text, REQUEST_CHAR_LIMIT);
-			const translatedParts: string[] = [];
-			for (const part of parts) {
-				translatedParts.push(await translateOne(part, sl, tl, settings, options.signal));
+			// A region block carries its paragraph structure as \n\n; translate
+			// paragraph by paragraph so the structure survives the round trip.
+			const paragraphs = block.text.split(/\n{2,}/);
+			const translatedParagraphs: string[] = [];
+			for (const paragraph of paragraphs) {
+				const parts = splitLongText(paragraph, REQUEST_CHAR_LIMIT);
+				const translatedParts: string[] = [];
+				for (const part of parts) {
+					translatedParts.push(await translateOne(part, sl, tl, settings, options.signal));
+				}
+				translatedParagraphs.push(translatedParts.join(' ').trim());
 			}
-			translations.push({ id: block.id, translatedText: translatedParts.join(' ').trim() });
+			translations.push({ id: block.id, translatedText: translatedParagraphs.join('\n\n').trim() });
 		}
 		return { translations };
 	}

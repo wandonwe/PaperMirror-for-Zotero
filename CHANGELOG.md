@@ -9,6 +9,28 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.2.8] — 2026-08-07
+
+### Added
+
+- **Region-based translation.** A coalescing pass between extraction and
+  translation rebuilds semantic regions from whatever fragments extraction
+  produced: consecutive body blocks in the same column, at the same type
+  size, with only line-spacing between them merge into ONE region — extracted
+  in reading order, translated as one semantic block, masked line by line,
+  and typeset into the region's own union bounding box. The shredded
+  one-line-per-block abstracts are gone.
+- Paragraph roles (Background, Methods and Results, Conclusions, Key Words)
+  survive the round trip: genuine paragraph boundaries join as blank lines,
+  the free Microsoft/Google engines translate paragraph-by-paragraph so the
+  structure is never flattened, and the typesetter renders it back as
+  separate paragraphs (`white-space: pre-line`).
+- Containment-first typesetting: before the flow may move anything, each
+  region walks a typographic ladder — leading 1.5 → 1.34 → 1.24, then type
+  down to 88% of source (floor 8.5px) — inside its own box. Only what still
+  does not fit spills into the push-down/grow machinery, so translated text
+  stays inside its region and never overlaps adjacent content.
+
 ## [0.2.7] — 2026-08-07
 
 ### Fixed
@@ -303,7 +325,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.7...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/wandonwe/papermirror-zotero/compare/v0.2.4...v0.2.5

@@ -32,15 +32,23 @@ interface Piece {
 	blockId: string;
 	pieceIndex: number;
 	q: string; // escaped text actually sent
+	/** Paragraph-break marker: reassembled as \n\n, never sent upstream. */
+	br?: boolean;
 }
 
 function buildPieces(blocks: TranslationRequest['blocks']): Piece[] {
 	const pieces: Piece[] = [];
 	for (const block of blocks) {
-		const parts = splitLongText(block.text, BATCH_CHAR_LIMIT);
-		parts.forEach((part, pieceIndex) => {
-			pieces.push({ blockId: block.id, pieceIndex, q: escapeHTML(part) });
-		});
+		// Split at paragraph boundaries FIRST (a region block carries its
+		// Background/Methods structure as \n\n), then at the length cap.
+		let pieceIndex = 0;
+		for (const paragraph of block.text.split(/\n{2,}/)) {
+			for (const part of splitLongText(paragraph, BATCH_CHAR_LIMIT)) {
+				pieces.push({ blockId: block.id, pieceIndex: pieceIndex++, q: escapeHTML(part) });
+			}
+			pieces.push({ blockId: block.id, pieceIndex: pieceIndex++, q: '', br: true });
+		}
+		pieces.pop(); // no break after the last paragraph
 	}
 	return pieces;
 }
@@ -101,25 +109,35 @@ async function translateBatch(
 	settings: ProviderSettings,
 	signal: AbortSignal | undefined
 ): Promise<Map<string, string[]>> {
-	const tk = calcGoogleTk(batch.map(p => p.q).join(''));
-	const base = (settings.apiBaseURL || BASE).replace(/\/+$/, '');
-	const url = `${base}${PATH}&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&tk=${tk}`;
-	const rawBody = batch.map(p => `&q=${encodeURIComponent(p.q)}`).join('');
-	const { json } = await requestJSON(url, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-		rawBody,
-		timeoutMs: settings.timeoutMs,
-		signal
-	});
-	const texts = parseGoogleEntries(json, batch.length);
+	const sendable = batch.filter(p => !p.br);
 	const byBlock = new Map<string, string[]>();
-	batch.forEach((piece, i) => {
-		const cleaned = cleanGoogleAnnotatedText(texts[i] ?? '');
-		const list = byBlock.get(piece.blockId) ?? [];
-		list[piece.pieceIndex] = cleaned;
-		byBlock.set(piece.blockId, list);
-	});
+	if (sendable.length) {
+		const tk = calcGoogleTk(sendable.map(p => p.q).join(''));
+		const base = (settings.apiBaseURL || BASE).replace(/\/+$/, '');
+		const url = `${base}${PATH}&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&tk=${tk}`;
+		const rawBody = sendable.map(p => `&q=${encodeURIComponent(p.q)}`).join('');
+		const { json } = await requestJSON(url, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			rawBody,
+			timeoutMs: settings.timeoutMs,
+			signal
+		});
+		const texts = parseGoogleEntries(json, sendable.length);
+		sendable.forEach((piece, i) => {
+			const cleaned = cleanGoogleAnnotatedText(texts[i] ?? '');
+			const list = byBlock.get(piece.blockId) ?? [];
+			list[piece.pieceIndex] = cleaned;
+			byBlock.set(piece.blockId, list);
+		});
+	}
+	for (const piece of batch) {
+		if (piece.br) {
+			const list = byBlock.get(piece.blockId) ?? [];
+			list[piece.pieceIndex] = '\n\n';
+			byBlock.set(piece.blockId, list);
+		}
+	}
 	return byBlock;
 }
 
@@ -171,7 +189,10 @@ export const googleFreeProvider: TranslationProvider = {
 				.filter(b => merged.has(b.id))
 				.map(b => ({
 					id: b.id,
-					translatedText: (merged.get(b.id) ?? []).join(' ').trim()
+					translatedText: (merged.get(b.id) ?? [])
+						.join(' ')
+						.replace(/\s*\n\n\s*/g, '\n\n')
+						.trim()
 				}))
 		};
 	}
