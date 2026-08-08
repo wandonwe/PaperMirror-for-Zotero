@@ -9,6 +9,29 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-08
+
+Housekeeping release: a full audit of the tree, removing everything the
+current version no longer reaches. No behaviour changes.
+
+### Removed
+
+- Dead modules and helpers: `src/utils/throttle.ts` (no importers), the
+  adapter's `getPdfViewerWindow` (only user was the deleted floating chip),
+  and the session's `copyCurrent` (its only caller was an unwired callback).
+- Dead pane surface: the never-mounted 显示原文对照 / PDF叠加 switches, the
+  unused `onToggleShowOriginal` / `onToggleOverlay` / `onCopy` /
+  `onExportPdf` callbacks and their session wiring, and `setOverlayEnabled`.
+  (The compare state itself, `Zotero.PaperMirror.exportTranslatedPdf()` and
+  the overlay mode are untouched — only the orphaned plumbing is gone.)
+- The 141-line hand-drawn brand-badge set, obsolete since the real official
+  marks landed in 0.4.3. The fallback is now the neutral letter tile; the
+  generic-endpoint globe stays.
+- 25 orphaned locale strings per language (old settings-pane labels, mode
+  tooltips, 复制译文 / 生成译文PDF button labels), the dead `paneRatio`
+  pref, the 生成译文PDF button CSS, and the empty `addon/` and
+  `docs/design/` scaffolding directories.
+
 ## [0.4.3] — 2026-08-08
 
 ### Changed
@@ -614,7 +637,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.0...v0.4.1

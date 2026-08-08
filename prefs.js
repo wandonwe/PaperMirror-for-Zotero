@@ -17,8 +17,6 @@ pref('extensions.zotero.bilingualReader.translateCaptions', true);
 pref('extensions.zotero.bilingualReader.translateReferences', false);
 pref('extensions.zotero.bilingualReader.useContext', true);
 pref('extensions.zotero.bilingualReader.autoPrefetch', true);
-// 50/50: 对照翻译下两页大小一致,分隔条可手动调节
-pref('extensions.zotero.bilingualReader.paneRatio', 50);
 pref('extensions.zotero.bilingualReader.paneSide', 'right');
 pref('extensions.zotero.bilingualReader.syncScroll', true);
 // 整页对照下: 开启后掀开遮罩,直接看到原页文字

@@ -1053,17 +1053,6 @@
 	content: none;
 }
 
-/* 生成译文PDF button: quiet accent so it reads as the "big action" */
-.pm-header .pm-export {
-	border: 1px solid #6f6ce8;
-	color: #6f6ce8;
-	border-radius: 6px;
-}
-.pm-header .pm-export:hover {
-	background: rgba(111, 108, 232, .14);
-}
-
-
 /* ==========================================================================
    Header bar — one row, fixed order:
    icon · languages · engine · refresh · status · sync · save · layout ·

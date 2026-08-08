@@ -18,7 +18,6 @@ export type PrefKey
 	| 'translateReferences'
 	| 'useContext'
 	| 'autoPrefetch'
-	| 'paneRatio'
 	| 'paneSide'
 	| 'syncScroll'
 	| 'showOriginal'

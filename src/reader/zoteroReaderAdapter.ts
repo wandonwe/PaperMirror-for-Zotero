@@ -955,21 +955,6 @@ export function getSelectedText(reader: ReaderLike): string {
 }
 
 /**
- * The inner PDF.js window and document — for UI that must live inside the
- * viewer (our own selection-follow button, positioned in the viewer's own
- * coordinate space). Returns null until the iframe is ready.
- */
-export function getPdfViewerWindow(reader: ReaderLike): (Window & typeof globalThis) | null {
-	try {
-		const win = reader._internalReader?._primaryView?._iframeWindow;
-		return (win && win.document) ? (win as Window & typeof globalThis) : null;
-	}
-	catch {
-		return null;
-	}
-}
-
-/**
  * Register the toolbar event listener. MUST pass pluginID so Zotero removes
  * the listener automatically on plugin shutdown (9.0.6's manual unregister
  * is broken — see header comment).

@@ -59,8 +59,6 @@ function paneStrings(): PaneStrings {
 		explainSubtitle: getString('papermirror-explain-subtitle'),
 		explainCopy: getString('papermirror-explain-copy'),
 		explainSave: getString('papermirror-explain-save'),
-		showOriginal: getString('papermirror-show-original'),
-		overlay: getString('papermirror-overlay'),
 		syncScroll: getString('papermirror-prefs-syncscroll'),
 		statusTranslating: getString('papermirror-status-translating-page'),
 		statusDone: getString('papermirror-status-done-page'),
@@ -70,14 +68,11 @@ function paneStrings(): PaneStrings {
 		pagePrefix: getString('papermirror-page'),
 		pageSuffix: getString('papermirror-page-suffix'),
 		retranslate: getString('papermirror-retranslate'),
-		copy: getString('papermirror-copy'),
 		saveNote: getString('papermirror-save-note'),
 		settings: getString('papermirror-settings'),
 		close: getString('papermirror-close'),
 		swapSides: getString('papermirror-swap-sides'),
 		pending: getString('papermirror-pending'),
-		exportPdf: getString('papermirror-export-pdf'),
-		exportPdfTip: getString('papermirror-export-pdf-tip'),
 		viewArticle: getString('papermirror-view-article'),
 		viewPage: getString('papermirror-view-page'),
 		privacyNotice: getString('papermirror-privacy-notice'),
@@ -172,14 +167,10 @@ export class ReaderSession {
 			// 菜单栏「解析」: explains the current PDF selection, or the
 			// highlighted 译文 block, or asks the reader to select text first.
 			onExplainSelection: () => void this.explainSelection(),
-			onToggleShowOriginal: enabled => setPref('showOriginal', enabled),
-			onToggleOverlay: enabled => this.applyOverlay(enabled, true),
 			onToggleSync: enabled => this.setSyncEnabled(enabled),
 			onRetranslate: () => void this.retranslateCurrent(),
-			onCopy: mode => void this.copyCurrent(mode),
 			onSaveNote: () => void this.saveSelectionToNote(),
 			onOpenSettings: () => this.openSettings(),
-			onExportPdf: () => void this.exportTranslatedPdf(),
 			onToggleViewKind: kind => setPref('paneView', kind),
 			onPickLanguages: (source, target) => this.applyLanguagePick(source, target),
 			onPickProvider: providerId => this.applyProviderPick(providerId),
@@ -550,7 +541,6 @@ export class ReaderSession {
 		if (persist) {
 			setPref('overlayEnabled', enabled);
 		}
-		this.pane?.setOverlayEnabled(enabled);
 		this.overlay?.setEnabled(enabled);
 		if (enabled) {
 			// Re-feed everything already translated so it appears immediately
@@ -992,33 +982,6 @@ export class ReaderSession {
 		}
 	}
 
-	private async copyCurrent(mode: 'plain' | 'both'): Promise<void> {
-		if (!this.pane || !this.manager) {
-			return;
-		}
-		// Prefer explicit selection in the pane
-		const selection = this.pane.getSelectionText();
-		let text = selection;
-		if (!text) {
-			const page = adapter.getCurrentPageIndex(this.reader);
-			const state = this.manager.getPageState(page);
-			if (state) {
-				text = this.pane.getPageText(page, state.blocks, state.translations, mode);
-			}
-		}
-		if (!text) {
-			return;
-		}
-		try {
-			const helper = Components.classes['@mozilla.org/widget/clipboardhelper;1']
-				.getService(Components.interfaces.nsIClipboardHelper);
-			helper.copyString(text);
-			this.pane.toast(getString('papermirror-toast-copied'));
-		}
-		catch (e) {
-			logger.warn(MODULE, 'Clipboard copy failed', e);
-		}
-	}
 
 	private async saveSelectionToNote(): Promise<void> {
 		if (!this.pane || !this.manager) {

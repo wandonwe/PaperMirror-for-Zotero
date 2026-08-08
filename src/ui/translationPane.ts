@@ -75,8 +75,6 @@ export interface PaneStrings {
 	explainSubtitle: string;
 	explainCopy: string;
 	explainSave: string;
-	showOriginal: string;
-	overlay: string;
 	syncScroll: string;
 	statusTranslating: string; // template with %n%
 	statusDone: string; // template with %n%
@@ -86,16 +84,11 @@ export interface PaneStrings {
 	pagePrefix: string;
 	pageSuffix: string;
 	retranslate: string;
-	copy: string;
 	saveNote: string;
 	settings: string;
 	close: string;
 	swapSides: string;
 	pending: string;
-	/** Retained for the Zotero.PaperMirror.exportTranslatedPdf() entry point,
-	 *  which no longer has a button in the pane. */
-	exportPdf: string;
-	exportPdfTip: string;
 	viewArticle: string;
 	viewPage: string;
 	privacyNotice: string;
@@ -108,13 +101,9 @@ export interface PaneCallbacks {
 	onSaveExplanationNote(): void;
 	/** 菜单栏「解析」按钮 — explain the current PDF selection. */
 	onExplainSelection(): void;
-	onToggleShowOriginal(enabled: boolean): void;
-	onToggleOverlay(enabled: boolean): void;
 	onToggleSync(enabled: boolean): void;
 	onRetranslate(): void;
-	onCopy(mode: 'plain' | 'both'): void;
 	onSaveNote(): void;
-	onExportPdf(): void;
 	onToggleViewKind(kind: 'page' | 'article'): void;
 	/** 菜单栏直接切换 — no round-trip through the settings pane. */
 	onPickLanguages(source: string, target: string): void;
@@ -147,8 +136,6 @@ export class TranslationPane {
 	private languagePill!: HTMLElement;
 	private providerName!: HTMLElement;
 	private providerMark!: HTMLElement;
-	private originalSwitch!: HTMLElement;
-	private overlaySwitch!: HTMLElement;
 	private syncSwitch!: HTMLElement;
 	private toastEl!: HTMLElement;
 	private toastText!: HTMLElement;
@@ -478,147 +465,6 @@ export class TranslationPane {
 		const tile = (fill: string): Element => node('rect', { x: '.5', y: '.5', width: '15', height: '15', rx: '3.5', fill });
 
 		switch (id) {
-			case 'bing-free':
-				// Microsoft: the four squares.
-				svg.append(
-					node('rect', { x: '1.5', y: '1.5', width: '6', height: '6', fill: '#f25022' }),
-					node('rect', { x: '8.5', y: '1.5', width: '6', height: '6', fill: '#7fba00' }),
-					node('rect', { x: '1.5', y: '8.5', width: '6', height: '6', fill: '#00a4ef' }),
-					node('rect', { x: '8.5', y: '8.5', width: '6', height: '6', fill: '#ffb900' })
-				);
-				return svg;
-			case 'google-free': {
-				// Google: the sign-in "G", the canonical four-colour path
-				// (24×24 artwork, scaled to fit).
-				const g = node('g', { transform: 'translate(1.4 1.4) scale(0.55)' });
-				g.append(
-					node('path', { fill: '#4285F4', d: 'M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z' }),
-					node('path', { fill: '#34A853', d: 'M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z' }),
-					node('path', { fill: '#FBBC05', d: 'M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z' }),
-					node('path', { fill: '#EA4335', d: 'M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z' })
-				);
-				svg.appendChild(g);
-				return svg;
-			}
-			case 'openai': {
-				// The hexagonal knot: six identical petals, rotated 60° apart.
-				const g = node('g', {});
-				for (let i = 0; i < 6; i++) {
-					g.appendChild(node('path', {
-						d: 'M8 1.4c1.5 0 2.7 1.2 2.7 2.7v3.2L8 8.9 5.3 7.3V4.1C5.3 2.6 6.5 1.4 8 1.4Z',
-						fill: 'none', stroke: 'currentColor', 'stroke-width': '1.15',
-						'stroke-linejoin': 'round',
-						transform: `rotate(${i * 60} 8 8)`
-					}));
-				}
-				svg.appendChild(g);
-				return svg;
-			}
-			case 'anthropic': {
-				// Anthropic: the radiating burst mark on the warm cream tile —
-				// their actual symbol, not a letter. Tapered rays out of centre.
-				const g = node('g', { fill: '#141413' });
-				for (let i = 0; i < 12; i++) {
-					// Alternating ray lengths give the burst its distinctive
-					// long/short rhythm.
-					const long = i % 2 === 0;
-					const outer = long ? 6.4 : 4.9;
-					g.appendChild(node('path', {
-						d: `M8 ${8 - outer} 8.62 8 8 8.62 7.38 8Z`,
-						transform: `rotate(${i * 30} 8 8)`
-					}));
-				}
-				svg.append(tile('#F0EEE5'), g);
-				return svg;
-			}
-			case 'gemini': {
-				// Gemini: the four-point gradient star (the real mark).
-				const defs = node('defs', {});
-				const grad = node('linearGradient', { id: 'pm-gem', x1: '0', y1: '1', x2: '1', y2: '0' });
-				grad.append(
-					node('stop', { offset: '0', 'stop-color': '#1C7DFF' }),
-					node('stop', { offset: '.52', 'stop-color': '#4796E3' }),
-					node('stop', { offset: '1', 'stop-color': '#9177C7' })
-				);
-				defs.appendChild(grad);
-				svg.append(defs, node('path', {
-					d: 'M8 1c.55 3.8 2.65 5.9 6.5 6.5-3.85.6-5.95 2.7-6.5 6.5-.55-3.8-2.65-5.9-6.5-6.5C5.35 6.9 7.45 4.8 8 1Z',
-					fill: 'url(#pm-gem)'
-				}));
-				return svg;
-			}
-			case 'deepseek':
-				// DeepSeek: the blue whale swoosh.
-				svg.append(node('path', {
-					d: 'M14.6 4.2c-.5 2.1-1.7 3.5-3.2 4.5.1.5.1 1-.05 1.6-.4 1.7-1.7 3-3.6 3.4-1.9.4-3.9-.2-5.5-1.7-.4-.4-.8-.9-1-1.4.9.5 1.8.7 2.6.6-.9-.7-1.5-1.6-1.8-2.7-.3-1.2-.1-2.4.5-3.5.7 1.4 1.7 2.4 3 3 .9.4 1.9.6 2.9.5.6-1.5 1.7-2.7 3.2-3.6-.5-.2-1-.3-1.6-.3.7-.5 1.5-.8 2.3-.8.8-.1 1.5 0 2.25.4Z',
-					fill: '#4D6BFE'
-				}));
-				return svg;
-			case 'deepl':
-				// DeepL: the navy tile with the white dart.
-				svg.append(
-					tile('#0F2B46'),
-					node('path', { d: 'M4.4 3.6 12.4 8l-8 4.4v-3.1L8.6 8 4.4 6.7Z', fill: '#fff' })
-				);
-				return svg;
-			case 'moonshot':
-				// Kimi: the black tile with the crescent-cut K.
-				svg.append(
-					tile('#101418'),
-					node('path', { d: 'M4.6 3.4h2.1v3.9L10 3.4h2.7L9.2 7.6l3.6 5h-2.6L7.7 9.1l-1 1.1v2.4H4.6Z', fill: '#fff' })
-				);
-				return svg;
-			case 'qwen': {
-				// 通义千问: the violet interlocking hexagram.
-				const defs = node('defs', {});
-				const grad = node('linearGradient', { id: 'pm-qwen', x1: '0', y1: '0', x2: '1', y2: '1' });
-				grad.append(node('stop', { offset: '0', 'stop-color': '#7B5CFF' }), node('stop', { offset: '1', 'stop-color': '#4735D9' }));
-				defs.appendChild(grad);
-				svg.append(defs, tile('url(#pm-qwen)'),
-					node('path', { d: 'M8 2.8 12.5 10.6H3.5Z', fill: 'none', stroke: '#fff', 'stroke-width': '1.2', 'stroke-linejoin': 'round' }),
-					node('path', { d: 'M8 13.2 3.5 5.4h9Z', fill: 'none', stroke: '#fff', 'stroke-width': '1.2', 'stroke-linejoin': 'round', opacity: '.85' })
-				);
-				return svg;
-			}
-			case 'zhipu':
-				svg.append(tile('#2D5CFE'), node('path', { d: 'M4.4 3.6h7.2v1.9L7.4 10.5h4.4v1.9H4.2v-1.9l4.2-5H4.4Z', fill: '#fff' }));
-				return svg;
-			case 'siliconflow': {
-				// SiliconFlow: the purple pinwheel.
-				const g = node('g', {});
-				for (let i = 0; i < 4; i++) {
-					g.appendChild(node('path', {
-						d: 'M8 8C8 4.7 9.6 2.4 12.6 1.6 12.2 4.9 10.7 7 8 8Z',
-						fill: '#8A5BF6', transform: `rotate(${i * 90} 8 8)`
-					}));
-				}
-				svg.appendChild(g);
-				return svg;
-			}
-			case 'groq':
-				svg.append(tile('#F55036'), node('path', {
-					d: 'M11.4 7.9a3.4 3.4 0 1 0-3.4 3.4h1.5v1.9H8a5.3 5.3 0 1 1 5.3-5.3v3.3h-1.9Z',
-					fill: '#fff'
-				}));
-				return svg;
-			case 'ollama':
-				// Ollama: the llama face.
-				svg.append(
-					tile('#ffffff'),
-					node('path', {
-						d: 'M5.1 2.2c.7 0 1.2 1 1.3 2.2a4 4 0 0 1 3.2 0c.1-1.2.6-2.2 1.3-2.2s1.3 1.3 1.2 2.7c0 .3-.1.6-.2.9a4 4 0 0 1 1 2.7c0 1-.3 1.8-.9 2.5.2.4.3.9.3 1.4 0 .5-.1.9-.3 1.3h-1.3c.2-.4.4-.8.4-1.3 0-.4-.1-.8-.3-1.1a4 4 0 0 1-5.6 0c-.2.3-.3.7-.3 1.1 0 .5.2.9.4 1.3H4.0a3.1 3.1 0 0 1 0-2.7c-.6-.7-.9-1.5-.9-2.5a4 4 0 0 1 1-2.7c-.1-.3-.2-.6-.2-.9-.1-1.4.5-2.7 1.2-2.7Z',
-						fill: 'none', stroke: '#111', 'stroke-width': '.9', 'stroke-linejoin': 'round'
-					}),
-					node('circle', { cx: '6.6', cy: '8.3', r: '.55', fill: '#111' }),
-					node('circle', { cx: '9.4', cy: '8.3', r: '.55', fill: '#111' })
-				);
-				return svg;
-			case 'openrouter':
-				svg.append(tile('#20242C'), node('path', {
-					d: 'M3 6.2h2.4c1 0 1.7.4 2.5 1 .8-.6 1.5-1 2.5-1h.9V4.6L13.9 7 11.3 9.4V7.8h-.9c-.7 0-1.2.3-2 .9-.8.6-1.6 1.1-2.9 1.1H3Z',
-					fill: '#fff'
-				}));
-				return svg;
 			case 'openai-compatible':
 			case 'custom': {
 				// No brand to borrow: a neutral endpoint glyph.
@@ -756,18 +602,6 @@ export class TranslationPane {
 		this.statusRow.append(this.statusMain, this.statusSub);
 
 		this.syncSwitch = this.switchControl(this.strings.syncScroll, true, on => this.callbacks.onToggleSync(on));
-		// Constructed but not mounted: session code still drives their state.
-		this.originalSwitch = this.switchControl(
-			this.strings.showOriginal,
-			this.host.getAttribute('data-pm-show-original') !== 'false',
-			on => this.preserveScroll(() => {
-				this.host.setAttribute('data-pm-show-original', String(on));
-				this.compareOriginal = on;
-				this.applyCompareState();
-				this.callbacks.onToggleShowOriginal(on);
-			})
-		);
-		this.overlaySwitch = this.switchControl(this.strings.overlay, false, on => this.callbacks.onToggleOverlay(on));
 
 		bar.append(
 			this.languagePill,
@@ -851,13 +685,8 @@ export class TranslationPane {
 	 */
 	setShowOriginal(enabled: boolean): void {
 		this.host.setAttribute('data-pm-show-original', String(enabled));
-		this.originalSwitch?.setAttribute('data-pm-on', String(enabled));
 		this.compareOriginal = enabled;
 		this.applyCompareState();
-	}
-
-	setOverlayEnabled(enabled: boolean): void {
-		this.overlaySwitch?.setAttribute('data-pm-on', String(enabled));
 	}
 
 	setSyncEnabled(enabled: boolean): void {
