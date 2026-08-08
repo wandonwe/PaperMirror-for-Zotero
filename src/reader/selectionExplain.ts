@@ -52,6 +52,10 @@ const CSS = `
 }
 #${CHIP_ID}:hover { transform: translateY(-1px); }
 #${CHIP_ID} .pm-sel-spark { font-size: 11px; opacity: .95; }
+/* Hidden state under OUR control. The id selector above out-specifies the UA
+   [hidden] rule, so relying on the .hidden property left the chip permanently
+   visible — this attribute + !important is what actually removes it. */
+#${CHIP_ID}[data-pm-hidden="true"] { display: none !important; }
 `;
 
 export interface SelectionExplainOptions {
@@ -70,6 +74,8 @@ export class SelectionExplainButton {
 	private doc: Document | null = null;
 	private chip: HTMLElement | null = null;
 	private currentText = '';
+	/** Pointer is over the chip — mousedown must not treat it as "click away". */
+	private overChip = false;
 
 	private onMouseUp: ((event: MouseEvent) => void) | null = null;
 	private onMouseDown: ((event: MouseEvent) => void) | null = null;
@@ -133,7 +139,7 @@ export class SelectionExplainButton {
 				}
 				// A click on the chip itself is a request to explain, not a
 				// selection gesture — handled by the chip's own listener.
-				if (this.chip && event.target && this.chip.contains(event.target as Node)) {
+				if (this.overChip || (this.chip && event.target && this.chip.contains(event.target as Node))) {
 					return;
 				}
 				// Let the selection settle before reading it.
@@ -143,8 +149,15 @@ export class SelectionExplainButton {
 				this.showTimer = setTimeout(() => this.evaluateSelection(), 10);
 			};
 			this.onMouseDown = (event: MouseEvent): void => {
+				// Interacting with the chip must NOT be read as "click away". The
+				// overChip flag is the reliable guard (event.target identity across
+				// the content compartment isn't always the chip node); contains()
+				// is a backup.
+				if (this.overChip) {
+					return;
+				}
 				if (this.chip && event.target && this.chip.contains(event.target as Node)) {
-					return; // starting a click on the chip — keep it
+					return;
 				}
 				this.hide();
 			};
@@ -238,7 +251,18 @@ export class SelectionExplainButton {
 		chip.addEventListener('click', (event) => {
 			event.preventDefault();
 			event.stopPropagation();
-			const text = this.currentText;
+			// Fall back to the live selection: even if a stray mousedown cleared
+			// currentText, the selection is still there (mousedown was prevented).
+			let text = this.currentText;
+			if (!text) {
+				try {
+					const sel = this.win?.getSelection?.();
+					text = sel ? String(sel.toString()).trim() : '';
+				}
+				catch {
+					text = '';
+				}
+			}
 			this.hide();
 			if (text) {
 				this.onExplain(text);
@@ -246,8 +270,14 @@ export class SelectionExplainButton {
 		});
 		// Hovering keeps the chip alive (the reader is aiming for it); leaving it
 		// starts a short countdown so it never lingers once attention moves on.
-		chip.addEventListener('mouseenter', () => this.cancelAutoHide());
-		chip.addEventListener('mouseleave', () => this.scheduleAutoHide(AUTO_HIDE_AFTER_LEAVE_MS));
+		chip.addEventListener('mouseenter', () => {
+			this.overChip = true;
+			this.cancelAutoHide();
+		});
+		chip.addEventListener('mouseleave', () => {
+			this.overChip = false;
+			this.scheduleAutoHide(AUTO_HIDE_AFTER_LEAVE_MS);
+		});
 		(doc.body ?? doc.documentElement).appendChild(chip);
 		this.chip = chip;
 		return chip;
@@ -255,7 +285,7 @@ export class SelectionExplainButton {
 
 	private show(rect: DOMRect): void {
 		const chip = this.ensureChip();
-		chip.hidden = false;
+		chip.removeAttribute('data-pm-hidden');
 		chip.style.visibility = 'hidden';
 		chip.style.left = '0px';
 		chip.style.top = '0px';
@@ -280,16 +310,18 @@ export class SelectionExplainButton {
 
 	private scheduleAutoHide(ms: number): void {
 		this.cancelAutoHide();
-		const win = this.win ?? (globalThis as unknown as Window);
-		this.autoHideTimer = win.setTimeout(() => {
+		// The plugin sandbox's own setTimeout — fires reliably and runs the
+		// closure in our context. (Scheduling through the content window proved
+		// unreliable across the compartment.)
+		this.autoHideTimer = setTimeout(() => {
 			this.autoHideTimer = null;
 			this.hide();
-		}, ms) as unknown as ReturnType<typeof setTimeout>;
+		}, ms);
 	}
 
 	private cancelAutoHide(): void {
 		if (this.autoHideTimer) {
-			(this.win ?? (globalThis as unknown as Window)).clearTimeout(this.autoHideTimer as unknown as number);
+			clearTimeout(this.autoHideTimer);
 			this.autoHideTimer = null;
 		}
 	}
@@ -300,8 +332,9 @@ export class SelectionExplainButton {
 			this.showTimer = null;
 		}
 		this.cancelAutoHide();
+		this.overChip = false;
 		if (this.chip) {
-			this.chip.hidden = true;
+			this.chip.setAttribute('data-pm-hidden', 'true');
 		}
 		this.currentText = '';
 	}

@@ -9,6 +9,31 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-08
+
+The 0.4 line is the first prepared for public GitHub distribution.
+
+### Added
+
+- **Automatic updates from GitHub.** The manifest now points Zotero at
+  `updates.json` on the repository's main branch, and the release workflow
+  regenerates that file — with the release's sha256 — on every tag. Once a
+  user has any v0.4.0+ build installed, Zotero downloads and installs each new
+  release on its own; no manual `.xpi` re-install. `scripts/gen-updates.mjs`
+  produces the manifest, and the CI tag build publishes the release and commits
+  the pointer back to main.
+
+### Fixed
+
+- **划词解析 chip never disappeared.** Its `#id` style rule out-specified the
+  UA `[hidden]` rule, so hiding it had no visual effect — it now hides through
+  a dedicated attribute and reliably auto-dismisses.
+- **Clicking the 解析 chip did nothing.** A stray document-level mousedown
+  cleared the captured text before the click ran; the click now also falls
+  back to the live selection, and an over-chip guard stops the mousedown from
+  dismissing the chip mid-interaction. The idle auto-hide now runs on the
+  plugin's own timer rather than through the content window.
+
 ## [0.3.11] — 2026-08-08
 
 ### Fixed
@@ -552,7 +577,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.11...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.11...v0.4.0
 [0.3.11]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.9...v0.3.10
 [0.3.9]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.8...v0.3.9

@@ -43,6 +43,11 @@ back into the English line breaks.
 
 Requires **Zotero 9.0.x**. macOS, Windows and Linux.
 
+Once installed, PaperMirror **updates itself**: Zotero checks this repository for
+new releases and installs them automatically (Add-ons → ⚙ → *Check for Updates*
+forces an immediate check). Every GitHub release published from v0.4.0 onward is
+picked up this way — no need to download the `.xpi` again.
+
 ## Translation engines
 
 Bring your own key. No developer keys are bundled, and a key is never sent
