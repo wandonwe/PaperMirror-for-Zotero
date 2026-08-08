@@ -7,7 +7,7 @@ The latest release is supported. This project is pre-1.0; fixes land on `main`.
 ## Reporting a vulnerability
 
 Please open a
-[private security advisory](https://github.com/wandonwe/papermirror-zotero/security/advisories/new)
+[private security advisory](https://github.com/wandonwe/PaperMirror-for-Zotero/security/advisories/new)
 rather than a public issue, and allow a little time for a fix before disclosure.
 
 Especially interested in:

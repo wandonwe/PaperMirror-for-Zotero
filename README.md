@@ -10,7 +10,7 @@ A bilingual reading mode for Zotero's built-in PDF reader. The original paper
 stays exactly as printed on one side; the same page, re-flowed in your language,
 sits beside it.
 
-[![CI](https://github.com/wandonwe/papermirror-zotero/actions/workflows/ci.yml/badge.svg)](https://github.com/wandonwe/papermirror-zotero/actions/workflows/ci.yml)
+[![CI](https://github.com/wandonwe/PaperMirror-for-Zotero/actions/workflows/ci.yml/badge.svg)](https://github.com/wandonwe/PaperMirror-for-Zotero/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Zotero 9.0](https://img.shields.io/badge/Zotero-9.0.x-CC2936.svg)](https://www.zotero.org/)
 
@@ -36,7 +36,7 @@ back into the English line breaks.
 
 ## Install
 
-1. Download the latest `.xpi` from [Releases](https://github.com/wandonwe/papermirror-zotero/releases).
+1. Download the latest `.xpi` from [Releases](https://github.com/wandonwe/PaperMirror-for-Zotero/releases).
 2. In Zotero: **Tools → Add-ons → ⚙ → Install Add-on From File…**
 3. Open **Settings → PaperMirror**, choose a translation engine, and paste an
    API key if that engine needs one.

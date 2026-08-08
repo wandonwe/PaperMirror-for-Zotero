@@ -21,7 +21,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
 
-const REPO = 'wandonwe/papermirror-zotero';
+const REPO = 'wandonwe/PaperMirror-for-Zotero';
 const ADDON_ID = manifest.applications.zotero.id;
 const version = pkg.version;
 const zoteroApp = {
