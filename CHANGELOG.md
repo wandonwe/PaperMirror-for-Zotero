@@ -9,6 +9,14 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-08-08
+
+### Changed
+
+- Adopted the Chinese name **文镜** ("a mirror for text"). It now appears
+  alongside PaperMirror in the add-on's name (Zotero's add-ons list), the
+  settings pane label, and the README home page. No functional changes.
+
 ## [0.6.0] — 2026-08-08
 
 First stable release. Same reader, now presented as a finished project.
@@ -698,7 +706,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.1...v0.5.2

@@ -2,7 +2,7 @@
 
 <img src="assets/icons/icon128.png" width="96" alt="PaperMirror">
 
-# PaperMirror for Zotero
+# PaperMirror 文镜 · for Zotero
 
 **中英对照阅读 · 版面级重排 · 就地覆盖翻译**
 **Bilingual side‑by‑side reading, layout‑faithful, right inside Zotero**
@@ -22,7 +22,7 @@
 
 ## 中文
 
-在 Zotero 自带的 PDF 阅读器里直接对照阅读外文文献:一边是**原版 PDF**(排版、图表、公式原封不动),另一边是**按版面重排的整页译文**,大小与原文一致、逐段对齐。图表、表格、公式、分栏、页眉页脚等都从原页原样保留,只有正文被替换并重新排版,不会被硬塞进原文的换行里。
+**PaperMirror(文镜)** —— 文字之镜,原文与译文两相映照。在 Zotero 自带的 PDF 阅读器里直接对照阅读外文文献:一边是**原版 PDF**(排版、图表、公式原封不动),另一边是**按版面重排的整页译文**,大小与原文一致、逐段对齐。图表、表格、公式、分栏、页眉页脚等都从原页原样保留,只有正文被替换并重新排版,不会被硬塞进原文的换行里。
 
 ### 三种阅读模式
 

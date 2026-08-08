@@ -1,4 +1,4 @@
-papermirror-prefpane-label = PaperMirror 雙語閱讀
+papermirror-prefpane-label = PaperMirror 文鏡
 papermirror-toolbar-toggle = 中英對照閱讀
 papermirror-explain = 解析
 papermirror-explain-tip = 解析 PDF 中選取的文字(先選取,再點這裡)

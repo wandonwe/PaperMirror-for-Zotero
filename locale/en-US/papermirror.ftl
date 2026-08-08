@@ -1,4 +1,4 @@
-papermirror-prefpane-label = PaperMirror
+papermirror-prefpane-label = PaperMirror 文镜
 papermirror-toolbar-toggle = Bilingual reading (中英对照)
 papermirror-explain = Explain
 papermirror-explain-tip = Explain the text selected in the PDF (select first, then click here)
