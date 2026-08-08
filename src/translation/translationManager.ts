@@ -27,6 +27,14 @@ import { chunkBlocks, trailingContext } from './segmenter';
 const MODULE = 'translationManager';
 
 /**
+ * After the batch retry, at most this many blocks are salvaged one by one.
+ * A single-block request cannot suffer id drift, so it converts almost every
+ * survivor; the cap only bounds the cost when a provider is systematically
+ * dropping ids (which the error path below then reports).
+ */
+const MAX_SALVAGE_BLOCKS = 8;
+
+/**
  * Absolute ceiling for one page end to end (extraction + all chunks). Long
  * pages with several chunks are fine at 60 s per request; five minutes means
  * something is stuck, not slow.
@@ -259,6 +267,7 @@ export class TranslationManager {
 		const chunks = chunkBlocks(blocks);
 		let previous: SourceBlock[] = [];
 		const results: TranslatedBlock[] = [];
+		let untranslatedCount = 0;
 
 		for (const chunk of chunks) {
 			if (signal.aborted) {
@@ -305,6 +314,49 @@ export class TranslationManager {
 				}
 			}
 
+			// Salvage: any id STILL missing gets its own single-block request.
+			// LLM providers sometimes drop or rename ids in a batched response;
+			// with exactly one block in the request the answer cannot misalign.
+			// Without this pass the block silently stayed English and the page
+			// rendered mixed-language (the JACC report).
+			const stillMissing = chunk.filter(b => !received.has(b.id));
+			if (stillMissing.length) {
+				logger.warn(MODULE, `Salvaging ${stillMissing.length} block(s) one by one on page ${pageIndex}`);
+				for (const block of stillMissing.slice(0, MAX_SALVAGE_BLOCKS)) {
+					if (signal.aborted) {
+						throw new PaperMirrorError('CANCELLED', 'cancelled');
+					}
+					const pb = protectedBlocks.find(p => p.block.id === block.id)!;
+					try {
+						const single = await this.deps.translateRequest(
+							{ ...request, previousContext: '', blocks: [{ id: block.id, type: block.type, text: pb.text }] },
+							signal
+						);
+						// One block in → whatever comes back IS its translation,
+						// even if the model rewrote the id.
+						const first = single.translations.find(t => t.translatedText.trim().length > 0);
+						if (first) {
+							received.set(block.id, first.translatedText);
+						}
+					}
+					catch (e) {
+						if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
+							throw e;
+						}
+						logger.warn(MODULE, `Salvage request failed for ${block.id}`, e);
+					}
+				}
+			}
+
+			const unrecovered = chunk.filter(b => !received.has(b.id));
+			if (unrecovered.length) {
+				untranslatedCount += unrecovered.length;
+				logger.warn(
+					MODULE,
+					`Page ${pageIndex + 1}: ${unrecovered.length} block(s) untranslated after salvage: ${unrecovered.map(b => b.id).join(', ')}`
+				);
+			}
+
 			for (const block of chunk) {
 				const raw = received.get(block.id);
 				if (raw === undefined) {
@@ -325,6 +377,15 @@ export class TranslationManager {
 
 		state.status = 'done';
 		this.notify(state);
-		await this.deps.writeCache(pageIndex, blocks, results);
+		// Only a COMPLETE page enters the cache. Caching a partial page would
+		// freeze the mixed-language rendering: every revisit would hit the
+		// cache and never retry the missing blocks. Left uncached, the next
+		// visit (or 重新翻译) runs the whole pipeline again.
+		if (untranslatedCount === 0) {
+			await this.deps.writeCache(pageIndex, blocks, results);
+		}
+		else {
+			logger.warn(MODULE, `Page ${pageIndex + 1} left uncached (${untranslatedCount} untranslated block(s)) so a revisit retries`);
+		}
 	}
 }

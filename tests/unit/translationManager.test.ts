@@ -81,6 +81,70 @@ test('retries only missing ids', async () => {
 	manager.dispose();
 });
 
+test('salvage: ids dropped by batch AND retry get single-block requests', async () => {
+	// The JACC mixed-language page: the provider answers batches but keeps
+	// omitting one block's id. The batch retry ALSO omits it. Only a
+	// single-block request converges — and even then the model may rewrite
+	// the id, which must not matter when there is exactly one block.
+	const singleRequests: string[] = [];
+	const { deps } = makeDeps({
+		translateRequest: async (request) => {
+			if (request.blocks.length === 1) {
+				singleRequests.push(request.blocks[0]!.id);
+				// Model rewrites the id — salvage must still accept it.
+				return { translations: [{ id: 'whatever-the-model-said', translatedText: '单独救回' }] };
+			}
+			// Batches always drop the last block, batch retry included.
+			return {
+				translations: request.blocks.slice(0, -1).map(b => ({ id: b.id, translatedText: '批量' }))
+			};
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 10);
+	const state = manager.getPageState(0)!;
+	assert.equal(state.status, 'done');
+	assert.equal(state.translations.size, 2, 'every block translated');
+	assert.equal(state.translations.get('page-0-block-1'), '单独救回');
+	assert.ok(singleRequests.includes('page-0-block-1'), 'the dropped id went out as a single-block request');
+	manager.dispose();
+});
+
+test('a page with unrecovered blocks is NOT cached, so a revisit retries', async () => {
+	let failSalvage = true;
+	let translateCalls = 0;
+	const { deps } = makeDeps({
+		translateRequest: async (request) => {
+			translateCalls++;
+			if (request.blocks.length === 1 && failSalvage) {
+				// Even the salvage request fails for this block.
+				const { PaperMirrorError } = await import('../../src/types/models');
+				throw new PaperMirrorError('NETWORK', 'flaky');
+			}
+			if (request.blocks.length === 1) {
+				return { translations: [{ id: request.blocks[0]!.id, translatedText: '第二次成功' }] };
+			}
+			return { translations: request.blocks.slice(0, -1).map(b => ({ id: b.id, translatedText: '批量' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 10);
+	assert.equal(manager.getPageState(0)!.status, 'done', 'partial page still shows what it has');
+	assert.equal(manager.getPageState(0)!.translations.size, 1);
+	assert.ok(translateCalls > 0);
+
+	// Next session: the flaky failure is gone. Because the partial page was
+	// never cached, the pipeline runs again and completes.
+	failSalvage = false;
+	const manager2 = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager2.ensurePage(0, 10);
+	const state2 = manager2.getPageState(0)!;
+	assert.equal(state2.fromCache, undefined, 'partial result was not served from cache');
+	assert.equal(state2.translations.size, 2, 'revisit completes the page');
+	manager.dispose();
+	manager2.dispose();
+});
+
 test('no-text-layer surfaces as its own status', async () => {
 	const { deps } = makeDeps({
 		extractPage: async () => {

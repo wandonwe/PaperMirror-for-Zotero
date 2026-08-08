@@ -9,6 +9,23 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.3.6] — 2026-08-08
+
+### Fixed
+
+- **Mixed-language pages (中英混排).** LLM providers sometimes drop block ids
+  from a batched response; the manager retried the missing ids once as a
+  batch and then silently gave up, leaving those regions untranslated —
+  English paragraphs interleaved with Chinese ones in a single column (the
+  JACC report). Ids still missing after the batch retry are now salvaged one
+  request per block (a single-block answer cannot misalign, and the
+  translation is accepted even when the model rewrites the id), capped at 8
+  per chunk.
+- A page that still has untranslated blocks after salvage is no longer
+  written to the cache: previously the partial page was cached and every
+  revisit re-served the mixed rendering forever. Left uncached, the next
+  visit — or 重新翻译 — runs the whole pipeline again and completes it.
+
 ## [0.3.5] — 2026-08-08
 
 ### Fixed
@@ -454,7 +471,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.2...v0.3.3
