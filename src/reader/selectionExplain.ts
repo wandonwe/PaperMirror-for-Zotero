@@ -69,6 +69,7 @@ export class SelectionExplainButton {
 	private onMouseUp: ((event: MouseEvent) => void) | null = null;
 	private onMouseDown: ((event: MouseEvent) => void) | null = null;
 	private onScroll: (() => void) | null = null;
+	private onSelectionChange: (() => void) | null = null;
 	private attachTimer: ReturnType<typeof setInterval> | null = null;
 	private showTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -142,9 +143,29 @@ export class SelectionExplainButton {
 				this.hide();
 			};
 			this.onScroll = (): void => this.hide();
+			// The authoritative "not selected → hidden" signal: the moment the
+			// selection collapses (a click anywhere, keyboard nav, another app
+			// clearing it), the chip goes away. mouseup only ever SHOWS it.
+			this.onSelectionChange = (): void => {
+				if (!this.enabled || this.destroyed) {
+					return;
+				}
+				let text = '';
+				try {
+					const sel = this.win?.getSelection?.();
+					text = sel ? String(sel.toString()).trim() : '';
+				}
+				catch {
+					text = '';
+				}
+				if (!text) {
+					this.hide();
+				}
+			};
 
 			this.doc.addEventListener('mouseup', this.onMouseUp, true);
 			this.doc.addEventListener('mousedown', this.onMouseDown, true);
+			this.doc.addEventListener('selectionchange', this.onSelectionChange);
 			// PDF.js scrolls #viewerContainer, not the window; catch both.
 			this.win.addEventListener('scroll', this.onScroll, true);
 			return true;
@@ -276,6 +297,9 @@ export class SelectionExplainButton {
 			if (this.win && this.onScroll) {
 				this.win.removeEventListener('scroll', this.onScroll, true);
 			}
+			if (this.doc && this.onSelectionChange) {
+				this.doc.removeEventListener('selectionchange', this.onSelectionChange);
+			}
 			this.chip?.remove();
 			adapter.removePdfStyle(this.reader, STYLE_ID);
 		}
@@ -288,5 +312,6 @@ export class SelectionExplainButton {
 		this.onMouseUp = null;
 		this.onMouseDown = null;
 		this.onScroll = null;
+		this.onSelectionChange = null;
 	}
 }

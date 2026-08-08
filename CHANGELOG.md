@@ -9,6 +9,20 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.3.10] — 2026-08-08
+
+### Fixed
+
+- The 划词解析 chip now hides the instant the selection collapses. A
+  `selectionchange` listener is the authoritative "nothing selected → hidden"
+  signal (mouse-up only ever shows it), so the button is present only while
+  text is actually selected and never lingers on the page.
+
+### Changed
+
+- Removed the explanatory sub-line under the 划词解析按钮 setting; the
+  checkbox label alone is enough.
+
 ## [0.3.9] — 2026-08-08
 
 ### Changed
@@ -521,7 +535,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.9...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.10...HEAD
+[0.3.10]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.9...v0.3.10
 [0.3.9]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.6...v0.3.7
