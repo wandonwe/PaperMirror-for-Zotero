@@ -9,6 +9,25 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.3.9] — 2026-08-08
+
+### Changed
+
+- **划词解析 no longer lives in Zotero's shared selection popup.** The button
+  that appeared among the highlight swatches (where every translation/note
+  plugin competes for space and order) has been removed. Selecting text in
+  the PDF now floats our own standalone 「解析」 chip just under the selection —
+  it belongs to no shared surface, so nothing else can push it around. It
+  hides on the next click, scroll, or empty selection.
+- 讲解 renamed to **解析** throughout the UI.
+
+### Added
+
+- 阅读界面 settings gain a **划词解析按钮** toggle (default on). Turn it off
+  and the selection chip disappears entirely; 解析 is still available by
+  double-clicking a paragraph in the 译文 pane. The toggle applies to every
+  open reader immediately.
+
 ## [0.3.8] — 2026-08-08
 
 ### Changed
@@ -502,7 +521,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.8...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.9...HEAD
+[0.3.9]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.5...v0.3.6

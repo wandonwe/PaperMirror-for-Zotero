@@ -15,7 +15,7 @@
  */
 
 import { getString } from '../utils/l10n';
-import { getPref, setPref } from '../utils/prefs';
+import { getPref, setPref, registerPrefObserver, unregisterPrefObserver } from '../utils/prefs';
 import * as logger from '../utils/logger';
 import { ReaderSession, type ViewMode } from './readerSession';
 import { TextExtractor } from './textExtractor';
@@ -150,6 +150,7 @@ export class ReaderToolbarController {
 	private lastTranslatedMode = new Map<string, ViewMode>();
 	private busy = new Set<string>();
 	private notifierID: string | null = null;
+	private selectionPrefObserver: symbol | string | null = null;
 	private handler: ((event: ZoteroReaderEvent) => void) | null = null;
 	private disposed = false;
 
@@ -162,8 +163,9 @@ export class ReaderToolbarController {
 		// pluginID is REQUIRED: Zotero auto-unregisters by pluginID at shutdown
 		// (manual unregisterEventListener is broken in 9.0.6 — see adapter).
 		adapter.registerToolbarListener(this.pluginID, this.handler);
-		// 选中文字弹窗中的「讲解」按钮 (Read Frog-style deep explanation)
-		adapter.registerSelectionPopupListener(this.pluginID, event => this.renderSelectionPopup(event));
+		// 划词「解析」不再注入 Zotero 的共享划词弹窗 (色块 + 批注 A) —— 所有翻译/
+		// 笔记插件都往那里塞按钮,互相冲突。改由每个 session 自己在选区下方浮出
+		// 独立按钮 (SelectionExplainButton),可在设置中开关。
 
 		// Close sessions when their tab closes; keep an eye on file deletes.
 		this.notifierID = Zotero.Notifier.registerObserver(
@@ -185,6 +187,14 @@ export class ReaderToolbarController {
 			'papermirror-toolbar'
 		);
 
+		// Toggling 划词解析 in settings takes effect on every open reader at once.
+		this.selectionPrefObserver = registerPrefObserver('selectionExplainButton', (value) => {
+			const enabled = value !== false;
+			for (const session of this.sessions.values()) {
+				session.setSelectionExplainEnabled(enabled);
+			}
+		});
+
 		// Existing readers: inject the switcher directly (their toolbars
 		// rendered before our listener registered) AND nudge a re-render.
 		for (const reader of adapter.getAllReaders()) {
@@ -194,39 +204,6 @@ export class ReaderToolbarController {
 			}
 		}
 		logger.info(MODULE, `Toolbar controller initialized (${adapter.getAllReaders().length} open reader(s))`);
-	}
-
-	/**
-	 * Selection popup: offer 「讲解」 when a bilingual session is active for
-	 * this reader. append() must be called synchronously (custom-sections
-	 * contract), so the async work happens in the click handler.
-	 */
-	private renderSelectionPopup(event: ZoteroReaderEvent): void {
-		if (this.disposed) {
-			return;
-		}
-		try {
-			const { reader, doc, params, append } = event;
-			const session = this.sessions.get(this.sessionKey(reader as ReaderLike));
-			if (!session) {
-				return;
-			}
-			const selectedText: string = String(params?.annotation?.text ?? '');
-			if (!selectedText.trim()) {
-				return;
-			}
-			const button = doc.createElement('button');
-			button.className = 'pm-bilingual-explain-popup-btn';
-			button.textContent = getString('papermirror-explain');
-			button.style.cssText = 'margin:2px;padding:2px 8px;font-size:12px;cursor:pointer;';
-			button.addEventListener('click', () => {
-				void session.explainSelection(selectedText);
-			});
-			append(button);
-		}
-		catch (e) {
-			logger.warn(MODULE, 'renderTextSelectionPopup handler failed', e);
-		}
 	}
 
 	private ensureStyle(doc: Document): void {
@@ -669,6 +646,10 @@ export class ReaderToolbarController {
 		if (this.notifierID) {
 			Zotero.Notifier.unregisterObserver(this.notifierID);
 			this.notifierID = null;
+		}
+		if (this.selectionPrefObserver) {
+			unregisterPrefObserver(this.selectionPrefObserver);
+			this.selectionPrefObserver = null;
 		}
 		// The renderToolbar listener itself is removed by Zotero via pluginID
 		// on shutdown. For disable-without-restart, our handler also checks
