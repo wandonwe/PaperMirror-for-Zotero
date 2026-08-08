@@ -9,6 +9,22 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-08
+
+First stable release. Same reader, now presented as a finished project.
+
+### Added
+
+- Bilingual (中文 / English) GitHub home page with a step‑by‑step usage guide,
+  an FAQ, and a language switcher — covering the three reading modes, install
+  and auto‑update, translation engines and BYOK, the glossary, and privacy.
+
+### Notes
+
+- No functional changes to the reader from 0.5.3; 0.6.0 marks the point where
+  the feature set, the auto‑update pipeline (release‑asset `updates.json` via
+  the latest‑release alias) and the VS Code‑only publish flow are all settled.
+
 ## [0.5.3] — 2026-08-08
 
 ### Changed
@@ -682,7 +698,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.0...v0.5.1
