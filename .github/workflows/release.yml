@@ -33,35 +33,20 @@ jobs:
             exit 1
           fi
 
+      # Build the auto-update manifest for THIS release and ship it as a release
+      # asset. The plugin's update_url is the latest-release alias
+      # (releases/latest/download/updates.json), so uploading it here is all it
+      # takes for installed copies to see the new version — nothing is ever
+      # committed to main, so branch protection and concurrent tag builds can no
+      # longer stall auto-update. The version comes from the tag, not
+      # package.json, so a stray checkout can't change it.
+      - name: Generate updates.json
+        run: node scripts/gen-updates.mjs "${GITHUB_REF_NAME#v}"
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.xpi
+          files: |
+            dist/*.xpi
+            updates.json
           generate_release_notes: true
-
-      # Point the auto-update manifest at the just-published XPI. Zotero polls
-      # updates.json on main; committing it here is what makes installed copies
-      # upgrade themselves to this release.
-      #
-      # Sync to the true remote main FIRST (reset --hard origin/main): a tag
-      # build starts in detached HEAD at the tag, and if two tags are pushed
-      # close together the second build would otherwise regenerate against a
-      # stale main and its push would be rejected — which is exactly how
-      # updates.json got stuck at an old version. The tag version is passed
-      # EXPLICITLY so `gen-updates` can never read the wrong package.json.
-      - name: Update updates.json on main
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          XPI="dist/zotero-bilingual-reader-${VERSION}.xpi"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git checkout -B main origin/main
-          node scripts/gen-updates.mjs "$VERSION" "$XPI"
-          if git diff --quiet updates.json; then
-            echo "updates.json already current"
-          else
-            git add updates.json
-            git commit -m "chore(release): point updates.json at v${VERSION}"
-            git push origin main
-          fi

@@ -9,6 +9,22 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-08-08
+
+### Changed
+
+- **Auto-update no longer depends on committing to main.** `updates.json` is
+  now published as a *release asset* on every tag, and the manifest's
+  `update_url` points at GitHub's latest-release alias
+  (`releases/latest/download/updates.json`). Previously the release workflow
+  tried to commit the manifest back to `main`; that push kept being rejected
+  (branch protection / concurrent tag builds), so `updates.json` stayed stuck
+  at 0.4.2 and Zotero reported "No updates found" even though newer releases
+  existed. Nothing is written to `main` anymore, so the stall cannot recur.
+- Dropped `update_hash` from the manifest: a hash that had to match a build
+  byte-for-byte only ever produced mismatches between locally-built and
+  CI-built XPIs. The XPI is fetched over HTTPS from the project's own release.
+
 ## [0.5.1] — 2026-08-08
 
 ### Fixed
@@ -651,7 +667,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.2...v0.4.3
