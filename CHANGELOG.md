@@ -9,6 +9,18 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.4.2] — 2026-08-08
+
+### Fixed
+
+- CI/release builds failed on Node 20: the test runner passed a
+  `build/tests/**/*.test.mjs` glob to `node --test`, but Node only expands
+  test globs itself from v21 — on 20 the literal pattern "could not be
+  found" and the release workflow died before publishing. The runner now
+  lists the compiled test files explicitly, which works on every Node
+  version. (v0.4.1 never got a published release because of this; 0.4.2 is
+  the first tag the workflow publishes.)
+
 ## [0.4.1] — 2026-08-08
 
 ### Changed
@@ -588,7 +600,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.3.11...v0.4.0
 [0.3.11]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.3.10...v0.3.11

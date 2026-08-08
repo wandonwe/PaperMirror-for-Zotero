@@ -4,7 +4,7 @@
  */
 
 import { build } from 'esbuild';
-import { readdirSync, mkdirSync, rmSync } from 'node:fs';
+import { readdirSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -36,7 +36,27 @@ async function main() {
 		outExtension: { '.js': '.mjs' },
 		external: ['node:*']
 	});
-	const result = spawnSync(process.execPath, ['--test', join(outDir, '**', '*.test.mjs')], { stdio: 'inherit', shell: false });
+	// List the compiled files explicitly instead of passing a glob: `node
+	// --test` only expands glob patterns itself from Node 21, so the glob
+	// broke CI on Node 20 ("Could not find .../**/*.test.mjs").
+	const compiled = [];
+	const walk = (dir) => {
+		for (const name of readdirSync(dir)) {
+			const path = join(dir, name);
+			if (statSync(path).isDirectory()) {
+				walk(path);
+			}
+			else if (name.endsWith('.test.mjs')) {
+				compiled.push(path);
+			}
+		}
+	};
+	walk(outDir);
+	if (!compiled.length) {
+		console.error('No compiled test files found.');
+		process.exit(1);
+	}
+	const result = spawnSync(process.execPath, ['--test', ...compiled], { stdio: 'inherit', shell: false });
 	process.exit(result.status ?? 1);
 }
 

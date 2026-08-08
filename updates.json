@@ -3,15 +3,15 @@
 		"zotero-bilingual-reader@local": {
 			"updates": [
 				{
-					"version": "0.4.1",
-					"update_link": "https://github.com/wandonwe/PaperMirror-for-Zotero/releases/download/v0.4.1/zotero-bilingual-reader-0.4.1.xpi",
+					"version": "0.4.2",
+					"update_link": "https://github.com/wandonwe/PaperMirror-for-Zotero/releases/download/v0.4.2/zotero-bilingual-reader-0.4.2.xpi",
 					"applications": {
 						"zotero": {
 							"strict_min_version": "9.0",
 							"strict_max_version": "9.0.*"
 						}
 					},
-					"update_hash": "sha256:87a5c6a7dff6204bd505374708f2ba84668f6a08b1e959a03cc5d8ddffe73471"
+					"update_hash": "sha256:72b7b1b4b2c961c7d595bbf2fc6d605b623ae0d687681b3ca307250b90f2502c"
 				}
 			]
 		}
