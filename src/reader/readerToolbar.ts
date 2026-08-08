@@ -15,7 +15,7 @@
  */
 
 import { getString } from '../utils/l10n';
-import { getPref, setPref, registerPrefObserver, unregisterPrefObserver } from '../utils/prefs';
+import { getPref, setPref } from '../utils/prefs';
 import * as logger from '../utils/logger';
 import { ReaderSession, type ViewMode } from './readerSession';
 import { TextExtractor } from './textExtractor';
@@ -165,7 +165,6 @@ export class ReaderToolbarController {
 	private lastTranslatedMode = new Map<string, ViewMode>();
 	private busy = new Set<string>();
 	private notifierID: string | null = null;
-	private selectionPrefObserver: symbol | string | null = null;
 	private handler: ((event: ZoteroReaderEvent) => void) | null = null;
 	private disposed = false;
 
@@ -178,9 +177,11 @@ export class ReaderToolbarController {
 		// pluginID is REQUIRED: Zotero auto-unregisters by pluginID at shutdown
 		// (manual unregisterEventListener is broken in 9.0.6 — see adapter).
 		adapter.registerToolbarListener(this.pluginID, this.handler);
-		// 划词「解析」不再注入 Zotero 的共享划词弹窗 (色块 + 批注 A) —— 所有翻译/
-		// 笔记插件都往那里塞按钮,互相冲突。改由每个 session 自己在选区下方浮出
-		// 独立按钮 (SelectionExplainButton),可在设置中开关。
+		// 「解析」 lives in the 译文面板 menu bar (a fixed button that explains
+		// the current PDF selection). It is deliberately NOT in Zotero's shared
+		// text-selection popup — every translation/note plugin crowds that popup
+		// and the buttons collide — and not a floating chip either (the chip
+		// fought the reader's selection events and never behaved reliably).
 
 		// Close sessions when their tab closes; keep an eye on file deletes.
 		this.notifierID = Zotero.Notifier.registerObserver(
@@ -201,14 +202,6 @@ export class ReaderToolbarController {
 			['tab'],
 			'papermirror-toolbar'
 		);
-
-		// Toggling 划词解析 in settings takes effect on every open reader at once.
-		this.selectionPrefObserver = registerPrefObserver('selectionExplainButton', (value) => {
-			const enabled = value !== false;
-			for (const session of this.sessions.values()) {
-				session.setSelectionExplainEnabled(enabled);
-			}
-		});
 
 		// Existing readers: inject the switcher directly (their toolbars
 		// rendered before our listener registered) AND nudge a re-render.
@@ -690,10 +683,6 @@ export class ReaderToolbarController {
 		if (this.notifierID) {
 			Zotero.Notifier.unregisterObserver(this.notifierID);
 			this.notifierID = null;
-		}
-		if (this.selectionPrefObserver) {
-			unregisterPrefObserver(this.selectionPrefObserver);
-			this.selectionPrefObserver = null;
 		}
 		// The renderToolbar listener itself is removed by Zotero via pluginID
 		// on shutdown. For disable-without-restart, our handler also checks

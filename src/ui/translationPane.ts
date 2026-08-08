@@ -34,6 +34,7 @@ export interface PaneStrings {
 	eyebrow: string;
 	title: string;
 	explain: string;
+	explainTip: string;
 	explainTitle: string;
 	explainSubtitle: string;
 	explainCopy: string;
@@ -69,6 +70,8 @@ export interface PaneCallbacks {
 	onExplainBlock(pageIndex: number, blockId: string): void;
 	onCopyExplanation(): void;
 	onSaveExplanationNote(): void;
+	/** 菜单栏「解析」按钮 — explain the current PDF selection. */
+	onExplainSelection(): void;
 	onToggleShowOriginal(enabled: boolean): void;
 	onToggleOverlay(enabled: boolean): void;
 	onToggleSync(enabled: boolean): void;
@@ -696,6 +699,7 @@ export class TranslationPane {
 			this.iconButton(ICON_PATHS.refresh, this.strings.retranslate, () => this.callbacks.onRetranslate(), 'pm-refresh'),
 			this.el('span', 'pm-bar-spacer'),
 			this.syncSwitch,
+			this.textButton('pm-bar-action', `✦ ${this.strings.explain}`, this.strings.explainTip, () => this.callbacks.onExplainSelection()),
 			this.textButton('pm-bar-action', this.strings.saveNote, this.strings.saveNote, () => this.callbacks.onSaveNote()),
 			this.el('span', 'pm-bar-sep'),
 			this.makeSideButton(),

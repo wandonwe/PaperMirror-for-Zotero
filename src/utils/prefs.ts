@@ -39,7 +39,6 @@ export type PrefKey
 	| 'promptVersion'
 	| 'apiKeyFallback'
 	| 'parallelProviders'
-	| 'selectionExplainButton'
 	| 'layoutMigration';
 
 export function getPref<T = unknown>(key: PrefKey, fallback?: T): T {

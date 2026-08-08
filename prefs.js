@@ -44,9 +44,6 @@ pref('extensions.zotero.bilingualReader.overlayDisplayMode', 'dim-original');
 pref('extensions.zotero.bilingualReader.overlayFitMode', 'expand');
 // 覆盖模式下鼠标悬停在译文段落上时,掀开该段遮罩显示原文
 pref('extensions.zotero.bilingualReader.overlayPeekHover', true);
-// 划词解析: 在 PDF 中选中文字后,选区下方浮出独立的「解析」按钮 (不再挤进
-// Zotero 共享划词弹窗,避免与其他插件冲突)。关闭后可改用译文面板里双击段落。
-pref('extensions.zotero.bilingualReader.selectionExplainButton', true);
 // 架构迁移标记: 1 = 已迁移到覆盖渲染器默认值
 pref('extensions.zotero.bilingualReader.layoutMigration', 0);
 // 并行翻译服务商 (JSON 数组): 与主服务商轮流分担页面, 各自使用自己的密钥。

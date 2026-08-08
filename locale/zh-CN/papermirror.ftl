@@ -2,6 +2,7 @@ papermirror-prefpane-label = PaperMirror 双语阅读
 papermirror-toolbar-toggle = 中英对照阅读
 papermirror-show-original = 显示原文对照
 papermirror-explain = 解析
+papermirror-explain-tip = 解析 PDF 中选中的文字(先选中,再点这里)
 papermirror-explain-title = 深度解析
 papermirror-explain-no-selection = 请先在 PDF 中选中要解析的文字,或双击一个译文段落。
 papermirror-explain-needs-llm = 解析功能需要 LLM 服务商(如 DeepSeek、Kimi、Claude);免费必应/谷歌引擎不支持解析。

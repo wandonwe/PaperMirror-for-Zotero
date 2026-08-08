@@ -9,6 +9,17 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-08-08
+
+### Changed
+
+- **解析 moved into the 译文面板 menu bar.** The floating selection chip is
+  gone — it fought the reader's selection events and never behaved reliably.
+  In its place, a fixed 「✦ 解析」 button sits in the pane's top bar next to
+  保存到笔记: select text in the PDF (or click a 译文 paragraph) and press it.
+  With nothing selected it shows the "select text first" hint. The 划词解析按钮
+  setting was removed along with the chip.
+
 ## [0.4.0] — 2026-08-08
 
 The 0.4 line is the first prepared for public GitHub distribution.
@@ -577,7 +588,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.3.11...v0.4.0
 [0.3.11]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.3.9...v0.3.10

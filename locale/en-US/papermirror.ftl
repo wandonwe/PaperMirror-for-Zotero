@@ -2,6 +2,7 @@ papermirror-prefpane-label = PaperMirror
 papermirror-toolbar-toggle = Bilingual reading (中英对照)
 papermirror-show-original = Show original
 papermirror-explain = Explain
+papermirror-explain-tip = Explain the text selected in the PDF (select first, then click here)
 papermirror-explain-title = Deep explanation
 papermirror-explain-no-selection = Select text in the PDF (or click a translated paragraph) first.
 papermirror-explain-needs-llm = Explanation requires an LLM provider (e.g. DeepSeek, Kimi, Claude); the free Bing/Google engines cannot explain.

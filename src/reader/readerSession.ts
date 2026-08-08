@@ -31,7 +31,6 @@ import { getPref, setPref } from '../utils/prefs';
 import { detectLanguage, defaultTargetFor, sourceCodeFor } from '../utils/languageDetector';
 import { createSyncController, type SyncController } from './scrollSynchronizer';
 import { PdfOverlay, type OverlayDisplayMode } from './pdfOverlay';
-import { SelectionExplainButton } from './selectionExplain';
 import { createSplitView, type SplitViewHandles } from './splitView';
 import { TextExtractor } from './textExtractor';
 import * as adapter from './zoteroReaderAdapter';
@@ -55,6 +54,7 @@ function paneStrings(): PaneStrings {
 		eyebrow: 'PAPERMIRROR',
 		title: getString('papermirror-pane-title'),
 		explain: getString('papermirror-explain'),
+		explainTip: getString('papermirror-explain-tip'),
 		explainTitle: getString('papermirror-explain-title'),
 		explainSubtitle: getString('papermirror-explain-subtitle'),
 		explainCopy: getString('papermirror-explain-copy'),
@@ -105,7 +105,6 @@ export class ReaderSession {
 	private manager: TranslationManager | null = null;
 	private sync: SyncController | null = null;
 	private overlay: PdfOverlay | null = null;
-	private selectExplain: SelectionExplainButton | null = null;
 	private pollTimer: ReturnType<typeof setInterval> | null = null;
 	private lastPageIndex = -1;
 	private fileHash = '';
@@ -170,6 +169,9 @@ export class ReaderSession {
 			},
 			onCopyExplanation: () => this.copyExplanation(),
 			onSaveExplanationNote: () => void this.saveExplanationToNote(),
+			// 菜单栏「解析」: explains the current PDF selection, or the
+			// highlighted 译文 block, or asks the reader to select text first.
+			onExplainSelection: () => void this.explainSelection(),
 			onToggleShowOriginal: enabled => setPref('showOriginal', enabled),
 			onToggleOverlay: enabled => this.applyOverlay(enabled, true),
 			onToggleSync: enabled => this.setSyncEnabled(enabled),
@@ -199,15 +201,6 @@ export class ReaderSession {
 		this.overlay.setDisplayMode(getPref<OverlayDisplayMode>('overlayDisplayMode', 'dim-original'));
 		this.overlay.setPeekOnHover(getPref<boolean>('overlayPeekHover', true));
 		this.overlay.setFitMode(getPref<'strict' | 'expand'>('overlayFitMode', 'expand'));
-		// 划词解析: our own chip anchored under the selection, replacing the
-		// button that used to crowd Zotero's shared selection popup. Off = the
-		// reader relies on double-clicking a paragraph in the 译文 pane instead.
-		this.selectExplain = new SelectionExplainButton(this.reader, {
-			label: getString('papermirror-explain'),
-			onExplain: text => void this.explainSelection(text)
-		});
-		this.selectExplain.setEnabled(getPref<boolean>('selectionExplainButton', true));
-		this.selectExplain.setLabel(getString('papermirror-explain'));
 		this.pane.setArticleFontSize(getPref<number>('articleFontSize', 16));
 		// 整页对照: the pane shows the whole document; each page renders as
 		// the original until its translation completes, then swaps.
@@ -1078,11 +1071,6 @@ export class ReaderSession {
 		}
 	}
 
-	/** Live toggle for the 划词解析 floating button (settings observer). */
-	setSelectionExplainEnabled(enabled: boolean): void {
-		this.selectExplain?.setEnabled(enabled);
-	}
-
 	/**
 	 * 选中句子解析 (Read Frog-style analysis): explain the current PDF
 	 * selection — or the highlighted block — using the configured LLM.
@@ -1243,8 +1231,6 @@ export class ReaderSession {
 		}
 		this.overlay?.destroy();
 		this.overlay = null;
-		this.selectExplain?.destroy();
-		this.selectExplain = null;
 		this.manager?.dispose();
 		this.manager = null;
 		this.pane?.destroy();
