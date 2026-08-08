@@ -9,6 +9,15 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.3.8] — 2026-08-08
+
+### Changed
+
+- The Anthropic entry in the 翻译服务 picker now shows the company's radial
+  burst mark instead of a plain "A" tile, so every provider row carries its
+  real brand symbol. (The OpenAI-compatible and Custom HTTP entries keep a
+  neutral globe on purpose — they are generic endpoints with no brand.)
+
 ## [0.3.7] — 2026-08-08
 
 ### Fixed
@@ -493,7 +502,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.7...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.8...HEAD
+[0.3.8]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.4...v0.3.5

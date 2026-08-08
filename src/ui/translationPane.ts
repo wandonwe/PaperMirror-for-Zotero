@@ -435,16 +435,23 @@ export class TranslationPane {
 				svg.appendChild(g);
 				return svg;
 			}
-			case 'anthropic':
-				// Anthropic: the dark A on the warm cream tile.
-				svg.append(
-					tile('#F0EEE5'),
-					node('path', {
-						d: 'M6.9 3.6h2.2L13.2 12.4h-2.2l-.84-2.16H6.0L5.16 12.4H3.0Zm-.24 4.9h2.84L8.08 4.86Z',
-						fill: '#181818'
-					})
-				);
+			case 'anthropic': {
+				// Anthropic: the radiating burst mark on the warm cream tile —
+				// their actual symbol, not a letter. Tapered rays out of centre.
+				const g = node('g', { fill: '#141413' });
+				for (let i = 0; i < 12; i++) {
+					// Alternating ray lengths give the burst its distinctive
+					// long/short rhythm.
+					const long = i % 2 === 0;
+					const outer = long ? 6.4 : 4.9;
+					g.appendChild(node('path', {
+						d: `M8 ${8 - outer} 8.62 8 8 8.62 7.38 8Z`,
+						transform: `rotate(${i * 30} 8 8)`
+					}));
+				}
+				svg.append(tile('#F0EEE5'), g);
 				return svg;
+			}
 			case 'gemini': {
 				// Gemini: the four-point gradient star (the real mark).
 				const defs = node('defs', {});
