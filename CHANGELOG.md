@@ -9,6 +9,19 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.3.5] — 2026-08-08
+
+### Fixed
+
+- Gemini answered 404/INVALID_MODEL: the preset's default model
+  `gemini-2.0-flash` was retired upstream. The preset now defaults to
+  `gemini-2.5-flash`, and a stored auto-filled `gemini-2.0-flash` is cleared
+  once at startup so the new default applies.
+- The provider-pool list rendered once at pane load, so a key saved a minute
+  later — or a provider switch — left every LLM row stuck on 「未配置密钥」
+  and the just-configured provider still listed. The list re-renders when
+  the primary provider changes and after a key is saved.
+
 ## [0.3.4] — 2026-08-07
 
 ### Added
@@ -441,7 +454,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.1...v0.3.2

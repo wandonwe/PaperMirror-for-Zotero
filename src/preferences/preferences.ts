@@ -135,62 +135,74 @@ interface PaperMirrorPublicAPI {
 
 			// The provider-pool checkboxes: one per service that could pull its
 			// weight — key already stored, or no key needed. Rendered from the
-			// live roster so a newly added provider shows up without UI edits.
+			// live roster, and RE-rendered whenever the primary provider
+			// changes or a key is saved: the first version drew the list once
+			// at load, so a key typed a minute later (or a provider switch)
+			// left every LLM row stuck on 「未配置密钥」.
 			const poolHost = byId<HTMLElement>('papermirror-pool');
-			if (poolHost) {
-				void (async () => {
-					let checked: string[] = [];
-					try {
-						const raw = JSON.parse(String(getPref('parallelProviders') ?? '[]'));
-						checked = Array.isArray(raw) ? raw.filter((x: unknown): x is string => typeof x === 'string') : [];
+			const renderPool = async (): Promise<void> => {
+				if (!poolHost) {
+					return;
+				}
+				let checked: string[] = [];
+				try {
+					const raw = JSON.parse(String(getPref('parallelProviders') ?? '[]'));
+					checked = Array.isArray(raw) ? raw.filter((x: unknown): x is string => typeof x === 'string') : [];
+				}
+				catch {
+					checked = [];
+				}
+				const providers = api()?.listProviders() ?? [];
+				const primary = String(byId<HTMLElement & { value: string }>('papermirror-provider')?.value || getPref('provider') || 'bing-free');
+				const rows: HTMLElement[] = [];
+				for (const provider of providers) {
+					if (provider.id === primary || provider.id === 'custom') {
+						continue;
 					}
-					catch {
-						checked = [];
+					let usable = !provider.requiresApiKey;
+					if (!usable) {
+						try {
+							usable = ((await api()?.getApiKey(provider.id)) ?? '').length > 0;
+						}
+						catch {
+							usable = false;
+						}
 					}
-					const providers = api()?.listProviders() ?? [];
-					const primary = String(getPref('provider') ?? 'bing-free');
-					const rows: HTMLElement[] = [];
-					for (const provider of providers) {
-						if (provider.id === primary || provider.id === 'custom') {
-							continue;
+					const row = document.createElement('label');
+					row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:1px 0;';
+					const box = document.createElement('input');
+					box.type = 'checkbox';
+					box.checked = checked.includes(provider.id);
+					box.disabled = !usable;
+					box.addEventListener('change', () => {
+						const next = new Set(checked);
+						if (box.checked) {
+							next.add(provider.id);
 						}
-						let usable = !provider.requiresApiKey;
-						if (!usable) {
-							try {
-								usable = ((await api()?.getApiKey(provider.id)) ?? '').length > 0;
-							}
-							catch {
-								usable = false;
-							}
+						else {
+							next.delete(provider.id);
 						}
-						const row = document.createElement('label');
-						row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:1px 0;';
-						const box = document.createElement('input');
-						box.type = 'checkbox';
-						box.checked = checked.includes(provider.id);
-						box.disabled = !usable;
-						box.addEventListener('change', () => {
-							const next = new Set(checked);
-							if (box.checked) {
-								next.add(provider.id);
-							}
-							else {
-								next.delete(provider.id);
-							}
-							checked = [...next];
-							setPref('parallelProviders', JSON.stringify(checked));
-						});
-						const text = document.createElement('span');
-						text.textContent = usable ? provider.displayName : `${provider.displayName}(未配置密钥)`;
-						if (!usable) {
-							text.style.opacity = '.5';
-						}
-						row.append(box, text);
-						rows.push(row);
+						checked = [...next];
+						setPref('parallelProviders', JSON.stringify(checked));
+					});
+					const text = document.createElement('span');
+					text.textContent = usable ? provider.displayName : `${provider.displayName}(未配置密钥)`;
+					if (!usable) {
+						text.style.opacity = '.5';
 					}
-					poolHost.replaceChildren(...rows);
-				})();
-			}
+					row.append(box, text);
+					rows.push(row);
+				}
+				poolHost.replaceChildren(...rows);
+			};
+			void renderPool();
+			byId<HTMLElement>('papermirror-provider')?.addEventListener('command', () => {
+				void renderPool();
+			});
+			byId<HTMLInputElement>('papermirror-apikey')?.addEventListener('change', () => {
+				// setApiKey is async; give the credential store a beat.
+				setTimeout(() => void renderPool(), 400);
+			});
 		}
 
 		// Footer: the real installed version, not a hardcoded string that

@@ -67,7 +67,9 @@ const presetProviders: TranslationProvider[] = [
 		id: 'gemini',
 		displayName: 'Google Gemini',
 		defaultBaseURL: 'https://generativelanguage.googleapis.com/v1beta/openai',
-		defaultModel: 'gemini-2.0-flash',
+		// gemini-2.0-flash was retired (the API answers 404 model-not-found);
+		// 2.5-flash is the current fast tier.
+		defaultModel: 'gemini-2.5-flash',
 		noV1Suffix: true
 	}),
 	createOpenAICompatibleProvider({

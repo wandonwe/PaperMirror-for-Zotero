@@ -37,6 +37,12 @@ export let toolbarController: ReaderToolbarController | null = null;
  * toolbar menu, and whatever the reader picks afterwards sticks.
  */
 function migrateToOverlayArchitecture(): void {
+	// v5 (runs for everyone below it): the Gemini preset's old default model
+	// was retired upstream — a stored auto-filled 'gemini-2.0-flash' now only
+	// produces 404s, so clear it and let the new default apply.
+	if (getPref<string>('model', '') === 'gemini-2.0-flash') {
+		setPref('model', '');
+	}
 	if (getPref<number>('layoutMigration', 0) >= 4) {
 		return;
 	}
