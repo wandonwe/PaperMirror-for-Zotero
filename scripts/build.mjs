@@ -24,7 +24,7 @@ export async function buildAddon() {
 		format: 'iife',
 		target: 'firefox115',
 		platform: 'browser',
-		loader: { '.css': 'text' },
+		loader: { '.css': 'text', '.svg': 'text' },
 		logLevel: 'info',
 		banner: {
 			js: '/* PaperMirror for Zotero — generated bundle; sources in src/ (AGPL-3.0) */'

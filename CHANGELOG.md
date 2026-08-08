@@ -9,6 +9,20 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.4.3] — 2026-08-08
+
+### Changed
+
+- **The 翻译服务 picker now shows the real, official brand marks.** The
+  hand-drawn approximations are replaced by the services' actual vector
+  logos (vendored from the MIT-licensed lobe-icons set): Microsoft's four
+  squares, Google's G, OpenAI's knot, Claude's coral starburst, Gemini's
+  gradient star, DeepSeek's whale, DeepL, Kimi's K + blue dot, 通义千问,
+  智谱, SiliconFlow, Groq, Ollama and OpenRouter. Monochrome marks follow
+  the pane's text colour so they stay visible in dark mode; the drawn
+  glyphs survive only as a parse-failure fallback. OpenAI-compatible and
+  Custom HTTP keep the neutral globe — generic endpoints have no brand.
+
 ## [0.4.2] — 2026-08-08
 
 ### Fixed
@@ -600,7 +614,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.3.11...v0.4.0

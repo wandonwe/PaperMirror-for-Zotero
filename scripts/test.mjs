@@ -32,7 +32,7 @@ async function main() {
 		format: 'esm',
 		platform: 'node',
 		target: 'node20',
-		loader: { '.css': 'text' },
+		loader: { '.css': 'text', '.svg': 'text' },
 		outExtension: { '.js': '.mjs' },
 		external: ['node:*']
 	});

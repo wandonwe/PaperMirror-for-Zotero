@@ -17,6 +17,42 @@ import * as logger from '../utils/logger';
 import type { ExplanationSection } from '../translation/explainer';
 import type { PageTranslationState } from '../translation/translationManager';
 import type { SourceBlock } from '../types/models';
+// Official brand marks (vendored from lobe-icons, MIT — see brandIcons/README).
+import svgMicrosoft from './brandIcons/microsoft.svg';
+import svgGoogle from './brandIcons/google.svg';
+import svgOpenAI from './brandIcons/openai.svg';
+import svgClaude from './brandIcons/claude.svg';
+import svgGemini from './brandIcons/gemini.svg';
+import svgDeepSeek from './brandIcons/deepseek.svg';
+import svgDeepL from './brandIcons/deepl.svg';
+import svgKimi from './brandIcons/kimi.svg';
+import svgQwen from './brandIcons/qwen.svg';
+import svgZhipu from './brandIcons/zhipu.svg';
+import svgSiliconFlow from './brandIcons/siliconflow.svg';
+import svgGroq from './brandIcons/groq.svg';
+import svgOllama from './brandIcons/ollama.svg';
+import svgOpenRouter from './brandIcons/openrouter.svg';
+
+/**
+ * id → official SVG source. openai-compatible / custom deliberately have no
+ * entry: they are generic endpoints with no brand, and get the neutral globe.
+ */
+const BRAND_SVGS: Record<string, string> = {
+	'bing-free': svgMicrosoft,
+	'google-free': svgGoogle,
+	openai: svgOpenAI,
+	anthropic: svgClaude,
+	gemini: svgGemini,
+	deepseek: svgDeepSeek,
+	deepl: svgDeepL,
+	moonshot: svgKimi,
+	qwen: svgQwen,
+	zhipu: svgZhipu,
+	siliconflow: svgSiliconFlow,
+	groq: svgGroq,
+	ollama: svgOllama,
+	openrouter: svgOpenRouter
+};
 
 const MODULE = 'translationPane';
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
@@ -380,12 +416,52 @@ export class TranslationPane {
 	}
 
 	/**
-	 * A small brand badge per translation service, drawn in code — Microsoft's
-	 * four squares, Google's four-colour ring, coloured monograms for the rest.
-	 * One function, used by the header chip and the switcher menu, so the two
-	 * can never disagree.
+	 * The OFFICIAL vector mark for a service, from the vendored lobe-icons
+	 * SVGs. Monochrome marks (OpenAI, Groq, Ollama, OpenRouter) carry
+	 * fill="currentColor" and follow the pane's text colour in both themes.
+	 * Returns null for unbranded ids (compatible/custom) or if parsing is
+	 * unavailable — the caller then falls back to the drawn glyph.
+	 */
+	private realBrandBadge(id: string): Element | null {
+		const source = BRAND_SVGS[id];
+		if (!source) {
+			return null;
+		}
+		try {
+			const win = this.doc.defaultView as (Window & { DOMParser?: typeof DOMParser }) | null;
+			const Parser = win?.DOMParser ?? (globalThis as { DOMParser?: typeof DOMParser }).DOMParser;
+			if (!Parser) {
+				return null;
+			}
+			const parsed = new Parser().parseFromString(source, 'image/svg+xml');
+			const rootEl = parsed.documentElement;
+			if (!rootEl || rootEl.nodeName.toLowerCase() !== 'svg') {
+				return null;
+			}
+			const svg = this.doc.importNode(rootEl, true) as Element;
+			svg.setAttribute('class', 'pm-provider-badge');
+			svg.setAttribute('width', '16');
+			svg.setAttribute('height', '16');
+			svg.removeAttribute('style'); // drop the icon set's flex inline style
+			return svg;
+		}
+		catch (e) {
+			logger.debug(MODULE, `brand svg for ${id} failed to parse`, e);
+			return null;
+		}
+	}
+
+	/**
+	 * A small brand badge per translation service. Real official marks first
+	 * (realBrandBadge); the code-drawn glyphs below survive only as a fallback
+	 * and for the unbranded generic endpoints. One function, used by the
+	 * header chip and the switcher menu, so the two can never disagree.
 	 */
 	private providerBadge(id: string): Element {
+		const real = this.realBrandBadge(id);
+		if (real) {
+			return real;
+		}
 		const svg = this.doc.createElementNS(SVG_NS, 'svg');
 		svg.setAttribute('viewBox', '0 0 16 16');
 		svg.setAttribute('class', 'pm-provider-badge');

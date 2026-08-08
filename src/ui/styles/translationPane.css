@@ -1403,7 +1403,8 @@
 	height: 15px;
 	flex: none;
 	display: block;
-	border-radius: 3px;
+	/* No border-radius: the real brand marks (Microsoft's squares, DeepL's
+	   tile) reach the edges of their viewBox and must not be clipped round. */
 }
 
 .pm-chip-provider .pm-provider-mark {
