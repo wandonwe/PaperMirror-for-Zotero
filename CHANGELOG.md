@@ -9,6 +9,21 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-08-08
+
+### Changed
+
+- **Releases now trigger on a push to `main`, not on a tag** — so the whole
+  flow works from VS Code's Sync button with no terminal and no manual tags.
+  Bump the version in `manifest.json` + `package.json`, commit, Sync; the
+  workflow reads the version, creates the `v<version>` tag itself, and
+  publishes the XPI + `updates.json` release assets. Versions already released
+  are skipped, and pushes that don't change `manifest.json` are ignored.
+- Combined with 0.5.2's release-asset auto-update (nothing is ever written to
+  `main`), `main` no longer diverges, so VS Code Sync stays a clean
+  fast-forward. Anyone who installs a 0.5.2+ `.xpi` from Releases auto-updates
+  from the latest release — no configuration on their end.
+
 ## [0.5.2] — 2026-08-08
 
 ### Changed
@@ -667,7 +682,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.3...v0.5.0

@@ -88,6 +88,20 @@ npm run dev-install  # build and drop into a local Zotero profile
 TypeScript in `strict` mode, bundled with esbuild. No test may be deleted to
 make a build pass.
 
+### Releasing
+
+Entirely from the editor — no tags, no terminal:
+
+1. Bump the version in `manifest.json` **and** `package.json` (keep them equal).
+2. Add a `CHANGELOG.md` entry.
+3. Commit and **Sync** (push to `main`).
+
+That push triggers the Release workflow, which builds, tags `v<version>`, and
+publishes the `.xpi` plus `updates.json` as release assets. The plugin's
+`update_url` is the latest-release alias, so every installed copy — anyone's,
+anywhere — auto-updates from that release. Pushes that don't change the version
+are ignored, and a version that's already released is skipped.
+
 ### Layout
 
 ```

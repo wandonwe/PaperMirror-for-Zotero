@@ -1,8 +1,24 @@
 name: Release
 
+# VS Code-only workflow: no manual tags, no terminal.
+#
+# To ship a new version: bump the version in manifest.json (and package.json),
+# update CHANGELOG.md, commit, and press Sync in VS Code. That push to main is
+# the trigger — this job reads the version from manifest.json and, if no release
+# exists for it yet, builds, creates the tag v<version>, and publishes the XPI
+# and updates.json as release assets. Pushes that don't touch manifest.json are
+# ignored; a version that's already released is skipped, so it never
+# double-publishes.
+#
+# Nothing here writes to main (updates.json ships as a release asset, read via
+# the latest-release alias in the plugin manifest), so main never diverges and
+# VS Code's Sync stays a clean fast-forward forever.
+
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths:
+      - manifest.json
 
 permissions:
   contents: write
@@ -15,37 +31,55 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Read version from manifest.json
+        id: v
+        run: echo "version=$(node -p "require('./manifest.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Has this version already been released?
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ steps.v.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "v${{ steps.v.outputs.version }} is already released — nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.exists == 'false'
         with:
           node-version: '20'
           cache: npm
 
-      - run: npm ci
-      - run: npm test
-      - run: npm run package
-
-      - name: Verify tag matches package version
+      - name: Versions in manifest.json and package.json must match
+        if: steps.check.outputs.exists == 'false'
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
           PKG="$(node -p "require('./package.json').version")"
-          if [ "$TAG" != "$PKG" ]; then
-            echo "Tag v$TAG does not match package.json version $PKG" >&2
+          MAN="${{ steps.v.outputs.version }}"
+          if [ "$PKG" != "$MAN" ]; then
+            echo "package.json ($PKG) does not match manifest.json ($MAN) — bump both." >&2
             exit 1
           fi
 
-      # Build the auto-update manifest for THIS release and ship it as a release
-      # asset. The plugin's update_url is the latest-release alias
-      # (releases/latest/download/updates.json), so uploading it here is all it
-      # takes for installed copies to see the new version — nothing is ever
-      # committed to main, so branch protection and concurrent tag builds can no
-      # longer stall auto-update. The version comes from the tag, not
-      # package.json, so a stray checkout can't change it.
-      - name: Generate updates.json
-        run: node scripts/gen-updates.mjs "${GITHUB_REF_NAME#v}"
+      - name: Build, test, package
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          npm ci
+          npm test
+          npm run package
 
-      - name: Publish release
+      - name: Generate updates.json
+        if: steps.check.outputs.exists == 'false'
+        run: node scripts/gen-updates.mjs "${{ steps.v.outputs.version }}"
+
+      - name: Publish release (creates the tag)
+        if: steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.v.outputs.version }}
+          target_commitish: ${{ github.sha }}
           files: |
             dist/*.xpi
             updates.json
