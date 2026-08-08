@@ -23,7 +23,14 @@ const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
 
 const REPO = 'wandonwe/PaperMirror-for-Zotero';
 const ADDON_ID = manifest.applications.zotero.id;
-const version = pkg.version;
+// Version comes from an explicit first arg when given (the release tag) and
+// falls back to package.json only for local runs. In CI the step does a
+// `git checkout main` before this, which would otherwise swap package.json's
+// version out from under us — so the tag MUST win. A leading "v" is trimmed.
+const versionArg = process.argv[2] && /^v?\d/.test(process.argv[2])
+	? process.argv[2].replace(/^v/, '')
+	: null;
+const version = versionArg ?? pkg.version;
 const zoteroApp = {
 	strict_min_version: manifest.applications.zotero.strict_min_version,
 	strict_max_version: manifest.applications.zotero.strict_max_version
@@ -39,7 +46,7 @@ async function sha256(path) {
 	});
 }
 
-const xpiPath = process.argv[2];
+const xpiPath = versionArg ? process.argv[3] : process.argv[2];
 const update = {
 	version,
 	update_link: `https://github.com/${REPO}/releases/download/v${version}/zotero-bilingual-reader-${version}.xpi`,

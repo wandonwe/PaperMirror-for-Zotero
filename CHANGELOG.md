@@ -9,6 +9,20 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-08-08
+
+### Fixed
+
+- **Auto-update was stuck.** `updates.json` on main stopped advancing past
+  0.4.2, so Zotero reported "No updates found" even though newer releases had
+  been published. Two root causes in the release workflow: it regenerated the
+  file *after* `git checkout main` (which swapped `package.json`'s version out
+  from under `gen-updates`), and when tags were pushed close together the
+  later build regenerated against a stale main and its push was rejected. The
+  workflow now resets to the true `origin/main` before regenerating and takes
+  the version from the release tag explicitly (`gen-updates.mjs <version>
+  [xpi]`), so the manifest always lands on the version just released.
+
 ## [0.5.0] — 2026-08-08
 
 Housekeeping release: a full audit of the tree, removing everything the
@@ -637,7 +651,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.4.1...v0.4.2

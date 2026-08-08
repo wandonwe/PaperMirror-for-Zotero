@@ -42,14 +42,22 @@ jobs:
       # Point the auto-update manifest at the just-published XPI. Zotero polls
       # updates.json on main; committing it here is what makes installed copies
       # upgrade themselves to this release.
+      #
+      # Sync to the true remote main FIRST (reset --hard origin/main): a tag
+      # build starts in detached HEAD at the tag, and if two tags are pushed
+      # close together the second build would otherwise regenerate against a
+      # stale main and its push would be rejected — which is exactly how
+      # updates.json got stuck at an old version. The tag version is passed
+      # EXPLICITLY so `gen-updates` can never read the wrong package.json.
       - name: Update updates.json on main
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           XPI="dist/zotero-bilingual-reader-${VERSION}.xpi"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout main
-          node scripts/gen-updates.mjs "$XPI"
+          git fetch origin main
+          git checkout -B main origin/main
+          node scripts/gen-updates.mjs "$VERSION" "$XPI"
           if git diff --quiet updates.json; then
             echo "updates.json already current"
           else
