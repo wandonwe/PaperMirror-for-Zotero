@@ -9,6 +9,28 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.3.7] — 2026-08-08
+
+### Fixed
+
+- **Clicking translated text destroyed the layout.** A single click on a
+  paragraph in the 译文 pane ran 深度讲解, jumped the pane to the top of the
+  document AND navigated the PDF — and could leave the split collapsed with
+  the reader unreachable until the tab was closed. A single click now only
+  moves the focus highlight; 深度讲解 is a deliberate **double-click**.
+- **Split-view watchdog.** Zotero occasionally rewrites the reader browser's
+  inline styles (navigation, theme changes), erasing the split's pixel
+  pinning — the reader then collapsed to its minimum and the pane swallowed
+  the whole tab. The layout poll now detects the drift and re-pins within
+  ~350 ms, and the pane additionally carries a hard `max-width` so it can
+  never take the reader's half even if the pinning is lost.
+
+### Changed
+
+- 深度讲解 card no longer scrolls the pane to the document top. It floats
+  over the pane's lower edge, the document behind it never moves, and Esc
+  (or ×) dismisses it.
+
 ## [0.3.6] — 2026-08-08
 
 ### Fixed
@@ -471,7 +493,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.7...HEAD
+[0.3.7]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.3...v0.3.4

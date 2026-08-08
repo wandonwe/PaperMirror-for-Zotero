@@ -637,11 +637,24 @@ export class ReaderSession {
 				if (grownHeight > 0) {
 					slot.style.height = `${Math.ceil(grownHeight * fit)}px`;
 				}
+				// A single click on translated text must be INERT reading behaviour:
+				// it only moves the focus highlight. The old handler ran 深度讲解 +
+				// a scroll-to-top + a PDF navigation on every innocent click — the
+				// reader clicked a paragraph and the whole layout convulsed.
+				// 深度讲解 is now a deliberate DOUBLE-click.
 				for (const node of Array.from(built.element.querySelectorAll('[data-pm-block]'))) {
-					node.addEventListener('click', () => {
+					const focusBlock = (): void => {
+						const scope = slot.closest('.pm-scroll') ?? built.element;
+						for (const other of Array.from(scope.querySelectorAll('.pm-repage-block.pm-focused'))) {
+							other.classList.remove('pm-focused');
+						}
+						node.classList.add('pm-focused');
+					};
+					node.addEventListener('click', focusBlock);
+					node.addEventListener('dblclick', () => {
+						focusBlock();
 						const id = node.getAttribute('data-pm-block');
 						if (id) {
-							this.sync?.onPaneNavigated(pageIndex);
 							void this.explainSelection(
 								state.blocks.find(b => b.id === id)?.sourceText ?? ''
 							);

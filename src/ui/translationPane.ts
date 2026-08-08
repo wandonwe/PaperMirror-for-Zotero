@@ -136,6 +136,7 @@ export class TranslationPane {
 	private compareOriginal = false;
 	private resizeObserver: { disconnect(): void } | null = null;
 	private resizeTimer: ReturnType<typeof setTimeout> | null = null;
+	private explainKeyHandler: ((event: KeyboardEvent) => void) | null = null;
 	private viewKindButton: HTMLElement | null = null;
 	private sideButton: HTMLElement | null = null;
 	private sideFill: HTMLElement | null = null;
@@ -872,10 +873,13 @@ export class TranslationPane {
 	// ---- explain card (demo .explain-card) ----------------------------------
 
 	showExplanation(content: { loading?: boolean; sections?: ExplanationSection[]; error?: string; passage?: string }): void {
-		let card = this.scroll.querySelector('.pm-explain-card') as HTMLElement | null;
-		const isNew = !card;
+		// The card FLOATS over the pane's lower edge — it must never touch the
+		// scroll position. The old behaviour prepended it into the scroll body
+		// and jumped to the top of the document, which read as "everything I
+		// was looking at just vanished".
+		let card = this.host.querySelector('.pm-explain-card') as HTMLElement | null;
 		if (!card) {
-			card = this.el('div', 'pm-explain-card');
+			card = this.el('div', 'pm-explain-card pm-explain-floating');
 			const head = this.el('div', 'pm-card-head');
 			const titles = this.el('div', 'pm-card-titles');
 			titles.append(
@@ -894,7 +898,14 @@ export class TranslationPane {
 				this.textButton('pm-footer-button', this.strings.explainSave, this.strings.explainSave, () => this.callbacks.onSaveExplanationNote())
 			);
 			card.append(head, grid, actions);
-			this.scroll.prepend(card);
+			this.host.append(card);
+			// Esc dismisses — there must always be an obvious way out.
+			this.explainKeyHandler = (event: KeyboardEvent): void => {
+				if (event.key === 'Escape') {
+					this.hideExplanation();
+				}
+			};
+			this.doc.addEventListener('keydown', this.explainKeyHandler, true);
 		}
 
 		const passageEl = card.querySelector('.pm-explain-passage') as HTMLElement;
@@ -933,23 +944,14 @@ export class TranslationPane {
 			}
 			actions.hidden = false;
 		}
-
-		if (isNew) {
-			this.scroll.scrollTop = 0;
-		}
 	}
 
 	hideExplanation(): void {
-		const card = this.scroll.querySelector('.pm-explain-card') as HTMLElement | null;
-		if (!card) {
-			return;
+		if (this.explainKeyHandler) {
+			this.doc.removeEventListener('keydown', this.explainKeyHandler, true);
+			this.explainKeyHandler = null;
 		}
-		const height = card.getBoundingClientRect().height;
-		const wasScrolled = this.scroll.scrollTop > 0;
-		card.remove();
-		if (wasScrolled) {
-			this.scroll.scrollTop = Math.max(0, this.scroll.scrollTop - height);
-		}
+		this.host.querySelector('.pm-explain-card')?.remove();
 	}
 
 	// ---- pages & blocks -----------------------------------------------------
@@ -1568,6 +1570,10 @@ export class TranslationPane {
 		if (this.keyHandler) {
 			this.doc.removeEventListener('keydown', this.keyHandler);
 			this.keyHandler = null;
+		}
+		if (this.explainKeyHandler) {
+			this.doc.removeEventListener('keydown', this.explainKeyHandler, true);
+			this.explainKeyHandler = null;
 		}
 		if (this.toastTimer) {
 			clearTimeout(this.toastTimer);

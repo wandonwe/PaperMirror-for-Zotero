@@ -110,6 +110,8 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 	let ratio = 50;
 	let insetProvider: (() => number) | null = null;
 	let lastInset = 0;
+	/** The browser width applyRatio last pinned, for the drift watchdog. */
+	let lastPx = 0;
 
 	/**
 	 * Pixel sizing, not percentage flex.
@@ -148,10 +150,15 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 		lastInset = inset;
 		const contentTotal = Math.max(50, total - 7 - inset);
 		const px = Math.round(inset + contentTotal * (ratio / 100)) - 3;
+		lastPx = px;
 		browserEl.style.setProperty('flex', '0 0 auto', 'important');
 		browserEl.style.setProperty('width', `${px}px`, 'important');
 		browserEl.style.setProperty('min-width', `${px}px`, 'important');
 		browserEl.style.setProperty('max-width', `${px}px`, 'important');
+		// Belt and braces: even if the browser's pinning is somehow lost, the
+		// pane must NEVER be able to swallow the whole tab — cap it to its own
+		// share so the reader always keeps its half.
+		paneHost.style.maxWidth = `${Math.max(120, total - px - 7)}px`;
 	};
 
 	// Keep the pixel split correct when the window (or tab) resizes.
@@ -282,10 +289,33 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 			insetProvider = provider;
 			applyRatio(ratio);
 		},
-		/** Cheap periodic check: re-split when the sidebar opens/closes/resizes. */
+		/**
+		 * Cheap periodic check (the session polls this every ~350 ms):
+		 *  - re-split when the sidebar opens/closes/resizes;
+		 *  - WATCHDOG: Zotero occasionally rewrites the browser element's inline
+		 *    styles (navigation, theme changes), which erases the pixel pinning —
+		 *    the browser then collapses to its minimum and the pane swallows the
+		 *    whole tab, with the reader gone until the tab is closed. Detect the
+		 *    drift and re-pin, so the layout self-heals within a beat instead of
+		 *    trapping the user.
+		 */
 		refreshLayout(): void {
 			if (!paneVisible) {
 				return;
+			}
+			try {
+				if (lastPx > 0) {
+					const actual = browserEl.getBoundingClientRect().width;
+					const pinLost = !browserEl.style.getPropertyValue('max-width');
+					if (pinLost || Math.abs(actual - lastPx) > 24) {
+						logger.warn(MODULE, `Split drifted (pinned ${lastPx}px, actual ${Math.round(actual)}px${pinLost ? ', styles cleared' : ''}); re-pinning`);
+						applyRatio(ratio);
+						return;
+					}
+				}
+			}
+			catch {
+				// measurement is best-effort
 			}
 			let inset = 0;
 			try {

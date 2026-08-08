@@ -474,6 +474,20 @@
 	font-family: Inter, -apple-system, "PingFang SC", sans-serif;
 }
 
+/* 深度讲解 floats over the pane's lower edge — the document behind it never
+   moves, and Esc or × dismisses it. It must never affect the scroll layout. */
+.pm-explain-card.pm-explain-floating {
+	position: absolute;
+	left: 12px;
+	right: 12px;
+	bottom: 12px;
+	margin: 0;
+	max-height: 55%;
+	overflow-y: auto;
+	z-index: 30;
+	box-shadow: 0 10px 34px rgba(15, 23, 42, .26);
+}
+
 .pm-card-head {
 	display: flex;
 	align-items: center;
