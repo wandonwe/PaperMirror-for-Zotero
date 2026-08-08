@@ -9,6 +9,23 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.3.11] — 2026-08-08
+
+### Fixed
+
+- The 划词解析 chip no longer lingers on the page. It now auto-hides after a
+  few idle seconds (the countdown pauses while the pointer is over it and
+  restarts, shorter, when the pointer leaves), on top of the existing
+  hide-on-click-elsewhere / scroll / empty-selection paths — so it is never
+  left showing over the document.
+
+### Changed
+
+- The mode caret beside the 翻译 toolbar icon is now a crisp stroked chevron
+  icon instead of the text "▾" (which rendered as a small off-centre glyph).
+  It shares the icon button's sizing, tracks an open/pressed state, and the
+  menu's single close path keeps the caret state in sync.
+
 ## [0.3.10] — 2026-08-08
 
 ### Fixed
@@ -535,7 +552,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.10...HEAD
+[Unreleased]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.11...HEAD
+[0.3.11]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.9...v0.3.10
 [0.3.9]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/wandonwe/papermirror-zotero/compare/v0.3.7...v0.3.8

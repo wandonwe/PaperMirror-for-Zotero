@@ -77,7 +77,10 @@ const SWITCH_CSS = `
 .${CARET_CLASS} {
 	appearance: none;
 	-moz-appearance: none;
-	width: 13px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
 	height: 22px;
 	margin: 0 0 0 1px;
 	padding: 0;
@@ -85,12 +88,24 @@ const SWITCH_CSS = `
 	border-radius: 5px;
 	background: transparent;
 	color: inherit;
-	font: 9px/1 system-ui, sans-serif;
 	cursor: pointer;
+}
+.${CARET_CLASS} svg {
+	width: 12px;
+	height: 12px;
+	display: block;
+	opacity: .75;
 }
 .${CARET_CLASS}:hover {
 	background: var(--fill-quinary, rgba(0, 0, 0, .07));
 }
+.${CARET_CLASS}:hover svg { opacity: 1; }
+/* Open state: the menu is showing — mark the caret as active. */
+.${CARET_CLASS}[aria-expanded="true"] {
+	background: rgba(111, 108, 232, .16);
+	border-color: #6f6ce8;
+}
+.${CARET_CLASS}[aria-expanded="true"] svg { opacity: 1; }
 .${SWITCH_CLASS} {
 	position: relative;
 }
@@ -265,6 +280,27 @@ export class ReaderToolbarController {
 	}
 
 	/**
+	 * The mode-menu caret — a crisp stroked chevron instead of the text "▾",
+	 * which rendered as a tiny off-centre glyph. currentColor + round joins so
+	 * it stays sharp and matches the reader toolbar's other icons.
+	 */
+	private static appendCaretIcon(doc: Document, button: HTMLElement): void {
+		const SVG_NS = 'http://www.w3.org/2000/svg';
+		const svg = doc.createElementNS(SVG_NS, 'svg');
+		svg.setAttribute('viewBox', '0 0 16 16');
+		svg.setAttribute('aria-hidden', 'true');
+		const path = doc.createElementNS(SVG_NS, 'path');
+		path.setAttribute('d', 'M4.5 6.5 8 10l3.5-3.5');
+		path.setAttribute('fill', 'none');
+		path.setAttribute('stroke', 'currentColor');
+		path.setAttribute('stroke-width', '1.6');
+		path.setAttribute('stroke-linecap', 'round');
+		path.setAttribute('stroke-linejoin', 'round');
+		svg.appendChild(path);
+		button.appendChild(svg);
+	}
+
+	/**
 	 * One icon button: 对照翻译. Pressed, the reader splits — original page on
 	 * one side, that page rebuilt with translated text (原版排版保持不变) on
 	 * the other. Pressed again, back to the plain PDF.
@@ -293,8 +329,10 @@ export class ReaderToolbarController {
 
 		const caret = doc.createElement('button');
 		caret.className = CARET_CLASS;
-		caret.textContent = '▾';
+		ReaderToolbarController.appendCaretIcon(doc, caret);
 		caret.title = getString('papermirror-mode-pick');
+		caret.setAttribute('aria-haspopup', 'menu');
+		caret.setAttribute('aria-expanded', 'false');
 		caret.setAttribute('tabindex', '-1');
 		caret.addEventListener('click', (event) => {
 			event.stopPropagation();
@@ -312,12 +350,15 @@ export class ReaderToolbarController {
 	 * answer different questions, so both stay one click away.
 	 */
 	private toggleModeMenu(doc: Document, wrap: HTMLElement, reader: ReaderLike): void {
+		const caret = wrap.querySelector(`.${CARET_CLASS}`);
 		const existing = wrap.querySelector(`.${MENU_CLASS}`);
 		if (existing) {
 			existing.remove();
+			caret?.setAttribute('aria-expanded', 'false');
 			return;
 		}
 		doc.querySelectorAll(`.${MENU_CLASS}`).forEach(node => node.remove());
+		caret?.setAttribute('aria-expanded', 'true');
 		const menu = doc.createElement('div');
 		menu.className = MENU_CLASS;
 		const current = this.currentMode(reader);
@@ -333,7 +374,7 @@ export class ReaderToolbarController {
 			item.setAttribute('aria-checked', option.mode === current ? 'true' : 'false');
 			item.addEventListener('click', (event) => {
 				event.stopPropagation();
-				menu.remove();
+				closeMenu();
 				if (option.mode !== 'original') {
 					this.lastTranslatedMode.set(this.sessionKey(reader), option.mode);
 				}
@@ -355,7 +396,7 @@ export class ReaderToolbarController {
 		peek.setAttribute('aria-checked', peekOn ? 'true' : 'false');
 		peek.addEventListener('click', (event) => {
 			event.stopPropagation();
-			menu.remove();
+			closeMenu();
 			const next = !getPref<boolean>('overlayPeekHover', true);
 			setPref('overlayPeekHover', next);
 			this.sessions.get(this.sessionKey(reader))?.setPeekOnHover(next);
@@ -370,7 +411,7 @@ export class ReaderToolbarController {
 		dim.setAttribute('aria-checked', dimOn ? 'true' : 'false');
 		dim.addEventListener('click', (event) => {
 			event.stopPropagation();
-			menu.remove();
+			closeMenu();
 			const next = dimOn ? 'translation-only' : 'dim-original';
 			setPref('overlayDisplayMode', next);
 			this.sessions.get(this.sessionKey(reader))?.setOverlayDisplayMode(next);
@@ -378,11 +419,14 @@ export class ReaderToolbarController {
 		menu.appendChild(dim);
 
 		wrap.appendChild(menu);
-		// Any click elsewhere dismisses it.
-		const dismiss = (): void => {
+		// Single close path: drop the menu, un-press the caret, unhook listeners.
+		const closeMenu = (): void => {
 			menu.remove();
+			caret?.setAttribute('aria-expanded', 'false');
 			doc.removeEventListener('click', dismiss, true);
 		};
+		// Any click elsewhere dismisses it.
+		const dismiss = (): void => closeMenu();
 		doc.addEventListener('click', dismiss, true);
 	}
 

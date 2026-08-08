@@ -25,6 +25,11 @@ const MODULE = 'selectionExplain';
 const CHIP_ID = 'pm-select-explain-chip';
 const STYLE_ID = 'pm-select-explain-style';
 
+/** Idle lifespan of the chip once shown, if the reader doesn't click it. */
+const AUTO_HIDE_MS = 4000;
+/** Shorter grace period after the pointer leaves the chip. */
+const AUTO_HIDE_AFTER_LEAVE_MS = 1200;
+
 const CSS = `
 #${CHIP_ID} {
 	position: fixed;
@@ -72,6 +77,7 @@ export class SelectionExplainButton {
 	private onSelectionChange: (() => void) | null = null;
 	private attachTimer: ReturnType<typeof setInterval> | null = null;
 	private showTimer: ReturnType<typeof setTimeout> | null = null;
+	private autoHideTimer: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(reader: ReaderLike, opts: SelectionExplainOptions) {
 		this.reader = reader;
@@ -238,6 +244,10 @@ export class SelectionExplainButton {
 				this.onExplain(text);
 			}
 		});
+		// Hovering keeps the chip alive (the reader is aiming for it); leaving it
+		// starts a short countdown so it never lingers once attention moves on.
+		chip.addEventListener('mouseenter', () => this.cancelAutoHide());
+		chip.addEventListener('mouseleave', () => this.scheduleAutoHide(AUTO_HIDE_AFTER_LEAVE_MS));
 		(doc.body ?? doc.documentElement).appendChild(chip);
 		this.chip = chip;
 		return chip;
@@ -264,6 +274,24 @@ export class SelectionExplainButton {
 		chip.style.left = `${Math.round(left)}px`;
 		chip.style.top = `${Math.round(top)}px`;
 		chip.style.visibility = 'visible';
+		// Never let it live on the page indefinitely.
+		this.scheduleAutoHide(AUTO_HIDE_MS);
+	}
+
+	private scheduleAutoHide(ms: number): void {
+		this.cancelAutoHide();
+		const win = this.win ?? (globalThis as unknown as Window);
+		this.autoHideTimer = win.setTimeout(() => {
+			this.autoHideTimer = null;
+			this.hide();
+		}, ms) as unknown as ReturnType<typeof setTimeout>;
+	}
+
+	private cancelAutoHide(): void {
+		if (this.autoHideTimer) {
+			(this.win ?? (globalThis as unknown as Window)).clearTimeout(this.autoHideTimer as unknown as number);
+			this.autoHideTimer = null;
+		}
 	}
 
 	hide(): void {
@@ -271,6 +299,7 @@ export class SelectionExplainButton {
 			clearTimeout(this.showTimer);
 			this.showTimer = null;
 		}
+		this.cancelAutoHide();
 		if (this.chip) {
 			this.chip.hidden = true;
 		}
@@ -287,6 +316,7 @@ export class SelectionExplainButton {
 			clearTimeout(this.showTimer);
 			this.showTimer = null;
 		}
+		this.cancelAutoHide();
 		try {
 			if (this.doc && this.onMouseUp) {
 				this.doc.removeEventListener('mouseup', this.onMouseUp, true);
