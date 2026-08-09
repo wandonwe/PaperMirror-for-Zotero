@@ -89,6 +89,19 @@ one architecture: strict in-place replacement.
   guaranteed to fit, so the rare true failure is now stated rather than left
   silently English.
 
+- **Long-page translation no longer stalls on salvage.** Salvaging every
+  dropped id one-by-one, strictly sequentially, made a page where the provider
+  dropped many ids crawl. Salvage now runs in bounded-parallel waves (4 at a
+  time) — still one block per request (no id drift), but a long page finishes
+  in a fraction of the wall-clock instead of appearing to hang.
+- **Tables stay cleanly original, never half-translated or bled over.** Any
+  block overlapping a detected table region is now kept in the original — not
+  only the cells the detector flagged, but also long recommendation cells that
+  look like paragraphs and the stitched-across-cells paragraphs the extractor
+  sometimes emits. This removes the mixed English/Chinese cells and the Chinese
+  text that was overlapping table rows. (A table is all-original until the real
+  cell model lands.)
+
 Still ahead (acknowledged, not yet done): a real table Row/Cell model with
 per-cell replacement (today whole detected tables stay original), and
 paragraph-granular placement so one overflowing line can't hold back a long

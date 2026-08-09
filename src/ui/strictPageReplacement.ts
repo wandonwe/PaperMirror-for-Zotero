@@ -249,6 +249,16 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			imageExcluded++;
 			continue;
 		}
+		// A block overlapping a detected table REGION — even one the cell
+		// detector did not itself flag (long recommendation cells look like
+		// paragraphs) — must stay original too. Otherwise the whole table shows
+		// half-translated, or a paragraph the extractor stitched across cells
+		// gets stamped in Chinese ACROSS the table. Until the real cell model
+		// exists, a table is all-original, never mixed.
+		if (area > 0 && guard.regions.some(r => intersectArea(box, r as unknown as PixelBox) > area * 0.15)) {
+			tableExcluded++;
+			continue;
+		}
 		replaceable.push(block);
 	}
 

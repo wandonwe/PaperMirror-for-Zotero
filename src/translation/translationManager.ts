@@ -37,6 +37,13 @@ const MODULE = 'translationManager';
 const SALVAGE_WARN_THRESHOLD = 24;
 
 /**
+ * How many single-block salvage requests run at once. A few in flight keeps a
+ * long page from stalling on sequential round-trips; kept modest so free MT
+ * engines are not rate-limited into failure.
+ */
+const SALVAGE_CONCURRENCY = 4;
+
+/**
  * Absolute ceiling for one page end to end (extraction + all chunks). Long
  * pages with several chunks are fine at 60 s per request; five minutes means
  * something is stuck, not slow.
@@ -411,14 +418,15 @@ export class TranslationManager {
 			// rendered mixed-language (the JACC report).
 			const stillMissing = chunk.filter(b => !received.has(b.id));
 			if (stillMissing.length) {
-				logger.warn(MODULE, `Salvaging ${stillMissing.length} block(s) one by one on page ${pageIndex}`);
+				logger.warn(MODULE, `Salvaging ${stillMissing.length} block(s) on page ${pageIndex} (concurrency ${SALVAGE_CONCURRENCY})`);
 				if (stillMissing.length > SALVAGE_WARN_THRESHOLD) {
 					logger.warn(MODULE, `Page ${pageIndex + 1}: provider dropped ${stillMissing.length} ids — salvaging all, but this engine is misbehaving`);
 				}
-				for (const block of stillMissing) {
-					if (signal.aborted) {
-						throw new PaperMirrorError('CANCELLED', 'cancelled');
-					}
+				// Salvage ALL missing ids, but in bounded-parallel waves rather
+				// than strictly one-after-another: single-block requests can't
+				// suffer id drift, and running a few at once keeps a long page
+				// from stalling for a minute on sequential round-trips.
+				const salvageOne = async (block: SourceBlock): Promise<void> => {
 					const pb = protectedBlocks.find(p => p.block.id === block.id)!;
 					try {
 						const single = await this.deps.translateRequest(
@@ -437,6 +445,19 @@ export class TranslationManager {
 							throw e;
 						}
 						logger.warn(MODULE, `Salvage request failed for ${block.id}`, e);
+					}
+				};
+				for (let i = 0; i < stillMissing.length; i += SALVAGE_CONCURRENCY) {
+					if (signal.aborted) {
+						throw new PaperMirrorError('CANCELLED', 'cancelled');
+					}
+					const wave = stillMissing.slice(i, i + SALVAGE_CONCURRENCY);
+					const settled = await Promise.allSettled(wave.map(salvageOne));
+					// Propagate a cancellation raised inside the wave.
+					for (const r of settled) {
+						if (r.status === 'rejected' && r.reason instanceof PaperMirrorError && r.reason.code === 'CANCELLED') {
+							throw r.reason;
+						}
 					}
 				}
 			}
