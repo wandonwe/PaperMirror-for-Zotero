@@ -9,7 +9,26 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
-## [0.8.0] — 2026-08-09
+## [0.8.1] — 2026-08-09
+
+### Changed
+
+- **单一通知组件 (StatusCapsule is the only task/error notifier).** The legacy
+  floating status note (`statusNote` + `pane.setStatus`) is deleted from the
+  pane and its CSS; `PdfOverlay.setStatus` is gone too. All task and error
+  feedback — translation, layout, partial, failed, cancelled, AND PDF export —
+  now flows through the one capsule via a progress model, so two components can
+  never show conflicting status.
+- **PDF 导出走胶囊 (export uses the capsule).** Export progress/done/failure
+  render in the capsule (`task: 'export'`); the duplicate completion Toast is
+  removed. Toast is now reserved for transient successes only — copy, save
+  note, cache cleared.
+- **错误进入状态机 (errors go through the model, not raw strings).** Open
+  failures and action errors post a `failed` capsule state instead of an
+  ad-hoc status string; the translation-success Toast is dropped (the capsule's
+  done state is the single completion signal).
+
+
 
 ### Added
 
@@ -1142,7 +1161,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.10...v0.8.0
 [0.7.10]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.9...v0.7.10
 [0.7.9]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.8...v0.7.9

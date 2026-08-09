@@ -283,16 +283,6 @@ export class PdfOverlay {
 	}
 
 	/**
-	 * Generic message (open failures, PDF export progress) → the same capsule,
-	 * so there is only ever one status element.
-	 */
-	setStatus(text: string | null, options: { busy?: boolean; error?: boolean; check?: boolean } = {}): void {
-		if (!this.destroyed) {
-			this.statusCapsule.setStatus(text, options);
-		}
-	}
-
-	/**
 	 * Rich per-page progress → the capsule. Translation is lazy (current page +
 	 * a couple prefetched), so there is no meaningful document-wide bar — the
 	 * honest signal is the current page's position plus its translate/place

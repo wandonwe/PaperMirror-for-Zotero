@@ -274,38 +274,6 @@
 .pm-refreshing .pm-article-host {
 	opacity: .45;
 }
-
-.pm-status-row {
-	display: flex;
-	gap: 10px;
-	margin-top: 12px;
-	font-size: 10px;
-	color: var(--pm-green);
-	min-height: 13px;
-	min-width: 0;
-}
-
-.pm-status-main,
-.pm-status-sub {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.pm-status-row .pm-check {
-	font-style: normal;
-	font-weight: bold;
-	margin-right: 4px;
-}
-
-.pm-status-sub {
-	color: var(--pm-cache-label);
-}
-
-.pm-status-row.pm-error {
-	color: var(--pm-error);
-}
-
 /* ===== scroll body (demo .translation-scroll) ===== */
 
 .pm-scroll {
@@ -976,17 +944,6 @@
 	width: 26px;
 	height: 26px;
 }
-
-.pm-status-row {
-	order: 1;
-	flex: 1 1 auto;
-	align-items: center;
-	margin: 0;
-	min-width: 0;
-	overflow: hidden;
-	gap: 6px;
-}
-
 .pm-header-actions {
 	order: 2;
 	margin-left: auto;
@@ -1092,12 +1049,6 @@
 }
 
 /* The status text takes the slack, so the controls stay pinned right. */
-.pm-bar .pm-status-row {
-	margin: 0;
-	flex: 1 1 auto;
-	min-width: 0;
-}
-
 .pm-bar .pm-switch-label {
 	flex: none;
 }
@@ -1139,42 +1090,6 @@
 
 
 /* Floating status note — bottom-right, appears on a new action, then leaves. */
-.pm-status-note {
-	position: absolute;
-	right: 16px;
-	bottom: 16px;
-	z-index: 60;
-	max-width: 78%;
-	padding: 8px 13px;
-	border-radius: 9px;
-	background: rgba(28, 32, 39, .94);
-	box-shadow: 0 6px 24px rgba(0, 0, 0, .28);
-	opacity: 0;
-	transform: translateY(8px);
-	pointer-events: none;
-	transition: opacity .18s ease, transform .18s ease;
-}
-
-.pm-status-note.pm-show {
-	opacity: 1;
-	transform: translateY(0);
-}
-
-.pm-status-note[data-pm-error="true"] {
-	background: rgba(74, 30, 32, .96);
-}
-
-.pm-status-note .pm-status-row {
-	margin: 0;
-	min-height: 0;
-	color: #7fd6ab;
-	font-size: 11px;
-}
-
-.pm-status-note .pm-status-row.pm-error {
-	color: #ffb4b4;
-}
-
 /* Takes the slack in the bar so the right-hand controls stay pinned right. */
 .pm-bar-spacer {
 	flex: 1 1 auto;

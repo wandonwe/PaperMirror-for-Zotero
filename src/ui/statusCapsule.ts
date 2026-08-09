@@ -16,6 +16,8 @@ export type OverlayPhase = 'translating' | 'laying-out' | 'done' | 'partial' | '
 
 export interface OverlayProgress {
 	phase: OverlayPhase;
+	/** Which task this is — translation (default) or PDF export. */
+	task?: 'translation' | 'export';
 	/** 1-based current page and document page count (position, not a doc-wide bar). */
 	currentPage: number;
 	totalPages: number;
@@ -25,7 +27,7 @@ export interface OverlayProgress {
 	segPlaced: number;
 	/** Segments that should have translated but were kept original. */
 	kept: number;
-	/** For the failed phase. */
+	/** For the failed phase, or a task-specific label (e.g. export). */
 	message?: string;
 }
 
@@ -117,6 +119,9 @@ export const CAPSULE_CSS = `
 
 /** Map a progress model to the capsule's normalized state and final 文案. */
 export function capsuleStateFor(m: OverlayProgress): CapsuleState {
+	if (m.task === 'export') {
+		return exportStateFor(m);
+	}
 	const pagePos = `第 ${m.currentPage} / ${m.totalPages} 页`;
 	const counts = `翻译 ${m.segTranslated}/${m.segTotal} 段 · 排版 ${m.segPlaced}/${m.segTotal} 段`;
 	// Combined progress across BOTH halves of the work — translation is the
@@ -177,6 +182,28 @@ export function capsuleStateFor(m: OverlayProgress): CapsuleState {
 				fraction: null,
 				main: '已停止翻译',
 				autoHideMs: 2600
+			};
+	}
+}
+
+/** Export task states (whole-PDF export runs through the same capsule). */
+function exportStateFor(m: OverlayProgress): CapsuleState {
+	const pct = m.segTotal > 0 ? Math.max(0, Math.min(1, m.segPlaced / m.segTotal)) : null;
+	switch (m.phase) {
+		case 'done':
+			return { phase: 'done', glyph: 'check', fraction: 1, main: m.message ?? 'PDF 已导出', autoHideMs: 2200 };
+		case 'failed':
+			return {
+				phase: 'failed', glyph: 'error', fraction: null,
+				main: m.message ?? 'PDF 导出失败',
+				action: { kind: 'close', label: '×', title: '关闭' }
+			};
+		case 'cancelled':
+			return { phase: 'cancelled', glyph: 'stop', fraction: null, main: '已停止导出', autoHideMs: 2200 };
+		default:
+			return {
+				phase: 'translating', glyph: 'ring', indeterminate: pct == null, fraction: pct,
+				main: m.message ?? '正在导出 PDF'
 			};
 	}
 }

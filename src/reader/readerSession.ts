@@ -110,7 +110,6 @@ export class ReaderSession {
 	private onViewModeChanged: ((mode: ViewMode) => void) | null = null;
 	private disposePdfEvents: (() => void) | null = null;
 	private pageRefreshTimer: ReturnType<typeof setTimeout> | null = null;
-	private statusHideTimer: ReturnType<typeof setTimeout> | null = null;
 	/** Provider pool (primary first). Rebuilt when translation (re)starts. */
 	private pool: string[] = [];
 	/** Real image rects per page (operator list), fetched once per document. */
@@ -285,13 +284,15 @@ export class ReaderSession {
 		}
 		else {
 			this.applyViewMode();
-			// Instant acknowledgement of the click: the first page's status
-			// only arrives once extraction finishes.
-			this.overlayStatus(
-				getString('papermirror-status-translating-page')
-					.replace('%n%', String(adapter.getCurrentPageIndex(this.reader) + 1)),
-				{ busy: true }
-			);
+			// Instant acknowledgement of the click: the first page's real counts
+			// arrive once extraction finishes; until then show an indeterminate
+			// "识别段落" capsule (segTotal 0 → indeterminate ring).
+			this.pushOverlayProgress({
+				phase: 'translating',
+				currentPage: adapter.getCurrentPageIndex(this.reader) + 1,
+				totalPages: adapter.getPageCount(this.reader),
+				segTotal: 0, segTranslated: 0, segPlaced: 0, kept: 0
+			});
 			this.startTranslating();
 		}
 
@@ -552,17 +553,14 @@ export class ReaderSession {
 		}
 	}
 
-	/** Status on the PDF page itself — only meaningful when the pane is hidden. */
-	private overlayStatus(text: string | null, options: { busy?: boolean; error?: boolean }): void {
-		if (this.viewMode !== 'overlay') {
-			this.overlay?.setStatus(null);
-			return;
-		}
-		if (this.statusHideTimer) {
-			clearTimeout(this.statusHideTimer);
-			this.statusHideTimer = null;
-		}
-		this.overlay?.setStatus(text, options);
+	/** A failure surfaced through the capsule (both modes), not a raw string. */
+	private pushFailure(message: string): void {
+		this.pushOverlayProgress({
+			phase: 'failed', message,
+			currentPage: adapter.getCurrentPageIndex(this.reader) + 1,
+			totalPages: adapter.getPageCount(this.reader),
+			segTotal: 0, segTranslated: 0, segPlaced: 0, kept: 0
+		});
 	}
 
 	private startPolling(): void {
@@ -859,8 +857,7 @@ export class ReaderSession {
 	showOpenFailure(error: unknown): void {
 		const message = error instanceof Error ? error.message : String(error);
 		this.split?.setPaneVisible(true);
-		this.pane?.setStatus(message, { error: true });
-		this.overlay?.setStatus(message, { error: true });
+		this.pushFailure(message);
 	}
 
 	/** 悬停看原文 on/off, from the toolbar menu. */
@@ -930,18 +927,21 @@ export class ReaderSession {
 	 */
 	async exportTranslatedPdf(): Promise<void> {
 		if (this.exportingPdf) {
-			this.pane?.toast(getString('papermirror-export-running').replace('%n%', '…'));
+			this.pushExport('translating', { message: getString('papermirror-export-running').replace('%n%', '…') });
 			return;
 		}
 		const item = adapter.getReaderItem(this.reader);
 		const filePath = item ? await (item as unknown as { getFilePathAsync(): Promise<string | false> }).getFilePathAsync() : null;
 		if (!item || !filePath) {
-			this.pane?.setStatus(getString('papermirror-export-failed'), { error: true });
+			this.pushExport('failed', { message: getString('papermirror-export-failed') });
 			return;
 		}
 		this.exportingPdf = true;
 		const report = (pct: number): void => {
-			this.pane?.setStatus(getString('papermirror-export-running').replace('%n%', String(Math.round(pct))), { busy: true });
+			this.pushExport('translating', {
+				pct,
+				message: getString('papermirror-export-running').replace('%n%', String(Math.round(pct)))
+			});
 		};
 		try {
 			const bytes = new Uint8Array(await IOUtils.read(String(filePath)));
@@ -978,17 +978,32 @@ export class ReaderSession {
 			};
 			await saveOne(monoBytes, 'mono');
 			await saveOne(dualBytes, 'dual');
-			this.pane?.setStatus(getString('papermirror-export-done'), { check: true });
-			this.pane?.toast(getString('papermirror-export-done'));
+			// Export completion is shown ONCE, in the capsule — no extra toast.
+			this.pushExport('done', { message: getString('papermirror-export-done') });
 		}
 		catch (e) {
 			const message = e instanceof PaperMirrorError ? e.message : String(e);
 			logger.warn(MODULE, 'exportTranslatedPdf failed', e);
-			this.pane?.setStatus(`${getString('papermirror-export-failed')}: ${message}`, { error: true });
+			this.pushExport('failed', { message: `${getString('papermirror-export-failed')}: ${message}` });
 		}
 		finally {
 			this.exportingPdf = false;
 		}
+	}
+
+	/** PDF-export progress → the same capsule (task: export). */
+	private pushExport(phase: OverlayProgress['phase'], opts?: { pct?: number; message?: string }): void {
+		this.pushOverlayProgress({
+			task: 'export',
+			phase,
+			currentPage: adapter.getCurrentPageIndex(this.reader) + 1,
+			totalPages: adapter.getPageCount(this.reader),
+			segTotal: 100,
+			segTranslated: opts?.pct ?? 0,
+			segPlaced: opts?.pct ?? 0,
+			kept: 0,
+			message: opts?.message
+		});
 	}
 
 	/** Wait until one page's translation settles (done / error / no text). */
@@ -1180,7 +1195,6 @@ export class ReaderSession {
 		try {
 			// Bypasses the cache; the fresh result overwrites the old entry on write.
 			await this.manager.retranslatePage(page);
-			this.pane?.toast(getString('papermirror-toast-retranslated'));
 		}
 		finally {
 			this.pane?.setBusy(false);
@@ -1277,7 +1291,7 @@ export class ReaderSession {
 			this.pane.toast(getString('papermirror-toast-saved'));
 		}
 		else {
-			this.pane.setStatus(getString('papermirror-status-error'), { error: true });
+			this.pushFailure(getString('papermirror-status-error'));
 		}
 	}
 
@@ -1377,7 +1391,7 @@ export class ReaderSession {
 			this.pane.toast(getString('papermirror-toast-saved'));
 		}
 		else {
-			this.pane.setStatus(getString('papermirror-status-error'), { error: true });
+			this.pushFailure(getString('papermirror-status-error'));
 		}
 	}
 
@@ -1394,7 +1408,7 @@ export class ReaderSession {
 		}
 		catch (e) {
 			logger.warn(MODULE, 'clearCurrentCache failed', e);
-			this.pane?.setStatus(getString('papermirror-status-error'), { error: true });
+			this.pushFailure(getString('papermirror-status-error'));
 		}
 	}
 
@@ -1435,10 +1449,6 @@ export class ReaderSession {
 		}
 		this.disposePdfEvents?.();
 		this.disposePdfEvents = null;
-		if (this.statusHideTimer) {
-			clearTimeout(this.statusHideTimer);
-			this.statusHideTimer = null;
-		}
 		this.overlay?.destroy();
 		this.overlay = null;
 		this.manager?.dispose();

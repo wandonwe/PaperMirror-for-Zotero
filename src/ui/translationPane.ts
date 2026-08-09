@@ -136,9 +136,6 @@ export class TranslationPane {
 
 	private scroll!: HTMLElement;
 	private articleHost!: HTMLElement;
-	private statusRow!: HTMLElement;
-	private statusMain!: HTMLElement;
-	private statusSub!: HTMLElement;
 	private languagePill!: HTMLElement;
 	private providerName!: HTMLElement;
 	private providerMark!: HTMLElement;
@@ -146,9 +143,6 @@ export class TranslationPane {
 	private toastEl!: HTMLElement;
 	private toastText!: HTMLElement;
 	private toastTimer: ReturnType<typeof setTimeout> | null = null;
-	private statusNote!: HTMLElement;
-	private statusTimer: ReturnType<typeof setTimeout> | null = null;
-	private lastStatusSignature = '';
 
 	private pages = new Map<number, PageSection>();
 	private selectedBlockId: string | null = null;
@@ -627,11 +621,6 @@ export class TranslationPane {
 			this.openProviderMenu();
 		});
 
-		this.statusRow = this.el('div', 'pm-status-row');
-		this.statusMain = this.el('span', 'pm-status-main');
-		this.statusSub = this.el('span', 'pm-status-sub');
-		this.statusRow.append(this.statusMain, this.statusSub);
-
 		this.syncSwitch = this.switchControl(this.strings.syncScroll, true, on => this.callbacks.onToggleSync(on));
 
 		bar.append(
@@ -658,13 +647,12 @@ export class TranslationPane {
 		this.scrollHandler = () => this.handleScroll();
 		this.scroll.addEventListener('scroll', this.scrollHandler, { passive: true });
 
-		// --- floating status note (bottom-right) + toast
-		this.statusNote = this.el('div', 'pm-status-note');
+		// --- success toast only (status/errors live in the StatusCapsule)
 		this.toastEl = this.el('div', 'pm-toast');
 		this.toastText = this.el('p');
 		this.toastEl.append(this.el('span', 'pm-toast-check', '✓'), this.toastText);
 
-		this.host.append(header, this.scroll, this.statusNote, this.toastEl);
+		this.host.append(header, this.scroll, this.toastEl);
 
 		this.keyHandler = (event: KeyboardEvent) => {
 			if (event.key === 'Escape') {
@@ -745,47 +733,6 @@ export class TranslationPane {
 
 	setBusy(busy: boolean): void {
 		this.host.classList.toggle('pm-refreshing', busy);
-	}
-
-	/**
-	 * Transient status, shown as a floating note in the bottom-right corner.
-	 *
-	 * Only NEW information appears: repeating the same message does not
-	 * re-trigger it. Busy states stay up while the work runs, results fade
-	 * after a couple of seconds, errors linger long enough to be read.
-	 */
-	setStatus(main: string, options?: { sub?: string; error?: boolean; busy?: boolean; check?: boolean }): void {
-		const sub = options?.sub ?? '';
-		const signature = `${main}|${sub}|${options?.error ? 'e' : ''}${options?.busy ? 'b' : ''}`;
-		if (signature === this.lastStatusSignature) {
-			return;
-		}
-		this.lastStatusSignature = signature;
-
-		this.statusMain.replaceChildren();
-		if (options?.busy) {
-			this.statusMain.append(this.el('span', 'pm-bilingual-spinner'));
-		}
-		else if (options?.check) {
-			this.statusMain.append(this.el('i', 'pm-check', '✓'));
-		}
-		this.statusMain.append(this.doc.createTextNode(main));
-		this.statusSub.textContent = sub;
-		this.statusRow.classList.toggle('pm-error', !!options?.error);
-
-		this.statusNote.replaceChildren(this.statusRow);
-		this.statusNote.setAttribute('data-pm-error', String(!!options?.error));
-		this.statusNote.classList.add('pm-show');
-		if (this.statusTimer) {
-			clearTimeout(this.statusTimer);
-			this.statusTimer = null;
-		}
-		if (!options?.busy) {
-			this.statusTimer = setTimeout(
-				() => this.statusNote.classList.remove('pm-show'),
-				options?.error ? 7000 : 2400
-			);
-		}
 	}
 
 	toast(message: string): void {
@@ -1525,10 +1472,6 @@ export class TranslationPane {
 		if (this.toastTimer) {
 			clearTimeout(this.toastTimer);
 			this.toastTimer = null;
-		}
-		if (this.statusTimer) {
-			clearTimeout(this.statusTimer);
-			this.statusTimer = null;
 		}
 		if (this.resizeTimer) {
 			clearTimeout(this.resizeTimer);
