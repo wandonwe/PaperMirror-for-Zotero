@@ -340,3 +340,26 @@ test('looksTranslated rejects a HALF-translated / mixed response, not just pure 
 		true
 	);
 });
+
+test('优先翻译当前页: the current page translates before any neighbour is prefetched', async () => {
+	const order: number[] = [];
+	const { deps } = makeDeps({
+		pageCount: () => 10,
+		extractPage: async (p) => [{
+			id: `page-${p}-block-0`, pageIndex: p, order: 0, type: 'paragraph',
+			sourceText: `Body text for page ${p} with enough words here.`
+		}],
+		translateRequest: async (request) => {
+			order.push(request.pageIndex ?? -1);
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '译文内容' })) };
+		}
+	});
+	// prefetch ON so neighbours are eligible; the current page must still win.
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: true, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(3);
+	await new Promise(r => setTimeout(r, 30));
+	assert.equal(order[0], 3, 'the current page is translated first');
+	assert.ok(order.includes(2) && order.includes(4), 'neighbours are prefetched afterwards');
+	assert.ok(order.indexOf(3) < order.indexOf(4), 'current page precedes its neighbours');
+	manager.dispose();
+});

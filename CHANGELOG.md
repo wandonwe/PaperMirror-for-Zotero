@@ -9,7 +9,24 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
-## [0.7.10] — 2026-08-09
+## [0.8.0] — 2026-08-09
+
+### Added
+
+- **圆环两段式交互 (two-zone ring).** Clicking the ring's OUTER edge expands or
+  collapses the capsule's detail body; clicking the INNER disc (where the % is)
+  re-translates the current page. The hit test splits the ring at ~42% of its
+  radius, so the two gestures don't collide on the small ring.
+
+### Changed
+
+- **优先翻译当前页 (current page first).** The page you are on now gets a
+  dominant scheduler priority AND the concurrency to itself — neighbour pages
+  are not prefetched until the current page is done, so a slow free engine never
+  spends its slots translating pages ahead while the visible page waits. Once
+  the current page finishes, its neighbours prefetch as before.
+
+
 
 ### Fixed
 
@@ -1125,7 +1142,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.10...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.10...v0.8.0
 [0.7.10]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.9...v0.7.10
 [0.7.9]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.8...v0.7.9
 [0.7.8]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.7...v0.7.8

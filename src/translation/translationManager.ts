@@ -43,6 +43,9 @@ const SALVAGE_WARN_THRESHOLD = 24;
  */
 const SALVAGE_CONCURRENCY = 4;
 
+/** The visible page's scheduler priority — dominant over neighbour prefetch (1). */
+const CURRENT_PAGE_PRIORITY = 100;
+
 /**
  * Accept a response as a REAL translation, not an echo or a half-translation.
  * For a Chinese target a prose source (≥PROSE_WORD_GATE Latin words — a real
@@ -169,8 +172,25 @@ export class TranslationManager {
 			keep.add(`page-${p}-compress`);
 		}
 		this.scheduler.cancelExcept(keep);
-		for (const page of wanted) {
-			void this.ensurePage(page, page === pageIndex ? 10 : 1);
+		// 优先翻译当前页: the page the reader is on gets a dominant priority AND
+		// the concurrency to itself — neighbour prefetch is not enqueued until the
+		// current page is done, so a slow free engine never spends its 2 slots on
+		// pages ahead while the visible page waits.
+		void this.ensurePage(pageIndex, CURRENT_PAGE_PRIORITY);
+		if (this.pages.get(pageIndex)?.status === 'done') {
+			this.prefetchNeighbours();
+		}
+	}
+
+	/** Prefetch the pages around the current one — only once it is itself done. */
+	private prefetchNeighbours(): void {
+		if (this.disposed || !this.prefetchEnabled) {
+			return;
+		}
+		for (const page of this.wantedPages()) {
+			if (page !== this.currentPage) {
+				void this.ensurePage(page, 1);
+			}
 		}
 	}
 
@@ -561,6 +581,11 @@ export class TranslationManager {
 
 		state.status = 'done';
 		this.notify(state);
+		// The visible page is done → now it is safe to prefetch its neighbours
+		// (they were held back so they could not starve the current page).
+		if (pageIndex === this.currentPage) {
+			this.prefetchNeighbours();
+		}
 		// Only a COMPLETE page enters the cache. Caching a partial page would
 		// freeze the mixed-language rendering: every revisit would hit the
 		// cache and never retry the missing blocks. Left uncached, the next

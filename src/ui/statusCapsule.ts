@@ -339,7 +339,7 @@ export class StatusCapsule {
 
 		const ring = doc.createElement('div');
 		ring.className = 'pm-ring';
-		ring.title = '刷新本页';
+		ring.title = '圆心：刷新本页 · 圆环边缘：展开/收起详情';
 		const svg = doc.createElementNS(SVG_NS, 'svg');
 		svg.setAttribute('viewBox', '0 0 34 34');
 		const track = doc.createElementNS(SVG_NS, 'circle');
@@ -352,11 +352,24 @@ export class StatusCapsule {
 		const glyph = doc.createElement('span');
 		glyph.className = 'pm-glyph';
 		ring.appendChild(svg); ring.appendChild(glyph);
-		// Ring click → re-translate the current page.
+		// The ring is two hit zones: the OUTER band (the drawn circle) toggles
+		// the detail body open/closed; the INNER disc (where the % sits)
+		// re-translates the current page.
 		ring.addEventListener('click', (e) => {
 			e.preventDefault();
 			e.stopPropagation();
-			this.callbacks.onRefreshRing?.();
+			const rect = ring.getBoundingClientRect();
+			const dx = e.clientX - (rect.left + rect.width / 2);
+			const dy = e.clientY - (rect.top + rect.height / 2);
+			const dist = Math.hypot(dx, dy);
+			// Inner disc ≈ 42% of the ring radius; anything beyond is the edge.
+			if (rect.width > 0 && dist > rect.width * 0.42) {
+				this.collapsed = !this.collapsed;
+				el.setAttribute('data-pm-collapsed', String(this.collapsed));
+			}
+			else {
+				this.callbacks.onRefreshRing?.();
+			}
 		});
 
 		const body = doc.createElement('div');
