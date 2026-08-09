@@ -146,26 +146,42 @@ export const CAPSULE_CSS = `
 .${CAPSULE_CLASS} .pm-ring-progress circle { fill: none; stroke-width: 3.5; }
 .${CAPSULE_CLASS} .pm-track { stroke: rgba(255, 255, 255, .16); }
 .${CAPSULE_CLASS} .pm-arc { stroke: #6c9bff; stroke-linecap: round; transition: stroke-dashoffset .3s ease, stroke .2s ease; }
+/* Center button = 刷新本页. FULLY reset the native <button> (appearance/margin/
+   min-width/text-align/text-indent/box-sizing) so no host default shifts the %,
+   and make it a full 34×34 disc concentric with the SVG — "100%" never overflows
+   a too-narrow button. The % lives in an independent .pm-ring-label span that
+   handles the visual centering, so button text layout can't nudge it. */
 .${CAPSULE_CLASS} .pm-ring-refresh {
 	position: absolute;
 	top: 50%;
 	left: 50%;
 	transform: translate(-50%, -50%);
-	width: 24px;
-	height: 24px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	width: 34px;
+	height: 34px;
+	margin: 0;
 	padding: 0;
-	border: none;
+	min-width: 0;
+	box-sizing: border-box;
+	-webkit-appearance: none;
+	appearance: none;
+	border: 0;
 	border-radius: 50%;
 	background: transparent;
 	color: inherit;
 	font: 600 11px/1 -apple-system, "PingFang SC", "Segoe UI", system-ui, sans-serif;
+	text-align: center;
+	text-indent: 0;
 	cursor: pointer;
 	transition: background .15s ease;
 }
 .${CAPSULE_CLASS} .pm-ring-refresh:hover { background: rgba(255, 255, 255, .16); }
+.${CAPSULE_CLASS} .pm-ring-label {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	pointer-events: none;
+}
 .${CAPSULE_CLASS} .pm-body { flex: 1 1 auto; min-width: 0; cursor: pointer; }
 .${CAPSULE_CLASS} .pm-main { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .${CAPSULE_CLASS} .pm-sub { margin-top: 2px; opacity: .72; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -185,9 +201,18 @@ export const CAPSULE_CSS = `
 	cursor: pointer;
 }
 .${CAPSULE_CLASS} .pm-action:hover { background: rgba(255, 255, 255, .18); }
-/* Collapsed: only the ring remains, as a big (≥56px) easy-to-hit square that
-   expands on click. The center 刷新 button keeps working on top. */
-.${CAPSULE_CLASS}[data-pm-collapsed="true"] { width: auto; padding: 6px; cursor: pointer; }
+/* Collapsed: SAME 56×56 outer size as the expanded capsule's height — no more
+   padding:6px + shell:56 = 68px jump. The shell fills the 56 square (easy hit
+   target), the SVG stays 34×34 so the RING itself does not grow; only the
+   clickable background does. */
+.${CAPSULE_CLASS}[data-pm-collapsed="true"] {
+	width: 56px;
+	height: 56px;
+	min-height: 56px;
+	padding: 0;
+	gap: 0;
+	cursor: pointer;
+}
 .${CAPSULE_CLASS}[data-pm-collapsed="true"] .pm-ring-shell { width: 56px; height: 56px; cursor: pointer; }
 .${CAPSULE_CLASS}[data-pm-collapsed="true"] .pm-ring-shell:hover { background: rgba(255, 255, 255, .1); }
 .${CAPSULE_CLASS}[data-pm-collapsed="true"] .pm-body,
@@ -374,9 +399,10 @@ export class StatusCapsule {
 					: Math.max(0, Math.min(1, state.fraction));
 				arc.setAttribute('stroke-dashoffset', String(C * (1 - frac)));
 			}
-			// The %/glyph lives INSIDE the center 刷新 button now (so hovering the
-			// center reads "重新翻译本页" and clicking it re-translates).
-			const label = el.querySelector('.pm-ring-refresh');
+			// The %/glyph lives in the center 刷新 button's label span (so hovering
+			// the center reads "重新翻译本页" and clicking it re-translates, while
+			// the span keeps the number optically centred).
+			const label = el.querySelector('.pm-ring-label');
 			if (label) {
 				label.textContent = state.glyph === 'check' ? '✓'
 					: state.glyph === 'warn' || state.glyph === 'error' ? '!'
@@ -443,6 +469,11 @@ export class StatusCapsule {
 		refresh.className = 'pm-ring-refresh';
 		refresh.type = 'button';
 		refresh.title = '重新翻译本页';
+		// The % text is an independent span so button text-layout quirks across
+		// platforms can never nudge it off the ring's geometric centre.
+		const label = doc.createElement('span');
+		label.className = 'pm-ring-label';
+		refresh.appendChild(label);
 		refresh.addEventListener('click', (e) => {
 			e.preventDefault();
 			e.stopPropagation();

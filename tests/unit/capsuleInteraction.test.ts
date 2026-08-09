@@ -233,3 +233,11 @@ test('the SVG progress ring carries no click handler (display only)', () => {
 	const svg = el.querySelector('.pm-ring-progress')!;
 	assert.equal(svg.listeners.get('click')?.length ?? 0, 0, 'outer ring is not a hit zone');
 });
+
+test('the % renders into an independent label span, not raw button text', () => {
+	// (33 + 0) / (66 * 2) = 0.25 → 25%. The number must live in .pm-ring-label
+	// so button text-layout quirks cannot shift it off centre.
+	const { el } = mount({ ...active, phase: 'translating', segTotal: 66, segTranslated: 33, segPlaced: 0 });
+	const label = el.querySelector('.pm-ring-label')!;
+	assert.equal(label.textContent, '25%');
+});

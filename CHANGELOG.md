@@ -9,6 +9,23 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.8.4] — 2026-08-09
+
+### Fixed
+
+- **百分比稳定居中 (percentage sits at the ring's true centre).** The center
+  button is now a fully-reset native `<button>` (appearance / margin / min-width
+  / text-align / text-indent / box-sizing all cleared) sized to the full 34×34
+  ring, and the `%` moved into an independent `.pm-ring-label` span
+  (`inset: 0; display: grid; place-items: center; pointer-events: none`). Host
+  platform button defaults can no longer nudge the number, and “100%” no longer
+  overflows a too-narrow (24px) button.
+- **折叠后不再变高 (collapsed capsule keeps the same 56px height).** Collapsed
+  state used `padding: 6px` around a 56px shell (= 68px tall) while expanded was
+  56px, so the widget jumped taller when collapsed. Collapsed is now a fixed
+  56×56 box (`padding: 0; gap: 0`); the SVG stays 34×34, so only the clickable
+  background fills the square — the ring itself does not grow.
+
 ## [0.8.3] — 2026-08-09
 
 ### Changed
