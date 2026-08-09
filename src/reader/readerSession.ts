@@ -652,10 +652,12 @@ export class ReaderSession {
 		this.tasks.set(id, model);
 		// done/cancelled linger ~2.2s as a full message, then clear. On DONE we
 		// also auto-collapse: the capsule shrinks to the resting bottom-right
-		// ring (idle) instead of vanishing. failed/partial NEVER auto-clear or
-		// auto-collapse — they stay expanded until the user acts.
-		if (model.phase === 'done' || model.phase === 'cancelled') {
+		// ring (idle) instead of vanishing. A transient 'notice' (copied / saved /
+		// cache cleared) flashes ~1.9s then clears WITHOUT collapsing. failed and
+		// partial NEVER auto-clear or auto-collapse — they wait for the user.
+		if (model.phase === 'done' || model.phase === 'cancelled' || model.phase === 'notice') {
 			const collapseAfter = model.phase === 'done';
+			const ms = model.phase === 'notice' ? 1900 : 2200;
 			this.taskHideTimers.set(id, setTimeout(() => {
 				this.taskHideTimers.delete(id);
 				this.tasks.delete(id);
@@ -663,9 +665,24 @@ export class ReaderSession {
 					this.setCapsuleCollapsed(true);
 				}
 				this.renderTopTask();
-			}, 2200));
+			}, ms));
 		}
 		this.renderTopTask();
+	}
+
+	/**
+	 * 成功提示统一走胶囊: a transient success flash (copied / saved / cache
+	 * cleared) shown IN the single capsule — there is no separate bottom toast
+	 * anymore. It rides the task queue as a short-lived 'notice' so it routes to
+	 * the visible surface and auto-clears back to whatever was underneath.
+	 */
+	private flashNotice(message: string): void {
+		this.setTask('flash', {
+			phase: 'notice', message,
+			currentPage: adapter.getCurrentPageIndex(this.reader) + 1,
+			totalPages: adapter.getPageCount(this.reader),
+			segTotal: 0, segTranslated: 0, segPlaced: 0, kept: 0
+		});
 	}
 
 	/**
@@ -1483,7 +1500,8 @@ export class ReaderSession {
 				logger.warn(MODULE, 'retranslateAll: cache clear failed', e);
 			}
 		}
-		this.pane?.toast(getString('papermirror-toast-cache-cleared'));
+		// No separate toast: the capsule immediately shows the current page
+		// re-translating, which IS the confirmation that 刷新全部 took effect.
 		if (getPref<boolean>('privacyNoticeAccepted', false)) {
 			this.manager.setCurrentPage(adapter.getCurrentPageIndex(this.reader));
 		}
@@ -1534,7 +1552,7 @@ export class ReaderSession {
 			attachmentURI: buildAttachmentSelectURI(item)
 		});
 		if (noteID) {
-			this.pane.toast(getString('papermirror-toast-saved'));
+			this.flashNotice(getString('papermirror-toast-saved'));
 		}
 		else {
 			this.pushFailure(getString('papermirror-status-error'));
@@ -1613,7 +1631,7 @@ export class ReaderSession {
 			Components.classes['@mozilla.org/widget/clipboardhelper;1']
 				.getService(Components.interfaces.nsIClipboardHelper)
 				.copyString(text);
-			this.pane.toast(getString('papermirror-toast-copied'));
+			this.flashNotice(getString('papermirror-toast-copied'));
 		}
 		catch (e) {
 			logger.warn(MODULE, 'Clipboard copy failed', e);
@@ -1634,7 +1652,7 @@ export class ReaderSession {
 			attachmentURI: buildAttachmentSelectURI(item)
 		});
 		if (noteID) {
-			this.pane.toast(getString('papermirror-toast-saved'));
+			this.flashNotice(getString('papermirror-toast-saved'));
 		}
 		else {
 			this.pushFailure(getString('papermirror-status-error'));
@@ -1649,7 +1667,7 @@ export class ReaderSession {
 		}
 		try {
 			await cacheManager.clearAttachmentAllVersions(item.key);
-			this.pane?.toast(getString('papermirror-toast-cache-cleared'));
+			// No toast: retranslateCurrent() makes the capsule show progress.
 			await this.retranslateCurrent();
 		}
 		catch (e) {

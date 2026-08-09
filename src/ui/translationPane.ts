@@ -149,9 +149,6 @@ export class TranslationPane {
 	private providerName!: HTMLElement;
 	private providerMark!: HTMLElement;
 	private syncSwitch!: HTMLElement;
-	private toastEl!: HTMLElement;
-	private toastText!: HTMLElement;
-	private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
 	private pages = new Map<number, PageSection>();
 	private selectedBlockId: string | null = null;
@@ -659,12 +656,9 @@ export class TranslationPane {
 		this.scrollHandler = () => this.handleScroll();
 		this.scroll.addEventListener('scroll', this.scrollHandler, { passive: true });
 
-		// --- success toast only (status/errors live in the StatusCapsule)
-		this.toastEl = this.el('div', 'pm-toast');
-		this.toastText = this.el('p');
-		this.toastEl.append(this.el('span', 'pm-toast-check', '✓'), this.toastText);
-
-		this.host.append(header, this.scroll, this.toastEl);
+		// Every notification — task, error AND transient success — now lives in
+		// the StatusCapsule. There is no separate bottom toast module anymore.
+		this.host.append(header, this.scroll);
 
 		this.keyHandler = (event: KeyboardEvent) => {
 			if (event.key === 'Escape') {
@@ -750,15 +744,6 @@ export class TranslationPane {
 	/** Mirror the session-owned collapsed state onto this surface's capsule. */
 	setCollapsed(collapsed: boolean): void {
 		this.statusCapsule.setCollapsed(collapsed);
-	}
-
-	toast(message: string): void {
-		this.toastText.textContent = message;
-		this.toastEl.classList.add('pm-show');
-		if (this.toastTimer) {
-			clearTimeout(this.toastTimer);
-		}
-		this.toastTimer = setTimeout(() => this.toastEl.classList.remove('pm-show'), 1900);
 	}
 
 	// ---- privacy notice -----------------------------------------------------
@@ -1515,10 +1500,6 @@ export class TranslationPane {
 		if (this.explainKeyHandler) {
 			this.doc.removeEventListener('keydown', this.explainKeyHandler, true);
 			this.explainKeyHandler = null;
-		}
-		if (this.toastTimer) {
-			clearTimeout(this.toastTimer);
-			this.toastTimer = null;
 		}
 		if (this.resizeTimer) {
 			clearTimeout(this.resizeTimer);

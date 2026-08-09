@@ -9,6 +9,19 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.8.8] — 2026-08-09
+
+### Changed
+
+- **通知彻底统一到胶囊 (single capsule is now the ONLY notification surface).**
+  The bottom-center success toast module (`.pm-toast`) is fully removed —
+  fields, DOM, `toast()` method, timer and CSS. Transient successes (译文已复制 /
+  已保存为子笔记 / 缓存已清除) now flash as a new capsule `notice` state: a ✓ over
+  a green ring with the message, auto-hiding after ~1.9s, priced just under a
+  failure so it shows over active work then reverts to whatever was underneath.
+- **刷新全部 / 清除缓存不再弹底部提示.** Both immediately re-translate the current
+  page, so the capsule's own progress IS the confirmation — no separate toast.
+
 ## [0.8.7] — 2026-08-09
 
 ### Changed

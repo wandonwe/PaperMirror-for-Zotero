@@ -18,7 +18,7 @@
  * document and the container to mount into, so both surfaces look identical.
  */
 
-export type OverlayPhase = 'idle' | 'translating' | 'laying-out' | 'done' | 'partial' | 'failed' | 'cancelled';
+export type OverlayPhase = 'idle' | 'translating' | 'laying-out' | 'done' | 'partial' | 'failed' | 'cancelled' | 'notice';
 
 export interface OverlayProgress {
 	phase: OverlayPhase;
@@ -61,6 +61,12 @@ export function taskPriority(m: OverlayProgress): number {
 	const active = m.phase === 'translating' || m.phase === 'laying-out';
 	if (m.phase === 'failed') {
 		return 500;
+	}
+	// A transient success flash (copied / saved / cache cleared) is a direct
+	// response to something the user just clicked — show it over everything but a
+	// failure, then it auto-clears back to whatever was underneath.
+	if (m.phase === 'notice') {
+		return 450;
 	}
 	if (m.phase === 'partial') {
 		return 350;
@@ -244,6 +250,7 @@ export const CAPSULE_CSS = `
 .${CAPSULE_CLASS}[data-pm-phase="failed"] .pm-arc { stroke: var(--pm-ring-failed); }
 .${CAPSULE_CLASS}[data-pm-phase="cancelled"] .pm-arc { stroke: var(--pm-ring-stopped); }
 .${CAPSULE_CLASS}[data-pm-phase="idle"] .pm-arc { stroke: var(--pm-ring-idle); }
+.${CAPSULE_CLASS}[data-pm-phase="notice"] .pm-arc { stroke: var(--pm-ring-done); }
 .${CAPSULE_CLASS}[data-pm-indeterminate="true"] .pm-ring-progress { animation: pm-capsule-spin 1s linear infinite; }
 @keyframes pm-capsule-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
 `;
@@ -328,6 +335,17 @@ export function capsuleStateFor(m: OverlayProgress): CapsuleState {
 				fraction: null,
 				main: '已停止翻译',
 				autoHideMs: 2600
+			};
+		case 'notice':
+			// Transient success flash — copied / saved / cache cleared. A ✓ over a
+			// full green ring, auto-hides. The single capsule is now the ONLY
+			// notification surface; there is no separate bottom toast.
+			return {
+				phase: m.phase,
+				glyph: 'check',
+				fraction: 1,
+				main: m.message ?? '已完成',
+				autoHideMs: 1900
 			};
 	}
 }

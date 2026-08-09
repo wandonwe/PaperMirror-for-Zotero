@@ -73,6 +73,22 @@ test('cancelled: stop glyph, auto-hides', () => {
 	assert.ok((s.autoHideMs ?? 0) > 0);
 });
 
+test('notice: transient success flash — ✓, custom message, auto-hides, no action', () => {
+	const s = capsuleStateFor({ ...base, phase: 'notice', message: '译文已复制到剪贴板' });
+	assert.equal(s.glyph, 'check');
+	assert.equal(s.main, '译文已复制到剪贴板');
+	assert.ok((s.autoHideMs ?? 0) > 0, 'notice auto-hides');
+	assert.equal(s.action, undefined, 'a success flash has no button');
+});
+
+test('task priority: a success notice shows over active work but under a failure', () => {
+	const notice: OverlayProgress = { ...base, phase: 'notice', message: '已保存' };
+	const activeTranslate: OverlayProgress = { ...base, phase: 'translating' };
+	const failed: OverlayProgress = { ...base, phase: 'failed', message: 'x' };
+	assert.ok(taskPriority(notice) > taskPriority(activeTranslate), 'flash is visible over progress');
+	assert.ok(taskPriority(failed) > taskPriority(notice), 'a failure still wins');
+});
+
 test('idle on a translated page → ✓, full ring, persists (no auto-hide, no action)', () => {
 	const s = capsuleStateFor({ ...base, phase: 'idle', segTranslated: 1, segTotal: 0 });
 	assert.equal(s.glyph, 'check');

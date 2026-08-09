@@ -617,45 +617,8 @@
 	border-color: var(--pm-accent);
 }
 
-/* ===== toast (demo .toast) ===== */
-
-.pm-toast {
-	position: absolute;
-	left: 50%;
-	bottom: 60px;
-	z-index: 50;
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	min-width: 230px;
-	max-width: 86%;
-	padding: 11px 15px;
-	border-radius: 9px;
-	background: #242a32;
-	color: #fff;
-	box-shadow: 0 18px 50px rgba(31, 39, 51, .12);
-	opacity: 0;
-	transform: translate(-50%, 15px);
-	pointer-events: none;
-	transition: .22s;
-}
-
-.pm-toast.pm-show {
-	opacity: 1;
-	transform: translate(-50%, 0);
-}
-
-.pm-toast .pm-toast-check {
-	color: #62d69d;
-	flex: none;
-}
-
-.pm-toast p {
-	margin: 0;
-	font-size: 12px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
+/* The bottom-center success toast was removed in 0.8.8 — every notification
+   (task, error, and transient success) now lives in the single StatusCapsule. */
 
 /* ===== privacy notice / per-page status ===== */
 
