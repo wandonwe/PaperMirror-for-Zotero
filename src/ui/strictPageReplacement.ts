@@ -30,6 +30,7 @@ import { isMetadataBlock } from '../reader/metaFilter';
 import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
 import { detectTableRegions } from '../reader/tableGuard';
+import { buildTableModel, type CellMember } from '../reader/tableStructure';
 import {
 	inkFor,
 	localPaper,
@@ -116,7 +117,9 @@ export interface StrictPageStats {
 	abandoned: number;
 	/** Still being resolved (measuring / compress in flight). */
 	pending: number;
-	/** Kept original because inside a protected table region. */
+	/** Table cells translated + replaced in place (the cell model). */
+	tableTranslated: number;
+	/** Kept original because inside a protected table region / data cell. */
 	tableExcluded: number;
 	/** Kept original because the box overlapped a real image. */
 	imageExcluded: number;
@@ -149,6 +152,12 @@ function intersectArea(a: PixelBox, b: PixelBox): number {
 	const w = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
 	const h = Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
 	return w > 0 && h > 0 ? w * h : 0;
+}
+
+/** Fraction of `box`'s area that lies inside `region`. */
+function containedFraction(box: PixelBox, region: { left: number; top: number; width: number; height: number }): number {
+	const area = box.width * box.height;
+	return area > 0 ? intersectArea(box, region as PixelBox) / area : 0;
 }
 
 /**
@@ -206,24 +215,98 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		.map(r => rectToPixels(r, render, 1))
 		.filter(b => b.width > 8 && b.height > 8);
 
-	// Table regions stay entirely original until the cell model exists.
+	const pxOf = new Map<string, PixelBox>();
+	for (const b of translatable) {
+		pxOf.set(b.id, pixelBox(b, render, 1));
+	}
+	const blockById = new Map(translatable.map(b => [b.id, b]));
+
 	const guard = detectTableRegions(
 		translatable.map(b => ({
 			id: b.id, text: b.sourceText, type: b.type,
-			box: pixelBox(b, render, 1), fontSize: b.fontSize
+			box: pxOf.get(b.id)!, fontSize: b.fontSize
 		})),
 		Math.max(6, bodyPt * pxPerPoint)
 	);
+
+	// ---- 2a. table cell model ----------------------------------------------
+	// For each detected region, infer the Row/Cell grid. Prose cells become
+	// synthetic per-cell "blocks" that go through the SAME strict pipeline
+	// (masked, measured, committed inside their own rectangle); data cells and
+	// cross-column fragments stay original. `translationOf` resolves both real
+	// block ids and synthetic cell ids.
+	const cellTranslations = new Map<string, string>();
+	const cellBlocks: SourceBlock[] = [];
+	const consumedMemberIds = new Set<string>();
+	let tableTranslated = 0;
+	let tableExcluded = 0;
+	guard.regions.forEach((region, tableIndex) => {
+		const members: CellMember[] = translatable
+			.filter(b => containedFraction(pxOf.get(b.id)!, region) >= 0.5 && b.lineRectsPdf?.length)
+			.map(b => ({ id: b.id, box: pxOf.get(b.id)!, text: b.sourceText, fontSize: b.fontSize }));
+		if (!members.length) {
+			return;
+		}
+		const model = buildTableModel(input.pageIndex, tableIndex, region, members);
+		for (const cell of model.cells) {
+			for (const mid of cell.memberIds) {
+				consumedMemberIds.add(mid); // handled here, not as a normal block
+			}
+			// A data / spanning cell stays original.
+			if (cell.kind !== 'text') {
+				tableExcluded += cell.memberIds.length;
+				continue;
+			}
+			// Assemble the cell's translation from its members; if any member is
+			// missing a translation the cell can't be shown whole → keep original.
+			const parts = cell.memberIds.map(mid => input.translations.get(mid));
+			if (parts.some(p => p === undefined || !p.trim())) {
+				tableExcluded += cell.memberIds.length;
+				continue;
+			}
+			const lineRects: [number, number, number, number][] = [];
+			const sizes: number[] = [];
+			for (const mid of cell.memberIds) {
+				const mb = blockById.get(mid);
+				if (mb?.lineRectsPdf) {
+					lineRects.push(...mb.lineRectsPdf);
+				}
+				if (mb?.fontSize) {
+					sizes.push(mb.fontSize);
+				}
+			}
+			if (!lineRects.length) {
+				tableExcluded += cell.memberIds.length;
+				continue;
+			}
+			cellTranslations.set(cell.id, parts.join(''));
+			cellBlocks.push({
+				id: cell.id,
+				pageIndex: input.pageIndex,
+				order: 0,
+				type: 'paragraph',
+				sourceText: cell.text,
+				lineRectsPdf: lineRects,
+				fontSize: sizes.length ? sizes[Math.floor(sizes.length / 2)] : bodyPt
+			});
+			tableTranslated++;
+		}
+	});
+
+	const translationOf = (id: string): string | undefined =>
+		cellTranslations.get(id) ?? input.translations.get(id);
 
 	const replaceable: SourceBlock[] = [];
 	// Placement accounting (#6): every translatable block is classified so the
 	// page can be honest about what was NOT shown translated — never a silent
 	// English block.
-	let tableExcluded = 0;
 	let imageExcluded = 0;
 	let untranslated = 0;
 	let tooSmall = 0;
 	for (const block of translatable) {
+		if (consumedMemberIds.has(block.id)) {
+			continue; // owned by the table cell model (translated cell or kept original)
+		}
 		const text = input.translations.get(block.id);
 		if (isMetadataBlock(block.sourceText)) {
 			continue; // running heads/DOIs — deliberately not translated
@@ -234,9 +317,9 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		}
 		if (guard.excluded.has(block.id)) {
 			tableExcluded++;
-			continue; // protected table content
+			continue; // protected table content the cell model didn't claim
 		}
-		const box = pixelBox(block, render, 1);
+		const box = pxOf.get(block.id)!;
 		const minWidth = block.type === 'caption' ? 28 : 50;
 		if (box.width < minWidth || box.height < 9 || block.sourceText.trim().length < 6) {
 			tooSmall++;
@@ -249,17 +332,31 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			imageExcluded++;
 			continue;
 		}
-		// A block overlapping a detected table REGION — even one the cell
-		// detector did not itself flag (long recommendation cells look like
-		// paragraphs) — must stay original too. Otherwise the whole table shows
-		// half-translated, or a paragraph the extractor stitched across cells
-		// gets stamped in Chinese ACROSS the table. Until the real cell model
-		// exists, a table is all-original, never mixed.
+		// A block overlapping a detected table REGION that the cell model did
+		// NOT turn into a cell (e.g. a paragraph the extractor stitched across
+		// cells) stays original — never stamped in Chinese across the table.
 		if (area > 0 && guard.regions.some(r => intersectArea(box, r as unknown as PixelBox) > area * 0.15)) {
 			tableExcluded++;
 			continue;
 		}
 		replaceable.push(block);
+	}
+	// Synthetic text-cell blocks join the replaceable set (they live inside
+	// table regions, so they must bypass the region-overlap guard above).
+	for (const cb of cellBlocks) {
+		const box = pixelBox(cb, render, 1);
+		if (box.width < 20 || box.height < 9) {
+			tableExcluded += 1;
+			tableTranslated -= 1;
+			continue;
+		}
+		const area = box.width * box.height;
+		if (area > 0 && imageBoxes.some(img => intersectArea(box, img) > area * 0.15)) {
+			tableExcluded += 1;
+			tableTranslated -= 1;
+			continue;
+		}
+		replaceable.push(cb);
 	}
 
 	// ---- 3. per-line mask geometry (painted lazily, ONLY on commit) ---------
@@ -380,7 +477,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		if (block.type === 'heading' || block.type === 'title') {
 			node.setAttribute('data-pm-strong', 'true');
 		}
-		node.textContent = input.translations.get(block.id)!; // SAFE: text node
+		node.textContent = translationOf(block.id)!; // SAFE: text node
 		node.title = block.sourceText;
 		textLayer.appendChild(node);
 		// The block's own original leading: the median gap between successive
@@ -548,7 +645,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		return {
 			replaceable: items.length,
 			committed, abandoned, pending,
-			tableExcluded, imageExcluded, untranslated, tooSmall
+			tableTranslated, tableExcluded, imageExcluded, untranslated, tooSmall
 		};
 	};
 
@@ -559,7 +656,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		stats: {
 			replaceable: items.length,
 			committed: 0, abandoned: 0, pending: items.length,
-			tableExcluded, imageExcluded, untranslated, tooSmall
+			tableTranslated, tableExcluded, imageExcluded, untranslated, tooSmall
 		}
 	};
 }

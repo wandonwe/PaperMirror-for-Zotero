@@ -102,10 +102,24 @@ one architecture: strict in-place replacement.
   text that was overlapping table rows. (A table is all-original until the real
   cell model lands.)
 
-Still ahead (acknowledged, not yet done): a real table Row/Cell model with
-per-cell replacement (today whole detected tables stay original), and
-paragraph-granular placement so one overflowing line can't hold back a long
-paragraph.
+- **Table cell model — text cells now translate in place (`tableStructure.ts`).**
+  A detected table region is no longer kept wholesale in English. Its Row/Cell
+  grid is inferred geometrically (columns from the members' x-extents seeded
+  narrowest-first so a spanning cell can't fuse two columns; rows from their
+  y-extents), and each cell is handled on its own: prose cells (labels,
+  recommendations, prose headers like "2025 Recommendation") are translated and
+  replaced inside their own rectangle through the same measure-before-commit
+  pipeline, while data cells (numbers, value±sd, ranges, symbols), whole
+  numeric columns, and any fragment stitched ACROSS columns stay original — so
+  a data table's figures and alignment are never disturbed and nothing is ever
+  stamped across the grid. Each cell carries a stable id
+  (`page-<p>-table-<t>-r<row>-c<col>`). The placement tally gains a
+  `tableTranslated` count beside `tableExcluded`.
+
+Still ahead (acknowledged, not yet done): ruling-line detection from the
+operator list for tables drawn with rules rather than whitespace; splitting a
+multi-block cell's translation across its members; and paragraph-granular
+placement so one overflowing line can't hold back a long paragraph.
 
 ### Changed (architecture)
 
