@@ -38,6 +38,13 @@ export interface SourceBlock {
 	 * rebuilt page keeps the original's typographic hierarchy.
 	 */
 	fontSize?: number;
+	/**
+	 * When this block is a coalesced semantic paragraph group, the ids of the
+	 * original extraction fragments it was built from (reading order). The
+	 * group is the atomic unit for translation, measurement and commit; this
+	 * preserves the provenance instead of losing it in the merge.
+	 */
+	memberIds?: string[];
 	/** Placeholders that must be restored after translation (formulas etc.). */
 	placeholders?: PlaceholderEntry[];
 	/** True when this block belongs to the references section. */

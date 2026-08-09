@@ -155,3 +155,34 @@ test('a shard with no adjacent body neighbour survives unmerged', () => {
 	const regions = coalesceRegions([h, shard]);
 	assert.equal(regions.length, 2, 'nothing eligible to absorb it — kept');
 });
+
+// ---- 语义段落组: long continuations, provenance, colon separators ------------
+
+test('a LONG lowercase continuation fragment is absorbed — length is not a rejection criterion', () => {
+	// The Radiology page-6 case: "least as robust, if not better, than…" is 70+
+	// chars, starts lowercase, and is unmistakably the middle of a sentence.
+	// The old ≤60-char cap left it as an independent English block inside a
+	// Chinese paragraph.
+	const regions = coalesceRegions([
+		block('a', 'One should expect that PCCT-based models will be at', { topY: 700, fontSize: 10 }),
+		block('b', 'least as robust, if not better, than CT-based algorithms given the many improvements that PCCT has to offer.', { topY: 685, fontSize: 8 })
+	]);
+	assert.equal(regions.length, 1, 'the long continuation joined its paragraph');
+	assert.ok(regions[0]!.sourceText.includes('will be at least as robust'), 'sentence reads whole');
+});
+
+test('a merged region keeps memberIds provenance for every absorbed fragment', () => {
+	const regions = coalesceRegions([
+		block('a', 'Background—Computed tomographic coronary angiography is a', { topY: 700 }),
+		block('b', 'noninvasive imaging modality that permits identification', { topY: 687 }),
+		block('c', 'and characterization of coronary plaques.', { topY: 674 })
+	]);
+	assert.equal(regions.length, 1);
+	assert.deepEqual(regions[0]!.memberIds, ['a', 'b', 'c'], 'source relationship preserved through the merge');
+});
+
+test('a colon at a fragment boundary does not become a paragraph break', () => {
+	const a = block('a', 'the modifications include the following:', { topY: 700 });
+	const b = block('b', 'sharper kernels and thinner sections.', { topY: 660 });
+	assert.equal(separatorBetween(a, b), ' ', 'colon means the clause continues — a space, never \\n\\n');
+});

@@ -9,6 +9,31 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.7.5] — 2026-08-09
+
+**语义段落组 (semantic paragraph groups).** The coalesced region IS the
+paragraph group: one id, one translation request, one strict node, one union
+rectangle, per-line masks, and an all-or-nothing commit — there is no
+member-by-member commit inside a group by construction. The mixed-language
+paragraphs came from fragments that FAILED to join a group; this release makes
+grouping authoritative.
+
+### Fixed
+
+- **Length is no longer a rejection criterion for continuations.** A
+  lowercase-opening fragment ("least as robust, if not better, than…") is the
+  middle of someone else's sentence no matter how long it is — the old ≤60-char
+  shard cap left exactly these long fragments as independent blocks, stranded
+  in English inside a Chinese paragraph. Absorption's total-length gate is also
+  relaxed (bounded at 1.5× the region cap) so the tail of a cap-split paragraph
+  can rejoin instead of being stranded.
+- **Colon no longer ends a sentence in the region separator** (the same
+  contradiction fixed in paragraphHeuristics in 0.7.4, in regionCoalescer's own
+  copy): a colon-ending fragment joins with a space, never a paragraph break.
+- **Groups keep provenance.** A merged region records `memberIds` — the ids of
+  every extraction fragment it absorbed, in reading order — so the source
+  relationship survives the merge instead of being lost.
+
 ## [0.7.4] — 2026-08-09
 
 ### Fixed
@@ -1007,7 +1032,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.4...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.5...HEAD
+[0.7.5]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.1...v0.7.2

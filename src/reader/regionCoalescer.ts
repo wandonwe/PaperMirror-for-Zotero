@@ -54,8 +54,14 @@ function sameColumn(a: Rect, b: Rect): boolean {
 	return wider > 0 && overlap / wider >= 0.55;
 }
 
+/**
+ * Sentence-terminal punctuation only. A colon or semicolon means the clause
+ * CONTINUES ("the following:", "…sharpness;") — counting them as sentence ends
+ * inserted paragraph breaks mid-sentence, the same contradiction fixed in
+ * paragraphHeuristics.
+ */
 function endsSentence(text: string): boolean {
-	return /[.!?。！？:：][)\]"'”’]?\s*$/.test(text.trim());
+	return /[.!?。！？][)\]"'”’]?\s*$/.test(text.trim());
 }
 
 /** "word-" → next fragment continues the same word. */
@@ -121,6 +127,9 @@ function mergeTwo(a: SourceBlock, b: SourceBlock): SourceBlock {
 	return {
 		...a,
 		sourceText: joined,
+		// Provenance: the group keeps the ids of every fragment it absorbed —
+		// merging must not lose the source relationship.
+		memberIds: [...(a.memberIds ?? [a.id]), ...(b.memberIds ?? [b.id])],
 		// Representative size follows the LONGER text, not blindly the first
 		// fragment — fragment one may carry a drop cap or lead-in styling.
 		fontSize: (b.sourceText.length > a.sourceText.length ? b.fontSize : a.fontSize) ?? a.fontSize,
@@ -161,8 +170,14 @@ export function isShard(block: SourceBlock): boolean {
 	if (t.length <= 12) {
 		return true;
 	}
-	// A torn-off continuation: starts lowercase mid-word/mid-sentence.
-	return t.length <= 60 && /^[a-z]/.test(t);
+	// A torn-off continuation: starts lowercase mid-word/mid-sentence. LENGTH
+	// IS NOT A REJECTION CRITERION — "least as robust, if not better, than
+	// CT-based algorithms given…" is 70+ characters and is still unmistakably
+	// the middle of someone else's sentence (an English paragraph never opens
+	// in lowercase). The old ≤60 cap left exactly these long fragments as
+	// independent blocks: translated alone, measured alone, stranded in
+	// English inside a Chinese paragraph.
+	return /^[a-z]/.test(t);
 }
 
 /**
@@ -185,7 +200,11 @@ export function canAbsorb(host: SourceBlock, shard: SourceBlock): boolean {
 	const em = Math.max(host.fontSize ?? 10, 6);
 	// Vertically adjacent or overlapping, up to 3em apart either way.
 	const gap = Math.max(rh[1] - rs[3], rs[1] - rh[3]);
-	if ((host.sourceText.length + shard.sourceText.length) > MAX_REGION_CHARS) {
+	// Length must not be a hard rejection for absorption: refusing strands the
+	// continuation as a guaranteed-English fragment, which is strictly worse
+	// than a somewhat oversized request. Bounded at 1.5× the region cap so a
+	// pathological page can't build an unbounded block.
+	if ((host.sourceText.length + shard.sourceText.length) > MAX_REGION_CHARS * 1.5) {
 		return false;
 	}
 	return gap <= em * 3;
