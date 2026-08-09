@@ -23,7 +23,7 @@ import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationRes
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
-import { buildStrictPage, revertStrictBlocks, settleStrictPage, type UnfitBlock } from '../ui/strictPageReplacement';
+import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, type UnfitBlock } from '../ui/strictPageReplacement';
 import { translateFullPdf, bytesToBase64, type TranslateSubmission } from '../translation/pdfService';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
@@ -117,6 +117,14 @@ export class ReaderSession {
 	private imageRects = new Map<number, [number, number, number, number][] | null>();
 	/** Compress-and-retry rounds already spent per page (max 2). */
 	private compressRounds = new Map<number, number>();
+	/**
+	 * Pages with a compress request currently in flight. A round is counted
+	 * ONLY when a request is actually dispatched — settle can measure the same
+	 * render several times (font readiness), and without this guard those
+	 * repeat measures burned all the rounds on one render and long blocks
+	 * reverted to English ("译文显示后又消失").
+	 */
+	private compressPending = new Set<number>();
 	/**
 	 * 刷新-driven engine rotation. With a provider pool active, hitting 刷新 on
 	 * a page bumps its offset so the RE-translation is dealt to the NEXT
@@ -652,18 +660,40 @@ export class ReaderSession {
 			});
 			if (built) {
 				slot.replaceChildren(applyFit(built.element));
-				settleStrictPage(built.element, (unfit: UnfitBlock[]) => {
+				settleStrictPage(built.element, (unfit: UnfitBlock[], final: boolean) => {
+					if (this.destroyed) {
+						return;
+					}
 					if (!unfit.length) {
+						// Everything fits — this page's rounds are settled.
+						this.compressRounds.delete(pageIndex);
+						return;
+					}
+					// Consequential action only on the FINAL (fonts-settled)
+					// measure — the provisional passes use fallback-font metrics
+					// and acting on them caused spurious compresses and reverts.
+					if (!final || this.compressPending.has(pageIndex)) {
 						return;
 					}
 					const rounds = this.compressRounds.get(pageIndex) ?? 0;
-					if (rounds < 2) {
+					// Character budgets only help engines that read the prompt —
+					// the free MT services ignore them, so for those we go
+					// straight to the shrink stage instead of wasting rounds.
+					const llm = canExplain(getProvider(this.providerForPage(pageIndex)));
+					if (llm && rounds < 2) {
+						this.compressPending.add(pageIndex);
 						this.compressRounds.set(pageIndex, rounds + 1);
-						void this.manager?.compressBlocks(pageIndex, unfit);
+						void this.manager?.compressBlocks(pageIndex, unfit)
+							.finally(() => this.compressPending.delete(pageIndex));
+						return;
 					}
-					else {
-						revertStrictBlocks(built.element, unfit.map(u => u.id));
-						logger.info(MODULE, `page ${pageIndex + 1}: ${unfit.length} block(s) kept original (no fit within fixed geometry)`);
+					// Budget rounds exhausted (or unavailable): one bounded font
+					// shrink (94%→88%, floor 8.5px) before anything reverts —
+					// a slightly smaller translation beats a vanishing one.
+					const still = shrinkStrictBlocks(built.element, unfit.map(u => u.id));
+					if (still.length) {
+						revertStrictBlocks(built.element, still);
+						logger.info(MODULE, `page ${pageIndex + 1}: ${still.length} block(s) kept original (no fit within fixed geometry)`);
 					}
 				});
 				// A single click on translated text must be INERT reading behaviour:
@@ -994,6 +1024,7 @@ export class ReaderSession {
 		void this.rebuildPool();
 		this.manager?.resetAll();
 		this.compressRounds.clear();
+		this.compressPending.clear();
 		this.pageProviderOffset.clear();
 		this.detectedSource = null;
 		if (getPref<boolean>('privacyNoticeAccepted', false)) {
@@ -1009,6 +1040,7 @@ export class ReaderSession {
 		}
 		const page = adapter.getCurrentPageIndex(this.reader);
 		this.compressRounds.delete(page);
+		this.compressPending.delete(page);
 		// Pool active → deal this page to the next engine before re-translating.
 		if (this.pool.length > 1) {
 			this.pageProviderOffset.set(page, ((this.pageProviderOffset.get(page) ?? 0) + 1) % this.pool.length);

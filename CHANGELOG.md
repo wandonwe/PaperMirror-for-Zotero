@@ -27,6 +27,31 @@ one architecture: strict in-place replacement.
 - GitHub Releases now carry this changelog section as their release notes
   (the auto-generated commit list follows below).
 
+### Fixed
+
+- **长文本不稳定 — 译文显示后又消失.** Three real defects conspired against
+  long paragraphs. (1) The measure pass fires several times per render (font
+  readiness insurance), and every firing spent a compress round — one render
+  burned the whole budget and the block reverted to English. Settle now
+  distinguishes provisional measures from THE final fonts-settled one, and
+  rounds are only spent (and reverts only happen) on that final measure, with
+  an in-flight guard so a page never has two compress requests racing.
+  (2) Scrolling cancelled the in-flight compress task of the very page being
+  read; the scheduler now keeps `page-N-compress` alive for every wanted
+  page. (3) The free MT engines ignore character budgets, so their compress
+  rounds were guaranteed futile — they now skip straight to the shrink stage.
+- **Last-resort font shrink before any revert.** A block that still overflows
+  after the budgeted retries tries 94% then 88% of its fixed size (floor
+  8.5px, plus a new tightest 1.14/−0.02em ladder step) before giving up — a
+  deliberate, bounded exception to the fixed-type-size rule, because a
+  slightly smaller translation beats one that vanishes back into English.
+  Only blocks that fail even this revert to the original.
+- **Compression budgets are measured, not guessed.** The retry budget is now
+  the tighter of the geometric estimate and the block's own measured need
+  (`textLen × boxHeight/scrollHeight × 0.92`), so the compressed translation
+  actually fits on the first retry. Pages that settle cleanly reset their
+  round counter.
+
 ### Changed (architecture)
 
 - **整页对照 is now STRICT in-place replacement** (`strictPageReplacement.ts`).

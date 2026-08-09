@@ -180,3 +180,58 @@ test('formula placeholders are protected and restored around translation', async
 	assert.ok(text.includes('$E=mc^2$'), 'formula restored');
 	manager.dispose();
 });
+
+test('scrolling does not cancel an in-flight compress for a still-wanted page', async () => {
+	let release: () => void = () => {};
+	let compressAborted: boolean | null = null;
+	const { deps } = makeDeps();
+	const plain = deps.translateRequest;
+	deps.translateRequest = async (request, signal) => {
+		if (request.blocks.some(b => b.charBudget !== undefined)) {
+			// Slow compress round: hold it open so setCurrentPage races it.
+			await new Promise<void>(r => { release = r; });
+			compressAborted = signal.aborted;
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '短:' + b.text })) };
+		}
+		return plain(request, signal);
+	};
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const compress = manager.compressBlocks(0, [{ id: 'page-0-block-0', maxChars: 40 }]);
+	// Let the compress task start running before the "scroll" arrives.
+	await new Promise(r => setTimeout(r, 5));
+	manager.setCurrentPage(0); // the exact scroll event that used to kill it
+	release();
+	await compress;
+	assert.equal(compressAborted, false, 'page-0-compress must survive setCurrentPage(0)');
+	assert.equal(
+		manager.getPageState(0)!.translations.get('page-0-block-0'),
+		'短:Source paragraph 0 on page 0.',
+		'the budgeted re-translation landed'
+	);
+	manager.dispose();
+});
+
+test('a compress for a page no longer wanted IS cancelled on scroll', async () => {
+	let sawAbort = false;
+	const { deps } = makeDeps();
+	const plain = deps.translateRequest;
+	deps.translateRequest = async (request, signal) => {
+		if (request.blocks.some(b => b.charBudget !== undefined)) {
+			await new Promise<void>((resolve, reject) => {
+				const t = setTimeout(resolve, 200);
+				signal.addEventListener?.('abort', () => { clearTimeout(t); sawAbort = true; reject(new Error('aborted')); });
+			});
+			return { translations: [] };
+		}
+		return plain(request, signal);
+	};
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const compress = manager.compressBlocks(0, [{ id: 'page-0-block-0', maxChars: 40 }]);
+	await new Promise(r => setTimeout(r, 5));
+	manager.setCurrentPage(7); // far away — page 0 is not wanted anymore
+	await compress; // compressBlocks swallows cancellation
+	assert.equal(sawAbort, true, 'far-page compress should still be dropped');
+	manager.dispose();
+});

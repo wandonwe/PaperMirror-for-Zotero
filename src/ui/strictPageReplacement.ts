@@ -50,13 +50,24 @@ function bitmapScaleFor(widthPx: number, heightPx: number): number {
 	return Math.max(1, Math.min(BITMAP_SCALE_MAX, Math.sqrt(BITMAP_PIXEL_BUDGET / area)));
 }
 
-/** The leading/tracking compress ladder. The FONT SIZE never changes. */
+/** The leading/tracking compress ladder. The FONT SIZE never changes here. */
 const STRICT_LADDER: { lineHeight: number; letterSpacingEm: number }[] = [
 	{ lineHeight: 1.42, letterSpacingEm: 0 },
 	{ lineHeight: 1.32, letterSpacingEm: 0 },
 	{ lineHeight: 1.24, letterSpacingEm: -0.01 },
-	{ lineHeight: 1.18, letterSpacingEm: -0.02 }
+	{ lineHeight: 1.18, letterSpacingEm: -0.02 },
+	{ lineHeight: 1.14, letterSpacingEm: -0.02 }
 ];
+
+/**
+ * LAST-RESORT font shrink, tried only after the compress-and-retry rounds are
+ * exhausted (or unavailable — the free engines ignore character budgets).
+ * This is a deliberate, bounded deviation from the fixed-font-size rule:
+ * a translation at 94%/88% of the body size is far better reading than one
+ * that silently reverts to English. Floor 8.5px; below that we still revert.
+ */
+const SHRINK_STEPS = [0.94, 0.88];
+const SHRINK_FLOOR_PX = 8.5;
 
 export interface StrictPageInput {
 	blocks: SourceBlock[];
@@ -291,13 +302,56 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				}
 			}
 			if (!fits) {
+				// The geometric estimate is crude; the block just told us its
+				// real need. textLen × (boxHeight / scrollHeight) is the length
+				// that WOULD have fit at the current metrics — take the tighter
+				// of the two so the compressed retry actually fits.
+				const estimate = estimateCjkCapacity(item.box.width, item.box.height, item.fontPx);
+				const textLen = (item.node.textContent ?? '').length;
+				const sh = item.node.scrollHeight;
+				const measured = sh > item.box.height && textLen > 0
+					? Math.floor(textLen * (item.box.height / sh) * 0.92)
+					: estimate;
 				unfit.push({
 					id: item.id,
-					maxChars: estimateCjkCapacity(item.box.width, item.box.height, item.fontPx)
+					maxChars: Math.max(8, Math.min(estimate, measured))
 				});
 			}
 		}
 		return unfit;
+	};
+
+	// ---- last-resort shrink (see SHRINK_STEPS): fit or hand back for revert --
+	(page as HTMLElement & { pmShrinkFit?: (ids: string[]) => string[] }).pmShrinkFit = (ids: string[]): string[] => {
+		const still: string[] = [];
+		for (const id of ids) {
+			const item = items.find(i => i.id === id);
+			if (!item || item.node.style.display === 'none') {
+				continue;
+			}
+			let fits = false;
+			for (const factor of SHRINK_STEPS) {
+				const px = Math.max(SHRINK_FLOOR_PX, item.fontPx * factor);
+				item.node.style.fontSize = `${px.toFixed(2)}px`;
+				for (const step of STRICT_LADDER) {
+					item.node.style.lineHeight = String(step.lineHeight);
+					item.node.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
+					if (item.node.scrollHeight <= item.box.height + 1.5
+						&& item.node.scrollWidth <= item.box.width + 1.5) {
+						fits = true;
+						break;
+					}
+				}
+				if (fits || px <= SHRINK_FLOOR_PX) {
+					break;
+				}
+			}
+			if (!fits) {
+				item.node.style.fontSize = `${item.fontPx.toFixed(2)}px`; // restore
+				still.push(id);
+			}
+		}
+		return still;
 	};
 
 	// ---- per-block reversion: original text back, no clipping ever ----------
@@ -325,36 +379,68 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 
 /**
  * Measure with font-readiness insurance, mirroring settleTranslatedPage.
- * `onMeasured` fires after every pass with the unfit list.
+ * `onMeasured` fires after every pass with the unfit list and a `final` flag:
+ * exactly ONE call per render carries final=true — the measure taken after
+ * web fonts settled. Callers must take consequential action (spending a
+ * compress round, shrinking, reverting) only on that final call; the earlier
+ * provisional passes exist to catch geometry early but measure with fallback
+ * fonts, and acting on them is what made long-text translations flicker in
+ * and then vanish (rounds burned 2–3× per render, then a premature revert).
  */
-export function settleStrictPage(element: HTMLElement, onMeasured: (unfit: UnfitBlock[]) => void): void {
+export function settleStrictPage(element: HTMLElement, onMeasured: (unfit: UnfitBlock[], final: boolean) => void): void {
 	const settle = (element as HTMLElement & { pmSettleStrict?: () => UnfitBlock[] }).pmSettleStrict;
 	if (!settle) {
 		return;
 	}
-	onMeasured(settle());
+	let fonts: { status?: string; ready?: Promise<unknown> } | undefined;
 	try {
-		const fonts = (element.ownerDocument as Document & { fonts?: { status?: string; ready?: Promise<unknown> } }).fonts;
-		if (!fonts?.ready) {
-			return;
-		}
-		const again = (): void => {
-			if (element.isConnected) {
-				onMeasured(settle());
+		fonts = (element.ownerDocument as Document & { fonts?: { status?: string; ready?: Promise<unknown> } }).fonts;
+	}
+	catch {
+		fonts = undefined;
+	}
+	const ready = fonts?.ready;
+	if (!fonts || !ready) {
+		onMeasured(settle(), true); // no font API — this is all we get
+		return;
+	}
+	const f = fonts;
+	onMeasured(settle(), false); // provisional: fallback-font metrics
+	try {
+		void ready.then(() => {
+			if (!element.isConnected) {
+				return;
 			}
-		};
-		void fonts.ready.then(() => {
-			again();
-			if (fonts.status === 'loading' && fonts.ready) {
-				void fonts.ready.then(again);
+			const secondWave = f.status === 'loading' ? f.ready : undefined;
+			if (secondWave) {
+				// A second load wave started — one more provisional pass now,
+				// the final one when it completes.
+				onMeasured(settle(), false);
+				void secondWave.then(() => {
+					if (element.isConnected) {
+						onMeasured(settle(), true);
+					}
+				});
+				return;
 			}
+			onMeasured(settle(), true);
 		});
 	}
 	catch {
-		// insurance only
+		onMeasured(settle(), true); // insurance: never leave the caller waiting
 	}
 }
 
 export function revertStrictBlocks(element: HTMLElement, ids: string[]): void {
 	(element as HTMLElement & { pmRevert?: (ids: string[]) => void }).pmRevert?.(ids);
+}
+
+/**
+ * Last-resort font shrink for the listed blocks (94% → 88%, floor 8.5px).
+ * Returns the ids that STILL do not fit — those are the only candidates left
+ * for revertStrictBlocks.
+ */
+export function shrinkStrictBlocks(element: HTMLElement, ids: string[]): string[] {
+	const shrink = (element as HTMLElement & { pmShrinkFit?: (ids: string[]) => string[] }).pmShrinkFit;
+	return shrink ? shrink(ids) : ids;
 }

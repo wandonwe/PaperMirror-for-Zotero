@@ -103,8 +103,16 @@ export class TranslationManager {
 		}
 		this.currentPage = pageIndex;
 		const wanted = this.wantedPages();
-		// Drop queued work for pages no longer near the viewport
-		this.scheduler.cancelExcept(new Set([...wanted].map(p => `page-${p}`)));
+		// Drop queued work for pages no longer near the viewport — but keep the
+		// compress-and-retry tasks of pages still wanted: cancelling those on
+		// every scroll wasted the strict renderer's budget rounds and long
+		// blocks ended up reverting to the original text.
+		const keep = new Set<string>();
+		for (const p of wanted) {
+			keep.add(`page-${p}`);
+			keep.add(`page-${p}-compress`);
+		}
+		this.scheduler.cancelExcept(keep);
 		for (const page of wanted) {
 			void this.ensurePage(page, page === pageIndex ? 10 : 1);
 		}
