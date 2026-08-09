@@ -73,6 +73,20 @@ test('cancelled: stop glyph, auto-hides', () => {
 	assert.ok((s.autoHideMs ?? 0) > 0);
 });
 
+test('idle on a translated page → ✓, full ring, persists (no auto-hide, no action)', () => {
+	const s = capsuleStateFor({ ...base, phase: 'idle', segTranslated: 1, segTotal: 0 });
+	assert.equal(s.glyph, 'check');
+	assert.equal(s.fraction, 1);
+	assert.equal(s.autoHideMs, undefined, 'idle never auto-hides');
+	assert.equal(s.action, undefined, 'idle has no right-hand action');
+});
+
+test('idle on a never-translated page → ↻ refresh glyph', () => {
+	const s = capsuleStateFor({ ...base, phase: 'idle', segTranslated: 0, segTotal: 0 });
+	assert.equal(s.glyph, 'refresh');
+	assert.equal(s.autoHideMs, undefined);
+});
+
 test('failed with retryable:false (save/copy/open) → × close action, NOT retry', () => {
 	// Issue 1: a non-translation failure must not offer a 重试 that would
 	// wrongly re-translate the page.

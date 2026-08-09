@@ -244,7 +244,7 @@ export class PdfOverlay {
 	/** The one consolidated status capsule (shared with the pane). */
 	private readonly statusCapsule: StatusCapsule;
 
-	constructor(reader: ReaderLike, options: { onCancel?: () => void; onRetry?: () => void; onViewPartial?: () => void; onDismiss?: () => void; onRefreshRing?: () => void } = {}) {
+	constructor(reader: ReaderLike, options: { onCancel?: () => void; onRetry?: () => void; onViewPartial?: () => void; onDismiss?: () => void; onRefreshRing?: () => void; onCollapsedChange?: (collapsed: boolean) => void } = {}) {
 		this.reader = reader;
 		this.statusCapsule = new StatusCapsule(
 			() => {
@@ -297,6 +297,13 @@ export class PdfOverlay {
 	/** Superseded by setProgress; kept as a no-op for older callers. */
 	setRefreshBusy(_busy: boolean): void {
 		/* progress now flows through setProgress */
+	}
+
+	/** Mirror the session-owned collapsed state onto this surface's capsule. */
+	setCollapsed(collapsed: boolean): void {
+		if (!this.destroyed) {
+			this.statusCapsule.setCollapsed(collapsed);
+		}
 	}
 
 	/**

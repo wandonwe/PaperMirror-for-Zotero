@@ -18,7 +18,7 @@
  * document and the container to mount into, so both surfaces look identical.
  */
 
-export type OverlayPhase = 'translating' | 'laying-out' | 'done' | 'partial' | 'failed' | 'cancelled';
+export type OverlayPhase = 'idle' | 'translating' | 'laying-out' | 'done' | 'partial' | 'failed' | 'cancelled';
 
 export interface OverlayProgress {
 	phase: OverlayPhase;
@@ -76,7 +76,7 @@ export function taskPriority(m: OverlayProgress): number {
 
 export interface CapsuleState {
 	phase: OverlayPhase;
-	glyph: 'ring' | 'check' | 'warn' | 'error' | 'dot' | 'stop';
+	glyph: 'ring' | 'check' | 'warn' | 'error' | 'dot' | 'stop' | 'refresh';
 	indeterminate?: boolean;
 	fraction: number | null;
 	main: string;
@@ -93,6 +93,12 @@ export interface CapsuleCallbacks {
 	onDismiss?: () => void;
 	/** Clicking the ring re-translates the current page. */
 	onRefreshRing?: () => void;
+	/**
+	 * The user collapsed/expanded the capsule. The session owns this state and
+	 * mirrors it to the OTHER surface's capsule, so collapsing in 覆盖原文 stays
+	 * collapsed after switching to 对照翻译 (and vice-versa).
+	 */
+	onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 export const CAPSULE_CLASS = 'pm-status-capsule';
@@ -115,7 +121,7 @@ export const CAPSULE_CSS = `
 	color: #eef1f5;
 	font: 12px/1.35 -apple-system, "PingFang SC", "Segoe UI", system-ui, sans-serif;
 	box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
-	transition: opacity .18s ease, width .18s ease;
+	transition: opacity .18s ease, width .18s ease, height .18s ease;
 	user-select: none;
 }
 .${CAPSULE_CLASS}[data-pm-hidden="true"] { opacity: 0; pointer-events: none; }
@@ -239,6 +245,15 @@ export function capsuleStateFor(m: OverlayProgress): CapsuleState {
 		? (m.segTranslated + m.segPlaced) / (m.segTotal * 2)
 		: null;
 	switch (m.phase) {
+		case 'idle':
+			// The persistent resting state: the capsule never fully disappears,
+			// it settles into a bottom-right ring. If this page has already been
+			// translated we show a ✓ over a full ring; if it never has, a ↻ that
+			// invites 刷新本页. No auto-hide, no right-hand action. (segTranslated
+			// is used as a 0/1 "page already translated" flag by idleCapsuleState.)
+			return m.segTranslated > 0
+				? { phase: m.phase, glyph: 'check', fraction: 1, main: '本页翻译已完成' }
+				: { phase: m.phase, glyph: 'refresh', fraction: null, main: '点击圆环翻译本页' };
 		case 'translating':
 			return {
 				phase: m.phase,
@@ -387,7 +402,7 @@ export class StatusCapsule {
 			}
 			el.removeAttribute('data-pm-hidden');
 			el.setAttribute('data-pm-phase', state.phase);
-			this.setCollapsed(el, this.collapsed);
+			this.applyCollapsed(el, this.collapsed);
 			el.setAttribute('data-pm-indeterminate', String(!!state.indeterminate));
 
 			const C = 2 * Math.PI * 15;
@@ -407,9 +422,10 @@ export class StatusCapsule {
 				label.textContent = state.glyph === 'check' ? '✓'
 					: state.glyph === 'warn' || state.glyph === 'error' ? '!'
 						: state.glyph === 'stop' ? '—'
-							: (!state.indeterminate && state.fraction != null && state.phase !== 'done')
-								? `${Math.round(Math.max(0, Math.min(1, state.fraction)) * 100)}%`
-								: '';
+							: state.glyph === 'refresh' ? '↻'
+								: (!state.indeterminate && state.fraction != null && state.phase !== 'done')
+									? `${Math.round(Math.max(0, Math.min(1, state.fraction)) * 100)}%`
+									: '';
 			}
 			const main = el.querySelector('.pm-main');
 			if (main) {
@@ -491,7 +507,7 @@ export class StatusCapsule {
 		body.appendChild(main); body.appendChild(sub);
 		body.addEventListener('click', (e) => {
 			e.stopPropagation();
-			this.setCollapsed(el, true);
+			this.userSetCollapsed(el, true);
 		});
 
 		// --- right action (stop / retry / view / close) ---
@@ -505,7 +521,7 @@ export class StatusCapsule {
 		// by accident — collapsing is the text body's job.
 		el.addEventListener('click', () => {
 			if (this.collapsed) {
-				this.setCollapsed(el, false);
+				this.userSetCollapsed(el, false);
 			}
 		});
 
@@ -515,14 +531,46 @@ export class StatusCapsule {
 		return el;
 	}
 
-	/** Flip collapsed state and keep the ring shell's tooltip honest. */
-	private setCollapsed(el: HTMLElement, collapsed: boolean): void {
+	/**
+	 * Session-driven (silent) collapse setter. The session owns the shared
+	 * collapsed state and mirrors it onto BOTH surfaces' capsules; this applies
+	 * it WITHOUT echoing onCollapsedChange back (which would loop).
+	 */
+	setCollapsed(collapsed: boolean): void {
+		this.collapsed = collapsed;
+		const el = this.currentEl();
+		if (el) {
+			this.applyCollapsed(el, collapsed);
+		}
+	}
+
+	isCollapsed(): boolean {
+		return this.collapsed;
+	}
+
+	private currentEl(): HTMLElement | null {
+		try {
+			return (this.getHost()?.doc.querySelector(`.${CAPSULE_CLASS}`) as HTMLElement | null) ?? null;
+		}
+		catch {
+			return null;
+		}
+	}
+
+	/** DOM-only: reflect collapsed state + keep the ring shell tooltip honest. */
+	private applyCollapsed(el: HTMLElement, collapsed: boolean): void {
 		this.collapsed = collapsed;
 		el.setAttribute('data-pm-collapsed', String(collapsed));
 		const shell = el.querySelector('.pm-ring-shell') as HTMLElement | null;
 		if (shell) {
 			shell.title = collapsed ? '展开任务详情' : '';
 		}
+	}
+
+	/** A user gesture toggled collapse → apply AND notify the session to mirror it. */
+	private userSetCollapsed(el: HTMLElement, collapsed: boolean): void {
+		this.applyCollapsed(el, collapsed);
+		this.callbacks.onCollapsedChange?.(collapsed);
 	}
 
 	private runAction(kind: CapsuleAction['kind']): void {

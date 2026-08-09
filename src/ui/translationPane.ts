@@ -116,6 +116,8 @@ export interface PaneCallbacks {
 	onViewPartial(): void;
 	/** 状态胶囊 × — dismiss the current persistent task. */
 	onDismiss(): void;
+	/** 状态胶囊折叠/展开 — the session owns the shared collapsed state. */
+	onCollapsedChange(collapsed: boolean): void;
 	onSaveNote(): void;
 	onToggleViewKind(kind: 'page' | 'article'): void;
 	/** 菜单栏直接切换 — no round-trip through the settings pane. */
@@ -227,6 +229,7 @@ export class TranslationPane {
 				onRetry: () => this.callbacks.onRefreshPage(),
 				onViewPartial: () => this.callbacks.onViewPartial(), // 查看保留原文
 				onDismiss: () => this.callbacks.onDismiss(), // × 关闭当前通知
+				onCollapsedChange: (c) => this.callbacks.onCollapsedChange(c), // 折叠状态上报会话
 				onRefreshRing: () => this.callbacks.onRefreshPage() // 圆环 = 刷新本页
 			},
 			(doc) => {
@@ -742,6 +745,11 @@ export class TranslationPane {
 
 	setBusy(busy: boolean): void {
 		this.host.classList.toggle('pm-refreshing', busy);
+	}
+
+	/** Mirror the session-owned collapsed state onto this surface's capsule. */
+	setCollapsed(collapsed: boolean): void {
+		this.statusCapsule.setCollapsed(collapsed);
 	}
 
 	toast(message: string): void {

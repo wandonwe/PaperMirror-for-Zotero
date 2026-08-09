@@ -9,6 +9,29 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.8.5] — 2026-08-09
+
+### Changed
+
+- **缩小圆环在两种翻译模式中常驻右下角 (the shrunk ring is now persistent and
+  shared).** Two problems fixed together:
+  - **折叠状态共享 (shared collapsed state).** The collapsed/expanded state is no
+    longer stored inside each of the two `StatusCapsule` instances (overlay vs
+    pane) — the `ReaderSession` owns one `capsuleCollapsed` flag and mirrors it
+    onto both surfaces (`onCollapsedChange` callback + `setCollapsed`). Collapse
+    in 覆盖原文, switch to 对照翻译 → still collapsed, and vice-versa.
+  - **常驻 idle 状态 (persistent idle state).** When the task queue empties the
+    capsule no longer calls `setProgress(null)` and disappears. It renders a new
+    `idle` phase: a bottom-right resting ring showing ✓ 本页翻译已完成 if the
+    current page is translated, or ↻ 点击圆环翻译本页 if it never was. The center
+    still re-translates the page.
+- **完成后自动缩小而非隐藏 (done auto-collapses, not auto-hides).** A finished
+  page shows its full “已完成” message for ~2.2s, then auto-collapses into the
+  persistent idle ring. Failed and partial states never auto-collapse — they
+  stay expanded until the user acts.
+- The idle ring retargets the current page on scroll (✓ vs ↻), and 原文 mode
+  shows no capsule (there is nothing to refresh there).
+
 ## [0.8.4] — 2026-08-09
 
 ### Fixed

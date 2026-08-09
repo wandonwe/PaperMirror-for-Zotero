@@ -148,6 +148,16 @@ export class ReaderSession {
 	private taskHideTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	private topTaskId: string | null = null;
 	/**
+	 * The shared collapsed state of the single capsule. The SESSION owns it (not
+	 * the two StatusCapsule instances), so collapsing in 覆盖原文 stays collapsed
+	 * after switching to 对照翻译 and vice-versa. Mirrored onto both surfaces via
+	 * syncCapsuleCollapsedState().
+	 */
+	private capsuleCollapsed = false;
+	/** Pages that have been translated at least once — drives the idle glyph
+	 * (✓ vs ↻ 刷新本页) so the resting capsule tells the truth per page. */
+	private translatedPages = new Set<number>();
+	/**
 	 * The most recent page that settled with kept-original segments, and the
 	 * strict-page element that holds its `[data-pm-unfit]` boxes. Drives
 	 * 「查看保留原文」so the capsule action can scroll to and flash the exact
@@ -224,6 +234,7 @@ export class ReaderSession {
 			onCancelPage: () => this.cancelCurrentTranslation(), // 胶囊取消 = 停止翻译
 			onViewPartial: () => this.viewKeptOriginal(), // 胶囊「查看保留原文」= 定位保留段落
 			onDismiss: () => this.dismissTopTask(), // 胶囊 × = 关闭当前通知
+			onCollapsedChange: (c) => this.setCapsuleCollapsed(c), // 折叠状态由会话统一管理
 			onSaveNote: () => void this.saveSelectionToNote(),
 			onOpenSettings: () => this.openSettings(),
 			onToggleViewKind: kind => setPref('paneView', kind),
@@ -248,6 +259,7 @@ export class ReaderSession {
 			onRetry: () => void this.retranslateCurrent(),
 			onViewPartial: () => this.viewKeptOriginal(), // switch to pane + locate the kept blocks
 			onDismiss: () => this.dismissTopTask(),
+			onCollapsedChange: (c) => this.setCapsuleCollapsed(c), // 折叠状态由会话统一管理
 			onRefreshRing: () => void this.retranslateCurrent() // ring → 刷新本页
 		});
 		this.overlay.setDisplayMode(getPref<OverlayDisplayMode>('overlayDisplayMode', 'dim-original'));
@@ -596,17 +608,31 @@ export class ReaderSession {
 			return;
 		}
 		this.tasks.set(id, model);
+		// done/cancelled linger ~2.2s as a full message, then clear. On DONE we
+		// also auto-collapse: the capsule shrinks to the resting bottom-right
+		// ring (idle) instead of vanishing. failed/partial NEVER auto-clear or
+		// auto-collapse — they stay expanded until the user acts.
 		if (model.phase === 'done' || model.phase === 'cancelled') {
+			const collapseAfter = model.phase === 'done';
 			this.taskHideTimers.set(id, setTimeout(() => {
 				this.taskHideTimers.delete(id);
 				this.tasks.delete(id);
+				if (collapseAfter) {
+					this.setCapsuleCollapsed(true);
+				}
 				this.renderTopTask();
 			}, 2200));
 		}
 		this.renderTopTask();
 	}
 
-	/** Show the highest-priority live task in the visible surface's capsule. */
+	/**
+	 * Show the highest-priority live task in the visible surface's capsule. When
+	 * NO task is live the capsule does not disappear — it settles into a
+	 * persistent idle ring (✓ if this page is translated, ↻ 刷新本页 if not), so
+	 * the shrunk ring is always available bottom-right in both translation modes.
+	 * 原文 mode shows nothing (there is no translation to refresh there).
+	 */
 	private renderTopTask(): void {
 		let best: OverlayProgress | null = null;
 		let bestScore = -1;
@@ -620,14 +646,47 @@ export class ReaderSession {
 			}
 		}
 		this.topTaskId = bestId;
-		if (this.viewMode === 'overlay') {
-			this.overlay?.setProgress(best);
-			this.pane?.setProgress(null);
+		const current = best ?? this.idleCapsuleState();
+		switch (this.viewMode) {
+			case 'overlay':
+				this.overlay?.setProgress(current);
+				this.pane?.setProgress(null);
+				break;
+			case 'split':
+				this.pane?.setProgress(current);
+				this.overlay?.setProgress(null);
+				break;
+			case 'original':
+				this.overlay?.setProgress(null);
+				this.pane?.setProgress(null);
+				break;
 		}
-		else {
-			this.pane?.setProgress(best);
-			this.overlay?.setProgress(null);
-		}
+	}
+
+	/** The persistent resting model: reflects whether THIS page is translated. */
+	private idleCapsuleState(): OverlayProgress {
+		const pageIndex = adapter.getCurrentPageIndex(this.reader);
+		const translated = this.translatedPages.has(pageIndex);
+		return {
+			phase: 'idle',
+			currentPage: pageIndex + 1,
+			totalPages: adapter.getPageCount(this.reader),
+			segTotal: 0,
+			segTranslated: translated ? 1 : 0, // 0/1 flag → ✓ vs ↻ in the capsule
+			segPlaced: 0,
+			kept: 0
+		};
+	}
+
+	/** Shared collapsed state → mirror onto BOTH surfaces' capsules. */
+	private setCapsuleCollapsed(collapsed: boolean): void {
+		this.capsuleCollapsed = collapsed;
+		this.syncCapsuleCollapsedState();
+	}
+
+	private syncCapsuleCollapsedState(): void {
+		this.overlay?.setCollapsed(this.capsuleCollapsed);
+		this.pane?.setCollapsed(this.capsuleCollapsed);
 	}
 
 	/** Capsule × on a persistent state — drop the task it belongs to. */
@@ -704,6 +763,11 @@ export class ReaderSession {
 				}
 				this.pane?.setCurrentPage(page);
 				this.sync?.onPdfPageChanged(page);
+				// If nothing is actively running, the resting ring must retarget
+				// the new page (✓ vs ↻) instead of showing the old page's state.
+				if (!this.tasks.size) {
+					this.renderTopTask();
+				}
 			}
 		}, PAGE_POLL_MS);
 	}
@@ -962,6 +1026,8 @@ export class ReaderSession {
 		// (tableFailed). Intentionally-original content (data cells, figures,
 		// metadata, tiny fragments) is neither placed nor a failure.
 		const { placed, kept, segTotal, phase } = placementTally(s);
+		// This page has now been translated → the idle ring shows ✓ (not ↻) for it.
+		this.translatedPages.add(pageIndex);
 		// Remember where the kept-original segments live so 「查看保留原文」can
 		// jump straight to them; clear it once the page places everything.
 		if (kept > 0) {
@@ -1053,6 +1119,9 @@ export class ReaderSession {
 		// The visible surface changed → re-route the top task to its capsule and
 		// clear the one that just went away, so a live task follows the mode.
 		this.renderTopTask();
+		// …and carry the shared collapsed state onto the now-visible surface, so
+		// a capsule shrunk in one mode stays shrunk after switching modes.
+		this.syncCapsuleCollapsedState();
 	}
 
 	/**
@@ -1587,6 +1656,7 @@ export class ReaderSession {
 		}
 		this.taskHideTimers.clear();
 		this.tasks.clear();
+		this.translatedPages.clear();
 		this.lastPartial = null;
 		this.disposePdfEvents?.();
 		this.disposePdfEvents = null;

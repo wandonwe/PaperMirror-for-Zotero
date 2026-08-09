@@ -234,6 +234,28 @@ test('the SVG progress ring carries no click handler (display only)', () => {
 	assert.equal(svg.listeners.get('click')?.length ?? 0, 0, 'outer ring is not a hit zone');
 });
 
+test('session-driven setCollapsed applies silently (no onCollapsedChange echo)', () => {
+	let changes = 0;
+	const localDoc = new FakeDoc();
+	const host = { doc: localDoc as unknown as Document, container: localDoc.container as unknown as HTMLElement };
+	const cap = new StatusCapsule(() => host, { onCollapsedChange: () => changes++ });
+	cap.setProgress(active);
+	cap.setCollapsed(true); // mirrored from the session — must NOT loop back
+	const el = localDoc.container.children[0]!;
+	assert.equal(el.getAttribute('data-pm-collapsed'), 'true', 'silent setter still updates the DOM');
+	assert.equal(changes, 0, 'session-driven collapse must not re-notify the session');
+	assert.equal(cap.isCollapsed(), true);
+});
+
+test('a USER collapse gesture DOES report onCollapsedChange (for cross-mode sync)', () => {
+	const seen: boolean[] = [];
+	const { el } = mount(active, { onCollapsedChange: (c) => seen.push(c) });
+	el.querySelector('.pm-body')!.click(); // user collapses
+	assert.deepEqual(seen, [true], 'gesture notifies the session so the other surface mirrors it');
+	el.querySelector('.pm-ring-shell')!.click(); // user expands
+	assert.deepEqual(seen, [true, false]);
+});
+
 test('the % renders into an independent label span, not raw button text', () => {
 	// (33 + 0) / (66 * 2) = 0.25 → 25%. The number must live in .pm-ring-label
 	// so button text-layout quirks cannot shift it off centre.
