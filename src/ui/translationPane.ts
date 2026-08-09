@@ -106,9 +106,17 @@ export interface PaneCallbacks {
 	/** 菜单栏「解析」按钮 — explain the current PDF selection. */
 	onExplainSelection(): void;
 	onToggleSync(enabled: boolean): void;
-	/** 菜单栏刷新按钮 — 刷新全部 (re-translate the whole document). */
+	/**
+	 * 菜单栏刷新按钮 — 刷新全部 (强制全量): clears BOTH the page cache and the
+	 * per-segment store for the whole document, then re-translates from scratch.
+	 */
 	onRetranslate(): void;
-	/** 状态胶囊圆环 — 刷新本页 (re-translate the current page). */
+	/**
+	 * 状态胶囊圆环 — 刷新本页 (普通刷新): re-runs the current page but REUSES
+	 * qualified cached segments — only untranslated / invalid / unfit segments
+	 * cost a fresh request (with a provider pool it rotates the engine, which
+	 * changes the segment context and forces a genuine re-translation).
+	 */
 	onRefreshPage(): void;
 	/** 状态胶囊取消 — stop the current page's translation. */
 	onCancelPage(): void;

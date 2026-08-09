@@ -229,8 +229,8 @@ export class ReaderSession {
 			// highlighted 译文 block, or asks the reader to select text first.
 			onExplainSelection: () => void this.explainSelection(),
 			onToggleSync: enabled => this.setSyncEnabled(enabled),
-			onRetranslate: () => void this.retranslateAll(), // 菜单栏刷新 = 刷新全部
-			onRefreshPage: () => void this.retranslateCurrent(), // 胶囊圆环 = 刷新本页
+			onRetranslate: () => void this.retranslateAll(), // 菜单栏刷新 = 刷新全部 (强制全量,清页+段缓存)
+			onRefreshPage: () => void this.retranslateCurrent(), // 胶囊圆环 = 刷新本页 (普通刷新,复用合格段落)
 			onCancelPage: () => this.cancelCurrentTranslation(), // 胶囊取消 = 停止翻译
 			onViewPartial: () => this.viewKeptOriginal(), // 胶囊「查看保留原文」= 定位保留段落
 			onDismiss: () => this.dismissTopTask(), // 胶囊 × = 关闭当前通知
@@ -1456,8 +1456,11 @@ export class ReaderSession {
 		}
 		this.pane?.setBusy(true);
 		try {
-			// Bypasses the cache; the fresh result overwrites the old entry on write.
-			await this.manager.retranslatePage(page);
+			// 普通刷新 (normal): bypass the PAGE cache but reuse qualified segments —
+			// only untranslated / invalid / unfit segments re-request. The provider
+			// rotation above means a pooled setup still gets a genuinely different
+			// engine (different segment context ⇒ a real re-translation).
+			await this.manager.retranslatePage(page, 'normal');
 		}
 		finally {
 			this.pane?.setBusy(false);
@@ -1478,9 +1481,12 @@ export class ReaderSession {
 	}
 
 	/**
-	 * 刷新全部 (menu-bar button): drop every cached + in-memory translation for
-	 * this document and re-translate. Because translation is lazy, this re-runs
-	 * the current page now; the rest re-translate as they are viewed.
+	 * 刷新全部 (menu-bar button) — 强制全量: drop EVERY cached translation for
+	 * this document — the in-memory page states, the on-disk page cache AND the
+	 * per-segment store (clearAttachmentAllVersions removes the whole attachment
+	 * dir, segments included) — so nothing is reused. Because translation is
+	 * lazy, this re-runs the current page now; the rest re-translate as they are
+	 * viewed. (The ring's 刷新本页 is the lighter 普通刷新 that reuses segments.)
 	 */
 	private async retranslateAll(): Promise<void> {
 		if (!this.manager) {
