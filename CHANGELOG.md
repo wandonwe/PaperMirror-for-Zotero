@@ -9,6 +9,28 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-08-09
+
+### Fixed
+
+- **正文间隔不翻译 (alternating untranslated lines).** On narrow two-column
+  pages a paragraph was being cut into one-line blocks, each translated alone
+  and dropped into a one-line box — a line whose Chinese needs two lines could
+  not fit and stayed English, so translated and original lines alternated down
+  the column. The cause: a paragraph break was forced whenever two stacked
+  lines got different *column indices*, and the column detector flips that index
+  row-to-row on a narrow layout. Column continuity is now decided by geometry
+  alone (two stacked lines that share an x-range are one column; lines in
+  different columns never share an x-range), so paragraphs stay whole and
+  translate as units. Applied to both the char-stream and text-layer builders.
+- **表格整表未翻译 (whole text table left in English).** A table cell was flagged
+  "data → keep original" if it merely clipped a second column band (a 0.35
+  overlap test); a legitimately wide column like "Key results" trips that, so a
+  5-column text table had most cells flagged and stayed English. A cell now
+  counts as spanning only when it actually COVERS ≥2 bands (>0.5 of each) —
+  which only a true full-width stitched fragment does — so wide prose columns
+  translate while genuine cross-column fragments still stay original.
+
 ## [0.7.1] — 2026-08-09
 
 **表格单元格模型 (table cell model).** From this release on, every fix bumps the
@@ -943,7 +965,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.0...v0.6.1

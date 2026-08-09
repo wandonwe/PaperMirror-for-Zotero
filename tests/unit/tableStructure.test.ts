@@ -74,3 +74,25 @@ test('empty region yields an empty model', () => {
 	assert.equal(model.rowCount, 0);
 	assert.equal(model.colCount, 0);
 });
+
+test('a legitimately wide column (like "Key results") translates, not flagged data', () => {
+	// 3 columns; the right column is much wider than the others (a long prose
+	// "Key results" column). It clips no neighbour and must be a text cell.
+	const members: CellMember[] = [
+		cell('h-0', 40, 10, 90, 12, 'Task'),
+		cell('h-1', 150, 10, 110, 12, 'Population'),
+		cell('h-2', 280, 10, 300, 12, 'Key results'),
+		cell('r1-0', 40, 30, 90, 12, 'Airways'),
+		cell('r1-1', 150, 30, 110, 12, '29 human subjects'),
+		cell('r1-2', 280, 30, 300, 40, 'Sharp reconstruction kernel and submillimeter section thickness improves visualization of bronchial divisions and pulmonary vessels.'),
+		cell('r2-0', 40, 80, 90, 12, 'Lung'),
+		cell('r2-1', 150, 80, 110, 12, '112 human subjects'),
+		cell('r2-2', 280, 80, 300, 40, 'More precise depiction of ILD CT features at PCCT and reclassification of ILD patterns despite significant radiation dose reduction.')
+	];
+	const model = buildTableModel(0, 0, region(40, 10, 540, 110), members);
+	const keyResults = model.cells.filter(c => c.col === 2);
+	assert.ok(keyResults.length >= 2, 'the wide column has its own cells');
+	assert.ok(keyResults.every(c => c.kind === 'text'), 'wide prose column translates, not kept English');
+	// The "Task" prose column translates too.
+	assert.ok(model.cells.filter(c => c.col === 0).every(c => c.kind === 'text'));
+});

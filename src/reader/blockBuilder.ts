@@ -228,8 +228,11 @@ export function buildParagraphs(chars: PdfChar[], lines: Line[], pageWidth = 612
 			fontSize: size,
 			gap: line.rect[1] - next.rect[3],
 			wrapped: reachesRightMargin(line.rect as Rect, margins.right, size),
-			newColumn: columns[i] !== columns[i + 1]
-				|| (next.rect[1] > line.rect[3] + 5 && next.rect[0] > line.rect[0] + 50)
+			// Column continuity from GEOMETRY, not the (per-row unstable) band
+			// index: two stacked lines sharing an x-range are one column; lines
+			// in different columns never share an x-range. Trusting the index
+			// fragmented paragraphs into one-line blocks on narrow 2-column pages.
+			newColumn: (next.rect[1] > line.rect[3] + 5 && next.rect[0] > line.rect[0] + 50)
 				|| !linesShareColumn(line.rect as Rect, next.rect as Rect),
 			indented: next.rect[0] > margins.left + size * 0.8,
 			fontJump: line.fontSize > 0 && next.fontSize > 0

@@ -244,13 +244,14 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612): SpanLin
 			fontSize: size,
 			gap: line.rect[1] - next.rect[3],
 			wrapped: reachesRightMargin(line.rect, margins.right, size),
-			// The x-overlap test is the backstop for pages where column
-			// detection fails (a big figure votes down the gutter): two lines
-			// that do not share an x-range are NEVER one paragraph, so the
-			// worst failure degrades to per-line blocks instead of the left
-			// and right columns being interleaved into scrambled text.
-			newColumn: columns[i] !== columns[i + 1]
-				|| next.rect[3] > line.rect[3] + size
+			// Column continuity is decided by GEOMETRY, not the band index. On a
+			// narrow two-column page the column detector flips a line's index
+			// from one row to the next; trusting that index cut paragraphs into
+			// one-line blocks (each then translated alone and half of them left
+			// in English). Two stacked lines that share an x-range are the same
+			// column whatever the index said; lines in different columns never
+			// share an x-range, so this can't interleave the two columns either.
+			newColumn: next.rect[3] > line.rect[3] + size
 				|| !linesShareColumn(line.rect, next.rect),
 			indented: next.rect[0] > margins.left + size * 0.8,
 			fontJump: size > 0 && next.fontSize > 0 && Math.abs(next.fontSize - size) / size > 0.2,

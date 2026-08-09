@@ -105,23 +105,30 @@ function inferBands(
 	return bands.sort((a, b) => a.start - b.start);
 }
 
-/** The band a member's interval overlaps most, and whether it straddles ≥2. */
+/**
+ * The band a member's interval overlaps most, and whether it truly straddles
+ * ≥2 columns. "Straddles" means the cell COVERS most of two or more bands —
+ * only a full-width fragment stitched across columns does that. A merely wide
+ * legitimate column (e.g. "Key results") fills its own band and just clips a
+ * neighbour, which must NOT count, or whole text tables get flagged as data
+ * and left in English.
+ */
 function assignBand(start: number, end: number, bands: Band[]): { index: number; straddles: boolean } {
 	let best = -1;
 	let bestOv = 0;
-	let significant = 0;
+	let covered = 0;
 	for (let i = 0; i < bands.length; i++) {
 		const ov = overlap1D(bands[i]!.start, bands[i]!.end, start, end);
 		if (ov > bestOv) {
 			bestOv = ov;
 			best = i;
 		}
-		const w = Math.min(bands[i]!.end - bands[i]!.start, end - start);
-		if (w > 0 && ov > 0.35 * w) {
-			significant++;
+		const bandW = bands[i]!.end - bands[i]!.start;
+		if (bandW > 0 && ov > 0.5 * bandW) {
+			covered++;
 		}
 	}
-	return { index: best < 0 ? 0 : best, straddles: significant >= 2 };
+	return { index: best < 0 ? 0 : best, straddles: covered >= 2 };
 }
 
 /**
