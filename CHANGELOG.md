@@ -9,6 +9,28 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.8.3] — 2026-08-09
+
+### Changed
+
+- **胶囊圆环改用真实 DOM 点击分层 (real hit layers, no distance guessing).** The
+  ring no longer decides center-vs-edge by measuring click distance
+  (`dist > rect.width * 0.42`), which left the capsule stuck-collapsed. It is now
+  three real, stacked elements:
+  - **圆环中心按钮** (`.pm-ring-refresh`, over the %) → 重新翻译本页; it stops
+    propagation so refreshing never doubles as expand/collapse. Works in both
+    expanded and collapsed states.
+  - **圆环外圈** (`.pm-ring-progress` SVG) → progress display only,
+    `pointer-events: none`, never a hit zone.
+  - **文字区域** (`.pm-body`) → 收起.
+  - **收起后的方形背景** (`.pm-ring-shell`, enlarged to 56×56px) → 展开, via the
+    capsule's own click handler that fires only while collapsed.
+- **停止按钮改用 ■ (stop, not pause).** The right-hand action during
+  translation/layout is now `■ 停止任务` — the backend cancels and restarts, so a
+  pause/resume glyph would misrepresent it.
+- Hover tooltips: center reads “重新翻译本页”, the collapsed background reads
+  “展开任务详情”.
+
 ## [0.8.2] — 2026-08-09
 
 ### Fixed
