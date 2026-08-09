@@ -9,6 +9,32 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-08-09
+
+**表格单元格模型 (table cell model).** From this release on, every fix bumps the
+patch version by 0.0.1.
+
+### Added
+
+- **Table cell model — text cells now translate in place (`tableStructure.ts`).**
+  A detected table region is no longer kept wholesale in English. Its Row/Cell
+  grid is inferred geometrically (columns from the members' x-extents seeded
+  narrowest-first so a spanning cell can't fuse two columns; rows from their
+  y-extents), and each cell is handled on its own: prose cells (labels,
+  recommendations, prose headers like "2025 Recommendation") are translated and
+  replaced inside their own rectangle through the same measure-before-commit
+  pipeline, while data cells (numbers, value±sd, ranges, symbols), whole
+  numeric columns, and any fragment stitched ACROSS columns stay original — so
+  a data table's figures and alignment are never disturbed and nothing is ever
+  stamped across the grid. Each cell carries a stable id
+  (`page-<p>-table-<t>-r<row>-c<col>`). The placement tally gains a
+  `tableTranslated` count beside `tableExcluded`.
+
+Still ahead: ruling-line detection from the operator list for tables drawn with
+rules rather than whitespace; splitting a multi-block cell's translation across
+its members; and paragraph-granular placement so one overflowing line can't hold
+back a long paragraph.
+
 ## [0.7.0] — 2026-08-09
 
 **修复表格和图片排版问题 (table & figure layout fixes).** 整页对照重写为严格
@@ -101,25 +127,6 @@ one architecture: strict in-place replacement.
   sometimes emits. This removes the mixed English/Chinese cells and the Chinese
   text that was overlapping table rows. (A table is all-original until the real
   cell model lands.)
-
-- **Table cell model — text cells now translate in place (`tableStructure.ts`).**
-  A detected table region is no longer kept wholesale in English. Its Row/Cell
-  grid is inferred geometrically (columns from the members' x-extents seeded
-  narrowest-first so a spanning cell can't fuse two columns; rows from their
-  y-extents), and each cell is handled on its own: prose cells (labels,
-  recommendations, prose headers like "2025 Recommendation") are translated and
-  replaced inside their own rectangle through the same measure-before-commit
-  pipeline, while data cells (numbers, value±sd, ranges, symbols), whole
-  numeric columns, and any fragment stitched ACROSS columns stay original — so
-  a data table's figures and alignment are never disturbed and nothing is ever
-  stamped across the grid. Each cell carries a stable id
-  (`page-<p>-table-<t>-r<row>-c<col>`). The placement tally gains a
-  `tableTranslated` count beside `tableExcluded`.
-
-Still ahead (acknowledged, not yet done): ruling-line detection from the
-operator list for tables drawn with rules rather than whitespace; splitting a
-multi-block cell's translation across its members; and paragraph-granular
-placement so one overflowing line can't hold back a long paragraph.
 
 ### Changed (architecture)
 
@@ -936,7 +943,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.3...v0.6.0
