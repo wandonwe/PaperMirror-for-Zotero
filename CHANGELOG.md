@@ -9,7 +9,26 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
-## [0.7.8] — 2026-08-09
+## [0.7.9] — 2026-08-09
+
+### Changed
+
+- **对照翻译模式也用同一个状态胶囊 (same capsule in the side pane).** The status
+  capsule is now a shared component (`statusCapsule.ts`) used by BOTH 覆盖原文 and
+  对照翻译 modes, so the pane's bottom-right shows the same real progress ring,
+  page position, and honest 翻译 a/b · 排版 c/b counts as the overlay. Progress
+  is routed to whichever surface is visible; the other's capsule is dismissed.
+
+### Added
+
+- **点按圆环 = 刷新本页 (click the ring to re-translate the current page).** The
+  progress ring is now a button: clicking it re-translates the page you are on
+  (rotating to the next pool engine, as before).
+- **菜单栏刷新按钮改为「刷新全部」(top button = re-translate everything).** The
+  pane menu-bar refresh button now clears the whole document's cached +
+  in-memory translations and re-translates; because translation is lazy, the
+  current page re-runs now and the rest re-translate as they are viewed. Cancel
+  in the capsule now works in both modes.
 
 ### Changed
 
@@ -1079,7 +1098,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.8...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.9...HEAD
+[0.7.9]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.8...v0.7.9
 [0.7.8]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.5...v0.7.6

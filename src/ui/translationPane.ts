@@ -17,6 +17,7 @@ import * as logger from '../utils/logger';
 import type { ExplanationSection } from '../translation/explainer';
 import type { PageTranslationState } from '../translation/translationManager';
 import type { SourceBlock } from '../types/models';
+import { StatusCapsule, CAPSULE_CSS, type OverlayProgress } from './statusCapsule';
 // Official brand marks (vendored from lobe-icons, MIT — see brandIcons/README).
 import svgMicrosoft from './brandIcons/microsoft.svg';
 import svgGoogle from './brandIcons/google.svg';
@@ -102,7 +103,10 @@ export interface PaneCallbacks {
 	/** 菜单栏「解析」按钮 — explain the current PDF selection. */
 	onExplainSelection(): void;
 	onToggleSync(enabled: boolean): void;
+	/** 菜单栏刷新按钮 — 刷新全部 (re-translate the whole document). */
 	onRetranslate(): void;
+	/** 状态胶囊圆环 — 刷新本页 (re-translate the current page). */
+	onRefreshPage(): void;
 	onSaveNote(): void;
 	onToggleViewKind(kind: 'page' | 'article'): void;
 	/** 菜单栏直接切换 — no round-trip through the settings pane. */
@@ -203,12 +207,37 @@ export class TranslationPane {
 	 */
 	private displayPxPerPoint = 0;
 
+	private statusCapsule!: StatusCapsule;
+
 	constructor(host: HTMLElement, _title: string, strings: PaneStrings, callbacks: PaneCallbacks) {
 		this.host = host;
 		this.doc = host.ownerDocument!;
 		this.strings = strings;
 		this.callbacks = callbacks;
 		this.build();
+		// The consolidated status capsule (same widget as 覆盖原文 mode). Ring →
+		// 刷新本页; the 刷新全部 button lives in the menu bar.
+		this.statusCapsule = new StatusCapsule(
+			() => ({ doc: this.doc, container: this.host }),
+			{
+				onCancel: () => this.callbacks.onRefreshPage(), // cancel routes to a page re-run
+				onRetry: () => this.callbacks.onRefreshPage(),
+				onRefreshRing: () => this.callbacks.onRefreshPage()
+			},
+			(doc) => {
+				if (!doc.getElementById('pm-capsule-style')) {
+					const style = doc.createElementNS(HTML_NS, 'style') as HTMLStyleElement;
+					style.id = 'pm-capsule-style';
+					style.textContent = CAPSULE_CSS;
+					(doc.head ?? doc.documentElement).appendChild(style);
+				}
+			}
+		);
+	}
+
+	/** Rich per-page progress → the pane's status capsule (对照翻译 mode). */
+	setProgress(model: OverlayProgress | null): void {
+		this.statusCapsule.setProgress(model);
 	}
 
 	// ---- element helpers ----------------------------------------------------
@@ -606,7 +635,7 @@ export class TranslationPane {
 		bar.append(
 			this.languagePill,
 			providerPill,
-			this.iconButton(ICON_PATHS.refresh, this.strings.retranslate, () => this.callbacks.onRetranslate(), 'pm-refresh'),
+			this.iconButton(ICON_PATHS.refresh, '刷新全部', () => this.callbacks.onRetranslate(), 'pm-refresh'),
 			this.el('span', 'pm-bar-spacer'),
 			this.syncSwitch,
 			this.textButton('pm-bar-action', `✦ ${this.strings.explain}`, this.strings.explainTip, () => this.callbacks.onExplainSelection()),

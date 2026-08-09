@@ -208,7 +208,8 @@ export class ReaderSession {
 			// highlighted 译文 block, or asks the reader to select text first.
 			onExplainSelection: () => void this.explainSelection(),
 			onToggleSync: enabled => this.setSyncEnabled(enabled),
-			onRetranslate: () => void this.retranslateCurrent(),
+			onRetranslate: () => void this.retranslateAll(), // 菜单栏刷新 = 刷新全部
+			onRefreshPage: () => void this.retranslateCurrent(), // 胶囊圆环 = 刷新本页
 			onSaveNote: () => void this.saveSelectionToNote(),
 			onOpenSettings: () => this.openSettings(),
 			onToggleViewKind: kind => setPref('paneView', kind),
@@ -558,12 +559,18 @@ export class ReaderSession {
 		}
 	}
 
-	/** Push a progress model to the overlay capsule — only in 覆盖原文 mode. */
+	/**
+	 * Push a progress model to the status capsule of whichever surface is
+	 * visible: the on-page capsule in 覆盖原文 mode, the pane capsule in 对照翻译
+	 * mode. The inactive surface's capsule is dismissed so only one ever shows.
+	 */
 	private pushOverlayProgress(model: OverlayProgress): void {
 		if (this.viewMode === 'overlay') {
 			this.overlay?.setProgress(model);
+			this.pane?.setProgress(null);
 		}
 		else {
+			this.pane?.setProgress(model);
 			this.overlay?.setProgress(null);
 		}
 	}
@@ -1218,13 +1225,40 @@ export class ReaderSession {
 		const page = adapter.getCurrentPageIndex(this.reader);
 		this.manager?.cancelPage(page);
 		this.compressPending.delete(page);
-		if (this.viewMode === 'overlay') {
-			this.overlay?.setProgress({
-				phase: 'cancelled',
-				currentPage: page + 1,
-				totalPages: adapter.getPageCount(this.reader),
-				segTotal: 0, segTranslated: 0, segPlaced: 0, kept: 0
-			});
+		this.pushOverlayProgress({
+			phase: 'cancelled',
+			currentPage: page + 1,
+			totalPages: adapter.getPageCount(this.reader),
+			segTotal: 0, segTranslated: 0, segPlaced: 0, kept: 0
+		});
+	}
+
+	/**
+	 * 刷新全部 (menu-bar button): drop every cached + in-memory translation for
+	 * this document and re-translate. Because translation is lazy, this re-runs
+	 * the current page now; the rest re-translate as they are viewed.
+	 */
+	private async retranslateAll(): Promise<void> {
+		if (!this.manager) {
+			this.startTranslating();
+			return;
+		}
+		this.compressRounds.clear();
+		this.compressPending.clear();
+		this.pageProviderOffset.clear();
+		this.manager.resetAll();
+		const item = adapter.getReaderItem(this.reader);
+		if (item) {
+			try {
+				await cacheManager.clearAttachmentAllVersions(item.key);
+			}
+			catch (e) {
+				logger.warn(MODULE, 'retranslateAll: cache clear failed', e);
+			}
+		}
+		this.pane?.toast(getString('papermirror-toast-cache-cleared'));
+		if (getPref<boolean>('privacyNoticeAccepted', false)) {
+			this.manager.setCurrentPage(adapter.getCurrentPageIndex(this.reader));
 		}
 	}
 
