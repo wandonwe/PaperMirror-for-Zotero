@@ -23,7 +23,7 @@ import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationRes
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
-import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, type UnfitBlock } from '../ui/strictPageReplacement';
+import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, type UnfitBlock } from '../ui/strictPageReplacement';
 import { translateFullPdf, bytesToBase64, type TranslateSubmission } from '../translation/pdfService';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
@@ -32,6 +32,7 @@ import { getPref, setPref } from '../utils/prefs';
 import { detectLanguage, defaultTargetFor, sourceCodeFor } from '../utils/languageDetector';
 import { createSyncController, type SyncController } from './scrollSynchronizer';
 import { PdfOverlay, type OverlayDisplayMode, type OverlayProgress } from './pdfOverlay';
+import { taskPriority } from '../ui/statusCapsule';
 import { createSplitView, type SplitViewHandles } from './splitView';
 import { TextExtractor } from './textExtractor';
 import * as adapter from './zoteroReaderAdapter';
@@ -142,6 +143,17 @@ export class ReaderSession {
 	 * genuinely different translator, not the same one again.
 	 */
 	private pageProviderOffset = new Map<number, number>();
+	/** The single capsule's task queue (see setTask/renderTopTask). */
+	private tasks = new Map<string, OverlayProgress>();
+	private taskHideTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	private topTaskId: string | null = null;
+	/**
+	 * The most recent page that settled with kept-original segments, and the
+	 * strict-page element that holds its `[data-pm-unfit]` boxes. Drives
+	 * 「查看保留原文」so the capsule action can scroll to and flash the exact
+	 * segments that stayed in the source language.
+	 */
+	private lastPartial: { pageIndex: number; element: HTMLElement } | null = null;
 
 	/** The engine responsible for a page, honouring the 刷新 rotation. */
 	private providerForPage(pageIndex: number): string {
@@ -210,6 +222,8 @@ export class ReaderSession {
 			onRetranslate: () => void this.retranslateAll(), // 菜单栏刷新 = 刷新全部
 			onRefreshPage: () => void this.retranslateCurrent(), // 胶囊圆环 = 刷新本页
 			onCancelPage: () => this.cancelCurrentTranslation(), // 胶囊取消 = 停止翻译
+			onViewPartial: () => this.viewKeptOriginal(), // 胶囊「查看保留原文」= 定位保留段落
+			onDismiss: () => this.dismissTopTask(), // 胶囊 × = 关闭当前通知
 			onSaveNote: () => void this.saveSelectionToNote(),
 			onOpenSettings: () => this.openSettings(),
 			onToggleViewKind: kind => setPref('paneView', kind),
@@ -232,7 +246,8 @@ export class ReaderSession {
 		this.overlay = new PdfOverlay(this.reader, {
 			onCancel: () => this.cancelCurrentTranslation(),
 			onRetry: () => void this.retranslateCurrent(),
-			onViewPartial: () => this.setViewMode('split'), // the pane shows per-block detail
+			onViewPartial: () => this.viewKeptOriginal(), // switch to pane + locate the kept blocks
+			onDismiss: () => this.dismissTopTask(),
 			onRefreshRing: () => void this.retranslateCurrent() // ring → 刷新本页
 		});
 		this.overlay.setDisplayMode(getPref<OverlayDisplayMode>('overlayDisplayMode', 'dim-original'));
@@ -542,25 +557,134 @@ export class ReaderSession {
 	 * visible: the on-page capsule in 覆盖原文 mode, the pane capsule in 对照翻译
 	 * mode. The inactive surface's capsule is dismissed so only one ever shows.
 	 */
+	/** Route a translation/export progress model into the task queue. */
 	private pushOverlayProgress(model: OverlayProgress): void {
-		if (this.viewMode === 'overlay') {
-			this.overlay?.setProgress(model);
-			this.pane?.setProgress(null);
-		}
-		else {
-			this.pane?.setProgress(model);
-			this.overlay?.setProgress(null);
-		}
+		this.setTask(model.task === 'export' ? 'export' : 'translation', model);
 	}
 
-	/** A failure surfaced through the capsule (both modes), not a raw string. */
+	/**
+	 * A NON-translation failure (save note, copy, clear cache, open) surfaced in
+	 * the capsule as its own task. retryable:false → the capsule shows a × that
+	 * dismisses this task, never a 重试 that would wrongly re-translate.
+	 */
 	private pushFailure(message: string): void {
-		this.pushOverlayProgress({
-			phase: 'failed', message,
+		this.setTask('notice', {
+			phase: 'failed', message, retryable: false,
 			currentPage: adapter.getCurrentPageIndex(this.reader) + 1,
 			totalPages: adapter.getPageCount(this.reader),
 			segTotal: 0, segTranslated: 0, segPlaced: 0, kept: 0
 		});
+	}
+
+	/**
+	 * The task queue behind the single capsule. Several tasks can be live at
+	 * once (a page translating WHILE a PDF exports); the capsule shows the
+	 * highest-priority one instead of whichever updated last, so export and
+	 * translation no longer flip-flop over each other. done/cancelled tasks
+	 * self-clear after a moment; failed/partial persist until replaced or
+	 * dismissed.
+	 */
+	private setTask(id: string, model: OverlayProgress | null): void {
+		const timer = this.taskHideTimers.get(id);
+		if (timer) {
+			clearTimeout(timer);
+			this.taskHideTimers.delete(id);
+		}
+		if (!model) {
+			this.tasks.delete(id);
+			this.renderTopTask();
+			return;
+		}
+		this.tasks.set(id, model);
+		if (model.phase === 'done' || model.phase === 'cancelled') {
+			this.taskHideTimers.set(id, setTimeout(() => {
+				this.taskHideTimers.delete(id);
+				this.tasks.delete(id);
+				this.renderTopTask();
+			}, 2200));
+		}
+		this.renderTopTask();
+	}
+
+	/** Show the highest-priority live task in the visible surface's capsule. */
+	private renderTopTask(): void {
+		let best: OverlayProgress | null = null;
+		let bestScore = -1;
+		let bestId: string | null = null;
+		for (const [id, m] of this.tasks) {
+			const score = taskPriority(m);
+			if (score > bestScore) {
+				bestScore = score;
+				best = m;
+				bestId = id;
+			}
+		}
+		this.topTaskId = bestId;
+		if (this.viewMode === 'overlay') {
+			this.overlay?.setProgress(best);
+			this.pane?.setProgress(null);
+		}
+		else {
+			this.pane?.setProgress(best);
+			this.overlay?.setProgress(null);
+		}
+	}
+
+	/** Capsule × on a persistent state — drop the task it belongs to. */
+	private dismissTopTask(): void {
+		if (this.topTaskId) {
+			this.setTask(this.topTaskId, null);
+		}
+	}
+
+	/**
+	 * 「查看保留原文」: jump to and flash the segments a page kept in the source
+	 * language because their translation could not be placed. The segments live
+	 * in the strict-page element recorded by reportPlacement (works whether that
+	 * element sits in the on-PDF overlay or in the 对照 pane). When that element
+	 * is gone (page re-rendered), fall back to asking the pane to locate the
+	 * kept blocks on the same page.
+	 */
+	private viewKeptOriginal(): void {
+		const target = this.lastPartial;
+		const topPage = this.topTaskId
+			? this.tasks.get(this.topTaskId)?.currentPage
+			: undefined;
+		const pageIndex = target?.pageIndex
+			?? (topPage ? topPage - 1 : adapter.getCurrentPageIndex(this.reader));
+		// Bring the PDF (and thus any on-page overlay) to the right page first.
+		adapter.navigateToPage(this.reader, pageIndex);
+		if (target && target.element.isConnected) {
+			const boxes = Array.from(
+				target.element.querySelectorAll('[data-pm-unfit="true"]')
+			) as HTMLElement[];
+			if (boxes.length) {
+				boxes[0]?.scrollIntoView({ block: 'center' });
+				for (const box of boxes) {
+					this.flashKept(box);
+				}
+				return;
+			}
+		}
+		// Overlay element gone or empty → let the pane locate them.
+		this.pane?.revealKeptOriginal(pageIndex);
+	}
+
+	/**
+	 * Briefly outline a kept-original segment. Inline styles (not a CSS class)
+	 * so the same routine works in the overlay layer and the pane, whose
+	 * stylesheets differ.
+	 */
+	private flashKept(node: HTMLElement): void {
+		const prevOutline = node.style.outline;
+		const prevTransition = node.style.transition;
+		node.style.transition = 'outline-color 0.25s ease';
+		node.style.outline = '2px solid rgba(240, 173, 78, 0.95)';
+		const win = node.ownerDocument.defaultView;
+		win?.setTimeout(() => {
+			node.style.outline = prevOutline;
+			node.style.transition = prevTransition;
+		}, 2000);
 	}
 
 	private startPolling(): void {
@@ -824,22 +948,30 @@ export class ReaderSession {
 			MODULE,
 			`page ${pageIndex + 1} placement: ${s.committed}/${s.replaceable} shown, `
 			+ `${s.abandoned} won't fit, ${s.untranslated} untranslated, `
-			+ `${s.tableExcluded} in tables, ${s.imageExcluded} on images, ${s.tooSmall} too small`
+			+ `${s.tableFailed} table-failed, ${s.tableIntentional} table-kept, `
+			+ `${s.imageExcluded} on images, ${s.tooSmall} too small`
 		);
 		if (this.destroyed || pageIndex !== adapter.getCurrentPageIndex(this.reader)) {
 			return; // only annotate the page the reader is actually on
 		}
-		// ONE consistent 口径: the denominator is the units we actually tried to
-		// translate AND place — committed + translated cells (placed) plus the
-		// real failures (abandoned + untranslated). image/table/too-small are
-		// kept original BY DESIGN, so they are neither placed nor counted as
-		// failures (else every page with a figure would read "partial"). This
-		// keeps placed ≤ total, so the ring can never exceed 100%.
-		const placed = s.committed + s.tableTranslated;
-		const kept = s.abandoned + s.untranslated;
-		const segTotal = placed + kept;
+		// ONE consistent 口径, no double counting: `committed` ALREADY includes the
+		// table text cells that were placed (they are items like any block), so
+		// `placed` is just `committed`. Failures that must count as kept: blocks
+		// that wouldn't fit (abandoned), blocks the service didn't translate
+		// (untranslated), and table cells that failed to translate/place
+		// (tableFailed). Intentionally-original content (data cells, figures,
+		// metadata, tiny fragments) is neither placed nor a failure.
+		const { placed, kept, segTotal, phase } = placementTally(s);
+		// Remember where the kept-original segments live so 「查看保留原文」can
+		// jump straight to them; clear it once the page places everything.
+		if (kept > 0) {
+			this.lastPartial = { pageIndex, element };
+		}
+		else if (this.lastPartial?.pageIndex === pageIndex) {
+			this.lastPartial = null;
+		}
 		this.pushOverlayProgress({
-			phase: kept > 0 ? 'partial' : 'done',
+			phase,
 			currentPage: pageIndex + 1,
 			totalPages: adapter.getPageCount(this.reader),
 			segTotal,
@@ -918,6 +1050,9 @@ export class ReaderSession {
 				this.applyOverlay(false, false);
 				break;
 		}
+		// The visible surface changed → re-route the top task to its capsule and
+		// clear the one that just went away, so a live task follows the mode.
+		this.renderTopTask();
 	}
 
 	/**
@@ -1447,6 +1582,12 @@ export class ReaderSession {
 			clearTimeout(this.pageRefreshTimer);
 			this.pageRefreshTimer = null;
 		}
+		for (const timer of this.taskHideTimers.values()) {
+			clearTimeout(timer);
+		}
+		this.taskHideTimers.clear();
+		this.tasks.clear();
+		this.lastPartial = null;
 		this.disposePdfEvents?.();
 		this.disposePdfEvents = null;
 		this.overlay?.destroy();

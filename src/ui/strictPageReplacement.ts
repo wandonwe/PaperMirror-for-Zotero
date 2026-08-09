@@ -117,10 +117,15 @@ export interface StrictPageStats {
 	abandoned: number;
 	/** Still being resolved (measuring / compress in flight). */
 	pending: number;
-	/** Table cells translated + replaced in place (the cell model). */
-	tableTranslated: number;
-	/** Kept original because inside a protected table region / data cell. */
-	tableExcluded: number;
+	/** Table cells kept original BY DESIGN — data/numeric cells, cross-column
+	 * fragments. Not a failure; not counted as kept-that-should-have-translated.
+	 * (Committed text cells are counted in `committed`, like any other block, so
+	 * they are never double-counted here.) */
+	tableIntentional: number;
+	/** Table cells that FAILED to translate/place — missing translation, no
+	 * line rects (extraction error), or a cell that could not be placed. These
+	 * ARE real failures and must count as kept. */
+	tableFailed: number;
 	/** Kept original because the box overlapped a real image. */
 	imageExcluded: number;
 	/** The service returned no translation for these blocks. */
@@ -133,6 +138,38 @@ export interface StrictPageResult {
 	element: HTMLElement;
 	blocksPlaced: number;
 	stats: StrictPageStats;
+}
+
+/** The honest per-page tally derived from raw stats, for the status capsule. */
+export interface PlacementTally {
+	/** Segments actually shown translated. */
+	placed: number;
+	/** Segments left in the source language because placement failed. */
+	kept: number;
+	/** placed + kept. */
+	segTotal: number;
+	/** 'partial' when anything was kept, else 'done'. */
+	phase: 'done' | 'partial';
+}
+
+/**
+ * Collapse raw strict stats into the capsule's honest tally with ONE 口径, no
+ * double counting:
+ *  - `committed` ALREADY includes table text cells that were placed (they are
+ *    ordinary items), so `placed` is exactly `committed` — table cells are
+ *    never added again on top.
+ *  - Kept = real failures only: blocks that would not fit (abandoned), blocks
+ *    the service never translated (untranslated), and table cells that failed
+ *    to translate/place (tableFailed). Intentionally-kept content
+ *    (`tableIntentional`, images, tiny fragments) is neither placed nor a
+ *    failure, so "已完成" is shown only when nothing translatable was left in
+ *    the source language.
+ */
+export function placementTally(s: StrictPageStats): PlacementTally {
+	const placed = s.committed;
+	const kept = s.abandoned + s.untranslated + s.tableFailed;
+	const segTotal = placed + kept;
+	return { placed, kept, segTotal, phase: kept > 0 ? 'partial' : 'done' };
 }
 
 /**
@@ -238,8 +275,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const cellTranslations = new Map<string, string>();
 	const cellBlocks: SourceBlock[] = [];
 	const consumedMemberIds = new Set<string>();
-	let tableTranslated = 0;
-	let tableExcluded = 0;
+	let tableIntentional = 0;
+	let tableFailed = 0;
 	guard.regions.forEach((region, tableIndex) => {
 		const members: CellMember[] = translatable
 			.filter(b => containedFraction(pxOf.get(b.id)!, region) >= 0.5 && b.lineRectsPdf?.length)
@@ -252,16 +289,16 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			for (const mid of cell.memberIds) {
 				consumedMemberIds.add(mid); // handled here, not as a normal block
 			}
-			// A data / spanning cell stays original.
+			// A data / spanning cell stays original BY DESIGN (not a failure).
 			if (cell.kind !== 'text') {
-				tableExcluded += cell.memberIds.length;
+				tableIntentional += cell.memberIds.length;
 				continue;
 			}
 			// Assemble the cell's translation from its members; if any member is
 			// missing a translation the cell can't be shown whole → keep original.
 			const parts = cell.memberIds.map(mid => input.translations.get(mid));
 			if (parts.some(p => p === undefined || !p.trim())) {
-				tableExcluded += cell.memberIds.length;
+				tableFailed += cell.memberIds.length; // a cell whose text was not translated
 				continue;
 			}
 			const lineRects: [number, number, number, number][] = [];
@@ -276,7 +313,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				}
 			}
 			if (!lineRects.length) {
-				tableExcluded += cell.memberIds.length;
+				tableFailed += cell.memberIds.length; // extraction gave no line rects
 				continue;
 			}
 			cellTranslations.set(cell.id, parts.join(''));
@@ -289,7 +326,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				lineRectsPdf: lineRects,
 				fontSize: sizes.length ? sizes[Math.floor(sizes.length / 2)] : bodyPt
 			});
-			tableTranslated++;
+			// NOT counted here: a committed text cell is counted in `committed`
+			// at settle time, exactly like a paragraph — no double counting.
 		}
 	});
 
@@ -316,7 +354,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			continue;
 		}
 		if (guard.excluded.has(block.id)) {
-			tableExcluded++;
+			tableIntentional++;
 			continue; // protected table content the cell model didn't claim
 		}
 		const box = pxOf.get(block.id)!;
@@ -336,7 +374,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// NOT turn into a cell (e.g. a paragraph the extractor stitched across
 		// cells) stays original — never stamped in Chinese across the table.
 		if (area > 0 && guard.regions.some(r => intersectArea(box, r as unknown as PixelBox) > area * 0.15)) {
-			tableExcluded++;
+			tableIntentional++;
 			continue;
 		}
 		replaceable.push(block);
@@ -346,14 +384,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	for (const cb of cellBlocks) {
 		const box = pixelBox(cb, render, 1);
 		if (box.width < 20 || box.height < 9) {
-			tableExcluded += 1;
-			tableTranslated -= 1;
+			tableFailed += 1; // a translatable cell too small to place
 			continue;
 		}
 		const area = box.width * box.height;
 		if (area > 0 && imageBoxes.some(img => intersectArea(box, img) > area * 0.15)) {
-			tableExcluded += 1;
-			tableTranslated -= 1;
+			tableFailed += 1; // a translatable cell overlapping an image
 			continue;
 		}
 		replaceable.push(cb);
@@ -645,7 +681,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		return {
 			replaceable: items.length,
 			committed, abandoned, pending,
-			tableTranslated, tableExcluded, imageExcluded, untranslated, tooSmall
+			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall
 		};
 	};
 
@@ -656,7 +692,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		stats: {
 			replaceable: items.length,
 			committed: 0, abandoned: 0, pending: items.length,
-			tableTranslated, tableExcluded, imageExcluded, untranslated, tooSmall
+			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall
 		}
 	};
 }

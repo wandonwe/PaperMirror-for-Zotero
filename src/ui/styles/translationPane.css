@@ -270,10 +270,9 @@
 .pm-refreshing .pm-refresh svg {
 	animation: pm-spin .8s linear infinite;
 }
-
-.pm-refreshing .pm-article-host {
-	opacity: .45;
-}
+/* The whole-page dim during a refresh was removed: fading the translated text
+   to 45% read as "the translation vanished". The spinning button + the status
+   capsule are enough feedback that work is in flight. */
 /* ===== scroll body (demo .translation-scroll) ===== */
 
 .pm-scroll {
@@ -821,6 +820,24 @@
 .pm-repage-block.pm-focused {
 	background: rgba(64, 122, 255, .15);
 	border-radius: 2px;
+}
+
+/* 查看保留原文: a brief highlight on segments kept in the source language. */
+.pm-kept-flash {
+	animation: pm-kept-flash 2s ease;
+	border-radius: 2px;
+}
+
+@keyframes pm-kept-flash {
+	0%, 70% {
+		background: rgba(240, 173, 78, .35);
+		box-shadow: 0 0 0 2px rgba(240, 173, 78, .95);
+	}
+
+	100% {
+		background: transparent;
+		box-shadow: 0 0 0 2px rgba(240, 173, 78, 0);
+	}
 }
 
 .pm-repage-page-label {

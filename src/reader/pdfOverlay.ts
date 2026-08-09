@@ -244,7 +244,7 @@ export class PdfOverlay {
 	/** The one consolidated status capsule (shared with the pane). */
 	private readonly statusCapsule: StatusCapsule;
 
-	constructor(reader: ReaderLike, options: { onCancel?: () => void; onRetry?: () => void; onViewPartial?: () => void; onRefreshRing?: () => void } = {}) {
+	constructor(reader: ReaderLike, options: { onCancel?: () => void; onRetry?: () => void; onViewPartial?: () => void; onDismiss?: () => void; onRefreshRing?: () => void } = {}) {
 		this.reader = reader;
 		this.statusCapsule = new StatusCapsule(
 			() => {

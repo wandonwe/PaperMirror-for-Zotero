@@ -29,12 +29,43 @@ export interface OverlayProgress {
 	kept: number;
 	/** For the failed phase, or a task-specific label (e.g. export). */
 	message?: string;
+	/**
+	 * Whether a `failed` state offers a 重试 button. Translation failures are
+	 * retryable (retry = re-translate the page); a save-note / copy / open
+	 * failure is NOT — offering "重试" there would wrongly re-translate. Default
+	 * (undefined) is retryable, i.e. translation.
+	 */
+	retryable?: boolean;
 }
 
 export interface CapsuleAction {
 	kind: 'cancel' | 'retry' | 'view' | 'close';
 	label: string;
 	title?: string;
+}
+
+/**
+ * Priority of a task competing for the single capsule, highest wins. Several
+ * tasks can be live at once (a page translating WHILE a PDF exports); the
+ * capsule shows the most important one instead of whichever updated last, so
+ * export and translation no longer overwrite each other's status. Order:
+ *   failed > active export > partial > active translation > done > cancelled.
+ */
+export function taskPriority(m: OverlayProgress): number {
+	const active = m.phase === 'translating' || m.phase === 'laying-out';
+	if (m.phase === 'failed') {
+		return 500;
+	}
+	if (m.phase === 'partial') {
+		return 350;
+	}
+	if (m.task === 'export') {
+		return active ? 400 : 150;
+	}
+	if (active) {
+		return 300;
+	}
+	return m.phase === 'done' ? 120 : 110; // done / cancelled
 }
 
 export interface CapsuleState {
@@ -52,6 +83,8 @@ export interface CapsuleCallbacks {
 	onCancel?: () => void;
 	onRetry?: () => void;
 	onViewPartial?: () => void;
+	/** The × on a persistent (failed) state — dismiss the owning task. */
+	onDismiss?: () => void;
 	/** Clicking the ring re-translates the current page. */
 	onRefreshRing?: () => void;
 }
@@ -173,7 +206,11 @@ export function capsuleStateFor(m: OverlayProgress): CapsuleState {
 				glyph: 'error',
 				fraction: null,
 				main: m.message ?? '翻译失败',
-				action: { kind: 'retry', label: '重试', title: '重试翻译' }
+				// Retry re-translates the page, so it is only offered for
+				// translation failures — never for save/copy/open failures.
+				action: m.retryable === false
+					? { kind: 'close', label: '×', title: '关闭' }
+					: { kind: 'retry', label: '重试', title: '重试翻译' }
 			};
 		case 'cancelled':
 			return {
@@ -213,7 +250,6 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 /** A single status capsule mounted into a host document/container. */
 export class StatusCapsule {
 	private collapsed = false;
-	private autoHide: ReturnType<typeof setTimeout> | null = null;
 	private last: CapsuleState | null = null;
 
 	constructor(
@@ -230,21 +266,6 @@ export class StatusCapsule {
 		this.render(capsuleStateFor(model));
 	}
 
-	setStatus(text: string | null, options: { busy?: boolean; error?: boolean; check?: boolean } = {}): void {
-		if (!text) {
-			this.hide();
-			return;
-		}
-		this.render({
-			phase: options.error ? 'failed' : options.check ? 'done' : 'translating',
-			glyph: options.error ? 'error' : options.check ? 'check' : 'dot',
-			indeterminate: !!options.busy,
-			fraction: null,
-			main: text,
-			autoHideMs: options.check ? 2000 : undefined
-		});
-	}
-
 	/** Re-paint the last state (after a host redraw that may have dropped it). */
 	reassert(): void {
 		if (this.last) {
@@ -254,10 +275,6 @@ export class StatusCapsule {
 
 	hide(): void {
 		this.last = null;
-		if (this.autoHide) {
-			clearTimeout(this.autoHide);
-			this.autoHide = null;
-		}
 		try {
 			this.getHost()?.doc.querySelector(`.${CAPSULE_CLASS}`)?.setAttribute('data-pm-hidden', 'true');
 		}
@@ -268,10 +285,6 @@ export class StatusCapsule {
 
 	remove(): void {
 		this.last = null;
-		if (this.autoHide) {
-			clearTimeout(this.autoHide);
-			this.autoHide = null;
-		}
 		try {
 			this.getHost()?.doc.querySelectorAll(`.${CAPSULE_CLASS}`).forEach(n => n.remove());
 		}
@@ -282,10 +295,6 @@ export class StatusCapsule {
 
 	private render(state: CapsuleState): void {
 		this.last = state;
-		if (this.autoHide) {
-			clearTimeout(this.autoHide);
-			this.autoHide = null;
-		}
 		const host = this.getHost();
 		if (!host) {
 			return;
@@ -348,12 +357,9 @@ export class StatusCapsule {
 					action.onclick = null;
 				}
 			}
-			if (state.autoHideMs) {
-				this.autoHide = setTimeout(() => {
-					this.autoHide = null;
-					this.hide();
-				}, state.autoHideMs);
-			}
+			// Lifecycle (auto-hide of done/cancelled) is owned by the caller's
+			// task queue, not the capsule — so a finished task can't hide another
+			// task that is still running.
 		}
 		catch {
 			// host may be mid-teardown
@@ -429,6 +435,9 @@ export class StatusCapsule {
 		}
 		else if (kind === 'view') {
 			this.callbacks.onViewPartial?.();
+		}
+		else if (this.callbacks.onDismiss) {
+			this.callbacks.onDismiss();
 		}
 		else {
 			this.hide();

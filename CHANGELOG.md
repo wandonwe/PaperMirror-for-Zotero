@@ -9,6 +9,38 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.8.2] — 2026-08-09
+
+### Fixed
+
+- **通知按钮不再执行错误动作 (retry no longer mis-fires).** A non-translation
+  failure — save note, copy, clear cache, open — now shows a `×` that dismisses
+  the notice, instead of a 重试 that wrongly re-translated the page. Only real
+  translation failures offer 重试.
+- **「查看保留原文」真正定位 (view-kept-original actually locates).** The capsule's
+  查看 action now scrolls to the page that kept segments in the source language
+  and briefly highlights those exact segments (the strict `[data-pm-unfit]`
+  boxes, or the pending blocks in the pane) — previously a no-op.
+- **表格单元格不再重复计数 (no double-count of table cells).** Placed table text
+  cells are counted once (they are ordinary committed items); the final tally is
+  `placed = committed`, so pages no longer over-report placement.
+- **保留原文与失败区分开 (kept-by-design vs real failure).** Table cells kept on
+  purpose (numeric/data/spanning) no longer count as failures, so a fully-placed
+  page reads 已完成; cells that truly failed to translate or place count as kept
+  and correctly show 保留原文.
+- **导出与翻译不再互相覆盖 (export and translation stop overwriting each other).**
+  The single capsule is now backed by a task queue: when a page translates while
+  a PDF exports, the capsule shows the highest-priority task (failed > active
+  export > partial > active translation > terminal) instead of whichever updated
+  last.
+
+### Removed
+
+- Unused `StatusCapsule.setStatus()`, the dead internal `autoHide` field (the
+  session now owns auto-hide via the task queue), and a stale `.pm-status-row`
+  comment. The whole-page dim during a page refresh is gone — only the refresh
+  button spins now, so translated text no longer appears to vanish mid-refresh.
+
 ## [0.8.1] — 2026-08-09
 
 ### Changed

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { capsuleStateFor, type OverlayProgress } from '../../src/reader/pdfOverlay';
+import { taskPriority } from '../../src/ui/statusCapsule';
 
 const base: OverlayProgress = {
 	phase: 'translating',
@@ -70,4 +71,52 @@ test('cancelled: stop glyph, auto-hides', () => {
 	assert.equal(s.glyph, 'stop');
 	assert.equal(s.main, '已停止翻译');
 	assert.ok((s.autoHideMs ?? 0) > 0);
+});
+
+test('failed with retryable:false (save/copy/open) → × close action, NOT retry', () => {
+	// Issue 1: a non-translation failure must not offer a 重试 that would
+	// wrongly re-translate the page.
+	const s = capsuleStateFor({ ...base, phase: 'failed', message: '保存笔记失败', retryable: false });
+	assert.equal(s.action?.kind, 'close');
+	assert.notEqual(s.action?.kind, 'retry');
+});
+
+test('failed with retryable omitted (translation) → retry action', () => {
+	const s = capsuleStateFor({ ...base, phase: 'failed', message: '翻译失败：网络错误' });
+	assert.equal(s.action?.kind, 'retry');
+});
+
+test('partial "查看" action is a view, so it can locate the kept segments', () => {
+	// Issue 2: the action must be a distinct `view`, wired to onViewPartial —
+	// not a retry (which re-translates) or a close (which just dismisses).
+	const s = capsuleStateFor({ ...base, phase: 'partial', kept: 2 });
+	assert.equal(s.action?.kind, 'view');
+});
+
+test('task priority: a failure outranks everything', () => {
+	const failed: OverlayProgress = { ...base, phase: 'failed', message: 'x' };
+	const activeExport: OverlayProgress = { ...base, phase: 'translating', task: 'export' };
+	const activeTranslate: OverlayProgress = { ...base, phase: 'translating' };
+	assert.ok(taskPriority(failed) > taskPriority(activeExport));
+	assert.ok(taskPriority(failed) > taskPriority(activeTranslate));
+});
+
+test('task priority: a running export outranks a running page translation', () => {
+	// Issue 5: when a PDF export runs WHILE the current page translates, the
+	// capsule must not flip-flop — the more important (export) task wins.
+	const activeExport: OverlayProgress = { ...base, phase: 'translating', task: 'export' };
+	const activeTranslate: OverlayProgress = { ...base, phase: 'translating', task: 'translation' };
+	assert.ok(taskPriority(activeExport) > taskPriority(activeTranslate));
+});
+
+test('task priority: partial (kept original) outranks an active translation', () => {
+	const partial: OverlayProgress = { ...base, phase: 'partial', kept: 3 };
+	const activeTranslate: OverlayProgress = { ...base, phase: 'translating' };
+	assert.ok(taskPriority(partial) > taskPriority(activeTranslate));
+});
+
+test('task priority: an active translation outranks a finished (done) task', () => {
+	const activeTranslate: OverlayProgress = { ...base, phase: 'translating' };
+	const done: OverlayProgress = { ...base, phase: 'done' };
+	assert.ok(taskPriority(activeTranslate) > taskPriority(done));
 });

@@ -3,10 +3,13 @@
  *
  *   header  .pm-title-row   → [eyebrow(live dot + PAPERMIRROR) + h2 镜像译文]
  *                             [swap] [settings] [close]
- *           .pm-controls-row→ [源语言 → 目标语言] [服务商] [重新翻译]
- *           .pm-status-row  → ✓ 第 N 页已翻译 · 来自本地缓存
+ *           .pm-controls-row→ [源语言 → 目标语言] [服务商] [刷新全部]
  *   scroll  → 讲解卡片 / 第 N 页 分隔 / 译文段落(原文小字 + 衬线译文)
  *   footer  → 显示原文对照 · 同步滚动 · 复制译文 · 保存到笔记
+ *
+ * Task/error status is NOT in the pane chrome any more — it lives in the shared
+ * StatusCapsule (bottom-right). The pane only keeps the success Toast, the
+ * privacy card, the explain card, and per-page inline status (.pm-status-inline).
  *
  * Security: every dynamic string is rendered via textContent or a text node.
  * Model/remote content is NEVER assigned to innerHTML.
@@ -109,6 +112,10 @@ export interface PaneCallbacks {
 	onRefreshPage(): void;
 	/** 状态胶囊取消 — stop the current page's translation. */
 	onCancelPage(): void;
+	/** 状态胶囊「查看保留原文」— locate the kept-original segments. */
+	onViewPartial(): void;
+	/** 状态胶囊 × — dismiss the current persistent task. */
+	onDismiss(): void;
 	onSaveNote(): void;
 	onToggleViewKind(kind: 'page' | 'article'): void;
 	/** 菜单栏直接切换 — no round-trip through the settings pane. */
@@ -218,6 +225,8 @@ export class TranslationPane {
 			{
 				onCancel: () => this.callbacks.onCancelPage(), // 取消 = 真正停止翻译
 				onRetry: () => this.callbacks.onRefreshPage(),
+				onViewPartial: () => this.callbacks.onViewPartial(), // 查看保留原文
+				onDismiss: () => this.callbacks.onDismiss(), // × 关闭当前通知
 				onRefreshRing: () => this.callbacks.onRefreshPage() // 圆环 = 刷新本页
 			},
 			(doc) => {
@@ -1399,6 +1408,36 @@ export class TranslationPane {
 
 	scrollToBlock(blockId: string): void {
 		this.articleHost.querySelector(`[data-pm-block="${CSS.escape(blockId)}"]`)?.scrollIntoView({ block: 'center' });
+	}
+
+	/**
+	 * 查看保留原文: scroll to `pageIndex` and briefly flash the segments whose
+	 * translation could not be placed — the strict `[data-pm-unfit]` boxes in
+	 * page view, or the still-pending blocks in article view. Returns true if
+	 * at least one such segment was found and flashed.
+	 */
+	revealKeptOriginal(pageIndex: number): boolean {
+		this.scrollToPage(pageIndex);
+		const scope = this.articleHost;
+		const kept = Array.from(
+			scope.querySelectorAll(
+				`[data-pm-page="${pageIndex}"] [data-pm-unfit="true"],`
+				+ ` [data-pm-page="${pageIndex}"][data-pm-unfit="true"],`
+				+ ` [data-pm-page="${pageIndex}"][data-pm-pending="true"]`
+			)
+		) as HTMLElement[];
+		if (!kept.length) {
+			return false;
+		}
+		kept[0]?.scrollIntoView({ block: 'center' });
+		for (const node of kept) {
+			node.classList.remove('pm-kept-flash');
+			// Force reflow so re-adding the class restarts the animation.
+			void node.offsetWidth;
+			node.classList.add('pm-kept-flash');
+			this.doc.defaultView?.setTimeout(() => node.classList.remove('pm-kept-flash'), 2000);
+		}
+		return true;
 	}
 
 	private handleScroll(): void {
