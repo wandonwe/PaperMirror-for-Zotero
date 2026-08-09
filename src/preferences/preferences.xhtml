@@ -175,9 +175,9 @@
 			<label class="pm-title" value="性能与并行"/>
 		</hbox>
 		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 4px;">
-			<label value="并发请求数" control="papermirror-concurrency"/>
-			<html:input type="number" id="papermirror-concurrency" min="1" max="6" style="width: 4.5em;"/>
-			<label class="pm-desc" style="margin-top: 0;" value="LLM 服务商可到 6;免费引擎内部限 2"/>
+			<label value="最大并行页面数" control="papermirror-concurrency"/>
+			<html:input type="number" id="papermirror-concurrency" min="0" max="24" style="width: 4.5em;"/>
+			<label class="pm-desc" style="margin-top: 0;" value="0 = 自动(按启用的服务商各自能力求和,上限24);每个服务商独立限流"/>
 		</hbox>
 		<hbox class="pm-line" style="margin-top: 8px;">
 			<label value="并行翻译服务商(与主服务商轮流分担页面)"/>

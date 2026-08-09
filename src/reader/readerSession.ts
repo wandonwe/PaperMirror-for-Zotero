@@ -13,7 +13,7 @@ import {
 } from '../notes/noteService';
 import { getApiKey } from '../security/credentialStore';
 import { getProvider, listProviders } from '../translation/providers/registry';
-import { buildPool, pickProviderForPage } from '../translation/providerPool';
+import { buildPool, pickProviderForPage, poolConcurrencyPlan, prefetchWindowFor, type ProviderCapability } from '../translation/providerPool';
 import { endpointHost, supportsCharBudget } from '../translation/providers/types';
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
 import { TranslationManager, type PageTranslationState } from '../translation/translationManager';
@@ -388,7 +388,10 @@ export class ReaderSession {
 				},
 				getGlossary: () => this.loadGlossary(),
 				useContext: () => getPref<boolean>('useContext', true),
-				pageCount: () => adapter.getPageCount(this.reader)
+				pageCount: () => adapter.getPageCount(this.reader),
+				// Each page's provider LANE — lets the scheduler cap providers
+				// independently and reserve a foreground slot for the current one.
+				laneFor: (pageIndex: number) => this.providerForPage(pageIndex)
 			},
 			{
 				onPageUpdate: state => this.onPageUpdate(state),
@@ -407,19 +410,46 @@ export class ReaderSession {
 				}
 			},
 			{
-				// Free engines stay at ≤2 (scrape bot-risk); key providers may
-				// go to 6 — modern tier-1 rate limits take that comfortably.
-				maxConcurrent: Math.min(
-					getProvider(getPref<string>('provider', 'bing-free')).requiresApiKey ? 6 : 2,
-					Math.max(1, getPref<number>('maxConcurrentRequests', 2))
-				),
+				// The global cap is set properly by applyConcurrencyPlan() below
+				// (sum of each enabled provider's own lane cap); this initial value
+				// is just a safe floor until that runs.
+				maxConcurrent: 24,
+				reservedForeground: 1,
 				prefetch: getPref<boolean>('autoPrefetch', true)
 			}
 		);
+		this.applyConcurrencyPlan();
 		const page = adapter.getCurrentPageIndex(this.reader);
 		this.lastPageIndex = page;
 		this.pane?.setCurrentPage(page);
 		this.manager.setCurrentPage(page);
+	}
+
+	/**
+	 * 每服务商独立限流 + 自动全局并发: translate the current provider pool into
+	 * per-lane page caps and a global cap (their sum, clamped 2–24), and size the
+	 * prefetch window to the pool. The 最大并行页面数 setting is an OPTIONAL
+	 * ceiling: 0 = auto (pure per-provider sum); >0 caps the global total. Called
+	 * on manager creation and whenever the pool changes.
+	 */
+	private applyConcurrencyPlan(): void {
+		if (!this.manager) {
+			return;
+		}
+		const caps: ProviderCapability[] = this.pool.map((id) => {
+			const p = getProvider(id);
+			const local = id === 'ollama'
+				|| /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(p.defaultBaseURL || '');
+			return { id, requiresApiKey: p.requiresApiKey, local };
+		});
+		const plan = poolConcurrencyPlan(caps.length ? caps : [{ id: 'bing-free', requiresApiKey: false, local: false }]);
+		const override = Math.max(0, Math.floor(getPref<number>('maxConcurrentRequests', 0)));
+		const globalMax = override > 0 ? Math.min(24, Math.max(1, override)) : plan.globalMax;
+		this.manager.setLaneCaps(plan.laneCaps);
+		this.manager.setGlobalConcurrency(globalMax);
+		const win = prefetchWindowFor(Math.max(1, this.pool.length));
+		this.manager.setPrefetchWindow(win.forward, win.backward);
+		logger.info(MODULE, `Concurrency plan: global ${globalMax}${override > 0 ? ' (manual)' : ' (auto)'}, lanes ${JSON.stringify(plan.laneCaps)}, prefetch +${win.forward}/-${win.backward}`);
 	}
 
 	private resolveLanguages(sample: string): { source: string; target: string } {
@@ -494,6 +524,8 @@ export class ReaderSession {
 		if (this.pool.length > 1) {
 			logger.info(MODULE, `Provider pool: ${this.pool.join(' + ')}`);
 		}
+		// Pool membership changed → recompute per-lane caps, global cap, window.
+		this.applyConcurrencyPlan();
 	}
 
 	private async translateRequest(request: TranslationRequest, signal: AbortSignal): Promise<TranslationResponse> {

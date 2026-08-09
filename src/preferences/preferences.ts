@@ -124,10 +124,11 @@ interface PaperMirrorPublicAPI {
 		{
 			const concurrencyInput = byId<HTMLInputElement>('papermirror-concurrency');
 			if (concurrencyInput) {
-				const current = Number(getPref('maxConcurrentRequests') ?? 2);
-				concurrencyInput.value = String(Math.min(6, Math.max(1, Number.isFinite(current) ? current : 2)));
+				// 0 = auto (compute from the enabled providers); 1–24 = manual cap.
+				const current = Number(getPref('maxConcurrentRequests') ?? 0);
+				concurrencyInput.value = String(Math.min(24, Math.max(0, Number.isFinite(current) ? current : 0)));
 				concurrencyInput.addEventListener('change', () => {
-					const next = Math.min(6, Math.max(1, Math.round(Number(concurrencyInput.value) || 2)));
+					const next = Math.min(24, Math.max(0, Math.round(Number(concurrencyInput.value) || 0)));
 					concurrencyInput.value = String(next);
 					setPref('maxConcurrentRequests', next);
 				});

@@ -11,7 +11,7 @@ pref('extensions.zotero.bilingualReader.model', '');
 pref('extensions.zotero.bilingualReader.sourceLanguage', 'auto');
 pref('extensions.zotero.bilingualReader.targetLanguage', 'auto');
 pref('extensions.zotero.bilingualReader.timeoutMs', 60000);
-pref('extensions.zotero.bilingualReader.maxConcurrentRequests', 2);
+pref('extensions.zotero.bilingualReader.maxConcurrentRequests', 0); // 0 = auto (per-provider sum, clamp 2-24)
 pref('extensions.zotero.bilingualReader.customPrompt', '');
 pref('extensions.zotero.bilingualReader.translateCaptions', true);
 pref('extensions.zotero.bilingualReader.translateReferences', false);

@@ -519,6 +519,44 @@ test('段落级缓存: only the failed segment re-requests on normal refresh', a
 	manager.dispose();
 });
 
+test('provider pool: another lane prefetches WHILE the current page (its lane) is still translating', async () => {
+	const { PaperMirrorError } = await import('../../src/types/models');
+	const order: number[] = [];
+	let releaseCurrent!: () => void;
+	const { deps } = makeDeps({
+		pageCount: () => 10,
+		laneFor: (p: number) => (p % 2 === 0 ? 'A' : 'B'), // even→A, odd→B
+		extractPage: async (p) => [{
+			id: `page-${p}-block-0`, pageIndex: p, order: 0, type: 'paragraph',
+			sourceText: `Body text for page ${p} with enough words to be prose here.`
+		}],
+		translateRequest: async (request: TranslationRequest, signal?: AbortSignal): Promise<TranslationResponse> => {
+			const p = request.pageIndex ?? -1;
+			if (p === 0) {
+				await new Promise<void>((resolve, reject) => {
+					releaseCurrent = resolve;
+					signal?.addEventListener?.('abort', () => reject(new PaperMirrorError('CANCELLED', 'aborted')));
+				});
+			}
+			order.push(p);
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '译文内容' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: true, delayFn: () => Promise.resolve() });
+	manager.setLaneCaps({ A: 1, B: 1 });
+	manager.setGlobalConcurrency(4);
+	manager.setPrefetchWindow(2, 1);
+	manager.setCurrentPage(0); // page 0 on lane A blocks; page 1 (lane B) should prefetch
+	await new Promise(r => setTimeout(r, 20));
+	assert.ok(order.includes(1), 'lane B page prefetched while lane A current page was still blocked');
+	assert.ok(!order.includes(2), 'the same-lane (A) neighbour waited for the current page');
+	assert.ok(!order.includes(0), 'the current page is still translating (blocked)');
+	releaseCurrent();
+	await new Promise(r => setTimeout(r, 20));
+	assert.ok(order.includes(0), 'current page finishes after release');
+	manager.dispose();
+});
+
 test('navigating to a QUEUED prefetch page promotes it to run now (not stuck)', async () => {
 	// Problem one: a page enqueued as a low-priority prefetch used to be
 	// unreachable — ensurePage early-returned on isScheduled, so navigating to it

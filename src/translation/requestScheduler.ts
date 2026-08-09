@@ -1,7 +1,15 @@
 /**
- * Request scheduler: max-2 concurrency, retry with exponential backoff,
- * cancellation, and stale-task dropping. Pure module (unit-tested with
- * injected timers).
+ * Request scheduler: priority queue with a GLOBAL page-task cap, PER-LANE caps
+ * (a lane = one provider), a reserved foreground slot for the visible page,
+ * retry with exponential backoff, cancellation, stale-task dropping, and
+ * per-lane adaptive throttling (429 → halve, timeout → −1, success → slow +1).
+ * Pure module (unit-tested with injected timers).
+ *
+ * Lanes are why a provider POOL actually multiplies throughput: each provider's
+ * pages run in their own lane up to that provider's own cap, concurrently with
+ * the other lanes, instead of everything sharing one global number keyed off the
+ * main provider. A job with no lane ('') is unconstrained per-lane and behaves
+ * exactly as the old single-cap scheduler.
  */
 
 import { PaperMirrorError } from '../types/models';
@@ -12,12 +20,9 @@ export interface SchedulerOptions {
 	baseDelayMs: number;
 	delayFn?: (ms: number) => Promise<void>;
 	/**
-	 * Slots reserved for foreground jobs. Background jobs may occupy at most
-	 * `maxConcurrent - reservedForeground` slots at once, so at least this many
-	 * slots are ALWAYS free for a foreground job (the current visible page) to
-	 * start immediately — background prefetch can never fill every slot and make
-	 * the page the reader is looking at wait. Default 0 = no reservation (every
-	 * job competes purely on priority, the original behaviour).
+	 * Global slots reserved for foreground jobs. Background jobs may occupy at
+	 * most `maxConcurrent - reservedForeground` slots at once, so at least this
+	 * many are ALWAYS free for a foreground (current-page) job. Default 0.
 	 */
 	reservedForeground?: number;
 }
@@ -32,6 +37,8 @@ interface Job<T> {
 	attempts: number;
 	/** Foreground jobs (current page) may use reserved slots; background can't. */
 	foreground: boolean;
+	/** The provider lane this job belongs to; '' = no per-lane constraint. */
+	lane: string;
 }
 
 export class RequestScheduler {
@@ -41,6 +48,14 @@ export class RequestScheduler {
 	private active = new Map<string, Job<unknown>>();
 	private delayFn: (ms: number) => Promise<void>;
 	private disposed = false;
+	/** Configured per-lane page cap (the provider's steady-state limit). */
+	private laneCapMax = new Map<string, number>();
+	/** Current per-lane cap, after adaptive throttling. */
+	private laneCapCur = new Map<string, number>();
+	/** Consecutive successes per lane, for slow recovery. */
+	private laneSuccess = new Map<string, number>();
+	/** The lane that owns the visible page — it keeps one slot for foreground. */
+	private foregroundLane: string | null = null;
 
 	constructor(options?: Partial<SchedulerOptions>) {
 		this.options = {
@@ -50,9 +65,12 @@ export class RequestScheduler {
 			delayFn: options?.delayFn,
 			reservedForeground: options?.reservedForeground ?? 0
 		};
-		// Never reserve so much that background can never run, nor more than exist.
-		this.reservedForeground = Math.max(0, Math.min(this.options.reservedForeground ?? 0, this.options.maxConcurrent - 1));
+		this.reservedForeground = this.clampReserve(this.options.reservedForeground ?? 0);
 		this.delayFn = this.options.delayFn ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
+	}
+
+	private clampReserve(n: number): number {
+		return Math.max(0, Math.min(n, this.options.maxConcurrent - 1));
 	}
 
 	get pendingCount(): number {
@@ -61,6 +79,11 @@ export class RequestScheduler {
 
 	get activeCount(): number {
 		return this.active.size;
+	}
+
+	/** Live per-lane cap (after adaptive throttling), for tests/telemetry. */
+	laneCap(lane: string): number {
+		return this.laneCapCur.get(lane) ?? Infinity;
 	}
 
 	isScheduled(key: string): boolean {
@@ -72,13 +95,40 @@ export class RequestScheduler {
 		return this.queue.some(job => job.key === key);
 	}
 
+	/** Set the GLOBAL concurrent page-task cap. */
+	setGlobalMax(n: number): void {
+		this.options.maxConcurrent = Math.max(1, Math.floor(n));
+		this.reservedForeground = this.clampReserve(this.reservedForeground);
+		this.pump();
+	}
+
+	/**
+	 * Configure per-lane (per-provider) page caps. Resets each lane's adaptive
+	 * current cap to its configured max. Lanes not listed are unconstrained.
+	 */
+	configureLanes(caps: Record<string, number>): void {
+		this.laneCapMax.clear();
+		this.laneCapCur.clear();
+		this.laneSuccess.clear();
+		for (const [lane, cap] of Object.entries(caps)) {
+			const c = Math.max(1, Math.floor(cap));
+			this.laneCapMax.set(lane, c);
+			this.laneCapCur.set(lane, c);
+		}
+		this.pump();
+	}
+
+	/** The lane of the visible page keeps one slot free for its foreground job. */
+	setForegroundLane(lane: string | null): void {
+		this.foregroundLane = lane;
+		this.pump();
+	}
+
 	/**
 	 * Raise a still-queued job's priority (and optionally mark it foreground),
-	 * then re-sort and re-pump. This is how a page that was enqueued as a
-	 * low-priority background prefetch becomes the high-priority foreground
-	 * current page the instant the reader navigates to it — WITHOUT a duplicate
-	 * enqueue (which would reject) and without waiting for it to reach the head
-	 * on its own. No-op if the job already started or was never queued.
+	 * then re-sort and re-pump. This is how a page enqueued as a low-priority
+	 * background prefetch becomes the high-priority foreground current page the
+	 * instant the reader navigates to it. No-op if already started/never queued.
 	 */
 	promote(key: string, priority: number, foreground?: boolean): void {
 		const job = this.queue.find(j => j.key === key);
@@ -97,7 +147,7 @@ export class RequestScheduler {
 	 * Enqueue a job. If a job with the same key is already queued or running,
 	 * the existing promise semantics are preserved by rejecting the duplicate.
 	 */
-	enqueue<T>(key: string, priority: number, run: (signal: AbortSignal) => Promise<T>, opts?: { foreground?: boolean }): Promise<T> {
+	enqueue<T>(key: string, priority: number, run: (signal: AbortSignal) => Promise<T>, opts?: { foreground?: boolean; lane?: string }): Promise<T> {
 		if (this.disposed) {
 			return Promise.reject(new PaperMirrorError('CANCELLED', 'Scheduler disposed.'));
 		}
@@ -113,7 +163,8 @@ export class RequestScheduler {
 				reject,
 				controller: new AbortController(),
 				attempts: 0,
-				foreground: opts?.foreground ?? false
+				foreground: opts?.foreground ?? false,
+				lane: opts?.lane ?? ''
 			};
 			this.queue.push(job as Job<unknown>);
 			this.queue.sort((a, b) => b.priority - a.priority);
@@ -164,29 +215,18 @@ export class RequestScheduler {
 		this.cancelAll();
 	}
 
-	private pump(): void {
-		if (this.disposed) {
-			return;
-		}
-		// Background jobs may occupy at most this many slots, leaving the rest
-		// always free for a foreground (current-page) job.
-		const bgCap = this.options.maxConcurrent - this.reservedForeground;
-		// Scan the priority-sorted queue and start every ELIGIBLE job. A
-		// background job is skipped (not removed) while background is at its cap,
-		// so a lower-priority foreground job behind it can still start into a
-		// reserved slot. Freed slots re-pump from the top when a job finishes.
-		let i = 0;
-		while (i < this.queue.length && this.active.size < this.options.maxConcurrent) {
-			const job = this.queue[i]!;
-			if (!job.foreground && this.countActiveBackground() >= bgCap) {
-				i++; // background is full → leave this one queued, look further down
-				continue;
+	private laneCapOf(lane: string): number {
+		return this.laneCapCur.get(lane) ?? Infinity;
+	}
+
+	private activeInLane(lane: string): number {
+		let n = 0;
+		for (const job of this.active.values()) {
+			if (job.lane === lane) {
+				n++;
 			}
-			this.queue.splice(i, 1);
-			this.active.set(job.key, job);
-			void this.execute(job);
-			// A slot was consumed; re-scan from the top (do not advance i).
 		}
+		return n;
 	}
 
 	private countActiveBackground(): number {
@@ -199,25 +239,118 @@ export class RequestScheduler {
 		return n;
 	}
 
+	private pump(): void {
+		if (this.disposed) {
+			return;
+		}
+		const bgGlobalCap = this.options.maxConcurrent - this.reservedForeground;
+		// Scan the priority-sorted queue and start every ELIGIBLE job. Ineligible
+		// jobs are SKIPPED (not removed) so a lower-priority job on a lane that
+		// DOES have room can still start — this is what lets other providers'
+		// pages run while the current page's lane is busy. Freed slots re-pump.
+		let i = 0;
+		while (i < this.queue.length && this.active.size < this.options.maxConcurrent) {
+			const job = this.queue[i]!;
+			if (!this.canStart(job)) {
+				i++;
+				continue;
+			}
+			this.queue.splice(i, 1);
+			this.active.set(job.key, job);
+			void this.execute(job);
+			// A slot/lane was consumed; re-scan from the top (do not advance i).
+		}
+	}
+
+	private canStart(job: Job<unknown>): boolean {
+		// Per-lane cap.
+		const laneActive = this.activeInLane(job.lane);
+		if (laneActive >= this.laneCapOf(job.lane)) {
+			return false;
+		}
+		if (!job.foreground) {
+			// Global background reserve — keep foreground slots free.
+			if (this.countActiveBackground() >= bgOr(this.options.maxConcurrent - this.reservedForeground)) {
+				return false;
+			}
+			// Per-lane foreground reserve: the visible page's lane keeps ONE slot
+			// free so the current page can always start, even amid same-lane
+			// prefetch. Only applies when the lane has a finite cap.
+			if (job.lane && job.lane === this.foregroundLane) {
+				const cap = this.laneCapOf(job.lane);
+				if (Number.isFinite(cap) && laneActive >= cap - 1) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	// --- per-lane adaptive throttling ---------------------------------------
+
+	private penalizeLane(lane: string, kind: 'rate' | 'timeout'): void {
+		if (!lane || !this.laneCapMax.has(lane)) {
+			return;
+		}
+		const cur = this.laneCapCur.get(lane) ?? this.laneCapMax.get(lane)!;
+		const next = kind === 'rate' ? Math.floor(cur / 2) : cur - 1;
+		this.laneCapCur.set(lane, Math.max(1, next));
+		this.laneSuccess.set(lane, 0);
+	}
+
+	private rewardLane(lane: string): void {
+		if (!lane || !this.laneCapMax.has(lane)) {
+			return;
+		}
+		const max = this.laneCapMax.get(lane)!;
+		const cur = this.laneCapCur.get(lane) ?? max;
+		if (cur >= max) {
+			return;
+		}
+		// Recover one slot only after a run of clean successes, so we don't
+		// immediately re-provoke the limit we just backed off from.
+		const streak = (this.laneSuccess.get(lane) ?? 0) + 1;
+		if (streak >= 5) {
+			this.laneCapCur.set(lane, Math.min(max, cur + 1));
+			this.laneSuccess.set(lane, 0);
+		}
+		else {
+			this.laneSuccess.set(lane, streak);
+		}
+	}
+
 	private async execute(job: Job<unknown>): Promise<void> {
 		try {
 			for (;;) {
 				job.attempts++;
 				try {
 					const result = await job.run(job.controller.signal);
+					this.rewardLane(job.lane);
 					job.resolve(result);
 					return;
 				}
 				catch (e) {
 					const error = e instanceof PaperMirrorError ? e : new PaperMirrorError('UNKNOWN', String(e));
 					const cancelled = job.controller.signal.aborted || error.code === 'CANCELLED';
+					// Adaptive: only the erroring lane is throttled, never the pool.
+					if (!cancelled) {
+						if (error.code === 'RATE_LIMITED') {
+							this.penalizeLane(job.lane, 'rate');
+						}
+						else if (error.code === 'TIMEOUT') {
+							this.penalizeLane(job.lane, 'timeout');
+						}
+					}
 					if (cancelled || !error.retryable || job.attempts > this.options.maxRetries) {
 						job.reject(cancelled ? new PaperMirrorError('CANCELLED', 'Translation was cancelled.') : error);
 						return;
 					}
-					// Exponential backoff with jitter: base * 2^(attempt-1)
-					const delay = this.options.baseDelayMs * Math.pow(2, job.attempts - 1)
-						* (0.75 + Math.random() * 0.5);
+					// Honour Retry-After when the error carries one; else exponential
+					// backoff with jitter: base * 2^(attempt-1).
+					const retryAfter = (error as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs;
+					const delay = typeof retryAfter === 'number' && retryAfter > 0
+						? retryAfter
+						: this.options.baseDelayMs * Math.pow(2, job.attempts - 1) * (0.75 + Math.random() * 0.5);
 					await this.delayFn(delay);
 					if (job.controller.signal.aborted || this.disposed) {
 						job.reject(new PaperMirrorError('CANCELLED', 'Translation was cancelled.'));
@@ -231,4 +364,9 @@ export class RequestScheduler {
 			this.pump();
 		}
 	}
+}
+
+/** Guard: a background cap can never drop below 1 or nothing ever prefetches. */
+function bgOr(n: number): number {
+	return Math.max(1, n);
 }

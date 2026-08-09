@@ -1,6 +1,8 @@
 /**
  * Per-attachment translation orchestration:
- *  - lazy per-page translation with prefetch (prev 1 / next 2)
+ *  - lazy per-page translation with a pool-sized prefetch window
+ *  - per-provider (lane) concurrency: each provider runs its own pages in
+ *    parallel up to its own cap, under a global cap = sum of lanes
  *  - formula protection, glossary matching, chunking
  *  - response validation with missing-id retry
  *  - cache read/write
@@ -199,6 +201,12 @@ export interface TranslationDeps {
 	 */
 	readSegments?(pageIndex: number, hashes: string[]): Promise<Map<string, string> | null>;
 	writeSegments?(pageIndex: number, entries: { hash: string; translatedText: string }[]): Promise<void>;
+	/**
+	 * The provider LANE a page belongs to (its provider id). Lets the scheduler
+	 * cap each provider independently and reserve a foreground slot for the
+	 * current page's provider. Omitted → single shared lane (old behaviour).
+	 */
+	laneFor?(pageIndex: number): string;
 	/** Config snapshot getters. */
 	getLanguages(sampleText: string): { source: string; target: string };
 	getDocumentTitle(): string;
@@ -225,29 +233,50 @@ export class TranslationManager {
 	private disposed = false;
 	private currentPage = 0;
 	private prefetchEnabled = true;
+	/** Prefetch window (scales with the provider pool; set by the host). */
+	private prefetchForward = 1;
+	private prefetchBackward = 1;
 	/** Pages whose provider has already been reported unstable (fire once). */
 	private unstableFired = new Set<number>();
 
-	constructor(deps: TranslationDeps, events: ManagerEvents, options?: { maxConcurrent?: number; prefetch?: boolean; delayFn?: (ms: number) => Promise<void> }) {
+	constructor(deps: TranslationDeps, events: ManagerEvents, options?: { maxConcurrent?: number; reservedForeground?: number; prefetch?: boolean; delayFn?: (ms: number) => Promise<void> }) {
 		this.deps = deps;
 		this.events = events;
 		this.prefetchEnabled = options?.prefetch ?? true;
 		this.scheduler = new RequestScheduler({
-			// Up to 6: LLM providers at tier-1 rate limits handle several
-			// page-sized requests in flight; the free engines stay at 2 (the
-			// session clamps before it gets here).
-			maxConcurrent: Math.min(6, Math.max(1, options?.maxConcurrent ?? 2)),
+			// The GLOBAL cap; the host (session) reconfigures it from the live
+			// provider pool via setGlobalConcurrency / setLaneCaps. Per-provider
+			// limiting is enforced by lane caps, not this single number.
+			maxConcurrent: Math.max(1, options?.maxConcurrent ?? 2),
 			// Reserve ONE slot for the current page so background prefetch can
-			// never occupy every slot and make the visible page wait for a
-			// neighbour to finish. Even at the free engines' 2 slots, prefetch is
-			// capped at 1 and a foreground page always has a slot to start in.
-			reservedForeground: 1,
+			// never occupy every slot and make the visible page wait.
+			reservedForeground: options?.reservedForeground ?? 1,
 			delayFn: options?.delayFn
 		});
 	}
 
 	getPageState(pageIndex: number): PageTranslationState | undefined {
 		return this.pages.get(pageIndex);
+	}
+
+	private laneFor(pageIndex: number): string {
+		return this.deps.laneFor?.(pageIndex) ?? '';
+	}
+
+	/** GLOBAL concurrent page cap (host: sum of enabled providers' caps). */
+	setGlobalConcurrency(n: number): void {
+		this.scheduler.setGlobalMax(n);
+	}
+
+	/** Per-provider page caps (host: from each provider's concurrency profile). */
+	setLaneCaps(caps: Record<string, number>): void {
+		this.scheduler.configureLanes(caps);
+	}
+
+	/** Prefetch window: forward = min(2×poolSize, 12), backward = 1 (host-set). */
+	setPrefetchWindow(forward: number, backward: number): void {
+		this.prefetchForward = Math.max(0, Math.floor(forward));
+		this.prefetchBackward = Math.max(0, Math.floor(backward));
 	}
 
 	/** Called when the visible page changes. */
@@ -268,11 +297,13 @@ export class TranslationManager {
 			keep.add(`page-${p}-compress`);
 		}
 		this.scheduler.cancelExcept(keep);
-		// 2. 优先翻译当前页 (ALWAYS): if the page was already queued as a background
-		//    prefetch, promote it to the foreground reserved slot instead of
-		//    returning early (the bug: a queued prefetch kept its low priority
-		//    forever); otherwise create it as a foreground task. Either way it now
-		//    owns a reserved slot and cannot wait on a neighbour.
+		// 2. The visible page's provider LANE keeps a reserved foreground slot, so
+		//    the current page can always start even amid same-lane prefetch.
+		this.scheduler.setForegroundLane(this.laneFor(pageIndex));
+		// 3. 优先翻译当前页 (ALWAYS): if the page was already queued as a background
+		//    prefetch, promote it to the foreground instead of returning early
+		//    (the bug: a queued prefetch kept its low priority forever); otherwise
+		//    create it as a foreground task.
 		const key = `page-${pageIndex}`;
 		if (this.scheduler.isQueued(key)) {
 			this.scheduler.promote(key, PRIORITY.CURRENT_PAGE, true);
@@ -280,12 +311,12 @@ export class TranslationManager {
 		else {
 			void this.ensurePage(pageIndex, PRIORITY.CURRENT_PAGE, { foreground: true });
 		}
-		// 3. Neighbour prefetch is enqueued ONLY once the current page is done
-		//    (here if it was already cached/done; otherwise translatePage triggers
-		//    it on completion).
-		if (this.pages.get(pageIndex)?.status === 'done') {
-			this.prefetchNeighbours();
-		}
+		// 4. Prefetch neighbours NOW, not only after the current page finishes:
+		//    with per-lane caps + the current lane's reserved slot, OTHER
+		//    providers' pages translate in parallel while the current page runs,
+		//    and same-lane prefetch only ever uses that provider's spare capacity.
+		//    That is what actually makes a provider pool multiply throughput.
+		this.prefetchNeighbours();
 	}
 
 	/** Prefetch the pages around the current one — only once it is itself done. */
@@ -293,18 +324,18 @@ export class TranslationManager {
 		if (this.disposed || !this.prefetchEnabled) {
 			return;
 		}
-		// Hard guard: NEVER add background prefetch while the current page is
-		// still unfinished — it must not compete for slots with the visible page.
-		if (this.pages.get(this.currentPage)?.status !== 'done') {
-			return;
-		}
+		// No done-guard: prefetch is enqueued as BACKGROUND and the scheduler keeps
+		// it off the current lane's reserved slot, so it can never make the visible
+		// page wait — but it CAN fill other providers' lanes right away.
 		for (const page of this.wantedPages()) {
 			if (page === this.currentPage) {
 				continue;
 			}
+			// Nearer pages first; the next page beats the previous one.
+			const distance = Math.abs(page - this.currentPage);
 			const priority = page === this.currentPage + 1 ? PRIORITY.NEXT_PAGE
 				: page === this.currentPage - 1 ? PRIORITY.PREVIOUS_PAGE
-					: PRIORITY.SECOND_NEXT_PAGE;
+					: Math.max(1, PRIORITY.SECOND_NEXT_PAGE - distance);
 			void this.ensurePage(page, priority, { foreground: false });
 		}
 	}
@@ -391,7 +422,7 @@ export class TranslationManager {
 						).catch(() => { /* best effort */ });
 					}
 				}
-			}, { foreground: true }); // compress serves the VISIBLE page's layout
+			}, { foreground: true, lane: this.laneFor(pageIndex) }); // compress serves the VISIBLE page's layout
 		}
 		catch (e) {
 			if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
@@ -457,10 +488,16 @@ export class TranslationManager {
 			return [this.currentPage];
 		}
 		const count = this.deps.pageCount();
-		// [current, next, previous] — the next page is the likeliest to be read.
-		// current+2 is deliberately dropped: on the free engines (low concurrency)
-		// prefetching two pages ahead rarely pays off and steals a slot.
-		const pages = [this.currentPage, this.currentPage + 1, this.currentPage - 1];
+		// Window scales with the provider pool (host sets forward = min(2N, 12),
+		// backward = 1): more independent providers ⇒ more future pages worth
+		// fetching in parallel. Current page first, then forward, then backward.
+		const pages = [this.currentPage];
+		for (let d = 1; d <= this.prefetchForward; d++) {
+			pages.push(this.currentPage + d);
+		}
+		for (let d = 1; d <= this.prefetchBackward; d++) {
+			pages.push(this.currentPage - d);
+		}
 		return pages.filter(p => p >= 0 && (count <= 0 || p < count));
 	}
 
@@ -521,7 +558,7 @@ export class TranslationManager {
 						clearTimeout(watchdog);
 					}
 				}
-			}, { foreground: options?.foreground ?? false });
+			}, { foreground: options?.foreground ?? false, lane: this.laneFor(pageIndex) });
 		}
 		catch (e) {
 			const error = e instanceof PaperMirrorError ? e : new PaperMirrorError('UNKNOWN', String(e));

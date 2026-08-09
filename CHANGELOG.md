@@ -9,6 +9,35 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.8.9] — 2026-08-09
+
+### Changed
+
+并发调度重构 — 每服务商独立限流 + 真正的多服务商并行(引擎层,无 UI 模式选择器):
+
+- **每服务商独立限流 (per-provider lanes).** The scheduler now caps concurrency
+  PER PROVIDER (a "lane") instead of by one global number keyed off the main
+  provider. Each provider runs its own pages in parallel up to its own cap;
+  another provider's busy lane never blocks a page on a different lane. Lane
+  caps come from a per-type profile: free MT (Bing/Google) 1, DeepL-style paid
+  MT 3, cloud LLM 3, local (Ollama) 1.
+- **全局并发自动计算 (auto global cap).** The global page-task cap is the SUM of
+  the enabled providers' lane caps, clamped to [2, 24] — e.g. Google-free +
+  OpenAI + Gemini = 1 + 3 + 3 = 7. The setting is renamed 并发请求数 →
+  **最大并行页面数**, defaulting to **0 = 自动**; a value >0 is an optional manual
+  ceiling. Actual HTTP requests are managed internally, not exposed.
+- **多服务商真正并行 (pool actually multiplies throughput).** Neighbour prefetch
+  is now enqueued immediately (not only after the current page finishes), so
+  other providers' lanes fill while the current page translates. The current
+  page's provider lane always keeps one reserved foreground slot, so the visible
+  page never waits for a prefetch.
+- **预取窗口随服务商数扩展 (pool-sized prefetch window).** Forward = min(2 × pool
+  size, 12), backward = 1 (was a fixed ±1). Nearer pages get higher priority.
+- **动态降速 (per-lane adaptive throttling).** A `429` halves the offending
+  lane's cap; a timeout drops it by one; `Retry-After` is honoured when present;
+  a run of clean successes slowly restores one slot. Only the erroring provider
+  is throttled — never the whole pool. Session-scoped, not persisted.
+
 ## [0.8.8] — 2026-08-09
 
 ### Changed
