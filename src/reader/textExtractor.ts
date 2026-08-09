@@ -91,6 +91,27 @@ export class TextExtractor {
 		return false;
 	}
 
+	/**
+	 * 分组指标: fragments in → semantic groups out. A normal two-column page
+	 * should land at 10–30 translation units, NOT 60–100 line-level shards. When
+	 * a fragment-heavy page merges almost nothing (ratio ≈ 1), the coalescer is
+	 * not working for this layout — surface it as a warning so the log shows
+	 * WHY a page later needs many requests/salvages.
+	 */
+	private logGrouping(pageIndex: number, sourceBlockCount: number, groupCount: number): void {
+		const ratio = sourceBlockCount > 0 ? groupCount / sourceBlockCount : 1;
+		logger.info(
+			MODULE,
+			`Page ${pageIndex + 1} grouping: ${sourceBlockCount} fragment(s) → ${groupCount} unit(s) (ratio ${ratio.toFixed(2)})`
+		);
+		if (sourceBlockCount >= 40 && ratio > 0.85) {
+			logger.warn(
+				MODULE,
+				`Page ${pageIndex + 1}: ${sourceBlockCount} fragments barely merged (${groupCount} units) — coalescer ineffective for this layout`
+			);
+		}
+	}
+
 	async extractPage(pageIndex: number): Promise<SourceBlock[]> {
 		// --- path 1: the fork's char stream (best structure) -----------------
 		try {
@@ -108,7 +129,9 @@ export class TextExtractor {
 					includeReferences: this.includeReferences,
 					referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex)
 				});
+				const sourceBlockCount = result.blocks.length;
 				result.blocks = coalesceRegions(result.blocks);
+				this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
 				if (result.blocks.length) {
 					this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
 					return result.blocks;
@@ -167,7 +190,9 @@ export class TextExtractor {
 			});
 			// Rebuild semantic regions from whatever fragments extraction
 			// produced: whole regions translate as whole sentences.
+			const sourceBlockCount = result.blocks.length;
 			result.blocks = coalesceRegions(result.blocks);
+			this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
 			this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
 			logger.info(MODULE, `Page ${pageIndex + 1}: extracted ${result.blocks.length} block(s) from the text layer`);
 			return result.blocks;

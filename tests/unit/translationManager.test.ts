@@ -282,7 +282,40 @@ test('salvage recovers ALL dropped ids, not just the first eight', async () => {
 	const state = manager.getPageState(0)!;
 	assert.equal(state.status, 'done');
 	assert.equal(state.translations.size, N, 'every block is translated, not just 8');
-	assert.ok(singleCalls >= N - 2, `salvage ran for all the dropped blocks (ran ${singleCalls})`);
+	// 分级补救: the grouped tier recovers some blocks in small batches first, so
+	// FEWER single-block requests fire than one-per-dropped-block — while still
+	// converting every survivor.
+	assert.ok(singleCalls > 0, 'single-block tier still runs for the leftovers');
+	assert.ok(singleCalls <= N - 3, `grouped tier reduced the single-block requests (ran ${singleCalls})`);
+	manager.dispose();
+});
+
+test('熔断: >25% of a chunk missing fires onProviderUnstable exactly once per page', async () => {
+	const N = 8;
+	const unstable: { pageIndex: number; ratio: number }[] = [];
+	const { deps } = makeDeps({
+		extractPage: async (pageIndex) => Array.from({ length: N }, (_, i) => ({
+			id: `page-${pageIndex}-block-${i}`,
+			pageIndex, order: i, type: 'paragraph' as const,
+			sourceText: `Paragraph ${i} with enough English words to count as prose content.`
+		})),
+		translateRequest: async (request) => {
+			if (request.blocks.length > 1) {
+				// Batches drop everything except the first block → far over 25%.
+				return { translations: [{ id: request.blocks[0]!.id, translatedText: '批量译文的中文内容在此。' }] };
+			}
+			return { translations: [{ id: request.blocks[0]!.id, translatedText: '单块救回的中文译文内容。' }] };
+		}
+	});
+	const manager = new TranslationManager(
+		deps,
+		{ onPageUpdate: () => {}, onProviderUnstable: (pageIndex, ratio) => unstable.push({ pageIndex, ratio }) },
+		{ prefetch: false, delayFn: () => Promise.resolve() }
+	);
+	await manager.ensurePage(0, 10);
+	assert.equal(unstable.length, 1, 'fired exactly once for the page');
+	assert.equal(unstable[0]!.pageIndex, 0);
+	assert.ok(unstable[0]!.ratio > 0.25, 'reported ratio reflects the miss rate');
 	manager.dispose();
 });
 
@@ -339,6 +372,151 @@ test('looksTranslated rejects a HALF-translated / mixed response, not just pure 
 		looksTranslated(source, '在这些患者中，PCCT 在更低的辐射剂量下改善了特征的可视化。', 'zh-CN'),
 		true
 	);
+});
+
+test('initialCharBudget: first request carries a geometry-derived budget', async () => {
+	const { initialCharBudget } = await import('../../src/translation/translationManager');
+	const block: SourceBlock = {
+		id: 'p0-b0', pageIndex: 0, order: 0, type: 'paragraph',
+		sourceText: 'A long enough English paragraph with plenty of words to translate here.',
+		fontSize: 10,
+		// 3 lines × 300pt wide at 10pt font → 30 cols each → 90 cols ×0.9 = 81
+		lineRectsPdf: [[50, 700, 350, 710], [50, 688, 350, 698], [50, 676, 350, 686]]
+	};
+	assert.equal(initialCharBudget(block, 'zh-CN'), 81);
+	// Non-CJK target → no budget (no cheap width model for Latin scripts).
+	assert.equal(initialCharBudget(block, 'fr'), undefined);
+	// Headings are typeset differently → no budget.
+	assert.equal(initialCharBudget({ ...block, type: 'heading' }, 'zh-CN'), undefined);
+	// No geometry → no budget.
+	assert.equal(initialCharBudget({ ...block, lineRectsPdf: undefined }, 'zh-CN'), undefined);
+	// A tiny fragment (budget < 24) gets none — too tight to be guidance.
+	assert.equal(
+		initialCharBudget({ ...block, lineRectsPdf: [[50, 700, 150, 710]] }, 'zh-CN'),
+		undefined
+	);
+});
+
+test('the first batch request includes charBudget for prose blocks', async () => {
+	let seen: (number | undefined)[] = [];
+	const { deps } = makeDeps({
+		extractPage: async (pageIndex) => [{
+			id: `page-${pageIndex}-block-0`, pageIndex, order: 0, type: 'paragraph',
+			sourceText: 'Enough English words to be a real prose paragraph for translation.',
+			fontSize: 10,
+			lineRectsPdf: [[50, 700, 350, 710], [50, 688, 350, 698]]
+		}],
+		translateRequest: async (request: TranslationRequest): Promise<TranslationResponse> => {
+			seen = request.blocks.map(b => b.charBudget);
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '足够长的中文译文内容在此处呈现。' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	assert.equal(seen.length, 1);
+	assert.equal(typeof seen[0], 'number', 'first request already carries the layout budget');
+	manager.dispose();
+});
+
+test('段落级缓存: hits skip requests entirely; misses translate and are stored', async () => {
+	const { segmentHash } = await import('../../src/translation/translationManager');
+	const store = new Map<string, string>();
+	let requests = 0;
+	const mkBlocks = (pageIndex: number): SourceBlock[] => [
+		{ id: `page-${pageIndex}-block-0`, pageIndex, order: 0, type: 'paragraph',
+			sourceText: 'First English paragraph with plenty of words to translate properly.' },
+		{ id: `page-${pageIndex}-block-1`, pageIndex, order: 1, type: 'paragraph',
+			sourceText: 'Second English paragraph, also long enough to be prose for the test.' }
+	];
+	const { deps } = makeDeps({
+		extractPage: async p => mkBlocks(p),
+		readCache: async () => null, // page cache always misses → segments decide
+		translateRequest: async (request: TranslationRequest): Promise<TranslationResponse> => {
+			requests++;
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '这是一个足够长的中文译文段落内容。' })) };
+		},
+		readSegments: async (_p, hashes) => {
+			const out = new Map<string, string>();
+			for (const h of hashes) {
+				const hit = store.get(h);
+				if (hit) {
+					out.set(h, hit);
+				}
+			}
+			return out;
+		},
+		writeSegments: async (_p, entries) => {
+			for (const e of entries) {
+				store.set(e.hash, e.translatedText);
+			}
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	assert.equal(requests, 1, 'first pass translates (one batch)');
+	assert.equal(store.size, 2, 'both segments stored');
+	// 普通刷新: page state dropped, page cache bypassed — segments must serve it
+	// with ZERO new requests.
+	await manager.retranslatePage(0, 'normal');
+	assert.equal(requests, 1, 'normal refresh reuses qualified segments, no new requests');
+	assert.equal(manager.getPageState(0)?.status, 'done');
+	assert.equal(manager.getPageState(0)?.translations.size, 2);
+	// 强制重译: bypasses the segment store too.
+	await manager.retranslatePage(0, 'force');
+	assert.equal(requests, 2, 'force retranslate re-requests everything');
+	// Same source text on ANOTHER page → same hash → reused across pages.
+	const h = segmentHash(mkBlocks(0)[0]!.sourceText, 'en', 'zh-CN');
+	assert.ok(store.has(h), 'segment key is content-based, reusable across pages');
+	manager.dispose();
+});
+
+test('段落级缓存: only the failed segment re-requests on normal refresh', async () => {
+	const store = new Map<string, string>();
+	const requestedTexts: string[][] = [];
+	const { deps } = makeDeps({
+		extractPage: async pageIndex => [
+			{ id: `page-${pageIndex}-block-0`, pageIndex, order: 0, type: 'paragraph',
+				sourceText: 'A good paragraph that translates fine with plenty of words.' },
+			{ id: `page-${pageIndex}-block-1`, pageIndex, order: 1, type: 'paragraph',
+				sourceText: 'A difficult paragraph the provider keeps echoing back in English.' }
+		],
+		readCache: async () => null,
+		translateRequest: async (request: TranslationRequest): Promise<TranslationResponse> => {
+			requestedTexts.push(request.blocks.map(b => b.text));
+			return { translations: request.blocks.map((b) => ({
+				id: b.id,
+				// The 'difficult' block echoes English (rejected); the good one translates.
+				translatedText: b.text.includes('difficult') ? b.text : '合格的中文译文内容,足够长的一段。'
+			})) };
+		},
+		readSegments: async (_p, hashes) => {
+			const out = new Map<string, string>();
+			for (const h of hashes) {
+				const hit = store.get(h);
+				if (hit) {
+					out.set(h, hit);
+				}
+			}
+			return out;
+		},
+		writeSegments: async (_p, entries) => {
+			for (const e of entries) {
+				store.set(e.hash, e.translatedText);
+			}
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	assert.equal(store.size, 1, 'only the qualified segment is stored');
+	const callsBefore = requestedTexts.length;
+	await manager.retranslatePage(0, 'normal');
+	const refreshCalls = requestedTexts.slice(callsBefore);
+	// Every request in the refresh should touch ONLY the difficult block.
+	assert.ok(refreshCalls.length >= 1, 'the failed segment is re-requested');
+	for (const texts of refreshCalls) {
+		assert.ok(texts.every(t => t.includes('difficult')), 'good segment is never re-requested');
+	}
+	manager.dispose();
 });
 
 test('navigating to a QUEUED prefetch page promotes it to run now (not stuck)', async () => {

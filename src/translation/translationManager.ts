@@ -23,6 +23,7 @@ import { protectFormulas, restoreFormulas } from '../reader/formulaGuard';
 import { matchRules } from './glossary';
 import { RequestScheduler } from './requestScheduler';
 import { chunkBlocks, trailingContext } from './segmenter';
+import { fnv1a64 } from '../cache/cacheSchema';
 
 const MODULE = 'translationManager';
 
@@ -42,6 +43,16 @@ const SALVAGE_WARN_THRESHOLD = 24;
  * engines are not rate-limited into failure.
  */
 const SALVAGE_CONCURRENCY = 4;
+
+/** 分级补救 tier-1 batch size: small enough that id drift is rare. */
+const SALVAGE_BATCH_SIZE = 4;
+
+/**
+ * 熔断阈值: when more than this fraction of a chunk is still missing/invalid
+ * after the batch + combined retry, the engine is misbehaving — the host is
+ * told (onProviderUnstable) so it can reroute the page to a backup service.
+ */
+const UNSTABLE_MISSING_RATIO = 0.25;
 
 /**
  * Scheduler priorities. The current visible page and its work always dominate
@@ -86,6 +97,52 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 	// only echoed English (ratio 0) but a HALF-translated / mixed response,
 	// which the old "contains any CJK" test accepted.
 	return targetLanguageRatio(t) >= MIN_TARGET_RATIO;
+}
+
+/**
+ * 翻译前估算排版容量: the character budget a block's ORIGINAL rectangles can
+ * hold in the target script, sent with the FIRST request so most paragraphs fit
+ * on the first try — instead of translate → measure-fail → compress → re-measure
+ * round trips. Per line rect: width/font ≈ CJK columns; ×0.9 leaves margin for
+ * the estimate being rough. Only prose body blocks with real geometry get a
+ * budget, and only for CJK targets (Latin targets have no cheap width model).
+ * Returns undefined when no sane estimate exists — the request simply omits it.
+ */
+export function initialCharBudget(block: SourceBlock, targetLang: string): number | undefined {
+	if (!/^zh/i.test(targetLang)) {
+		return undefined;
+	}
+	if (block.type !== 'paragraph' && block.type !== 'list') {
+		return undefined;
+	}
+	const rects = block.lineRectsPdf;
+	const font = block.fontSize ?? 0;
+	if (!rects?.length || font <= 0) {
+		return undefined;
+	}
+	let cols = 0;
+	for (const r of rects) {
+		const width = r[2] - r[0];
+		if (width > 0) {
+			cols += width / font;
+		}
+	}
+	if (cols <= 0) {
+		return undefined;
+	}
+	const budget = Math.floor(cols * 0.9);
+	// A budget tighter than ~24 chars on real prose is noise, not guidance —
+	// and would push the model into dropping facts. Skip it.
+	return budget >= 24 ? budget : undefined;
+}
+
+/**
+ * 段落级缓存 key: content + languages. Provider/model/prompt/glossary scoping
+ * lives in the segment STORE the host injects (a different context reads a
+ * different store), so the hash itself stays a pure content key.
+ */
+export function segmentHash(sourceText: string, sourceLang: string, targetLang: string): string {
+	return fnv1a64(`${sourceText}\u0000${sourceLang}\u0000${targetLang}`);
 }
 
 /** CJK ideograph ranges used for the target-language ratio. */
@@ -133,6 +190,15 @@ export interface TranslationDeps {
 	/** Cache access; may be no-ops. */
 	readCache(pageIndex: number, blocks: SourceBlock[]): Promise<TranslatedBlock[] | null>;
 	writeCache(pageIndex: number, blocks: SourceBlock[], translations: TranslatedBlock[]): Promise<void>;
+	/**
+	 * 段落级缓存 (optional): batch-read/write individual segment translations by
+	 * content hash. The page cache stays as the fast whole-page index; the
+	 * segment store beneath it lets 普通刷新 re-request only the segments that
+	 * actually changed or failed, and lets identical table cells / repeated
+	 * paragraphs reuse their translation across pages.
+	 */
+	readSegments?(pageIndex: number, hashes: string[]): Promise<Map<string, string> | null>;
+	writeSegments?(pageIndex: number, entries: { hash: string; translatedText: string }[]): Promise<void>;
 	/** Config snapshot getters. */
 	getLanguages(sampleText: string): { source: string; target: string };
 	getDocumentTitle(): string;
@@ -143,6 +209,12 @@ export interface TranslationDeps {
 
 export interface ManagerEvents {
 	onPageUpdate(state: PageTranslationState): void;
+	/**
+	 * 熔断: fired at most once per page when a provider leaves >25% of a chunk
+	 * untranslated after batch + retry. The host may switch this page's
+	 * subsequent requests to a backup engine (provider pool rotation).
+	 */
+	onProviderUnstable?(pageIndex: number, missingRatio: number): void;
 }
 
 export class TranslationManager {
@@ -153,6 +225,8 @@ export class TranslationManager {
 	private disposed = false;
 	private currentPage = 0;
 	private prefetchEnabled = true;
+	/** Pages whose provider has already been reported unstable (fire once). */
+	private unstableFired = new Set<number>();
 
 	constructor(deps: TranslationDeps, events: ManagerEvents, options?: { maxConcurrent?: number; prefetch?: boolean; delayFn?: (ms: number) => Promise<void> }) {
 		this.deps = deps;
@@ -303,6 +377,19 @@ export class TranslationManager {
 						.filter(b => state.translations.has(b.id))
 						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! }));
 					await this.deps.writeCache(pageIndex, state.blocks, all);
+					// The SHORTER (fitting) version replaces the long one in the
+					// segment store too, so a 普通刷新 does not resurrect a
+					// translation that already failed placement once.
+					if (this.deps.writeSegments) {
+						const byId = new Map(blocks.map(b => [b.id, b]));
+						await this.deps.writeSegments(pageIndex, [...accepted]
+							.filter(([id]) => byId.has(id))
+							.map(([id, text]) => ({
+								hash: segmentHash(byId.get(id)!.sourceText, source, target),
+								translatedText: text
+							}))
+						).catch(() => { /* best effort */ });
+					}
 				}
 			}, { foreground: true }); // compress serves the VISIBLE page's layout
 		}
@@ -315,11 +402,22 @@ export class TranslationManager {
 		return accepted;
 	}
 
-	/** Force re-translate a page, bypassing cache. */
-	async retranslatePage(pageIndex: number): Promise<void> {
+	/**
+	 * Re-translate a page. Two strategies (刷新分级):
+	 *  - 'normal' (圆环刷新本页): bypass the PAGE cache but reuse the segment
+	 *    store — qualified segment translations come back instantly and only
+	 *    untranslated / previously-invalid segments cost new requests.
+	 *  - 'force' (强制重译): bypass both caches — every segment re-requests.
+	 */
+	async retranslatePage(pageIndex: number, mode: 'normal' | 'force' = 'normal'): Promise<void> {
 		this.pages.delete(pageIndex);
+		this.unstableFired.delete(pageIndex); // a fresh run may report anew
 		this.scheduler.cancel(`page-${pageIndex}`);
-		await this.ensurePage(pageIndex, PRIORITY.CURRENT_RETRANSLATE, { bypassCache: true, foreground: true });
+		await this.ensurePage(pageIndex, PRIORITY.CURRENT_RETRANSLATE, {
+			bypassCache: true,
+			bypassSegments: mode === 'force',
+			foreground: true
+		});
 	}
 
 	/**
@@ -341,6 +439,7 @@ export class TranslationManager {
 	resetAll(): void {
 		this.scheduler.cancelAll();
 		this.pages.clear();
+		this.unstableFired.clear();
 	}
 
 	cancelAll(): void {
@@ -376,7 +475,7 @@ export class TranslationManager {
 		}
 	}
 
-	async ensurePage(pageIndex: number, priority: number, options?: { bypassCache?: boolean; foreground?: boolean }): Promise<void> {
+	async ensurePage(pageIndex: number, priority: number, options?: { bypassCache?: boolean; bypassSegments?: boolean; foreground?: boolean }): Promise<void> {
 		if (this.disposed) {
 			return;
 		}
@@ -407,7 +506,7 @@ export class TranslationManager {
 				let watchdog: ReturnType<typeof setTimeout> | null = null;
 				try {
 					await Promise.race([
-						this.translatePage(state, signal, options?.bypassCache ?? false),
+						this.translatePage(state, signal, { bypassPageCache: options?.bypassCache ?? false, bypassSegments: options?.bypassSegments ?? false }),
 						new Promise<never>((_, reject) => {
 							watchdog = setTimeout(() => reject(new PaperMirrorError(
 								'TIMEOUT',
@@ -439,8 +538,16 @@ export class TranslationManager {
 		}
 	}
 
-	private async translatePage(state: PageTranslationState, signal: AbortSignal, bypassCache: boolean): Promise<void> {
+	private async translatePage(state: PageTranslationState, signal: AbortSignal, bypass: { bypassPageCache: boolean; bypassSegments: boolean }): Promise<void> {
 		const pageIndex = state.pageIndex;
+		// 真实性能指标 (per page): how many provider round-trips this page cost
+		// and how many were salvage. High salvage counts point at fragment-heavy
+		// grouping or an id-dropping provider — the log tells which.
+		const metrics = { requestCount: 0, salvageCount: 0, startedAt: Date.now() };
+		const countedTranslate = async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
+			metrics.requestCount++;
+			return this.deps.translateRequest(request, sig);
+		};
 
 		// 1. Extract
 		const blocks = await this.deps.extractPage(pageIndex);
@@ -455,7 +562,7 @@ export class TranslationManager {
 		}
 
 		// 2. Cache
-		if (!bypassCache) {
+		if (!bypass.bypassPageCache) {
 			const cached = await this.deps.readCache(pageIndex, blocks);
 			if (cached) {
 				for (const t of cached) {
@@ -480,13 +587,49 @@ export class TranslationManager {
 		const accept = (id: string, text: string): boolean =>
 			text.trim().length > 0 && looksTranslated(sourceById.get(id) ?? '', text, target);
 
+		// 2.5 段落级缓存: prefill whatever segments this context has already
+		// translated (content+language hash; provider/model scoping lives in the
+		// store the host injects). 普通刷新 re-enters here with the page cache
+		// bypassed but segments live, so only the segments that actually failed
+		// or changed cost a request. 'force' skips this entirely.
+		const segHash = (b: SourceBlock): string => segmentHash(b.sourceText, source, target);
+		let segmentHits = 0;
+		if (!bypass.bypassSegments && this.deps.readSegments) {
+			const cached = await this.deps.readSegments(pageIndex, blocks.map(segHash)).catch(() => null);
+			if (cached?.size) {
+				for (const block of blocks) {
+					const hit = cached.get(segHash(block));
+					if (hit !== undefined && accept(block.id, hit)) {
+						state.translations.set(block.id, hit);
+						segmentHits++;
+					}
+				}
+				if (segmentHits) {
+					this.notify(state); // show reused segments immediately
+				}
+			}
+		}
+		const toTranslate = blocks.filter(b => !state.translations.has(b.id));
+		if (!toTranslate.length) {
+			state.status = 'done';
+			this.notify(state);
+			logger.info(MODULE, `Page ${pageIndex + 1}: fully served from the segment cache (${segmentHits} segment(s), 0 requests)`);
+			if (pageIndex === this.currentPage) {
+				this.prefetchNeighbours();
+			}
+			await this.deps.writeCache(pageIndex, blocks, blocks
+				.filter(b => state.translations.has(b.id))
+				.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })));
+			return;
+		}
+
 		// Protect formulas per block
-		const protectedBlocks = blocks.map((block) => {
+		const protectedBlocks = toTranslate.map((block) => {
 			const { text, placeholders } = protectFormulas(block.sourceText);
 			return { block, text, placeholders };
 		});
 
-		const chunks = chunkBlocks(blocks);
+		const chunks = chunkBlocks(toTranslate);
 		let previous: SourceBlock[] = [];
 		const results: TranslatedBlock[] = [];
 		let untranslatedCount = 0;
@@ -503,12 +646,14 @@ export class TranslationManager {
 				previousContext: this.deps.useContext() ? trailingContext(previous) : '',
 				blocks: chunk.map((b) => {
 					const pb = protectedBlocks.find(p => p.block.id === b.id)!;
-					return { id: b.id, type: b.type, text: pb.text };
+					// 首次请求即携带排版预算: most paragraphs then fit on the first
+					// pass, skipping the translate→measure-fail→compress round trip.
+					return { id: b.id, type: b.type, text: pb.text, charBudget: initialCharBudget(b, target) };
 				}),
 				glossary
 			};
 
-			let response = await this.deps.translateRequest(request, signal);
+			let response = await countedTranslate(request, signal);
 			const received = new Map<string, string>();
 			for (const t of response.translations) {
 				if (accept(t.id, t.translatedText)) {
@@ -528,7 +673,7 @@ export class TranslationManager {
 					})
 				};
 				try {
-					response = await this.deps.translateRequest(retryRequest, signal);
+					response = await countedTranslate(retryRequest, signal);
 					for (const t of response.translations) {
 						if (accept(t.id, t.translatedText)) {
 							received.set(t.id, t.translatedText);
@@ -543,11 +688,63 @@ export class TranslationManager {
 				}
 			}
 
-			// Salvage: any id STILL missing gets its own single-block request.
-			// LLM providers sometimes drop or rename ids in a batched response;
-			// with exactly one block in the request the answer cannot misalign.
-			// Without this pass the block silently stayed English and the page
-			// rendered mixed-language (the JACC report).
+			// 熔断信号: the batch + retry still left over a quarter of the chunk
+			// missing or invalid — this engine is systematically dropping ids or
+			// echoing. Tell the host ONCE per page so it can reroute the page's
+			// remaining requests to the backup engine before we spend a pile of
+			// salvage requests on a misbehaving service.
+			const afterRetry = chunk.filter(b => !received.has(b.id));
+			if (afterRetry.length && afterRetry.length / chunk.length > UNSTABLE_MISSING_RATIO
+				&& !this.unstableFired.has(pageIndex)) {
+				this.unstableFired.add(pageIndex);
+				try {
+					this.events.onProviderUnstable?.(pageIndex, afterRetry.length / chunk.length);
+				}
+				catch { /* host handler must not break translation */ }
+			}
+
+			// 分级补救 tier 1: still-missing blocks are retried in SMALL batches
+			// (3–5 blocks — id drift is rare at this size) instead of jumping
+			// straight to one request per block. Only the leftovers of the
+			// grouped pass fall through to single-block salvage.
+			if (afterRetry.length >= 3) {
+				for (let i = 0; i < afterRetry.length; i += SALVAGE_BATCH_SIZE) {
+					if (signal.aborted) {
+						throw new PaperMirrorError('CANCELLED', 'cancelled');
+					}
+					const group = afterRetry.slice(i, i + SALVAGE_BATCH_SIZE).filter(b => !received.has(b.id));
+					if (!group.length) {
+						continue;
+					}
+					try {
+						metrics.salvageCount++;
+						const resp = await countedTranslate({
+							...request,
+							previousContext: '',
+							blocks: group.map((b) => {
+								const pb = protectedBlocks.find(p => p.block.id === b.id)!;
+								return { id: b.id, type: b.type, text: pb.text };
+							})
+						}, signal);
+						for (const t of resp.translations) {
+							if (accept(t.id, t.translatedText)) {
+								received.set(t.id, t.translatedText);
+							}
+						}
+					}
+					catch (e) {
+						if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
+							throw e;
+						}
+						logger.warn(MODULE, `Grouped salvage failed on page ${pageIndex}`, e);
+					}
+				}
+			}
+
+			// 分级补救 tier 2: any id STILL missing gets its own single-block
+			// request. With exactly one block in the request the answer cannot
+			// misalign. Without this pass the block silently stayed English and
+			// the page rendered mixed-language (the JACC report).
 			const stillMissing = chunk.filter(b => !received.has(b.id));
 			if (stillMissing.length) {
 				logger.warn(MODULE, `Salvaging ${stillMissing.length} block(s) on page ${pageIndex} (concurrency ${SALVAGE_CONCURRENCY})`);
@@ -561,7 +758,8 @@ export class TranslationManager {
 				const salvageOne = async (block: SourceBlock): Promise<void> => {
 					const pb = protectedBlocks.find(p => p.block.id === block.id)!;
 					try {
-						const single = await this.deps.translateRequest(
+						metrics.salvageCount++;
+						const single = await countedTranslate(
 							{ ...request, previousContext: '', blocks: [{ id: block.id, type: block.type, text: pb.text }] },
 							signal
 						);
@@ -619,23 +817,44 @@ export class TranslationManager {
 			previous = chunk;
 		}
 
-		if (!results.length) {
+		if (!results.length && !segmentHits) {
 			throw new PaperMirrorError('BAD_RESPONSE', 'The translation service returned no usable translations.');
 		}
 
 		state.status = 'done';
 		this.notify(state);
+		// 指标: groupCount(翻译单元) / chunkCount(请求批次) / requestCount(总请求) /
+		// salvageCount(逐块补救) / segmentHits(段落缓存命中).
+		logger.info(
+			MODULE,
+			`Page ${pageIndex + 1} metrics: ${blocks.length} unit(s), ${segmentHits} from segment cache, `
+			+ `${chunks.length} chunk(s), ${metrics.requestCount} request(s), ${metrics.salvageCount} salvage, `
+			+ `${untranslatedCount} untranslated, ${Date.now() - metrics.startedAt} ms`
+		);
 		// The visible page is done → now it is safe to prefetch its neighbours
 		// (they were held back so they could not starve the current page).
 		if (pageIndex === this.currentPage) {
 			this.prefetchNeighbours();
 		}
+		// Newly translated segments enter the segment store regardless of page
+		// completeness — a good segment is a good segment; only the PAGE index
+		// below requires completeness.
+		if (this.deps.writeSegments && results.length) {
+			const byId = new Map(blocks.map(b => [b.id, b]));
+			await this.deps.writeSegments(pageIndex, results
+				.map(r => ({ hash: segHash(byId.get(r.id)!), translatedText: r.translatedText }))
+			).catch(e => logger.warn(MODULE, 'segment write failed', e));
+		}
 		// Only a COMPLETE page enters the cache. Caching a partial page would
 		// freeze the mixed-language rendering: every revisit would hit the
 		// cache and never retry the missing blocks. Left uncached, the next
-		// visit (or 重新翻译) runs the whole pipeline again.
+		// visit (or 重新翻译) runs the whole pipeline again — with the segment
+		// store still saving the segments that DID succeed.
 		if (untranslatedCount === 0) {
-			await this.deps.writeCache(pageIndex, blocks, results);
+			const all: TranslatedBlock[] = blocks
+				.filter(b => state.translations.has(b.id))
+				.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! }));
+			await this.deps.writeCache(pageIndex, blocks, all);
 		}
 		else {
 			logger.warn(MODULE, `Page ${pageIndex + 1} left uncached (${untranslatedCount} untranslated block(s)) so a revisit retries`);

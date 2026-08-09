@@ -9,6 +9,39 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.8.7] — 2026-08-09
+
+### Changed
+
+翻译效率专项(按审核清单逐项实施):
+
+- **1. 段落分组指标 (grouping metrics).** Extraction now logs
+  `fragments → units (ratio)` per page and warns when a fragment-heavy page
+  barely merges (ratio > 0.85 at ≥40 fragments) — the signal that the semantic
+  coalescer is not working for that layout. Page completion logs
+  units / segment-cache hits / chunks / requests / salvage / untranslated / ms.
+- **2. 首次请求携带排版字符预算 (initial char budget).** Prose blocks with real
+  geometry now send `charBudget ≈ Σ(line width / font) × 0.9` in the FIRST
+  request (zh targets), so most paragraphs fit on the first pass instead of the
+  translate → measure-fail → compress → re-measure round trip. The prompt's
+  budget rules (dense phrasing, never dropped facts/numbers/units/citations)
+  apply from the start.
+- **3. 段落级缓存与增量刷新 (segment-level cache + tiered refresh).** Beneath the
+  page cache there is now a per-segment store keyed by content+language hash and
+  scoped by provider/model/promptVersion/glossary. 圆环「刷新本页」is now 普通刷新:
+  it bypasses the page cache but reuses qualified segments — only untranslated /
+  previously-invalid segments cost new requests (with a provider pool it still
+  rotates engines, whose separate store forces a genuine re-translation). 菜单
+  「刷新全部」remains 强制: it clears everything. Compress-accepted shorter
+  translations overwrite their segment entry, so a refresh cannot resurrect a
+  translation that already failed placement.
+- **4. 缺失 ID 分级补救与服务商熔断 (tiered salvage + circuit breaker).** Missing
+  ids now recover in tiers: full-batch retry → SMALL batches of 4 → single-block
+  requests only for the leftovers, instead of one request per dropped block.
+  When >25% of a chunk is still missing after batch+retry, `onProviderUnstable`
+  fires once per page and the session deals the page's remaining requests to the
+  next engine in the pool (logged; single-provider setups log and continue).
+
 ## [0.8.6] — 2026-08-09
 
 ### Changed

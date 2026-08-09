@@ -4,7 +4,7 @@
  */
 
 import * as cacheManager from '../cache/cacheManager';
-import { hashSourceTexts, type CacheKeyParts } from '../cache/cacheSchema';
+import { hashSourceTexts, type CacheKeyParts, type SegmentContextParts } from '../cache/cacheSchema';
 import {
 	buildAttachmentSelectURI,
 	explanationToPlainText,
@@ -369,6 +369,18 @@ export class ReaderSession {
 						await cacheManager.writePage(parts, translations);
 					}
 				},
+				// 段落级缓存: per-segment store scoped by provider/model/prompt/
+				// glossary, beneath the page cache. 普通刷新 (圆环) reuses it.
+				readSegments: async (pageIndex, hashes) => {
+					const parts = await this.segmentContext(pageIndex);
+					return parts ? cacheManager.readSegments(parts, hashes) : null;
+				},
+				writeSegments: async (pageIndex, entries) => {
+					const parts = await this.segmentContext(pageIndex);
+					if (parts) {
+						await cacheManager.writeSegments(parts, entries);
+					}
+				},
 				getLanguages: sample => this.resolveLanguages(sample),
 				getDocumentTitle: () => {
 					const item = adapter.getReaderItem(this.reader);
@@ -379,7 +391,20 @@ export class ReaderSession {
 				pageCount: () => adapter.getPageCount(this.reader)
 			},
 			{
-				onPageUpdate: state => this.onPageUpdate(state)
+				onPageUpdate: state => this.onPageUpdate(state),
+				// 熔断: this page's engine keeps dropping/echoing ids → deal its
+				// REMAINING requests to the next engine in the pool. With a single
+				// configured provider there is no backup — log and continue.
+				onProviderUnstable: (pageIndex, missingRatio) => {
+					const pct = Math.round(missingRatio * 100);
+					if (this.pool.length > 1) {
+						this.pageProviderOffset.set(pageIndex, ((this.pageProviderOffset.get(pageIndex) ?? 0) + 1) % this.pool.length);
+						logger.warn(MODULE, `page ${pageIndex + 1}: engine unstable (${pct}% missing) → switching to ${this.providerForPage(pageIndex)}`);
+					}
+					else {
+						logger.warn(MODULE, `page ${pageIndex + 1}: engine unstable (${pct}% missing); no backup provider configured`);
+					}
+				}
 			},
 			{
 				// Free engines stay at ≤2 (scrape bot-risk); key providers may
@@ -512,6 +537,23 @@ export class ReaderSession {
 
 	private loadGlossary(): GlossaryRule[] {
 		return parseGlossaryJSON(getPref<string>('glossaryGlobal', '[]'));
+	}
+
+	/** Context parts scoping the per-segment store (see cacheSchema). */
+	private async segmentContext(pageIndex: number): Promise<SegmentContextParts | null> {
+		const item = adapter.getReaderItem(this.reader);
+		if (!item) {
+			return null;
+		}
+		const settings = await this.providerSettingsFor(this.providerForPage(pageIndex));
+		return {
+			attachmentKey: item.key,
+			fileHash: this.fileHash || 'nohash',
+			provider: settings.providerId,
+			model: settings.model,
+			promptVersion: getPref<number>('promptVersion', PROMPT_VERSION),
+			glossaryHash: hashSourceTexts([getPref<string>('glossaryGlobal', '[]')])
+		};
 	}
 
 	private onPageUpdate(state: PageTranslationState): void {

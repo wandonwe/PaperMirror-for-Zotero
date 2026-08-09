@@ -11,8 +11,13 @@ import {
 	attachmentDirName,
 	isValidCachedPage,
 	pageFileName,
+	segmentContextHash,
+	segmentsFileName,
+	isValidCachedSegments,
 	type CacheKeyParts,
-	type CachedPage
+	type CachedPage,
+	type CachedSegments,
+	type SegmentContextParts
 } from './cacheSchema';
 
 const MODULE = 'cache';
@@ -69,6 +74,80 @@ export async function writePage(parts: CacheKeyParts, translations: TranslatedBl
 	}
 	catch (e) {
 		logger.warn(MODULE, 'Cache write failed (continuing without cache)', e);
+	}
+}
+
+function segmentsPath(parts: SegmentContextParts): string {
+	return PathUtils.join(cacheRootDir(), attachmentDirName(parts.attachmentKey, parts.fileHash), segmentsFileName(parts));
+}
+
+/**
+ * 段落级缓存 read: return whichever of the requested segment hashes exist in
+ * this attachment+context's segment store. Misses are simply absent from the
+ * returned map. Any read problem is a miss, never an error.
+ */
+export async function readSegments(parts: SegmentContextParts, hashes: string[]): Promise<Map<string, string>> {
+	const out = new Map<string, string>();
+	if (!hashes.length) {
+		return out;
+	}
+	const path = segmentsPath(parts);
+	try {
+		if (!(await IOUtils.exists(path))) {
+			return out;
+		}
+		const data = await IOUtils.readJSON(path);
+		if (!isValidCachedSegments(data, segmentContextHash(parts))) {
+			await IOUtils.remove(path, { ignoreAbsent: true });
+			return out;
+		}
+		for (const h of hashes) {
+			const text = data.segments[h];
+			if (typeof text === 'string' && text) {
+				out.set(h, text);
+			}
+		}
+		return out;
+	}
+	catch (e) {
+		logger.warn(MODULE, 'Segment cache read failed; treating as miss', e);
+		return out;
+	}
+}
+
+/**
+ * 段落级缓存 write: merge the new entries into the existing store (read →
+ * merge → atomic write), so concurrent pages appending segments do not clobber
+ * each other's earlier writes.
+ */
+export async function writeSegments(parts: SegmentContextParts, entries: { hash: string; translatedText: string }[]): Promise<void> {
+	if (!entries.length) {
+		return;
+	}
+	const path = segmentsPath(parts);
+	const dir = PathUtils.parent(path);
+	const context = segmentContextHash(parts);
+	try {
+		let segments: Record<string, string> = {};
+		if (await IOUtils.exists(path)) {
+			const data = await IOUtils.readJSON(path).catch(() => null);
+			if (isValidCachedSegments(data, context)) {
+				segments = data.segments;
+			}
+		}
+		for (const e of entries) {
+			if (e.hash && e.translatedText) {
+				segments[e.hash] = e.translatedText;
+			}
+		}
+		const entry: CachedSegments = { schemaVersion: CACHE_SCHEMA_VERSION, context, segments };
+		if (dir) {
+			await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
+		}
+		await IOUtils.writeJSON(path, entry, { tmpPath: path + '.tmp' });
+	}
+	catch (e) {
+		logger.warn(MODULE, 'Segment cache write failed (continuing without cache)', e);
 	}
 }
 
