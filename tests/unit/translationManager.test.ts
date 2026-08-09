@@ -191,7 +191,8 @@ test('scrolling does not cancel an in-flight compress for a still-wanted page', 
 			// Slow compress round: hold it open so setCurrentPage races it.
 			await new Promise<void>(r => { release = r; });
 			compressAborted = signal.aborted;
-			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '短:' + b.text })) };
+			// Genuinely shorter than the original — the manager accepts it.
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '短译' })) };
 		}
 		return plain(request, signal);
 	};
@@ -202,13 +203,34 @@ test('scrolling does not cancel an in-flight compress for a still-wanted page', 
 	await new Promise(r => setTimeout(r, 5));
 	manager.setCurrentPage(0); // the exact scroll event that used to kill it
 	release();
-	await compress;
+	const accepted = await compress;
 	assert.equal(compressAborted, false, 'page-0-compress must survive setCurrentPage(0)');
+	assert.equal(accepted.get('page-0-block-0'), '短译', 'the shorter retry is returned to the caller');
 	assert.equal(
 		manager.getPageState(0)!.translations.get('page-0-block-0'),
-		'短:Source paragraph 0 on page 0.',
-		'the budgeted re-translation landed'
+		'短译',
+		'the budgeted re-translation landed in page state'
 	);
+	manager.dispose();
+});
+
+test('compressBlocks rejects a retry that is not shorter than the current translation', async () => {
+	const { deps } = makeDeps();
+	const plain = deps.translateRequest;
+	deps.translateRequest = async (request, signal) => {
+		if (request.blocks.some(b => b.charBudget !== undefined)) {
+			// A service that echoes back a NOT-shorter string must NOT overwrite
+			// (base translation '译:Source paragraph 0 on page 0.' is 31 chars).
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '这个压缩结果并没有真正变短反而还更长了一点点所以必须被拒绝掉才对' })) };
+		}
+		return plain(request, signal);
+	};
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const before = manager.getPageState(0)!.translations.get('page-0-block-0');
+	const accepted = await manager.compressBlocks(0, [{ id: 'page-0-block-0', maxChars: 4 }]);
+	assert.equal(accepted.size, 0, 'a non-shorter retry is rejected');
+	assert.equal(manager.getPageState(0)!.translations.get('page-0-block-0'), before, 'the good translation is kept');
 	manager.dispose();
 });
 

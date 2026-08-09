@@ -31,6 +31,16 @@ export interface TranslationProvider {
 	/** Whether this provider needs an API key. */
 	requiresApiKey: boolean;
 
+	/**
+	 * Whether this provider honours a per-block character budget in the request
+	 * (i.e. it is prompt-driven and will actually try to shorten a translation
+	 * when asked). LLM engines do; fixed MT services (Bing/Google/DeepL) ignore
+	 * it, so the strict renderer must not waste compress rounds on them and
+	 * should go straight to the shrink stage. Explicit capability — NOT inferred
+	 * from whether the provider can also power the explain feature.
+	 */
+	supportsCharBudget?: boolean;
+
 	validateConfiguration(settings: ProviderSettings): Promise<ValidationResult>;
 
 	translate(
@@ -49,6 +59,11 @@ export interface TranslationProvider {
 		settings: ProviderSettings,
 		options: TranslateOptions
 	): Promise<string>;
+}
+
+/** True if this provider will act on a per-block character budget. */
+export function supportsCharBudget(provider: TranslationProvider): boolean {
+	return provider.supportsCharBudget === true;
 }
 
 /** The single host every request for a settings object will go to (privacy UI). */

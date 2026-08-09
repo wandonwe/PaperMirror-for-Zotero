@@ -122,18 +122,25 @@ export class TranslationManager {
 	 * Strict in-place replacement's compress-and-retry: the listed blocks'
 	 * translations did not fit their fixed rectangles, so they are re-requested
 	 * WITH a character budget (the prompt demands denser phrasing, never
-	 * dropped facts). Updated translations replace the old ones in the page
-	 * state and the cache, and the page re-notifies so the pane re-renders.
+	 * dropped facts). A retry is ACCEPTED only when it is actually shorter than
+	 * the translation it would replace — a service that echoes back the same or
+	 * a longer string must not overwrite a good result and waste the round.
+	 *
+	 * Accepted translations are merged into the page state and cache and RETURNED
+	 * (id → new text) so the caller can patch just those nodes in the live page.
+	 * This does NOT notify/re-render the whole page — that would make every
+	 * already-fitting block flicker English→Chinese on each compress round.
 	 */
-	async compressBlocks(pageIndex: number, entries: { id: string; maxChars: number }[]): Promise<void> {
+	async compressBlocks(pageIndex: number, entries: { id: string; maxChars: number }[]): Promise<Map<string, string>> {
+		const accepted = new Map<string, string>();
 		const state = this.pages.get(pageIndex);
 		if (this.disposed || !state || state.status !== 'done' || !entries.length) {
-			return;
+			return accepted;
 		}
 		const wanted = new Map(entries.map(e => [e.id, e.maxChars]));
 		const blocks = state.blocks.filter(b => wanted.has(b.id));
 		if (!blocks.length) {
-			return;
+			return accepted;
 		}
 		const sampleText = blocks.map(b => b.sourceText).join('\n').slice(0, 4000);
 		const { source, target } = this.deps.getLanguages(sampleText);
@@ -158,18 +165,23 @@ export class TranslationManager {
 					glossary: matchRules(this.deps.getGlossary(), blocks.map(b => b.sourceText))
 				};
 				const response = await this.deps.translateRequest(request, signal);
-				let updated = 0;
 				for (const t of response.translations) {
 					const pb = protectedBlocks.find(p => p.block.id === t.id);
 					if (!pb || !t.translatedText.trim()) {
 						continue;
 					}
-					state.translations.set(t.id, restoreFormulas(t.translatedText, pb.placeholders));
-					updated++;
+					const restored = restoreFormulas(t.translatedText, pb.placeholders);
+					const previous = state.translations.get(t.id);
+					// Only accept a genuinely shorter retry; equal/longer output
+					// cannot help it fit and would burn the result for nothing.
+					if (previous !== undefined && restored.length >= previous.length) {
+						continue;
+					}
+					state.translations.set(t.id, restored);
+					accepted.set(t.id, restored);
 				}
-				if (updated) {
-					logger.info(MODULE, `Page ${pageIndex + 1}: ${updated} block(s) re-translated under budget`);
-					this.notify(state);
+				if (accepted.size) {
+					logger.info(MODULE, `Page ${pageIndex + 1}: ${accepted.size} block(s) re-translated shorter under budget`);
 					const all: TranslatedBlock[] = state.blocks
 						.filter(b => state.translations.has(b.id))
 						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! }));
@@ -179,10 +191,11 @@ export class TranslationManager {
 		}
 		catch (e) {
 			if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
-				return;
+				return accepted;
 			}
 			logger.warn(MODULE, 'compressBlocks failed', e);
 		}
+		return accepted;
 	}
 
 	/** Force re-translate a page, bypassing cache. */

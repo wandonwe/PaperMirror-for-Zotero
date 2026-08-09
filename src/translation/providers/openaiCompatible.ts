@@ -68,6 +68,7 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 		displayBaseURL,
 		defaultModel: config.defaultModel,
 		requiresApiKey: config.requiresApiKey ?? (config.id !== 'custom'),
+		supportsCharBudget: true,
 
 		async validateConfiguration(settings: ProviderSettings): Promise<ValidationResult> {
 			try {

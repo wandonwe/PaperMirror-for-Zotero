@@ -40,6 +40,7 @@ export const anthropicProvider: TranslationProvider = {
 	defaultBaseURL: DEFAULT_BASE,
 	defaultModel: DEFAULT_MODEL,
 	requiresApiKey: true,
+	supportsCharBudget: true,
 
 	async validateConfiguration(settings: ProviderSettings): Promise<ValidationResult> {
 		if (!settings.apiKey) {

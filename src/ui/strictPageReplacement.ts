@@ -195,7 +195,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		replaceable.push(block);
 	}
 
-	// ---- 3. per-line masks, hard-clipped against images ---------------------
+	// ---- 3. per-line mask geometry (painted lazily, ONLY on commit) ---------
+	// The mask starts EMPTY. A block's paper rectangle is painted over the
+	// original strokes only at the moment the block is accepted (its
+	// translation measured to fit). Until then the original English text shows
+	// through untouched — so a block is never shown translated and then taken
+	// away. This is the core of the "measure before commit" contract.
 	const mask = doc.createElementNS(HTML_NS, 'canvas') as HTMLCanvasElement;
 	mask.width = canvas.width;
 	mask.height = canvas.height;
@@ -203,40 +208,59 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const maskCtx = mask.getContext('2d');
 	const blockPaper = new Map<string, string>();
 	const lineBoxesFor = new Map<string, PixelBox[]>();
-	if (maskCtx && ctx) {
+	if (ctx) {
 		for (const block of replaceable) {
 			const whole = pixelBox(block, render, 1);
 			const colour = localPaper(ctx, whole, BITMAP_SCALE, paper);
 			blockPaper.set(block.id, colour);
-			maskCtx.fillStyle = colour;
 			// Font-relative padding, not a fixed 2px: masks hug the strokes.
 			const fontPx = Math.max(6, (block.fontSize ?? bodyPt) * pxPerPoint);
 			const pad = Math.min(3, Math.max(1, fontPx * 0.08));
 			const lines: PixelBox[] = [];
 			for (const rect of block.lineRectsPdf as Rect[]) {
 				const box = rectToPixels(rect, render, 1);
-				const padded: PixelBox = {
+				lines.push({
 					left: box.left - pad, top: box.top - pad,
 					width: box.width + pad * 2, height: box.height + pad * 2
-				};
-				lines.push(padded);
-				maskCtx.fillRect(
-					padded.left * BITMAP_SCALE, padded.top * BITMAP_SCALE,
-					padded.width * BITMAP_SCALE, padded.height * BITMAP_SCALE
-				);
+				});
 			}
 			lineBoxesFor.set(block.id, lines);
 		}
-		// HARD RULE: intersectionArea(mask, image) === 0. Whatever was painted
-		// above, the image rectangles are wiped clean afterwards.
+	}
+	page.appendChild(mask);
+
+	/**
+	 * Paint one block's paper rectangle over its original strokes, then re-wipe
+	 * every real image rectangle so the HARD RULE always holds:
+	 * intersectionArea(mask, image) === 0. Idempotent.
+	 */
+	const paintMask = (id: string): void => {
+		if (!maskCtx) {
+			return;
+		}
+		const colour = blockPaper.get(id) ?? paper;
+		maskCtx.fillStyle = colour;
+		for (const line of lineBoxesFor.get(id) ?? []) {
+			maskCtx.fillRect(
+				line.left * BITMAP_SCALE, line.top * BITMAP_SCALE,
+				line.width * BITMAP_SCALE, line.height * BITMAP_SCALE
+			);
+		}
 		for (const img of imageBoxes) {
 			maskCtx.clearRect(
 				img.left * BITMAP_SCALE, img.top * BITMAP_SCALE,
 				img.width * BITMAP_SCALE, img.height * BITMAP_SCALE
 			);
 		}
-	}
-	page.appendChild(mask);
+	};
+	const clearMask = (id: string): void => {
+		for (const line of lineBoxesFor.get(id) ?? []) {
+			maskCtx?.clearRect(
+				line.left * BITMAP_SCALE, line.top * BITMAP_SCALE,
+				line.width * BITMAP_SCALE, line.height * BITMAP_SCALE
+			);
+		}
+	};
 
 	const ink = inkFor(paper);
 	page.style.setProperty('--pm-repage-ink', ink);
@@ -252,8 +276,13 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		node: HTMLElement;
 		box: PixelBox;
 		fontPx: number;
+		/** Shown (mask painted + node visible) after passing measurement. */
+		committed: boolean;
+		/** Gave up — stays original, never to be shown translated. */
+		abandoned: boolean;
 	}
 	const items: StrictItem[] = [];
+	const byId = new Map<string, StrictItem>();
 	for (const block of replaceable) {
 		const box = pixelBox(block, render, 1);
 		const node = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
@@ -265,9 +294,13 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		node.style.top = `${box.top}px`;
 		node.style.width = `${box.width}px`;
 		// FIXED height + hidden overflow: pure safety net — a block that
-		// cannot pass the measure gate is reverted, never shown clipped.
+		// cannot pass the measure gate is never revealed at all.
 		node.style.height = `${box.height}px`;
 		node.style.overflow = 'hidden';
+		// Hidden until accepted: laid out (so it is measurable) but invisible,
+		// and — critically — its mask is NOT yet painted, so the original text
+		// shows through. Acceptance flips visibility AND paints the mask together.
+		node.style.visibility = 'hidden';
 		const fontPx = Math.max(6, (block.fontSize ?? bodyPt) * pxPerPoint);
 		node.style.fontSize = `${fontPx.toFixed(2)}px`;
 		const bg = blockPaper.get(block.id);
@@ -281,72 +314,111 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		node.textContent = input.translations.get(block.id)!; // SAFE: text node
 		node.title = block.sourceText;
 		textLayer.appendChild(node);
-		items.push({ id: block.id, node, box, fontPx });
+		const item: StrictItem = { id: block.id, node, box, fontPx, committed: false, abandoned: false };
+		items.push(item);
+		byId.set(block.id, item);
 	}
 
-	// ---- measurement pass (idempotent) --------------------------------------
-	(page as HTMLElement & { pmSettleStrict?: () => UnfitBlock[] }).pmSettleStrict = (): UnfitBlock[] => {
+	/** Ladder-fit a hidden node; true when it fits its fixed rectangle. */
+	const ladderFits = (item: StrictItem): boolean => {
+		for (const step of STRICT_LADDER) {
+			item.node.style.lineHeight = String(step.lineHeight);
+			item.node.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
+			if (item.node.scrollHeight <= item.box.height + 1.5
+				&& item.node.scrollWidth <= item.box.width + 1.5) {
+				return true;
+			}
+		}
+		return false;
+	};
+
+	/** Reveal a measured-to-fit block: paint its mask, then show the node. */
+	const commit = (item: StrictItem): void => {
+		if (item.committed) {
+			return;
+		}
+		paintMask(item.id);
+		item.node.style.visibility = '';
+		item.node.removeAttribute('data-pm-unfit');
+		item.committed = true;
+	};
+
+	const budgetFor = (item: StrictItem): number => {
+		const estimate = estimateCjkCapacity(item.box.width, item.box.height, item.fontPx);
+		const textLen = (item.node.textContent ?? '').length;
+		const sh = item.node.scrollHeight;
+		const measured = sh > item.box.height && textLen > 0
+			? Math.floor(textLen * (item.box.height / sh) * 0.92)
+			: estimate;
+		return Math.max(8, Math.min(estimate, measured));
+	};
+
+	// ---- measurement pass ---------------------------------------------------
+	// `commitFitting` is the whole point: when true (the FINAL, fonts-settled
+	// pass) a block that measures to fit is revealed on the spot; a block that
+	// does not is left hidden (original showing) and returned as unfit. When
+	// false (a provisional pass on fallback-font metrics) NOTHING is revealed —
+	// we never show a block we might have to take back.
+	(page as HTMLElement & { pmSettleStrict?: (commitFitting: boolean) => UnfitBlock[] }).pmSettleStrict = (commitFitting: boolean): UnfitBlock[] => {
 		const unfit: UnfitBlock[] = [];
 		for (const item of items) {
-			if (item.node.style.display === 'none') {
-				continue; // reverted earlier
+			if (item.committed || item.abandoned) {
+				continue;
 			}
-			let fits = false;
-			for (const step of STRICT_LADDER) {
-				item.node.style.lineHeight = String(step.lineHeight);
-				item.node.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
-				if (item.node.scrollHeight <= item.box.height + 1.5
-					&& item.node.scrollWidth <= item.box.width + 1.5) {
-					fits = true;
-					break;
-				}
+			const fits = ladderFits(item);
+			if (fits && commitFitting) {
+				commit(item);
 			}
-			if (!fits) {
-				// The geometric estimate is crude; the block just told us its
-				// real need. textLen × (boxHeight / scrollHeight) is the length
-				// that WOULD have fit at the current metrics — take the tighter
-				// of the two so the compressed retry actually fits.
-				const estimate = estimateCjkCapacity(item.box.width, item.box.height, item.fontPx);
-				const textLen = (item.node.textContent ?? '').length;
-				const sh = item.node.scrollHeight;
-				const measured = sh > item.box.height && textLen > 0
-					? Math.floor(textLen * (item.box.height / sh) * 0.92)
-					: estimate;
-				unfit.push({
-					id: item.id,
-					maxChars: Math.max(8, Math.min(estimate, measured))
-				});
+			else if (!fits) {
+				unfit.push({ id: item.id, maxChars: budgetFor(item) });
 			}
 		}
 		return unfit;
 	};
 
-	// ---- last-resort shrink (see SHRINK_STEPS): fit or hand back for revert --
+	// ---- apply a compressed retry: patch text in place, measure, commit -----
+	// The compressed translations replace the block text WITHOUT rebuilding the
+	// page, so already-committed blocks never flicker. Blocks that now fit are
+	// revealed; the rest come back as still-unfit.
+	(page as HTMLElement & { pmApplyCompressed?: (m: Map<string, string>) => UnfitBlock[] }).pmApplyCompressed = (updates: Map<string, string>): UnfitBlock[] => {
+		const still: UnfitBlock[] = [];
+		for (const [id, text] of updates) {
+			const item = byId.get(id);
+			if (!item || item.committed || item.abandoned || !text.trim()) {
+				continue;
+			}
+			item.node.textContent = text; // SAFE: text node
+			if (ladderFits(item)) {
+				commit(item);
+			}
+			else {
+				still.push({ id, maxChars: budgetFor(item) });
+			}
+		}
+		return still;
+	};
+
+	// ---- last-resort shrink (see SHRINK_STEPS): fit-and-commit, or hand back -
 	(page as HTMLElement & { pmShrinkFit?: (ids: string[]) => string[] }).pmShrinkFit = (ids: string[]): string[] => {
 		const still: string[] = [];
 		for (const id of ids) {
-			const item = items.find(i => i.id === id);
-			if (!item || item.node.style.display === 'none') {
+			const item = byId.get(id);
+			if (!item || item.committed || item.abandoned) {
 				continue;
 			}
 			let fits = false;
 			for (const factor of SHRINK_STEPS) {
 				const px = Math.max(SHRINK_FLOOR_PX, item.fontPx * factor);
 				item.node.style.fontSize = `${px.toFixed(2)}px`;
-				for (const step of STRICT_LADDER) {
-					item.node.style.lineHeight = String(step.lineHeight);
-					item.node.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
-					if (item.node.scrollHeight <= item.box.height + 1.5
-						&& item.node.scrollWidth <= item.box.width + 1.5) {
-						fits = true;
-						break;
-					}
-				}
+				fits = ladderFits(item);
 				if (fits || px <= SHRINK_FLOOR_PX) {
 					break;
 				}
 			}
-			if (!fits) {
+			if (fits) {
+				commit(item);
+			}
+			else {
 				item.node.style.fontSize = `${item.fontPx.toFixed(2)}px`; // restore
 				still.push(id);
 			}
@@ -354,21 +426,20 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		return still;
 	};
 
-	// ---- per-block reversion: original text back, no clipping ever ----------
+	// ---- give up on a block: stays original forever (it was never shown) -----
 	(page as HTMLElement & { pmRevert?: (ids: string[]) => void }).pmRevert = (ids: string[]): void => {
-		const wipe = mask.getContext('2d');
 		for (const id of ids) {
-			const item = items.find(i => i.id === id);
+			const item = byId.get(id);
 			if (!item) {
 				continue;
 			}
-			item.node.style.display = 'none';
-			for (const line of lineBoxesFor.get(id) ?? []) {
-				wipe?.clearRect(
-					line.left * BITMAP_SCALE, line.top * BITMAP_SCALE,
-					line.width * BITMAP_SCALE, line.height * BITMAP_SCALE
-				);
+			item.abandoned = true;
+			if (item.committed) {
+				// Only reachable in pathological re-measures; undo the reveal.
+				clearMask(id);
+				item.committed = false;
 			}
+			item.node.style.visibility = 'hidden';
 			item.node.setAttribute('data-pm-unfit', 'true');
 		}
 	};
@@ -378,17 +449,16 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 }
 
 /**
- * Measure with font-readiness insurance, mirroring settleTranslatedPage.
- * `onMeasured` fires after every pass with the unfit list and a `final` flag:
- * exactly ONE call per render carries final=true — the measure taken after
- * web fonts settled. Callers must take consequential action (spending a
- * compress round, shrinking, reverting) only on that final call; the earlier
- * provisional passes exist to catch geometry early but measure with fallback
- * fonts, and acting on them is what made long-text translations flicker in
- * and then vanish (rounds burned 2–3× per render, then a premature revert).
+ * Measure with font-readiness insurance. `onMeasured` fires with the unfit
+ * list and a `final` flag: exactly ONE call per render carries final=true —
+ * the measure taken after web fonts settled, and the ONLY pass that reveals
+ * fitting blocks or lets the caller spend a compress round. Provisional passes
+ * (final=false) reveal nothing and must not drive any consequential action;
+ * acting on their fallback-font metrics is what made long-text translations
+ * flash in and then vanish.
  */
 export function settleStrictPage(element: HTMLElement, onMeasured: (unfit: UnfitBlock[], final: boolean) => void): void {
-	const settle = (element as HTMLElement & { pmSettleStrict?: () => UnfitBlock[] }).pmSettleStrict;
+	const settle = (element as HTMLElement & { pmSettleStrict?: (commitFitting: boolean) => UnfitBlock[] }).pmSettleStrict;
 	if (!settle) {
 		return;
 	}
@@ -401,11 +471,11 @@ export function settleStrictPage(element: HTMLElement, onMeasured: (unfit: Unfit
 	}
 	const ready = fonts?.ready;
 	if (!fonts || !ready) {
-		onMeasured(settle(), true); // no font API — this is all we get
+		onMeasured(settle(true), true); // no font API — this is the final pass
 		return;
 	}
 	const f = fonts;
-	onMeasured(settle(), false); // provisional: fallback-font metrics
+	onMeasured(settle(false), false); // provisional: measure only, reveal nothing
 	try {
 		void ready.then(() => {
 			if (!element.isConnected) {
@@ -415,20 +485,56 @@ export function settleStrictPage(element: HTMLElement, onMeasured: (unfit: Unfit
 			if (secondWave) {
 				// A second load wave started — one more provisional pass now,
 				// the final one when it completes.
-				onMeasured(settle(), false);
+				onMeasured(settle(false), false);
 				void secondWave.then(() => {
 					if (element.isConnected) {
-						onMeasured(settle(), true);
+						onMeasured(settle(true), true);
 					}
 				});
 				return;
 			}
-			onMeasured(settle(), true);
+			onMeasured(settle(true), true);
 		});
 	}
 	catch {
-		onMeasured(settle(), true); // insurance: never leave the caller waiting
+		onMeasured(settle(true), true); // insurance: never leave the caller waiting
 	}
+}
+
+/**
+ * Apply a compressed retry's shorter translations to the live page: patches
+ * the block text in place (no page rebuild → committed blocks never flicker),
+ * measures, reveals those that now fit, and returns the ones still too long.
+ */
+export function applyCompressedStrict(element: HTMLElement, updates: Map<string, string>): UnfitBlock[] {
+	const apply = (element as HTMLElement & { pmApplyCompressed?: (m: Map<string, string>) => UnfitBlock[] }).pmApplyCompressed;
+	return apply ? apply(updates) : [];
+}
+
+/**
+ * The retry plan for a set of unfit blocks: which get a budgeted compress
+ * round (only budget-capable engines, only blocks with rounds left) and which
+ * fall through to the shrink/revert stage. Pure — unit-tested directly.
+ */
+export interface RetryPlan {
+	compress: string[];
+	shrink: string[];
+}
+export function planStrictRetry(
+	unfit: UnfitBlock[],
+	opts: { roundsFor: (id: string) => number; maxRounds: number; budgetCapable: boolean }
+): RetryPlan {
+	const compress: string[] = [];
+	const shrink: string[] = [];
+	for (const u of unfit) {
+		if (opts.budgetCapable && opts.roundsFor(u.id) < opts.maxRounds) {
+			compress.push(u.id);
+		}
+		else {
+			shrink.push(u.id);
+		}
+	}
+	return { compress, shrink };
 }
 
 export function revertStrictBlocks(element: HTMLElement, ids: string[]): void {

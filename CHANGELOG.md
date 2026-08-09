@@ -29,28 +29,45 @@ one architecture: strict in-place replacement.
 
 ### Fixed
 
-- **长文本不稳定 — 译文显示后又消失.** Three real defects conspired against
-  long paragraphs. (1) The measure pass fires several times per render (font
-  readiness insurance), and every firing spent a compress round — one render
-  burned the whole budget and the block reverted to English. Settle now
-  distinguishes provisional measures from THE final fonts-settled one, and
-  rounds are only spent (and reverts only happen) on that final measure, with
-  an in-flight guard so a page never has two compress requests racing.
-  (2) Scrolling cancelled the in-flight compress task of the very page being
-  read; the scheduler now keeps `page-N-compress` alive for every wanted
-  page. (3) The free MT engines ignore character budgets, so their compress
-  rounds were guaranteed futile — they now skip straight to the shrink stage.
-- **Last-resort font shrink before any revert.** A block that still overflows
-  after the budgeted retries tries 94% then 88% of its fixed size (floor
-  8.5px, plus a new tightest 1.14/−0.02em ladder step) before giving up — a
-  deliberate, bounded exception to the fixed-type-size rule, because a
-  slightly smaller translation beats one that vanishes back into English.
-  Only blocks that fail even this revert to the original.
-- **Compression budgets are measured, not guessed.** The retry budget is now
-  the tighter of the geometric estimate and the block's own measured need
-  (`textLen × boxHeight/scrollHeight × 0.92`), so the compressed translation
-  actually fits on the first retry. Pages that settle cleanly reset their
-  round counter.
+- **长文本不稳定 — 译文显示后又消失 (measure before commit).** The disappearing
+  translation was deterministic, not random loss: the renderer showed every
+  block's translation immediately, then — after fonts loaded and it re-measured
+  — hid the ones that overflowed, so a long paragraph flashed in Chinese and
+  reverted to English. The renderer no longer shows a block it might take back.
+  Each block starts hidden with its ORIGINAL text visible (no mask painted);
+  only a block measured to fit is revealed — mask and text committed together
+  in one step. A block that cannot fit is never shown translated in the first
+  place, so there is nothing to retract. Transitions are only ever English →
+  Chinese (when a fix lands), never Chinese → English.
+- **Compress rounds are counted per block, only once, on the final measure.**
+  The measure pass runs several times per render (font-readiness insurance);
+  only the final, fonts-settled pass now reveals blocks or spends a round, and
+  an in-flight guard stops two compress requests racing on one page. Round
+  counters are keyed per block (not per page), so two long paragraphs at the
+  top of a page can no longer exhaust the budget for every long paragraph below.
+- **Compressed retries applied in place; only shorter results accepted.** A
+  budgeted retry patches just its own blocks into the live page — already-fit
+  blocks never flicker on a re-render — and the manager rejects any retry that
+  is not actually shorter than the translation it would replace, so a service
+  echoing back the same (or longer) text can't waste a round or clobber a good
+  result. Budgets are the tighter of the geometric estimate and the block's own
+  measured need (`textLen × boxHeight/scrollHeight × 0.92`).
+- **Free MT engines skip straight to shrink.** Character budgets only help
+  prompt-driven engines, so provider capability is now an explicit
+  `supportsCharBudget` flag (LLM/OpenAI-compatible = yes; Bing/Google/DeepL =
+  no) rather than being inferred from the explain feature — non-budget engines
+  no longer waste compress rounds.
+- **Last-resort font shrink before abandoning a block.** A block still too long
+  after its budgeted retries tries 94% then 88% of its fixed size (floor 8.5px,
+  plus a new tightest 1.14/−0.02em ladder step) before giving up — a
+  deliberate, bounded exception to the fixed-type-size rule. Only a block that
+  fails even this keeps the original.
+- **Stale renders can't overwrite the live page.** Each page render claims a
+  generation token; an older render still finishing its async tail (bitmap,
+  image rects, compress) bows out instead of flashing an outdated page in over
+  a newer one.
+- Scrolling no longer cancels the in-flight compress task of a page still near
+  the viewport — the scheduler keeps `page-N-compress` alive for wanted pages.
 
 ### Changed (architecture)
 

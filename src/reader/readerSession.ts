@@ -14,7 +14,7 @@ import {
 import { getApiKey } from '../security/credentialStore';
 import { getProvider, listProviders } from '../translation/providers/registry';
 import { buildPool, pickProviderForPage } from '../translation/providerPool';
-import { endpointHost } from '../translation/providers/types';
+import { endpointHost, supportsCharBudget } from '../translation/providers/types';
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
 import { TranslationManager, type PageTranslationState } from '../translation/translationManager';
 import { PROMPT_VERSION } from '../translation/promptBuilder';
@@ -23,7 +23,7 @@ import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationRes
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
-import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, type UnfitBlock } from '../ui/strictPageReplacement';
+import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, type UnfitBlock } from '../ui/strictPageReplacement';
 import { translateFullPdf, bytesToBase64, type TranslateSubmission } from '../translation/pdfService';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
@@ -115,8 +115,12 @@ export class ReaderSession {
 	private pool: string[] = [];
 	/** Real image rects per page (operator list), fetched once per document. */
 	private imageRects = new Map<number, [number, number, number, number][] | null>();
-	/** Compress-and-retry rounds already spent per page (max 2). */
-	private compressRounds = new Map<number, number>();
+	/**
+	 * Compress-and-retry rounds already spent, keyed by BLOCK id (max 2 each).
+	 * Per-block, not per-page: two long paragraphs at the top of a page must not
+	 * exhaust the budget for every long paragraph below them.
+	 */
+	private compressRounds = new Map<string, number>();
 	/**
 	 * Pages with a compress request currently in flight. A round is counted
 	 * ONLY when a request is actually dispatched — settle can measure the same
@@ -125,6 +129,13 @@ export class ReaderSession {
 	 * reverted to English ("译文显示后又消失").
 	 */
 	private compressPending = new Set<number>();
+	/**
+	 * Per-page render generation. Bumped at the start of every renderDocPage;
+	 * an async render (or its settle/compress callbacks) that discovers a newer
+	 * generation for its page aborts instead of overwriting the live slot — no
+	 * stale render can flash an old page in after a newer one has been shown.
+	 */
+	private renderToken = new Map<number, number>();
 	/**
 	 * 刷新-driven engine rotation. With a provider pool active, hitting 刷新 on
 	 * a page bumps its offset so the RE-translation is dealt to the NEXT
@@ -616,10 +627,18 @@ export class ReaderSession {
 	 * not just the ones the left viewer keeps on screen.
 	 */
 	private async renderDocPage(pageIndex: number, slot: HTMLElement, width: number): Promise<'translated' | 'original' | false> {
+		// Claim this render's generation up front; any older render still in its
+		// async tail will see a newer token and bow out before touching the slot.
+		const token = (this.renderToken.get(pageIndex) ?? 0) + 1;
+		this.renderToken.set(pageIndex, token);
+		const current = (): boolean => !this.destroyed && this.renderToken.get(pageIndex) === token;
 		// Supersample within a fixed pixel budget: sharp text without letting a
 		// tall page allocate an enormous canvas.
 		const oversample = Math.max(1, Math.min(1.8, Math.sqrt(3_200_000 / Math.max(1, width * width * 1.4))));
 		let render = await adapter.renderPageBitmap(this.reader, pageIndex, width, oversample);
+		if (!current()) {
+			return false;
+		}
 		if (!render) {
 			// Core rendering unavailable (compartment quirk, worker busy):
 			// fall back to copying the LEFT viewer's canvas. It only exists for
@@ -644,7 +663,11 @@ export class ReaderSession {
 			// Real image boundaries (operator list) — fetched once per page and
 			// cached for the document's lifetime; null = fall back to the grid.
 			if (!this.imageRects.has(pageIndex)) {
-				this.imageRects.set(pageIndex, await adapter.getImageRectsPdf(this.reader, pageIndex));
+				const rects = await adapter.getImageRectsPdf(this.reader, pageIndex);
+				if (!current()) {
+					return false;
+				}
+				this.imageRects.set(pageIndex, rects);
 			}
 			// STRICT in-place replacement: the page keeps its exact original
 			// size and geometry. A translation that cannot fit its source
@@ -659,42 +682,19 @@ export class ReaderSession {
 				imageRectsPdf: this.imageRects.get(pageIndex) ?? undefined
 			});
 			if (built) {
+				if (!current()) {
+					return false;
+				}
 				slot.replaceChildren(applyFit(built.element));
-				settleStrictPage(built.element, (unfit: UnfitBlock[], final: boolean) => {
-					if (this.destroyed) {
+				const element = built.element;
+				// Measure-before-commit: fitting blocks are revealed only on the
+				// FINAL (fonts-settled) pass; unfit blocks stay showing the
+				// original and are resolved without ever being shown-then-hidden.
+				settleStrictPage(element, (unfit: UnfitBlock[], final: boolean) => {
+					if (!current() || !final || !unfit.length) {
 						return;
 					}
-					if (!unfit.length) {
-						// Everything fits — this page's rounds are settled.
-						this.compressRounds.delete(pageIndex);
-						return;
-					}
-					// Consequential action only on the FINAL (fonts-settled)
-					// measure — the provisional passes use fallback-font metrics
-					// and acting on them caused spurious compresses and reverts.
-					if (!final || this.compressPending.has(pageIndex)) {
-						return;
-					}
-					const rounds = this.compressRounds.get(pageIndex) ?? 0;
-					// Character budgets only help engines that read the prompt —
-					// the free MT services ignore them, so for those we go
-					// straight to the shrink stage instead of wasting rounds.
-					const llm = canExplain(getProvider(this.providerForPage(pageIndex)));
-					if (llm && rounds < 2) {
-						this.compressPending.add(pageIndex);
-						this.compressRounds.set(pageIndex, rounds + 1);
-						void this.manager?.compressBlocks(pageIndex, unfit)
-							.finally(() => this.compressPending.delete(pageIndex));
-						return;
-					}
-					// Budget rounds exhausted (or unavailable): one bounded font
-					// shrink (94%→88%, floor 8.5px) before anything reverts —
-					// a slightly smaller translation beats a vanishing one.
-					const still = shrinkStrictBlocks(built.element, unfit.map(u => u.id));
-					if (still.length) {
-						revertStrictBlocks(built.element, still);
-						logger.info(MODULE, `page ${pageIndex + 1}: ${still.length} block(s) kept original (no fit within fixed geometry)`);
-					}
+					this.resolveStrictUnfit(pageIndex, element, unfit, token);
 				});
 				// A single click on translated text must be INERT reading behaviour:
 				// it only moves the focus highlight. The old handler ran 深度讲解 +
@@ -725,6 +725,66 @@ export class ReaderSession {
 		}
 		slot.replaceChildren(applyFit(buildOriginalPage(doc, render)));
 		return 'original';
+	}
+
+	/**
+	 * Resolve blocks whose translation did not fit their fixed rectangle,
+	 * WITHOUT ever having shown them translated (the strict renderer keeps them
+	 * hidden with the original text visible until they are accepted). Order:
+	 *   1. budget-capable engine, rounds left → a compressed retry, applied in
+	 *      place; blocks that then fit are revealed, the rest recurse;
+	 *   2. otherwise → one bounded font shrink;
+	 *   3. still won't fit → abandon (the original simply stays).
+	 * `token` ties every async step to the render that started it: a newer
+	 * render for this page makes this one bow out.
+	 */
+	private resolveStrictUnfit(pageIndex: number, element: HTMLElement, unfit: UnfitBlock[], token: number): void {
+		const live = (): boolean => !this.destroyed && element.isConnected && this.renderToken.get(pageIndex) === token;
+		if (!live() || !unfit.length) {
+			return;
+		}
+		const budgetCapable = supportsCharBudget(getProvider(this.providerForPage(pageIndex)));
+		const plan = planStrictRetry(unfit, {
+			roundsFor: id => this.compressRounds.get(id) ?? 0,
+			maxRounds: 2,
+			budgetCapable
+		});
+
+		// (2)+(3): blocks that get no (more) budgeted retry — shrink, then abandon.
+		if (plan.shrink.length) {
+			const still = shrinkStrictBlocks(element, plan.shrink);
+			if (still.length) {
+				revertStrictBlocks(element, still);
+				logger.info(MODULE, `page ${pageIndex + 1}: ${still.length} block(s) kept original (no fit within fixed geometry)`);
+			}
+		}
+
+		// (1): budgeted compress for the rest — at most one page-level request
+		// in flight, patched into the live page (no full re-render).
+		if (!plan.compress.length || this.compressPending.has(pageIndex) || !this.manager) {
+			return;
+		}
+		this.compressPending.add(pageIndex);
+		for (const id of plan.compress) {
+			this.compressRounds.set(id, (this.compressRounds.get(id) ?? 0) + 1);
+		}
+		const entries = unfit.filter(u => plan.compress.includes(u.id));
+		void this.manager.compressBlocks(pageIndex, entries)
+			.then((accepted) => {
+				if (!live()) {
+					return;
+				}
+				// Apply shorter retries in place; whatever still overflows (plus
+				// any block the service failed to shorten) goes round again.
+				const stillUnfit = applyCompressedStrict(element, accepted);
+				const noProgress = entries.filter(e => !accepted.has(e.id));
+				const next = [...stillUnfit, ...noProgress.filter(e => !stillUnfit.some(s => s.id === e.id))];
+				this.compressPending.delete(pageIndex);
+				if (next.length) {
+					this.resolveStrictUnfit(pageIndex, element, next, token);
+				}
+			})
+			.catch(() => this.compressPending.delete(pageIndex));
 	}
 
 	/**
@@ -1039,7 +1099,13 @@ export class ReaderSession {
 			return;
 		}
 		const page = adapter.getCurrentPageIndex(this.reader);
-		this.compressRounds.delete(page);
+		// Per-block round counters are keyed `page-<n>-…`; clear this page's.
+		const prefix = `page-${page}-`;
+		for (const id of [...this.compressRounds.keys()]) {
+			if (id.startsWith(prefix)) {
+				this.compressRounds.delete(id);
+			}
+		}
 		this.compressPending.delete(page);
 		// Pool active → deal this page to the next engine before re-translating.
 		if (this.pool.length > 1) {

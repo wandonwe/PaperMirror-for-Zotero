@@ -12,7 +12,9 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { settleStrictPage, shrinkStrictBlocks, type UnfitBlock } from '../../src/ui/strictPageReplacement';
+import { settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, type UnfitBlock } from '../../src/ui/strictPageReplacement';
+import { supportsCharBudget } from '../../src/translation/providers/types';
+import { getProvider } from '../../src/translation/providers/registry';
 
 interface FakeFonts {
 	status?: string;
@@ -93,4 +95,52 @@ test('shrinkStrictBlocks delegates to pmShrinkFit and returns the leftovers', ()
 test('shrinkStrictBlocks without the hook falls back to reverting everything', () => {
 	const el = {} as HTMLElement;
 	assert.deepEqual(shrinkStrictBlocks(el, ['a', 'b']), ['a', 'b']);
+});
+
+test('planStrictRetry routes budget-capable, in-budget blocks to compress', () => {
+	const unfit: UnfitBlock[] = [
+		{ id: 'a', maxChars: 40 },
+		{ id: 'b', maxChars: 40 },
+		{ id: 'c', maxChars: 40 }
+	];
+	const rounds = new Map<string, number>([['a', 0], ['b', 2], ['c', 1]]);
+	const plan = planStrictRetry(unfit, {
+		roundsFor: id => rounds.get(id) ?? 0,
+		maxRounds: 2,
+		budgetCapable: true
+	});
+	assert.deepEqual(plan.compress.sort(), ['a', 'c'], 'b has spent its 2 rounds → shrink');
+	assert.deepEqual(plan.shrink, ['b']);
+});
+
+test('planStrictRetry sends everything to shrink when the engine ignores budgets', () => {
+	const unfit: UnfitBlock[] = [{ id: 'a', maxChars: 40 }, { id: 'b', maxChars: 40 }];
+	const plan = planStrictRetry(unfit, { roundsFor: () => 0, maxRounds: 2, budgetCapable: false });
+	assert.deepEqual(plan.compress, []);
+	assert.deepEqual(plan.shrink, ['a', 'b']);
+});
+
+test('applyCompressedStrict delegates to pmApplyCompressed', () => {
+	const seen: Map<string, string>[] = [];
+	const el = {
+		pmApplyCompressed: (m: Map<string, string>) => { seen.push(m); return [{ id: 'x', maxChars: 20 }]; }
+	} as unknown as HTMLElement;
+	const still = applyCompressedStrict(el, new Map([['x', '短']]));
+	assert.equal(seen.length, 1);
+	assert.deepEqual(still, [{ id: 'x', maxChars: 20 }]);
+});
+
+test('applyCompressedStrict without the hook is a no-op', () => {
+	assert.deepEqual(applyCompressedStrict({} as HTMLElement, new Map([['x', 'y']])), []);
+});
+
+test('supportsCharBudget is explicit per provider, not tied to explain', () => {
+	// LLM/prompt-driven engines honour the budget…
+	assert.equal(supportsCharBudget(getProvider('anthropic')), true);
+	assert.equal(supportsCharBudget(getProvider('openai')), true);
+	assert.equal(supportsCharBudget(getProvider('deepseek')), true);
+	// …fixed MT services do not, so the renderer must not waste rounds on them.
+	assert.equal(supportsCharBudget(getProvider('bing-free')), false);
+	assert.equal(supportsCharBudget(getProvider('google-free')), false);
+	assert.equal(supportsCharBudget(getProvider('deepl')), false);
 });
