@@ -228,7 +228,7 @@ export class ReaderSession {
 		this.pane.setPaneSide(getPref<string>('paneSide', 'right') === 'left' ? 'left' : 'right');
 		this.pane.setShowOriginal(getPref<boolean>('showOriginal', false));
 		this.pane.setSyncEnabled(getPref<boolean>('syncScroll', true));
-		this.overlay = new PdfOverlay(this.reader);
+		this.overlay = new PdfOverlay(this.reader, { onRefresh: () => void this.retranslateCurrent() });
 		this.overlay.setDisplayMode(getPref<OverlayDisplayMode>('overlayDisplayMode', 'dim-original'));
 		this.overlay.setPeekOnHover(getPref<boolean>('overlayPeekHover', true));
 		this.overlay.setFitMode(getPref<'strict' | 'expand'>('overlayFitMode', 'expand'));
@@ -1157,6 +1157,7 @@ export class ReaderSession {
 			logger.info(MODULE, `刷新 page ${page + 1} → provider ${this.providerForPage(page)}`);
 		}
 		this.pane?.setBusy(true);
+		this.overlay?.setRefreshBusy(true); // spin the 覆盖原文模式 floating button
 		try {
 			// Bypasses the cache; the fresh result overwrites the old entry on write.
 			await this.manager.retranslatePage(page);
@@ -1164,6 +1165,7 @@ export class ReaderSession {
 		}
 		finally {
 			this.pane?.setBusy(false);
+			this.overlay?.setRefreshBusy(false);
 		}
 	}
 

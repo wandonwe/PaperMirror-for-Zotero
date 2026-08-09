@@ -9,6 +9,18 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.7.6] — 2026-08-09
+
+### Added
+
+- **覆盖原文模式的浮动刷新按钮 (floating 刷新 in overlay mode).** In 覆盖原文
+  (on-page overlay) mode the translation pane is hidden, so its 刷新 button
+  was out of reach. A round refresh button now floats in the bottom-right
+  corner whenever the overlay is on — just above where the status pill appears,
+  so the two never overlap. It re-translates the current page (rotating to the
+  next pool engine, like the pane's 刷新), spins while the request is in flight,
+  and is removed when the overlay is turned off.
+
 ## [0.7.5] — 2026-08-09
 
 **语义段落组 (semantic paragraph groups).** The coalesced region IS the
@@ -1032,7 +1044,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.5...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.6...HEAD
+[0.7.6]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.2...v0.7.3

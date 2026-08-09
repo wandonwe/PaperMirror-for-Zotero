@@ -62,6 +62,7 @@ const LAYER_CLASS = 'pm-overlay-layer';
 const BOX_CLASS = 'pm-overlay-box';
 const MASK_CLASS = 'pm-overlay-mask';
 const STATUS_CLASS = 'pm-overlay-status';
+const REFRESH_CLASS = 'pm-overlay-refresh';
 
 /** Attribute-selector escaping for block ids (they contain '#'). */
 function CSS_ESCAPE(value: string): string {
@@ -229,6 +230,38 @@ const OVERLAY_CSS = `
 }
 .${STATUS_CLASS}[data-pm-error="true"] i { background: #ff6b6b; }
 @keyframes pm-status-spin { to { transform: rotate(360deg); } }
+
+/* 覆盖原文模式 has no pane, so its 刷新 lives here as a floating button in the
+   bottom-right corner — sitting just above where the status pill appears so the
+   two never overlap. */
+.${REFRESH_CLASS} {
+	position: fixed;
+	right: 14px;
+	bottom: 52px;
+	z-index: 2147483000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 38px;
+	padding: 0;
+	border: none;
+	border-radius: 50%;
+	background: rgba(28, 30, 36, .92);
+	color: #f2f4f7;
+	box-shadow: 0 4px 18px rgba(0, 0, 0, .3);
+	cursor: pointer;
+	pointer-events: auto;
+	transition: opacity .18s ease, transform .12s ease, background .12s ease;
+}
+.${REFRESH_CLASS}:hover { background: rgba(48, 52, 60, .96); }
+.${REFRESH_CLASS}:active { transform: scale(.92); }
+.${REFRESH_CLASS} svg { width: 18px; height: 18px; display: block; }
+.${REFRESH_CLASS}[data-pm-busy="true"] {
+	pointer-events: none;
+	opacity: .7;
+}
+.${REFRESH_CLASS}[data-pm-busy="true"] svg { animation: pm-status-spin .8s linear infinite; }
 `;
 
 export interface OverlayPageData {
@@ -271,8 +304,13 @@ export class PdfOverlay {
 	/** 悬停看原文: hovering a paragraph reveals the source underneath it. */
 	private peekOnHover = true;
 
-	constructor(reader: ReaderLike) {
+	/** 覆盖原文模式's floating 刷新 handler (re-translate the current page). */
+	private onRefresh: (() => void) | null = null;
+	private refreshBusy = false;
+
+	constructor(reader: ReaderLike, options: { onRefresh?: () => void } = {}) {
 		this.reader = reader;
+		this.onRefresh = options.onRefresh ?? null;
 	}
 
 	isEnabled(): boolean {
@@ -293,6 +331,7 @@ export class PdfOverlay {
 			this.paperColour.clear();
 			adapter.injectPdfStyle(this.reader, STYLE_ID, OVERLAY_CSS);
 			this.subscribe();
+			this.ensureRefreshButton();
 			this.scheduleRedraw();
 		}
 		else {
@@ -345,6 +384,86 @@ export class PdfOverlay {
 		try {
 			const doc = adapter.getPageView(this.reader, 0)?.doc;
 			doc?.querySelectorAll(`.${STATUS_CLASS}`).forEach(node => node.remove());
+		}
+		catch {
+			// reader may be gone
+		}
+	}
+
+	/**
+	 * The floating 刷新 button for 覆盖原文模式 — created while the overlay is on,
+	 * idempotent (re-run on every redraw so it survives a page-view swap). Does
+	 * nothing when no onRefresh handler was supplied.
+	 */
+	private ensureRefreshButton(): void {
+		if (this.destroyed || !this.onRefresh) {
+			return;
+		}
+		try {
+			const doc = adapter.getPageView(this.reader, adapter.getCurrentPageIndex(this.reader))?.doc
+				?? adapter.getPageView(this.reader, 0)?.doc;
+			const body = doc?.body;
+			if (!body) {
+				return;
+			}
+			adapter.injectPdfStyle(this.reader, STYLE_ID, OVERLAY_CSS);
+			if (doc!.querySelector(`.${REFRESH_CLASS}`)) {
+				return; // already present in this document
+			}
+			const btn = doc!.createElement('button');
+			btn.className = REFRESH_CLASS;
+			btn.type = 'button';
+			btn.title = '刷新本页翻译';
+			btn.setAttribute('aria-label', '刷新本页翻译');
+			btn.setAttribute('data-pm-busy', String(this.refreshBusy));
+			// A refresh glyph, built as SVG nodes (no innerHTML for safety).
+			const SVG_NS = 'http://www.w3.org/2000/svg';
+			const svg = doc!.createElementNS(SVG_NS, 'svg');
+			svg.setAttribute('viewBox', '0 0 24 24');
+			svg.setAttribute('fill', 'none');
+			svg.setAttribute('stroke', 'currentColor');
+			svg.setAttribute('stroke-width', '2');
+			svg.setAttribute('stroke-linecap', 'round');
+			svg.setAttribute('stroke-linejoin', 'round');
+			const p1 = doc!.createElementNS(SVG_NS, 'path');
+			p1.setAttribute('d', 'M21 12a9 9 0 1 1-2.64-6.36');
+			const p2 = doc!.createElementNS(SVG_NS, 'polyline');
+			p2.setAttribute('points', '21 3 21 9 15 9');
+			svg.appendChild(p1);
+			svg.appendChild(p2);
+			btn.appendChild(svg);
+			btn.addEventListener('click', (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				if (!this.refreshBusy) {
+					this.onRefresh?.();
+				}
+			});
+			body.appendChild(btn);
+		}
+		catch (e) {
+			logger.debug(MODULE, 'refresh button failed', e);
+		}
+	}
+
+	/** Spin + disable the floating 刷新 while a re-translation is in flight. */
+	setRefreshBusy(busy: boolean): void {
+		this.refreshBusy = busy;
+		try {
+			const doc = adapter.getPageView(this.reader, adapter.getCurrentPageIndex(this.reader))?.doc
+				?? adapter.getPageView(this.reader, 0)?.doc;
+			doc?.querySelectorAll(`.${REFRESH_CLASS}`).forEach(node =>
+				node.setAttribute('data-pm-busy', String(busy)));
+		}
+		catch {
+			// reader may be gone
+		}
+	}
+
+	private removeRefreshButton(): void {
+		try {
+			const doc = adapter.getPageView(this.reader, 0)?.doc;
+			doc?.querySelectorAll(`.${REFRESH_CLASS}`).forEach(node => node.remove());
 		}
 		catch {
 			// reader may be gone
@@ -485,6 +604,9 @@ export class PdfOverlay {
 					logger.debug(MODULE, `drawPage(${p}) failed`, e);
 				}
 			}
+			// Re-assert the floating 刷新 after a redraw — a page-view swap can
+			// replace the document body the button lived in.
+			this.ensureRefreshButton();
 		}, 80);
 	}
 
@@ -815,6 +937,7 @@ export class PdfOverlay {
 		}
 		this.drawnSignature.clear();
 		this.removeStatus();
+		this.removeRefreshButton();
 		adapter.removePdfStyle(this.reader, STYLE_ID);
 	}
 
