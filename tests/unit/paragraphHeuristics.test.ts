@@ -250,3 +250,19 @@ test('replacementFontSize: body-cluster minimum, drop caps and superscripts excl
 	assert.equal(replacementFontSize([10, 10, 10]), 10);
 	assert.equal(replacementFontSize([]), 0);
 });
+
+test('planMerges uses geometry over the (unstable) column index when rects exist', () => {
+	// Same physical column (x-ranges overlap) but the flaky detector flipped the
+	// index between the two rows — they must STILL rejoin. This is the residual
+	// "one English line mid-paragraph" bug on narrow two-column pages.
+	assert.deepEqual(planMerges([
+		{ text: 'PCCT-based models will be at', column: 0, type: 'paragraph', gapAfter: 2, fontSize: 10, rect: [54, 700, 292, 712] },
+		{ text: 'least as robust, if not better, than', column: 1, type: 'paragraph', rect: [54, 686, 292, 698] }
+	]), [[0, 1]]);
+	// Different physical columns (disjoint x-ranges) never merge, even if the
+	// index happens to agree.
+	assert.deepEqual(planMerges([
+		{ text: 'ends open and', column: 0, type: 'paragraph', gapAfter: 2, fontSize: 10, rect: [54, 700, 292, 712] },
+		{ text: 'continues here', column: 0, type: 'paragraph', rect: [320, 700, 558, 712] }
+	]), [[0], [1]]);
+});

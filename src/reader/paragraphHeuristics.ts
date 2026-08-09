@@ -289,16 +289,21 @@ export function planMerges<T extends MergeableParagraph>(paragraphs: T[]): numbe
 			continue;
 		}
 		const prev = paragraphs[current[current.length - 1]!]!;
-		const sameColumn = (prev.column ?? 0) === (p.column ?? 0);
 		const bodyOnly = (prev.type ?? 'paragraph') === 'paragraph' && (p.type ?? 'paragraph') === 'paragraph';
 		// A genuine over-split leaves the two fragments on CONSECUTIVE lines.
 		// Anything separated by real whitespace was a deliberate break.
 		const size = prev.fontSize && prev.fontSize > 0 ? prev.fontSize : 10;
 		const adjacent = prev.gapAfter === undefined || prev.gapAfter <= size * 1.2;
-		// Column indexes alone are not enough: when band detection fails the
-		// whole page reports column 0, and rejoining would re-interleave the
-		// two real columns. Rects must overlap in x for a merge.
-		const geometryOk = !prev.rect || !p.rect || linesShareColumn(prev.rect, p.rect);
+		// Same-column test, GEOMETRY-first: when both fragments have rects (the
+		// real pipeline) two fragments belong together iff their x-ranges
+		// overlap — the band index is unstable row-to-row on narrow two-column
+		// pages and, trusted here, left mid-paragraph lines un-rejoined (stuck
+		// in English). Fragments in different columns never share an x-range, so
+		// this can't interleave the columns. Only when rects are absent (unit
+		// tests) do we fall back to the column index.
+		const sameColumn = (prev.rect && p.rect)
+			? linesShareColumn(prev.rect, p.rect)
+			: (prev.column ?? 0) === (p.column ?? 0);
 		// A fragment ending in a comma/colon is mid-sentence no matter how the
 		// next fragment begins — "…阻塞的患者中，" + "CCTA可以…" must rejoin
 		// even though the continuation starts with an uppercase acronym.
@@ -306,7 +311,6 @@ export function planMerges<T extends MergeableParagraph>(paragraphs: T[]): numbe
 		const mergeable = sameColumn
 			&& bodyOnly
 			&& adjacent
-			&& geometryOk
 			&& !endsSentence(prev.text)
 			&& !looksLikeListStart(p.text)
 			&& (startsContinuation(p.text) || danglingEnd);

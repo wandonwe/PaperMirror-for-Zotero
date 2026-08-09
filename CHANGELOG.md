@@ -9,6 +9,21 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.7.3] — 2026-08-09
+
+### Fixed
+
+- **残留的段中英文行 (residual mid-paragraph English lines).** After 0.7.2 fixed
+  the wholesale line-fragmentation, a few lines mid-paragraph (often the
+  citation-bearing ones) still stayed in English. The repair pass `planMerges`
+  was rejoining split fragments but still gated on the same unstable *column
+  index* — a line whose index had flipped never rejoined, so it stood alone as
+  a one-line block and its Chinese couldn't fit a one-line box. The same-column
+  test is now geometry-first: when both fragments have rectangles (the real
+  pipeline) they belong together iff their x-ranges overlap; the column index is
+  only a fallback for rect-less inputs. Different columns never share an
+  x-range, so columns still never interleave.
+
 ## [0.7.2] — 2026-08-09
 
 ### Fixed
@@ -965,7 +980,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.1...v0.7.0
