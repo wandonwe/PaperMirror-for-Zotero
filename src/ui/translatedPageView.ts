@@ -422,7 +422,10 @@ export function buildTranslatedPage(
 	(page as HTMLElement & { pmSettle?: () => void }).pmSettle = () => {
 		// Idempotent: reset every block to its starting state first, so the
 		// settle can be re-run (e.g. as font-readiness insurance) without the
-		// previous run's shrunken sizes compounding.
+		// previous run's shrunken sizes compounding. The PAGE HEIGHT resets
+		// too — a previous run may have grown the page, and if this run needs
+		// less the stale growth would leave a band of blank paper below.
+		page.style.height = `${pageHeightPx}px`;
 		for (const item of placed) {
 			item.node.style.fontSize = `${item.startSize}px`;
 			item.node.style.removeProperty('line-height');
@@ -584,14 +587,27 @@ export function settleTranslatedPage(element: HTMLElement, onSettled?: () => voi
 	onSettled?.();
 	try {
 		const fonts = (element.ownerDocument as Document & { fonts?: { status?: string; ready?: Promise<unknown> } }).fonts;
-		if (fonts?.status === 'loading' && fonts.ready) {
-			void fonts.ready.then(() => {
-				if (element.isConnected) {
-					settle();
-					onSettled?.();
-				}
-			});
+		if (!fonts?.ready) {
+			return;
 		}
+		const resettle = (): void => {
+			if (element.isConnected) {
+				settle();
+				onSettled?.();
+			}
+		};
+		// Hook `ready` UNCONDITIONALLY: our own text insertion may be what
+		// kicks off a font load, and the status check alone missed loads that
+		// start between the first measurement and the check. pmSettle is
+		// idempotent, so an already-loaded set just costs one cheap re-pass.
+		// A second wave is caught once (a face can start loading during the
+		// first re-settle); after that we stop — never an unbounded chain.
+		void fonts.ready.then(() => {
+			resettle();
+			if (fonts.status === 'loading' && fonts.ready) {
+				void fonts.ready.then(resettle);
+			}
+		});
 	}
 	catch {
 		// insurance only — never let it break the page
@@ -689,7 +705,7 @@ function buildObstacles(
 				: { column, fromCol, toCol });
 		});
 
-		return inkToObstacles(ink, cellH, [...ranges.values()], 2);
+		return inkToObstacles(ink, cellH, [...ranges.values()], 2, cellW);
 	}
 	catch (e) {
 		// No obstacle map is survivable — the flow simply keeps blocks in

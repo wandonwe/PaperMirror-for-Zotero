@@ -42,6 +42,13 @@ export interface FlowObstacle {
 	column: number;
 	top: number;
 	bottom: number;
+	/**
+	 * Actual horizontal ink extent in page pixels, when known. A small inline
+	 * figure must not block its whole column in the final overlap sweep —
+	 * without these, obstaclesToBoxes falls back to the column band.
+	 */
+	leftPx?: number;
+	rightPx?: number;
 }
 
 export interface FlowPlacement {
@@ -176,11 +183,33 @@ export function inkToObstacles(
 	ink: boolean[][],
 	cellHeight: number,
 	columnCells: { column: number; fromCol: number; toCol: number }[],
-	minRows = 2
+	minRows = 2,
+	cellWidth = 0
 ): FlowObstacle[] {
 	const obstacles: FlowObstacle[] = [];
 	for (const range of columnCells) {
 		let runStart = -1;
+		let runMinCol = Infinity;
+		let runMaxCol = -Infinity;
+		const flush = (row: number): void => {
+			if (runStart >= 0 && row - runStart >= minRows) {
+				const obstacle: FlowObstacle = {
+					column: range.column,
+					top: runStart * cellHeight,
+					bottom: row * cellHeight
+				};
+				// Tight horizontal extent: the actually-inked cells, so a small
+				// local figure does not block its whole column downstream.
+				if (cellWidth > 0 && runMinCol <= runMaxCol) {
+					obstacle.leftPx = runMinCol * cellWidth;
+					obstacle.rightPx = (runMaxCol + 1) * cellWidth;
+				}
+				obstacles.push(obstacle);
+			}
+			runStart = -1;
+			runMinCol = Infinity;
+			runMaxCol = -Infinity;
+		};
 		for (let row = 0; row <= ink.length; row++) {
 			const cells = ink[row];
 			let inked = false;
@@ -188,7 +217,8 @@ export function inkToObstacles(
 				for (let col = range.fromCol; col <= range.toCol && col < cells.length; col++) {
 					if (cells[col]) {
 						inked = true;
-						break;
+						runMinCol = Math.min(runMinCol, col);
+						runMaxCol = Math.max(runMaxCol, col);
 					}
 				}
 			}
@@ -196,14 +226,7 @@ export function inkToObstacles(
 				runStart = row;
 			}
 			else if (!inked && runStart >= 0) {
-				if (row - runStart >= minRows) {
-					obstacles.push({
-						column: range.column,
-						top: runStart * cellHeight,
-						bottom: row * cellHeight
-					});
-				}
-				runStart = -1;
+				flush(row);
 			}
 		}
 	}
@@ -232,8 +255,24 @@ export function obstaclesToBoxes(
 ): Box[] {
 	const boxes: Box[] = [];
 	for (const obstacle of obstacles) {
+		if (obstacle.bottom <= obstacle.top) {
+			continue;
+		}
+		// Prefer the obstacle's OWN ink extent: a small inline figure must not
+		// wall off its entire column. The column band is only the fallback for
+		// obstacles that don't carry one.
+		if (obstacle.leftPx !== undefined && obstacle.rightPx !== undefined
+			&& obstacle.rightPx - obstacle.leftPx > 0) {
+			boxes.push({
+				left: obstacle.leftPx,
+				top: obstacle.top,
+				width: obstacle.rightPx - obstacle.leftPx,
+				height: obstacle.bottom - obstacle.top
+			});
+			continue;
+		}
 		const band = columnBands.get(obstacle.column);
-		if (!band || band.right - band.left <= 0 || obstacle.bottom <= obstacle.top) {
+		if (!band || band.right - band.left <= 0) {
 			continue;
 		}
 		boxes.push({

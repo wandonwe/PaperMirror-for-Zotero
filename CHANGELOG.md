@@ -30,11 +30,18 @@ Layout-overflow fixes for the rebuilt (side-by-side) page, from a joint audit.
   tolerance shrinks from ±2px to ±0.5px, and the containment ladder gains a
   final 1.18 leading step (matching the overlay's ladder) before the type
   starts shrinking.
-- **Measure-once insurance.** `pmSettle` is now idempotent (every block resets
-  to its start state first), and if the document's font set is still loading
-  at first measurement, the page re-settles once when it finishes — with the
-  slot height re-synced after every settle. With the system CJK stack this is
-  normally a no-op; it closes the fragility for any late-arriving face.
+- **Measure-once insurance.** `pmSettle` is now idempotent — every block AND
+  the page height reset to their start state first, so a re-settle can shrink
+  a previously grown page instead of leaving a band of stale blank paper —
+  and the settle re-runs via an unconditional `document.fonts.ready` hook
+  (catching loads our own text insertion triggers, with one second-wave
+  re-check, never an unbounded chain). Slot height re-syncs after every
+  settle. With the system CJK stack this is normally a cheap no-op.
+- **Small obstacles no longer wall off their whole column.** `inkToObstacles`
+  now records each obstacle's actual horizontal ink extent, and the final
+  sweep uses that tight box — a small inline figure only repels blocks that
+  genuinely overlap it, instead of bouncing every pushed block in the column
+  below it (the column band remains the fallback when no extent is known).
 
 ### Notes
 

@@ -228,3 +228,47 @@ test('the final sweep refuses to park a block on a figure (the push-onto-figure 
 	assert.equal(tops.get('a'), 100);
 	assert.equal(tops.get('b'), 385, 'pushed below the figure, not onto it');
 });
+
+test('inkToObstacles records the tight horizontal ink extent when given a cell width', () => {
+	// A 3-row figure inked only in cells 2..3 of a 0..9 range: the obstacle
+	// must carry that extent, not the whole column.
+	const ink: boolean[][] = [];
+	for (let row = 0; row < 6; row++) {
+		const cells = new Array(10).fill(false);
+		if (row >= 1 && row <= 3) {
+			cells[2] = true;
+			cells[3] = true;
+		}
+		ink.push(cells);
+	}
+	const obstacles = inkToObstacles(ink, 10, [{ column: 0, fromCol: 0, toCol: 9 }], 2, 20);
+	assert.equal(obstacles.length, 1);
+	assert.equal(obstacles[0]!.leftPx, 40, 'left edge = first inked cell');
+	assert.equal(obstacles[0]!.rightPx, 80, 'right edge = past the last inked cell');
+});
+
+test('a small local obstacle does not wall off its whole column in the sweep', () => {
+	// Column band is 40..640 wide; the figure only occupies 40..120. A block
+	// at x 300..500 is pushed down by a neighbour into the figure's ROW — but
+	// it does not overlap the figure's actual extent, so it must NOT be
+	// bounced below it.
+	const figure = obstaclesToBoxes(
+		[{ column: 0, top: 200, bottom: 380, leftPx: 40, rightPx: 120 }],
+		new Map([[0, { left: 40, right: 640 }]])
+	);
+	assert.deepEqual(figure, [{ left: 40, top: 200, width: 80, height: 180 }]);
+	const movable = [
+		{ id: 'a', left: 300, top: 100, width: 200, height: 100 },
+		{ id: 'b', left: 310, top: 110, width: 200, height: 50 }
+	];
+	const tops = resolveOverlaps(movable, figure, 5, 1000);
+	assert.equal(tops.get('b'), 205, 'lands beside the small figure, not below it');
+});
+
+test('obstaclesToBoxes falls back to the column band when no extent is known', () => {
+	const boxes = obstaclesToBoxes(
+		[{ column: 0, top: 200, bottom: 380 }],
+		new Map([[0, { left: 40, right: 300 }]])
+	);
+	assert.deepEqual(boxes, [{ left: 40, top: 200, width: 260, height: 180 }]);
+});
