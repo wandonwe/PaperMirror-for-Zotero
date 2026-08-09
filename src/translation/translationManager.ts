@@ -44,12 +44,12 @@ const SALVAGE_WARN_THRESHOLD = 24;
 const SALVAGE_CONCURRENCY = 4;
 
 /**
- * Guard against a provider that returns the source text UNCHANGED (or otherwise
- * fails to translate) being accepted as a valid translation. For a Chinese
- * target a real translation of prose always contains CJK characters; English
- * echoed straight back has none. Only enforced on prose sources (≥3 alphabetic
- * words) so acronym/numeric cells like "PCCT (n=30)" — legitimately CJK-free —
- * are still accepted. Non-CJK targets have no cheap check, so they pass.
+ * Accept a response as a REAL translation, not an echo or a half-translation.
+ * For a Chinese target a prose source (≥PROSE_WORD_GATE Latin words — a real
+ * sentence, not a label or an acronym/numeric cell) must come back
+ * predominantly Chinese; empty, echoed-English, and half-in-English responses
+ * are rejected and routed through retry/salvage instead of stored as "done".
+ * Short cells/labels and non-CJK targets have no cheap check and pass.
  */
 export function looksTranslated(source: string, translated: string, targetLang: string): boolean {
 	const t = translated.trim();
@@ -60,10 +60,34 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 		return true;
 	}
 	const proseWords = (source.match(/[A-Za-z]{2,}/g) ?? []).length;
-	if (proseWords < 3) {
-		return true; // acronym / numeric / symbol cell — may legitimately have no CJK
+	if (proseWords < PROSE_WORD_GATE) {
+		return true; // label / acronym / numeric cell — may legitimately be CJK-free
 	}
-	return /[㐀-鿿豈-﫿]/.test(t);
+	// A PROSE source must come back predominantly Chinese. This rejects not
+	// only echoed English (ratio 0) but a HALF-translated / mixed response,
+	// which the old "contains any CJK" test accepted.
+	return targetLanguageRatio(t) >= MIN_TARGET_RATIO;
+}
+
+/** CJK ideograph ranges used for the target-language ratio. */
+const CJK_RE = /[㐀-鿿豈-﫿]/g;
+
+/** A source with at least this many Latin words is prose worth validating. */
+const PROSE_WORD_GATE = 6;
+/** Below this CJK ratio on a prose source, the response was not really translated. */
+const MIN_TARGET_RATIO = 0.45;
+
+/**
+ * Fraction of a Chinese translation that is actually Chinese: CJK characters
+ * over (CJK characters + Latin words). A whole translation scores high (a few
+ * embedded acronyms like PCCT/MRI are normal); a half-translated or mixed
+ * response scores low; pure echoed English scores 0.
+ */
+function targetLanguageRatio(text: string): number {
+	const cjk = (text.match(CJK_RE) ?? []).length;
+	const latinWords = (text.match(/[A-Za-z]{2,}/g) ?? []).length;
+	const denom = cjk + latinWords;
+	return denom === 0 ? 0 : cjk / denom;
 }
 
 /**

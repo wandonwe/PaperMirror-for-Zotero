@@ -9,6 +9,20 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.7.7] — 2026-08-09
+
+### Fixed
+
+- **半段翻译/中英混杂不再被当成功 (target-language RATIO check).** The
+  completeness check accepted any response containing a single CJK character,
+  so a half-translated or English/Chinese-mixed response passed and the page
+  stored it as done. A Chinese target now requires a prose source (≥6 Latin
+  words — a real sentence, not a label or acronym/numeric cell) to come back
+  PREDOMINANTLY Chinese: CJK characters over (CJK + Latin words) must be ≥0.45.
+  A few embedded acronyms (PCCT, MRI) still pass; a mostly-English response is
+  rejected and re-translated whole. Short cells/labels and non-CJK targets are
+  unaffected.
+
 ## [0.7.6] — 2026-08-09
 
 ### Added
@@ -1044,7 +1058,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.6...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.7...HEAD
+[0.7.7]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.3...v0.7.4

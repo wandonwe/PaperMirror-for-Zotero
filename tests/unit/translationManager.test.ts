@@ -270,11 +270,11 @@ test('salvage recovers ALL dropped ids, not just the first eight', async () => {
 		translateRequest: async (request) => {
 			if (request.blocks.length > 1) {
 				// A provider that drops everything but the first block of any batch.
-				return { translations: [{ id: request.blocks[0]!.id, translatedText: '批:' + request.blocks[0]!.text }] };
+				return { translations: [{ id: request.blocks[0]!.id, translatedText: '批量译文内容' }] };
 			}
 			// Single-block salvage always succeeds (no id drift possible).
 			singleCalls++;
-			return { translations: [{ id: request.blocks[0]!.id, translatedText: '救:' + request.blocks[0]!.text }] };
+			return { translations: [{ id: request.blocks[0]!.id, translatedText: '单块译文救回内容' }] };
 		}
 	});
 	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
@@ -323,4 +323,20 @@ test('an echoed-English response is treated as untranslated, not accepted', asyn
 		'the echoed English was rejected and salvage produced the real translation'
 	);
 	manager.dispose();
+});
+
+test('looksTranslated rejects a HALF-translated / mixed response, not just pure echo', async () => {
+	const { looksTranslated } = await import('../../src/translation/translationManager');
+	const source = 'PCCT improved feature visualization despite a lower radiation dose in these patients';
+	// Mostly English with a couple of Chinese words dropped in — the old
+	// "contains any CJK" check accepted this; the ratio check must reject it.
+	assert.equal(
+		looksTranslated(source, 'PCCT 改善 feature visualization despite a lower radiation dose in these patients', 'zh-CN'),
+		false
+	);
+	// A fully Chinese translation with the usual embedded acronyms → accepted.
+	assert.equal(
+		looksTranslated(source, '在这些患者中，PCCT 在更低的辐射剂量下改善了特征的可视化。', 'zh-CN'),
+		true
+	);
 });

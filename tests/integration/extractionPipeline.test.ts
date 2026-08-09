@@ -18,11 +18,15 @@ function blocksFor(chars: typeof fixtures.englishSingleColumn, includeReferences
 }
 
 function fakeProvider(): TranslationDeps['translateRequest'] {
+	// A realistic mock: a predominantly-Chinese translation that PRESERVES the
+	// tokens a real translation keeps verbatim — formula placeholders (⟦PMn⟧),
+	// numbers, percentages, and short acronyms (CI, MRI). Echoing the raw
+	// English back would (correctly) be rejected by the completeness check.
+	const KEEP = /⟦PM\d+⟧|[A-Za-z]*\d[\w.,%±\-–/]*|[A-Z]{2,4}/g;
 	return async (request: TranslationRequest): Promise<TranslationResponse> => ({
 		translations: request.blocks.map(b => ({
 			id: b.id,
-			// Echo back placeholders so the formula-restore path is exercised.
-			translatedText: '【译】' + b.text
+			translatedText: '译文内容' + (b.text.match(KEEP) ?? []).map(t => ' ' + t).join('') + '。'
 		}))
 	});
 }
