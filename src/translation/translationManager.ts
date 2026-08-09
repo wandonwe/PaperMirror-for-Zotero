@@ -262,6 +262,16 @@ export class TranslationManager {
 	}
 
 	/**
+	 * Cancel a page's in-flight translation + compress work (the capsule 取消).
+	 * Whatever has already landed stays; the page is not marked done, so a
+	 * revisit re-runs it.
+	 */
+	cancelPage(pageIndex: number): void {
+		this.scheduler.cancel(`page-${pageIndex}`);
+		this.scheduler.cancel(`page-${pageIndex}-compress`);
+	}
+
+	/**
 	 * Forget every page's translation state (provider or language switched:
 	 * existing translations are in the wrong language/engine now). In-flight
 	 * work is cancelled; the persistent cache is untouched — it is keyed by

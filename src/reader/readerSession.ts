@@ -31,7 +31,7 @@ import * as logger from '../utils/logger';
 import { getPref, setPref } from '../utils/prefs';
 import { detectLanguage, defaultTargetFor, sourceCodeFor } from '../utils/languageDetector';
 import { createSyncController, type SyncController } from './scrollSynchronizer';
-import { PdfOverlay, type OverlayDisplayMode } from './pdfOverlay';
+import { PdfOverlay, type OverlayDisplayMode, type OverlayProgress } from './pdfOverlay';
 import { createSplitView, type SplitViewHandles } from './splitView';
 import { TextExtractor } from './textExtractor';
 import * as adapter from './zoteroReaderAdapter';
@@ -228,7 +228,11 @@ export class ReaderSession {
 		this.pane.setPaneSide(getPref<string>('paneSide', 'right') === 'left' ? 'left' : 'right');
 		this.pane.setShowOriginal(getPref<boolean>('showOriginal', false));
 		this.pane.setSyncEnabled(getPref<boolean>('syncScroll', true));
-		this.overlay = new PdfOverlay(this.reader, { onRefresh: () => void this.retranslateCurrent() });
+		this.overlay = new PdfOverlay(this.reader, {
+			onCancel: () => this.cancelCurrentTranslation(),
+			onRetry: () => void this.retranslateCurrent(),
+			onViewPartial: () => this.setViewMode('split') // the pane shows per-block detail
+		});
 		this.overlay.setDisplayMode(getPref<OverlayDisplayMode>('overlayDisplayMode', 'dim-original'));
 		this.overlay.setPeekOnHover(getPref<boolean>('overlayPeekHover', true));
 		this.overlay.setFitMode(getPref<'strict' | 'expand'>('overlayFitMode', 'expand'));
@@ -495,7 +499,16 @@ export class ReaderSession {
 				case 'extracting': {
 					const text = getString('papermirror-status-translating-page').replace('%n%', pageNo);
 					this.pane?.setStatus(text, { busy: true });
-					this.overlayStatus(text, { busy: true });
+					// Rich per-page progress in the consolidated capsule.
+					this.pushOverlayProgress({
+						phase: 'translating',
+						currentPage: state.pageIndex + 1,
+						totalPages: adapter.getPageCount(this.reader),
+						segTotal: state.blocks.length,
+						segTranslated: state.translations.size,
+						segPlaced: 0,
+						kept: 0
+					});
 					break;
 				}
 				case 'done': {
@@ -504,25 +517,54 @@ export class ReaderSession {
 						check: true,
 						sub: state.fromCache ? getString('papermirror-status-cached') : ''
 					});
-					// The page itself now shows the answer; the chip has done
-					// its job and gets out of the way.
-					this.overlayStatus(text, {});
-					this.hideOverlayStatusSoon();
+					// Translation is done; strict placement runs next and
+					// reportPlacement() posts the final done/partial state. Show a
+					// laying-out state in the meantime (unless served from cache,
+					// where placement is immediate).
+					this.pushOverlayProgress({
+						phase: 'laying-out',
+						currentPage: state.pageIndex + 1,
+						totalPages: adapter.getPageCount(this.reader),
+						segTotal: state.blocks.length,
+						segTranslated: state.translations.size,
+						segPlaced: 0,
+						kept: 0
+					});
 					break;
 				}
 				case 'error': {
 					const text = state.error?.message ?? getString('papermirror-status-error');
 					this.pane?.setStatus(text, { error: true });
-					this.overlayStatus(text, { error: true });
+					this.pushOverlayProgress({
+						phase: 'failed', message: text,
+						currentPage: state.pageIndex + 1,
+						totalPages: adapter.getPageCount(this.reader),
+						segTotal: 0, segTranslated: 0, segPlaced: 0, kept: 0
+					});
 					break;
 				}
 				case 'no-text-layer': {
 					const text = getString('papermirror-no-text-layer');
 					this.pane?.setStatus(text, { error: true });
-					this.overlayStatus(text, { error: true });
+					this.pushOverlayProgress({
+						phase: 'failed', message: text,
+						currentPage: state.pageIndex + 1,
+						totalPages: adapter.getPageCount(this.reader),
+						segTotal: 0, segTranslated: 0, segPlaced: 0, kept: 0
+					});
 					break;
 				}
 			}
+		}
+	}
+
+	/** Push a progress model to the overlay capsule — only in 覆盖原文 mode. */
+	private pushOverlayProgress(model: OverlayProgress): void {
+		if (this.viewMode === 'overlay') {
+			this.overlay?.setProgress(model);
+		}
+		else {
+			this.overlay?.setProgress(null);
 		}
 	}
 
@@ -537,16 +579,6 @@ export class ReaderSession {
 			this.statusHideTimer = null;
 		}
 		this.overlay?.setStatus(text, options);
-	}
-
-	private hideOverlayStatusSoon(): void {
-		if (this.statusHideTimer) {
-			clearTimeout(this.statusHideTimer);
-		}
-		this.statusHideTimer = setTimeout(() => {
-			this.statusHideTimer = null;
-			this.overlay?.setStatus(null);
-		}, 2200);
 	}
 
 	private startPolling(): void {
@@ -816,6 +848,20 @@ export class ReaderSession {
 		if (this.destroyed || pageIndex !== adapter.getCurrentPageIndex(this.reader)) {
 			return; // only annotate the page the reader is actually on
 		}
+		// Honest per-page counts for the capsule: segTotal from the page's own
+		// blocks, placed = committed paragraphs + translated table cells, kept =
+		// segments that should have translated but were left original.
+		const state = this.manager?.getPageState(pageIndex);
+		const segTotal = state?.blocks.length ?? s.replaceable;
+		const segTranslated = state?.translations.size ?? s.committed;
+		const segPlaced = s.committed + s.tableTranslated;
+		const kept = s.abandoned + s.untranslated;
+		this.pushOverlayProgress({
+			phase: kept > 0 ? 'partial' : 'done',
+			currentPage: pageIndex + 1,
+			totalPages: adapter.getPageCount(this.reader),
+			segTotal, segTranslated, segPlaced, kept
+		});
 		if (keptOriginal > 0) {
 			const bits: string[] = [];
 			if (s.abandoned) {
@@ -1157,7 +1203,6 @@ export class ReaderSession {
 			logger.info(MODULE, `刷新 page ${page + 1} → provider ${this.providerForPage(page)}`);
 		}
 		this.pane?.setBusy(true);
-		this.overlay?.setRefreshBusy(true); // spin the 覆盖原文模式 floating button
 		try {
 			// Bypasses the cache; the fresh result overwrites the old entry on write.
 			await this.manager.retranslatePage(page);
@@ -1165,7 +1210,21 @@ export class ReaderSession {
 		}
 		finally {
 			this.pane?.setBusy(false);
-			this.overlay?.setRefreshBusy(false);
+		}
+	}
+
+	/** Capsule 取消: stop the current page's translation and mark it cancelled. */
+	private cancelCurrentTranslation(): void {
+		const page = adapter.getCurrentPageIndex(this.reader);
+		this.manager?.cancelPage(page);
+		this.compressPending.delete(page);
+		if (this.viewMode === 'overlay') {
+			this.overlay?.setProgress({
+				phase: 'cancelled',
+				currentPage: page + 1,
+				totalPages: adapter.getPageCount(this.reader),
+				segTotal: 0, segTranslated: 0, segPlaced: 0, kept: 0
+			});
 		}
 	}
 

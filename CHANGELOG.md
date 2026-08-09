@@ -9,6 +9,27 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.7.8] — 2026-08-09
+
+### Changed
+
+- **覆盖原文模式合并为一个状态胶囊 (one status capsule).** The separate floating
+  refresh button (0.7.6) and the status pill are gone; 覆盖原文 mode now has a
+  single bottom-right capsule (~260px, 16px radius, offset 22px) with a REAL
+  progress ring (no fake infinite spin — the arc reflects an actual fraction),
+  a main line `正在处理 第 3 / 12 页` (current page / total — translation is
+  lazy, so this is position, not a document-wide bar), and a sub line with
+  honest per-page counts `翻译 a/b 段 · 排版 c/b 段` so you can tell "translating
+  slowly" from "translated but layout failed".
+- **Distinct, honest end states.** 翻译中 / 排版中 (ring) → 已完成 (✓, auto-hides
+  after 2s) / 部分保留原文 (!, persists, 查看 opens the pane for per-block detail)
+  / 翻译失败 (!, persists, 重试) / 已停止翻译 (—). "Done" is never shown while
+  segments are still unplaced — a partial page says so with its kept count.
+- **Cancel + collapse.** The right-hand button cancels the current page's
+  translation while it runs; clicking the capsule body collapses it to just the
+  ring (and back). Placement counts come from the strict renderer's real tally
+  (committed paragraphs + translated table cells vs kept-original).
+
 ## [0.7.7] — 2026-08-09
 
 ### Fixed
@@ -1058,7 +1079,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.7...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.8...HEAD
+[0.7.8]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.4...v0.7.5

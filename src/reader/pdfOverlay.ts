@@ -61,8 +61,7 @@ const STYLE_ID = 'pm-overlay-style';
 const LAYER_CLASS = 'pm-overlay-layer';
 const BOX_CLASS = 'pm-overlay-box';
 const MASK_CLASS = 'pm-overlay-mask';
-const STATUS_CLASS = 'pm-overlay-status';
-const REFRESH_CLASS = 'pm-overlay-refresh';
+const CAPSULE_CLASS = 'pm-overlay-capsule';
 
 /** Attribute-selector escaping for block ids (they contain '#'). */
 function CSS_ESCAPE(value: string): string {
@@ -190,83 +189,168 @@ const OVERLAY_CSS = `
 /* Alt held: hide the whole layer so the page can be selected/annotated */
 .${LAYER_CLASS}[data-pm-peek="true"] { opacity: 0; pointer-events: none; }
 
-/* Progress chip. In 覆盖模式 the side pane is hidden, so without this the
-   reader clicks 翻译 and sees an unchanged page for however long the first
-   request takes — indistinguishable from the plugin being broken. */
-.${STATUS_CLASS} {
+/* One consolidated status capsule (bottom-right). 覆盖原文模式 hides the side
+   pane, so this capsule is its only progress/▉ feedback: a real progress ring,
+   overall page position, per-page translate/place counts, and honest end states
+   (done / partial / failed / cancelled). Replaces the old pill + floating
+   refresh button, which were redundant. */
+.${CAPSULE_CLASS} {
 	position: fixed;
-	right: 14px;
-	bottom: 14px;
+	right: 22px;
+	bottom: 22px;
 	z-index: 2147483000;
 	display: flex;
 	align-items: center;
-	gap: 7px;
-	max-width: 320px;
-	padding: 7px 12px;
-	border-radius: 999px;
-	background: rgba(28, 30, 36, .92);
-	color: #f2f4f7;
+	gap: 10px;
+	width: 260px;
+	min-height: 56px;
+	box-sizing: border-box;
+	padding: 10px 12px;
+	border-radius: 16px;
+	background: rgba(24, 26, 31, .9);
+	color: #eef1f5;
 	font: 12px/1.35 -apple-system, "PingFang SC", "Segoe UI", system-ui, sans-serif;
-	box-shadow: 0 4px 18px rgba(0, 0, 0, .3);
-	cursor: default;
-	transition: opacity .18s ease;
+	box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
+	transition: opacity .18s ease, width .18s ease;
+	cursor: pointer;
+	user-select: none;
 }
-.${STATUS_CLASS}[data-pm-hidden="true"] {
-	opacity: 0;
-	pointer-events: none;
-}
-.${STATUS_CLASS} i {
-	width: 9px;
-	height: 9px;
-	border-radius: 50%;
-	background: #37c871;
+.${CAPSULE_CLASS}[data-pm-hidden="true"] { opacity: 0; pointer-events: none; }
+.${CAPSULE_CLASS} .pm-ring { position: relative; flex: 0 0 auto; width: 34px; height: 34px; }
+.${CAPSULE_CLASS} .pm-ring svg { width: 34px; height: 34px; display: block; transform: rotate(-90deg); }
+.${CAPSULE_CLASS} .pm-ring circle { fill: none; stroke-width: 3.5; }
+.${CAPSULE_CLASS} .pm-ring .pm-track { stroke: rgba(255, 255, 255, .16); }
+.${CAPSULE_CLASS} .pm-ring .pm-arc { stroke: #6c9bff; stroke-linecap: round; transition: stroke-dashoffset .3s ease, stroke .2s ease; }
+.${CAPSULE_CLASS} .pm-glyph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+.${CAPSULE_CLASS} .pm-body { flex: 1 1 auto; min-width: 0; }
+.${CAPSULE_CLASS} .pm-main { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.${CAPSULE_CLASS} .pm-sub { margin-top: 2px; opacity: .72; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.${CAPSULE_CLASS} .pm-action {
 	flex: 0 0 auto;
-}
-.${STATUS_CLASS}[data-pm-busy="true"] i {
-	background: transparent;
-	border: 2px solid rgba(255, 255, 255, .3);
-	border-top-color: #96abf1;
-	animation: pm-status-spin .8s linear infinite;
-}
-.${STATUS_CLASS}[data-pm-error="true"] i { background: #ff6b6b; }
-@keyframes pm-status-spin { to { transform: rotate(360deg); } }
-
-/* 覆盖原文模式 has no pane, so its 刷新 lives here as a floating button in the
-   bottom-right corner — sitting just above where the status pill appears so the
-   two never overlap. */
-.${REFRESH_CLASS} {
-	position: fixed;
-	right: 14px;
-	bottom: 52px;
-	z-index: 2147483000;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 38px;
-	height: 38px;
-	padding: 0;
+	min-width: 26px;
+	height: 26px;
+	padding: 0 8px;
 	border: none;
-	border-radius: 50%;
-	background: rgba(28, 30, 36, .92);
-	color: #f2f4f7;
-	box-shadow: 0 4px 18px rgba(0, 0, 0, .3);
+	border-radius: 8px;
+	background: rgba(255, 255, 255, .08);
+	color: inherit;
+	font: inherit;
 	cursor: pointer;
-	pointer-events: auto;
-	transition: opacity .18s ease, transform .12s ease, background .12s ease;
 }
-.${REFRESH_CLASS}:hover { background: rgba(48, 52, 60, .96); }
-.${REFRESH_CLASS}:active { transform: scale(.92); }
-.${REFRESH_CLASS} svg { width: 18px; height: 18px; display: block; }
-.${REFRESH_CLASS}[data-pm-busy="true"] {
-	pointer-events: none;
-	opacity: .7;
-}
-.${REFRESH_CLASS}[data-pm-busy="true"] svg { animation: pm-status-spin .8s linear infinite; }
+.${CAPSULE_CLASS} .pm-action:hover { background: rgba(255, 255, 255, .18); }
+.${CAPSULE_CLASS} .pm-action svg { width: 15px; height: 15px; display: block; }
+.${CAPSULE_CLASS}[data-pm-collapsed="true"] { width: auto; }
+.${CAPSULE_CLASS}[data-pm-collapsed="true"] .pm-body,
+.${CAPSULE_CLASS}[data-pm-collapsed="true"] .pm-action { display: none; }
+.${CAPSULE_CLASS}[data-pm-phase="done"] .pm-arc { stroke: #37c871; }
+.${CAPSULE_CLASS}[data-pm-phase="partial"] .pm-arc { stroke: #f5a623; }
+.${CAPSULE_CLASS}[data-pm-phase="failed"] .pm-arc { stroke: #ff6b6b; }
+.${CAPSULE_CLASS}[data-pm-phase="cancelled"] .pm-arc { stroke: rgba(255, 255, 255, .4); }
+.${CAPSULE_CLASS}[data-pm-indeterminate="true"] .pm-ring svg { animation: pm-status-spin 1s linear infinite; }
+@keyframes pm-status-spin { to { transform: rotate(360deg); } }
 `;
 
 export interface OverlayPageData {
 	blocks: SourceBlock[];
 	translations: Map<string, string>;
+}
+
+/** Overall/current-page progress the reader session feeds the status capsule. */
+export type OverlayPhase = 'translating' | 'laying-out' | 'done' | 'partial' | 'failed' | 'cancelled';
+export interface OverlayProgress {
+	phase: OverlayPhase;
+	/** 1-based current page and document page count (position, not a doc-wide bar). */
+	currentPage: number;
+	totalPages: number;
+	/** Per-CURRENT-page segment counts. */
+	segTotal: number;
+	segTranslated: number;
+	segPlaced: number;
+	/** Segments that should have translated but were kept original (unfit / no response). */
+	kept: number;
+	/** For the failed phase. */
+	message?: string;
+}
+
+interface CapsuleAction {
+	kind: 'cancel' | 'retry' | 'view' | 'close';
+	label: string;
+	title?: string;
+}
+
+/** Normalized capsule render state — both setProgress and setStatus produce one. */
+interface CapsuleState {
+	phase: OverlayPhase;
+	glyph: 'ring' | 'check' | 'warn' | 'error' | 'dot' | 'stop';
+	indeterminate?: boolean;
+	fraction: number | null;
+	main: string;
+	sub?: string;
+	action?: CapsuleAction;
+	autoHideMs?: number;
+}
+
+/** Map a progress model to the capsule's normalized state and final 文案. */
+export function capsuleStateFor(m: OverlayProgress): CapsuleState {
+	const pagePos = `第 ${m.currentPage} / ${m.totalPages} 页`;
+	const counts = `翻译 ${m.segTranslated}/${m.segTotal} 段 · 排版 ${m.segPlaced}/${m.segTotal} 段`;
+	switch (m.phase) {
+		case 'translating':
+			return {
+				phase: m.phase,
+				glyph: 'ring',
+				indeterminate: m.segTotal <= 0,
+				fraction: m.segTotal > 0 ? m.segTranslated / m.segTotal : null,
+				main: `正在处理 ${pagePos}`,
+				sub: m.segTotal > 0 ? counts : '正在识别段落',
+				action: { kind: 'cancel', label: '×', title: '取消翻译' }
+			};
+		case 'laying-out':
+			return {
+				phase: m.phase,
+				glyph: 'ring',
+				fraction: m.segTotal > 0 ? m.segPlaced / m.segTotal : null,
+				main: `正在适配 ${pagePos} 排版`,
+				sub: counts,
+				action: { kind: 'cancel', label: '×', title: '取消' }
+			};
+		case 'done':
+			return {
+				phase: m.phase,
+				glyph: 'check',
+				fraction: 1,
+				main: `已完成 第 ${m.currentPage} 页`,
+				autoHideMs: 2000
+			};
+		case 'partial':
+			return {
+				phase: m.phase,
+				glyph: 'warn',
+				fraction: m.segTotal > 0 ? m.segPlaced / m.segTotal : null,
+				main: `第 ${m.currentPage} 页 · ${m.kept} 段保留原文`,
+				sub: counts,
+				action: { kind: 'view', label: '查看', title: '查看保留原文的段落' }
+			};
+		case 'failed':
+			return {
+				phase: m.phase,
+				glyph: 'error',
+				fraction: null,
+				main: m.message ?? '翻译失败',
+				action: { kind: 'retry', label: '重试', title: '重试翻译' }
+			};
+		case 'cancelled':
+			return {
+				phase: m.phase,
+				glyph: 'stop',
+				fraction: null,
+				main: '已停止翻译',
+				autoHideMs: 2600
+			};
+	}
 }
 
 interface PendingBox {
@@ -304,13 +388,21 @@ export class PdfOverlay {
 	/** 悬停看原文: hovering a paragraph reveals the source underneath it. */
 	private peekOnHover = true;
 
-	/** 覆盖原文模式's floating 刷新 handler (re-translate the current page). */
-	private onRefresh: (() => void) | null = null;
-	private refreshBusy = false;
+	/** Actions the consolidated status capsule can invoke. */
+	private capsule: {
+		onCancel?: () => void;
+		onRetry?: () => void;
+		onViewPartial?: () => void;
+	} = {};
+	/** Last rendered capsule state, so a redraw can re-assert it. */
+	private capsuleState: CapsuleState | null = null;
+	private collapsed = false;
+	private capsuleAutoHide: ReturnType<typeof setTimeout> | null = null;
+	private capsuleCollapseTimer: ReturnType<typeof setTimeout> | null = null;
 
-	constructor(reader: ReaderLike, options: { onRefresh?: () => void } = {}) {
+	constructor(reader: ReaderLike, options: { onCancel?: () => void; onRetry?: () => void; onViewPartial?: () => void } = {}) {
 		this.reader = reader;
-		this.onRefresh = options.onRefresh ?? null;
+		this.capsule = options;
 	}
 
 	isEnabled(): boolean {
@@ -331,7 +423,6 @@ export class PdfOverlay {
 			this.paperColour.clear();
 			adapter.injectPdfStyle(this.reader, STYLE_ID, OVERLAY_CSS);
 			this.subscribe();
-			this.ensureRefreshButton();
 			this.scheduleRedraw();
 		}
 		else {
@@ -343,127 +434,202 @@ export class PdfOverlay {
 	 * Progress chip inside the PDF view — the only feedback 覆盖模式 has while
 	 * the pane is hidden. `null` hides it.
 	 */
-	setStatus(text: string | null, options: { busy?: boolean; error?: boolean } = {}): void {
+	/**
+	 * Legacy generic-message API (open failures, PDF export progress). Rendered
+	 * as a message in the SAME capsule so there is only ever one element.
+	 */
+	setStatus(text: string | null, options: { busy?: boolean; error?: boolean; check?: boolean } = {}): void {
 		if (this.destroyed) {
 			return;
 		}
-		try {
-			const doc = adapter.getPageView(this.reader, adapter.getCurrentPageIndex(this.reader))?.doc
-				?? adapter.getPageView(this.reader, 0)?.doc;
-			const body = doc?.body;
-			if (!body) {
-				return;
-			}
-			adapter.injectPdfStyle(this.reader, STYLE_ID, OVERLAY_CSS);
-			let chip = doc!.querySelector(`.${STATUS_CLASS}`) as HTMLElement | null;
-			if (!text) {
-				chip?.setAttribute('data-pm-hidden', 'true');
-				return;
-			}
-			if (!chip) {
-				chip = doc!.createElement('div');
-				chip.className = STATUS_CLASS;
-				chip.appendChild(doc!.createElement('i'));
-				chip.appendChild(doc!.createElement('span'));
-				body.appendChild(chip);
-			}
-			chip.removeAttribute('data-pm-hidden');
-			chip.setAttribute('data-pm-busy', String(!!options.busy));
-			chip.setAttribute('data-pm-error', String(!!options.error));
-			const label = chip.querySelector('span');
-			if (label) {
-				label.textContent = text; // SAFE: text node only
-			}
+		if (!text) {
+			this.setProgress(null);
+			return;
 		}
-		catch (e) {
-			logger.debug(MODULE, 'status chip failed', e);
-		}
-	}
-
-	private removeStatus(): void {
-		try {
-			const doc = adapter.getPageView(this.reader, 0)?.doc;
-			doc?.querySelectorAll(`.${STATUS_CLASS}`).forEach(node => node.remove());
-		}
-		catch {
-			// reader may be gone
-		}
+		this.renderCapsule({
+			phase: options.error ? 'failed' : options.check ? 'done' : 'translating',
+			glyph: options.error ? 'error' : options.check ? 'check' : 'dot',
+			indeterminate: !!options.busy,
+			fraction: null,
+			main: text,
+			autoHideMs: options.check ? 2000 : undefined
+		});
 	}
 
 	/**
-	 * The floating 刷新 button for 覆盖原文模式 — created while the overlay is on,
-	 * idempotent (re-run on every redraw so it survives a page-view swap). Does
-	 * nothing when no onRefresh handler was supplied.
+	 * The rich per-page progress model → the capsule. `null` dismisses it.
+	 * Translation is lazy (current page + a couple prefetched), so there is no
+	 * meaningful document-wide "N of M pages translated" bar — the honest signal
+	 * is the current page's position plus its own translate/place counts.
 	 */
-	private ensureRefreshButton(): void {
-		if (this.destroyed || !this.onRefresh) {
+	setProgress(model: OverlayProgress | null): void {
+		if (this.destroyed) {
 			return;
 		}
+		if (!model) {
+			this.setProgress0();
+			return;
+		}
+		this.renderCapsule(capsuleStateFor(model));
+	}
+
+	private setProgress0(): void {
+		this.capsuleState = null;
+		const doc = this.capsuleDoc();
+		doc?.querySelector(`.${CAPSULE_CLASS}`)?.setAttribute('data-pm-hidden', 'true');
+	}
+
+	/** 覆盖原文模式 kept `setRefreshBusy` as a thin no-op for callers; progress now
+	 * flows through setProgress instead. */
+	setRefreshBusy(_busy: boolean): void {
+		/* superseded by setProgress */
+	}
+
+	private capsuleDoc(): Document | null {
 		try {
-			const doc = adapter.getPageView(this.reader, adapter.getCurrentPageIndex(this.reader))?.doc
-				?? adapter.getPageView(this.reader, 0)?.doc;
+			return adapter.getPageView(this.reader, adapter.getCurrentPageIndex(this.reader))?.doc
+				?? adapter.getPageView(this.reader, 0)?.doc
+				?? null;
+		}
+		catch {
+			return null;
+		}
+	}
+
+	/** Build (once) and paint the single status capsule for a normalized state. */
+	private renderCapsule(state: CapsuleState): void {
+		this.capsuleState = state;
+		if (this.capsuleAutoHide) {
+			clearTimeout(this.capsuleAutoHide);
+			this.capsuleAutoHide = null;
+		}
+		try {
+			const doc = this.capsuleDoc();
 			const body = doc?.body;
-			if (!body) {
+			if (!doc || !body) {
 				return;
 			}
 			adapter.injectPdfStyle(this.reader, STYLE_ID, OVERLAY_CSS);
-			if (doc!.querySelector(`.${REFRESH_CLASS}`)) {
-				return; // already present in this document
-			}
-			const btn = doc!.createElement('button');
-			btn.className = REFRESH_CLASS;
-			btn.type = 'button';
-			btn.title = '刷新本页翻译';
-			btn.setAttribute('aria-label', '刷新本页翻译');
-			btn.setAttribute('data-pm-busy', String(this.refreshBusy));
-			// A refresh glyph, built as SVG nodes (no innerHTML for safety).
 			const SVG_NS = 'http://www.w3.org/2000/svg';
-			const svg = doc!.createElementNS(SVG_NS, 'svg');
-			svg.setAttribute('viewBox', '0 0 24 24');
-			svg.setAttribute('fill', 'none');
-			svg.setAttribute('stroke', 'currentColor');
-			svg.setAttribute('stroke-width', '2');
-			svg.setAttribute('stroke-linecap', 'round');
-			svg.setAttribute('stroke-linejoin', 'round');
-			const p1 = doc!.createElementNS(SVG_NS, 'path');
-			p1.setAttribute('d', 'M21 12a9 9 0 1 1-2.64-6.36');
-			const p2 = doc!.createElementNS(SVG_NS, 'polyline');
-			p2.setAttribute('points', '21 3 21 9 15 9');
-			svg.appendChild(p1);
-			svg.appendChild(p2);
-			btn.appendChild(svg);
-			btn.addEventListener('click', (e) => {
-				e.preventDefault();
-				e.stopPropagation();
-				if (!this.refreshBusy) {
-					this.onRefresh?.();
+			let el = doc.querySelector(`.${CAPSULE_CLASS}`) as HTMLElement | null;
+			if (!el) {
+				el = doc.createElement('div');
+				el.className = CAPSULE_CLASS;
+				const ring = doc.createElement('div');
+				ring.className = 'pm-ring';
+				const svg = doc.createElementNS(SVG_NS, 'svg');
+				svg.setAttribute('viewBox', '0 0 34 34');
+				const track = doc.createElementNS(SVG_NS, 'circle');
+				track.setAttribute('class', 'pm-track');
+				track.setAttribute('cx', '17'); track.setAttribute('cy', '17'); track.setAttribute('r', '15');
+				const arc = doc.createElementNS(SVG_NS, 'circle');
+				arc.setAttribute('class', 'pm-arc');
+				arc.setAttribute('cx', '17'); arc.setAttribute('cy', '17'); arc.setAttribute('r', '15');
+				svg.appendChild(track); svg.appendChild(arc);
+				const glyph = doc.createElement('span');
+				glyph.className = 'pm-glyph';
+				ring.appendChild(svg); ring.appendChild(glyph);
+				const bodyDiv = doc.createElement('div');
+				bodyDiv.className = 'pm-body';
+				const main = doc.createElement('div'); main.className = 'pm-main';
+				const sub = doc.createElement('div'); sub.className = 'pm-sub';
+				bodyDiv.appendChild(main); bodyDiv.appendChild(sub);
+				const action = doc.createElement('button');
+				action.className = 'pm-action'; action.type = 'button';
+				el.appendChild(ring); el.appendChild(bodyDiv); el.appendChild(action);
+				// Click the body toggles collapsed; the action button is separate.
+				el.addEventListener('click', (e) => {
+					if ((e.target as HTMLElement)?.closest('.pm-action')) {
+						return;
+					}
+					this.collapsed = !this.collapsed;
+					el!.setAttribute('data-pm-collapsed', String(this.collapsed));
+				});
+				body.appendChild(el);
+			}
+			el.removeAttribute('data-pm-hidden');
+			el.setAttribute('data-pm-phase', state.phase);
+			el.setAttribute('data-pm-collapsed', String(this.collapsed));
+			el.setAttribute('data-pm-indeterminate', String(!!state.indeterminate));
+
+			const C = 2 * Math.PI * 15;
+			const arc = el.querySelector('.pm-arc') as SVGElement | null;
+			if (arc) {
+				arc.setAttribute('stroke-dasharray', String(C));
+				const frac = state.indeterminate || state.fraction == null
+					? 0.25
+					: Math.max(0, Math.min(1, state.fraction));
+				arc.setAttribute('stroke-dashoffset', String(C * (1 - frac)));
+			}
+			const glyph = el.querySelector('.pm-glyph');
+			if (glyph) {
+				glyph.textContent = state.glyph === 'check' ? '✓'
+					: state.glyph === 'warn' || state.glyph === 'error' ? '!'
+						: state.glyph === 'stop' ? '—'
+							: (!state.indeterminate && state.fraction != null && state.phase !== 'done')
+								? `${Math.round(Math.max(0, Math.min(1, state.fraction)) * 100)}%`
+								: '';
+			}
+			const main = el.querySelector('.pm-main');
+			if (main) { main.textContent = state.main; }
+			const sub = el.querySelector('.pm-sub') as HTMLElement | null;
+			if (sub) {
+				sub.textContent = state.sub ?? '';
+				sub.style.display = state.sub ? '' : 'none';
+			}
+			const action = el.querySelector('.pm-action') as HTMLButtonElement | null;
+			if (action) {
+				if (state.action) {
+					action.style.display = '';
+					action.textContent = state.action.label;
+					action.title = state.action.title ?? state.action.label;
+					action.onclick = (e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						this.runCapsuleAction(state.action!.kind);
+					};
 				}
-			});
-			body.appendChild(btn);
+				else {
+					action.style.display = 'none';
+					action.onclick = null;
+				}
+			}
+			if (state.autoHideMs) {
+				this.capsuleAutoHide = setTimeout(() => {
+					this.capsuleAutoHide = null;
+					this.setProgress0();
+				}, state.autoHideMs);
+			}
 		}
 		catch (e) {
-			logger.debug(MODULE, 'refresh button failed', e);
+			logger.debug(MODULE, 'status capsule failed', e);
 		}
 	}
 
-	/** Spin + disable the floating 刷新 while a re-translation is in flight. */
-	setRefreshBusy(busy: boolean): void {
-		this.refreshBusy = busy;
-		try {
-			const doc = adapter.getPageView(this.reader, adapter.getCurrentPageIndex(this.reader))?.doc
-				?? adapter.getPageView(this.reader, 0)?.doc;
-			doc?.querySelectorAll(`.${REFRESH_CLASS}`).forEach(node =>
-				node.setAttribute('data-pm-busy', String(busy)));
+	private runCapsuleAction(kind: CapsuleAction['kind']): void {
+		if (kind === 'cancel') {
+			this.capsule.onCancel?.();
 		}
-		catch {
-			// reader may be gone
+		else if (kind === 'retry') {
+			this.capsule.onRetry?.();
+		}
+		else if (kind === 'view') {
+			this.capsule.onViewPartial?.();
+		}
+		else {
+			this.setProgress0();
 		}
 	}
 
-	private removeRefreshButton(): void {
+	private removeCapsule(): void {
+		if (this.capsuleAutoHide) {
+			clearTimeout(this.capsuleAutoHide);
+			this.capsuleAutoHide = null;
+		}
+		this.capsuleState = null;
 		try {
 			const doc = adapter.getPageView(this.reader, 0)?.doc;
-			doc?.querySelectorAll(`.${REFRESH_CLASS}`).forEach(node => node.remove());
+			doc?.querySelectorAll(`.${CAPSULE_CLASS}`).forEach(node => node.remove());
 		}
 		catch {
 			// reader may be gone
@@ -604,9 +770,11 @@ export class PdfOverlay {
 					logger.debug(MODULE, `drawPage(${p}) failed`, e);
 				}
 			}
-			// Re-assert the floating 刷新 after a redraw — a page-view swap can
-			// replace the document body the button lived in.
-			this.ensureRefreshButton();
+			// Re-assert the capsule after a redraw — a page-view swap can replace
+			// the document body the capsule lived in.
+			if (this.capsuleState) {
+				this.renderCapsule(this.capsuleState);
+			}
 		}, 80);
 	}
 
@@ -936,8 +1104,7 @@ export class PdfOverlay {
 			this.removeLayer(pageIndex);
 		}
 		this.drawnSignature.clear();
-		this.removeStatus();
-		this.removeRefreshButton();
+		this.removeCapsule();
 		adapter.removePdfStyle(this.reader, STYLE_ID);
 	}
 
