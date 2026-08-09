@@ -59,6 +59,28 @@ const STRICT_LADDER: { lineHeight: number; letterSpacingEm: number }[] = [
 	{ lineHeight: 1.14, letterSpacingEm: -0.02 }
 ];
 
+/** Never tighten a line below the source's own leading, nor below this floor. */
+const LINE_HEIGHT_FLOOR = 1.0;
+
+/**
+ * The fit ladder for ONE block: the shared ladder, but never looser at the
+ * bottom than the block's OWN original line spacing. A one-line heading whose
+ * source rectangle is barely taller than its glyphs has a natural leading near
+ * 1.0, so it gets a 1.0 step it can actually pass; a body paragraph set at 1.3
+ * never has its lines crushed below 1.3. This is "match the original leading",
+ * not "force everything to a fixed 1.14".
+ */
+export function ladderFor(minLineHeight: number): { lineHeight: number; letterSpacingEm: number }[] {
+	const floor = Math.max(LINE_HEIGHT_FLOOR, Math.min(1.42, minLineHeight));
+	const steps = STRICT_LADDER
+		.map(s => ({ lineHeight: Math.max(floor, s.lineHeight), letterSpacingEm: s.letterSpacingEm }))
+		.filter((s, i, a) => i === 0 || s.lineHeight !== a[i - 1]!.lineHeight);
+	if (steps[steps.length - 1]!.lineHeight > floor) {
+		steps.push({ lineHeight: floor, letterSpacingEm: -0.02 });
+	}
+	return steps;
+}
+
 /**
  * LAST-RESORT font shrink, tried only after the compress-and-retry rounds are
  * exhausted (or unavailable — the free engines ignore character budgets).
@@ -84,9 +106,30 @@ export interface UnfitBlock {
 	maxChars: number;
 }
 
+/** Honest placement accounting for one strict page (#6). */
+export interface StrictPageStats {
+	/** Blocks eligible for in-place replacement (had a translation + geometry). */
+	replaceable: number;
+	/** Revealed translated so far. */
+	committed: number;
+	/** Given up on — original kept because no fit was possible. */
+	abandoned: number;
+	/** Still being resolved (measuring / compress in flight). */
+	pending: number;
+	/** Kept original because inside a protected table region. */
+	tableExcluded: number;
+	/** Kept original because the box overlapped a real image. */
+	imageExcluded: number;
+	/** The service returned no translation for these blocks. */
+	untranslated: number;
+	/** Below the min-size gate (tiny fragments). */
+	tooSmall: number;
+}
+
 export interface StrictPageResult {
 	element: HTMLElement;
 	blocksPlaced: number;
+	stats: StrictPageStats;
 }
 
 /**
@@ -173,23 +216,37 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	);
 
 	const replaceable: SourceBlock[] = [];
+	// Placement accounting (#6): every translatable block is classified so the
+	// page can be honest about what was NOT shown translated — never a silent
+	// English block.
+	let tableExcluded = 0;
+	let imageExcluded = 0;
+	let untranslated = 0;
+	let tooSmall = 0;
 	for (const block of translatable) {
 		const text = input.translations.get(block.id);
-		if (text === undefined || !text.trim() || isMetadataBlock(block.sourceText)) {
+		if (isMetadataBlock(block.sourceText)) {
+			continue; // running heads/DOIs — deliberately not translated
+		}
+		if (text === undefined || !text.trim()) {
+			untranslated++; // service never returned this block
 			continue;
 		}
 		if (guard.excluded.has(block.id)) {
+			tableExcluded++;
 			continue; // protected table content
 		}
 		const box = pixelBox(block, render, 1);
 		const minWidth = block.type === 'caption' ? 28 : 50;
 		if (box.width < minWidth || box.height < 9 || block.sourceText.trim().length < 6) {
+			tooSmall++;
 			continue;
 		}
 		// A body box overlapping a real image is an extraction error — the
 		// "paragraph" is figure innards. Never mask, never replace.
 		const area = box.width * box.height;
 		if (area > 0 && imageBoxes.some(img => intersectArea(box, img) > area * 0.15)) {
+			imageExcluded++;
 			continue;
 		}
 		replaceable.push(block);
@@ -276,6 +333,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		node: HTMLElement;
 		box: PixelBox;
 		fontPx: number;
+		/** The block's own original line spacing, as a line-height ratio. */
+		minLineHeight: number;
 		/** Shown (mask painted + node visible) after passing measurement. */
 		committed: boolean;
 		/** Gave up — stays original, never to be shown translated. */
@@ -314,14 +373,30 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		node.textContent = input.translations.get(block.id)!; // SAFE: text node
 		node.title = block.sourceText;
 		textLayer.appendChild(node);
-		const item: StrictItem = { id: block.id, node, box, fontPx, committed: false, abandoned: false };
+		// The block's own original leading: the median gap between successive
+		// source line tops, relative to the font. One-line blocks (headings)
+		// fall back to how tall their rectangle is — so a tight heading gets a
+		// tight, achievable line-height instead of the body default.
+		const tops = ((block.lineRectsPdf ?? []) as Rect[])
+			.map(r => rectToPixels(r, render, 1).top).sort((a, b) => a - b);
+		let naturalRatio = box.height / fontPx;
+		if (tops.length >= 2) {
+			const gaps: number[] = [];
+			for (let k = 1; k < tops.length; k++) {
+				gaps.push(tops[k]! - tops[k - 1]!);
+			}
+			gaps.sort((a, b) => a - b);
+			naturalRatio = gaps[Math.floor(gaps.length / 2)]! / fontPx;
+		}
+		const minLineHeight = Math.max(LINE_HEIGHT_FLOOR, Math.min(1.42, naturalRatio || 1.2));
+		const item: StrictItem = { id: block.id, node, box, fontPx, minLineHeight, committed: false, abandoned: false };
 		items.push(item);
 		byId.set(block.id, item);
 	}
 
 	/** Ladder-fit a hidden node; true when it fits its fixed rectangle. */
 	const ladderFits = (item: StrictItem): boolean => {
-		for (const step of STRICT_LADDER) {
+		for (const step of ladderFor(item.minLineHeight)) {
 			item.node.style.lineHeight = String(step.lineHeight);
 			item.node.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
 			if (item.node.scrollHeight <= item.box.height + 1.5
@@ -444,8 +519,45 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		}
 	};
 
+	// ---- live placement stats (#6): never a silent English block -----------
+	(page as HTMLElement & { pmStats?: () => StrictPageStats }).pmStats = (): StrictPageStats => {
+		let committed = 0;
+		let abandoned = 0;
+		let pending = 0;
+		for (const item of items) {
+			if (item.committed) {
+				committed++;
+			}
+			else if (item.abandoned) {
+				abandoned++;
+			}
+			else {
+				pending++;
+			}
+		}
+		return {
+			replaceable: items.length,
+			committed, abandoned, pending,
+			tableExcluded, imageExcluded, untranslated, tooSmall
+		};
+	};
+
 	logger.debug(MODULE, `page ${input.pageIndex + 1}: ${items.length} strict block(s), ${guard.regions.length} protected table(s)`);
-	return { element: page, blocksPlaced: items.length };
+	return {
+		element: page,
+		blocksPlaced: items.length,
+		stats: {
+			replaceable: items.length,
+			committed: 0, abandoned: 0, pending: items.length,
+			tableExcluded, imageExcluded, untranslated, tooSmall
+		}
+	};
+}
+
+/** Read a strict page's live placement stats, or null if not a strict page. */
+export function strictPageStats(element: HTMLElement): StrictPageStats | null {
+	const fn = (element as HTMLElement & { pmStats?: () => StrictPageStats }).pmStats;
+	return fn ? fn() : null;
 }
 
 /**

@@ -144,3 +144,18 @@ test('supportsCharBudget is explicit per provider, not tied to explain', () => {
 	assert.equal(supportsCharBudget(getProvider('google-free')), false);
 	assert.equal(supportsCharBudget(getProvider('deepl')), false);
 });
+
+test('ladderFor never crushes lines below the source leading', async () => {
+	const { ladderFor } = await import('../../src/ui/strictPageReplacement');
+	// A body paragraph set at 1.3 leading: no ladder step tightens below 1.3.
+	const body = ladderFor(1.3);
+	assert.ok(body.every(s => s.lineHeight >= 1.3), 'body lines never below source leading');
+	assert.ok(body[0]!.lineHeight >= body[body.length - 1]!.lineHeight, 'loose → tight order');
+	// A tight one-line heading (natural ~1.0) gets a 1.0 step it can pass —
+	// the fixed 1.14 floor used to make short headings fail outright.
+	const heading = ladderFor(1.0);
+	assert.ok(heading.some(s => Math.abs(s.lineHeight - 1.0) < 1e-9), 'heading gets a 1.0 step');
+	// Absurd inputs are clamped into [1.0, 1.42].
+	assert.ok(ladderFor(5).every(s => s.lineHeight <= 1.42));
+	assert.ok(ladderFor(0).every(s => s.lineHeight >= 1.0));
+});

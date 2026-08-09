@@ -23,7 +23,7 @@ import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationRes
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
-import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, type UnfitBlock } from '../ui/strictPageReplacement';
+import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, type UnfitBlock } from '../ui/strictPageReplacement';
 import { translateFullPdf, bytesToBase64, type TranslateSubmission } from '../translation/pdfService';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
@@ -691,7 +691,11 @@ export class ReaderSession {
 				// FINAL (fonts-settled) pass; unfit blocks stay showing the
 				// original and are resolved without ever being shown-then-hidden.
 				settleStrictPage(element, (unfit: UnfitBlock[], final: boolean) => {
-					if (!current() || !final || !unfit.length) {
+					if (!current() || !final) {
+						return;
+					}
+					if (!unfit.length) {
+						this.reportPlacement(pageIndex, element);
 						return;
 					}
 					this.resolveStrictUnfit(pageIndex, element, unfit, token);
@@ -783,8 +787,48 @@ export class ReaderSession {
 				if (next.length) {
 					this.resolveStrictUnfit(pageIndex, element, next, token);
 				}
+				else {
+					this.reportPlacement(pageIndex, element);
+				}
 			})
 			.catch(() => this.compressPending.delete(pageIndex));
+	}
+
+	/**
+	 * Honest placement accounting (#6): after a page settles, log the full
+	 * tally and — if any block could NOT be shown translated — surface a
+	 * non-blocking note rather than silently leaving English on the page.
+	 * "Translation complete" and "every block placed" are now distinct: the
+	 * text was translated; some rectangles are mathematically too small for it.
+	 */
+	private reportPlacement(pageIndex: number, element: HTMLElement): void {
+		const s = strictPageStats(element);
+		if (!s) {
+			return;
+		}
+		const keptOriginal = s.abandoned + s.untranslated + s.imageExcluded;
+		logger.info(
+			MODULE,
+			`page ${pageIndex + 1} placement: ${s.committed}/${s.replaceable} shown, `
+			+ `${s.abandoned} won't fit, ${s.untranslated} untranslated, `
+			+ `${s.tableExcluded} in tables, ${s.imageExcluded} on images, ${s.tooSmall} too small`
+		);
+		if (this.destroyed || pageIndex !== adapter.getCurrentPageIndex(this.reader)) {
+			return; // only annotate the page the reader is actually on
+		}
+		if (keptOriginal > 0) {
+			const bits: string[] = [];
+			if (s.abandoned) {
+				bits.push(`${s.abandoned} 段过长`);
+			}
+			if (s.untranslated) {
+				bits.push(`${s.untranslated} 段未翻译`);
+			}
+			if (s.imageExcluded) {
+				bits.push(`${s.imageExcluded} 段在图内`);
+			}
+			this.pane?.setStatus('部分内容保留原文', { sub: `本页 ${bits.join('、')}，已保留英文` });
+		}
 	}
 
 	/**

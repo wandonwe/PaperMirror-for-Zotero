@@ -68,6 +68,31 @@ one architecture: strict in-place replacement.
   a newer one.
 - Scrolling no longer cancels the in-flight compress task of a page still near
   the viewport — the scheduler keeps `page-N-compress` alive for wanted pages.
+- **Fit to the block's own leading, not a fixed floor (完整率).** The fit ladder
+  now bottoms out at each block's ORIGINAL line spacing (median gap between its
+  source line tops), never a blanket 1.14. A one-line heading whose rectangle
+  is barely taller than its glyphs gets a ~1.0 step it can actually pass —
+  short titles no longer fail placement outright — while a body paragraph is
+  never crushed below its own leading. This markedly raises how many blocks fit
+  in place instead of keeping English.
+- **Every missing block is salvaged, not just the first eight.** The one-by-one
+  salvage pass (single-block requests that can't suffer id drift) now covers
+  ALL ids a provider dropped from a batch, with a log warning when an engine is
+  systematically dropping many. Leaving a block untranslated to save a request
+  was exactly the mixed-language page this was meant to prevent.
+- **Honest placement accounting.** A strict page now reports a full tally —
+  shown, won't-fit, untranslated, in-table, on-image, too-small — logged every
+  render, and when any block is kept in English a non-blocking pane note says
+  so ("本页 N 段过长，已保留英文"). "Translation complete" and "every block
+  placed" are surfaced as distinct states: with rectangle-fixed, no-shrink-past-
+  floor, no-continuation constraints, an arbitrarily long translation cannot be
+  guaranteed to fit, so the rare true failure is now stated rather than left
+  silently English.
+
+Still ahead (acknowledged, not yet done): a real table Row/Cell model with
+per-cell replacement (today whole detected tables stay original), and
+paragraph-granular placement so one overflowing line can't hold back a long
+paragraph.
 
 ### Changed (architecture)
 

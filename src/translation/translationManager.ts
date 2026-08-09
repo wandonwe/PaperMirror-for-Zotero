@@ -27,12 +27,14 @@ import { chunkBlocks, trailingContext } from './segmenter';
 const MODULE = 'translationManager';
 
 /**
- * After the batch retry, at most this many blocks are salvaged one by one.
- * A single-block request cannot suffer id drift, so it converts almost every
- * survivor; the cap only bounds the cost when a provider is systematically
- * dropping ids (which the error path below then reports).
+ * After the batch retry, EVERY still-missing block is salvaged one by one — a
+ * single-block request cannot suffer id drift, so it converts almost every
+ * survivor. There is no cap: leaving a block untranslated to save a request is
+ * exactly the mixed-language page we are trying to eliminate. This soft ceiling
+ * only switches on a warning when a provider is systematically dropping ids, so
+ * the run is visible in the log rather than silently enormous.
  */
-const MAX_SALVAGE_BLOCKS = 8;
+const SALVAGE_WARN_THRESHOLD = 24;
 
 /**
  * Absolute ceiling for one page end to end (extraction + all chunks). Long
@@ -410,7 +412,10 @@ export class TranslationManager {
 			const stillMissing = chunk.filter(b => !received.has(b.id));
 			if (stillMissing.length) {
 				logger.warn(MODULE, `Salvaging ${stillMissing.length} block(s) one by one on page ${pageIndex}`);
-				for (const block of stillMissing.slice(0, MAX_SALVAGE_BLOCKS)) {
+				if (stillMissing.length > SALVAGE_WARN_THRESHOLD) {
+					logger.warn(MODULE, `Page ${pageIndex + 1}: provider dropped ${stillMissing.length} ids — salvaging all, but this engine is misbehaving`);
+				}
+				for (const block of stillMissing) {
 					if (signal.aborted) {
 						throw new PaperMirrorError('CANCELLED', 'cancelled');
 					}
