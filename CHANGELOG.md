@@ -9,6 +9,30 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.8.10] — 2026-08-09
+
+### Fixed
+
+- **缩放时译文闪现后消失 (zoom no longer drops overlay translations).** The
+  on-page overlay's redraw lifecycle is fixed — the translations were never
+  lost (they stayed in memory); only the DOM layer vanished. Four root causes:
+  - **重绘请求累积 (redraw requests accumulate).** `scheduleRedraw()` kept only
+    the LAST event's page (it reset the timer and captured one index), so during
+    a zoom storm every page but the last was dropped and never repainted. It now
+    merges a dirty-page set (and a redraw-all flag for scalechanging /
+    rotationchanging) into one pass.
+  - **原子替换 (atomic layer swap).** The new layer is now built in full and only
+    swapped in once it has real content — the old layer stays visible right up to
+    that frame. Previously the old layer was removed up front, so any mid-zoom
+    early-return left the page showing only the original.
+  - **签名只在挂载成功后保存 (signature saved after mount).** The geometry
+    signature that suppresses redundant redraws is now recorded ONLY after a real
+    layer mounts; an aborted or empty draw leaves it unset so the next event
+    retries, instead of marking a blank page "done".
+  - **失效节点保护 (stale-node guard).** If PDF.js swapped the page div during the
+    debounce, the draw reschedules onto the fresh node instead of painting a
+    layer that is about to be discarded.
+
 ## [0.8.9] — 2026-08-09
 
 ### Changed

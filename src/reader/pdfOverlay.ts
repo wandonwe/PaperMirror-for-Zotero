@@ -223,6 +223,17 @@ export class PdfOverlay {
 	private disposeEvents: (() => void) | null = null;
 	private pages = new Map<number, OverlayPageData>();
 	private redrawTimer: ReturnType<typeof setTimeout> | null = null;
+	/**
+	 * Pages that need a redraw, ACCUMULATED between debounce ticks. During a zoom
+	 * PDF.js fires pagerendered/textlayerrendered for many pages in quick
+	 * succession; the old "clear the timer, keep only the last event's page"
+	 * logic dropped every page but the last, so a page whose overlay PDF.js had
+	 * just destroyed was never repainted and its translation vanished. We now
+	 * merge every page that fired into one redraw pass.
+	 */
+	private dirtyPages = new Set<number>();
+	/** A document-level event (scalechanging/rotationchanging) → redraw all. */
+	private redrawAll = false;
 	private destroyed = false;
 	private peekHandler: ((event: KeyboardEvent) => void) | null = null;
 	private peekDoc: Document | null = null;
@@ -423,15 +434,28 @@ export class PdfOverlay {
 	}
 
 	private scheduleRedraw(pageIndex?: number): void {
+		// ACCUMULATE the request instead of overwriting the last one. A page-level
+		// event marks that page dirty; a document-level event (undefined index,
+		// i.e. scalechanging/rotationchanging) marks every page. The timer is NOT
+		// reset per call — the first event opens an 80ms window and every event
+		// inside it is merged, so no page is dropped during a zoom storm.
+		if (pageIndex === undefined) {
+			this.redrawAll = true;
+		}
+		else {
+			this.dirtyPages.add(pageIndex);
+		}
 		if (this.redrawTimer) {
-			clearTimeout(this.redrawTimer);
+			return;
 		}
 		this.redrawTimer = setTimeout(() => {
 			this.redrawTimer = null;
+			const targets = this.redrawAll ? [...this.pages.keys()] : [...this.dirtyPages];
+			this.redrawAll = false;
+			this.dirtyPages.clear();
 			if (this.destroyed || !this.enabled) {
 				return;
 			}
-			const targets = pageIndex !== undefined ? [pageIndex] : [...this.pages.keys()];
 			for (const p of targets) {
 				try {
 					this.drawPage(p);
@@ -498,10 +522,13 @@ export class PdfOverlay {
 		if (this.drawnSignature.get(pageIndex) === signature && view.div.querySelector(`.${LAYER_CLASS}`)) {
 			return;
 		}
-		// PDF.js rebuilds page content on re-render, so always start clean.
-		this.removeLayer(pageIndex);
-		this.drawnSignature.set(pageIndex, signature);
-
+		// ATOMIC REPLACE: build the new layer completely FIRST and only swap it in
+		// (and drop the old one, and record the signature) once we know it has real
+		// content. The old code removed the old layer and saved the signature up
+		// front, so any early-return below — a page mid-zoom with no geometry yet,
+		// pending.length === 0, a throw — left the page showing ONLY the original
+		// with a "done" signature that suppressed the retry. That is the zoom
+		// flash-then-vanish. Nothing is removed here.
 		const layer = view.doc.createElement('div');
 		layer.className = LAYER_CLASS;
 		this.applyPaperColour(layer, pageIndex);
@@ -607,15 +634,38 @@ export class PdfOverlay {
 		// Restore the source reading order for the DOM (hover/expand stacking).
 		layer.setAttribute('data-pm-mode', this.displayMode);
 
+		// The node may have been swapped by PDF.js during the 80ms debounce; only
+		// commit to a page div that is still live, else reschedule onto the fresh
+		// one instead of painting a layer that is about to be discarded.
+		const latest = adapter.getPageView(this.reader, pageIndex);
+		if (!latest || latest.div !== view.div || !view.div.isConnected) {
+			this.drawnSignature.delete(pageIndex);
+			this.scheduleRedraw(pageIndex);
+			return;
+		}
+
+		if (!view.div.style.position) {
+			view.div.style.position = 'relative';
+		}
+		// Atomic swap: attach the finished new layer, THEN drop any previous
+		// layer(s) for this page and set the correct mode class. The old overlay
+		// stays visible right up to the frame the new one lands, so a zoom never
+		// blanks the page to the original in between.
+		view.div.appendChild(layer);
+		for (const node of Array.from(view.div.querySelectorAll(`.${LAYER_CLASS}`))) {
+			if (node !== layer) {
+				node.remove();
+			}
+		}
+		view.div.classList.remove('pm-overlay-dim', 'pm-overlay-solid', 'pm-overlay-hover');
 		view.div.classList.add(
 			this.displayMode === 'dim-original' ? 'pm-overlay-dim'
 				: this.displayMode === 'hover' ? 'pm-overlay-hover'
 					: 'pm-overlay-solid'
 		);
-		if (!view.div.style.position) {
-			view.div.style.position = 'relative';
-		}
-		view.div.appendChild(layer);
+		// Signature recorded ONLY now that a real layer is mounted — an aborted or
+		// empty draw above leaves it unset so the next event retries.
+		this.drawnSignature.set(pageIndex, signature);
 	}
 
 	/**
