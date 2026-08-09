@@ -106,7 +106,7 @@ function isTranslatable(block: SourceBlock): boolean {
 /**
  * Sample the page's paper colour from the composed bitmap's margins.
  */
-function samplePaper(ctx: CanvasRenderingContext2D, width: number, height: number): string {
+export function samplePaper(ctx: CanvasRenderingContext2D, width: number, height: number): string {
 	try {
 		const inset = Math.max(2, Math.floor(Math.min(width, height) * 0.02));
 		const points: [number, number][] = [
@@ -151,7 +151,7 @@ function samplePaper(ctx: CanvasRenderingContext2D, width: number, height: numbe
  * Sampling the block's own corners and edge midpoints (text rarely touches
  * them) yields the colour that makes the mask invisible.
  */
-function localPaper(ctx: CanvasRenderingContext2D, box: { left: number; top: number; width: number; height: number }, scaleFactor: number, fallback: string): string {
+export function localPaper(ctx: CanvasRenderingContext2D, box: { left: number; top: number; width: number; height: number }, scaleFactor: number, fallback: string): string {
 	try {
 		// Twelve probes: the four inside corners, plus points 3px OUTSIDE each
 		// edge (margins and line gaps are text-free far more reliably than
@@ -219,7 +219,7 @@ function localPaper(ctx: CanvasRenderingContext2D, box: { left: number; top: num
 	}
 }
 
-function inkFor(paper: string): string {
+export function inkFor(paper: string): string {
 	const match = /rgb\((\d+),\s*(\d+),\s*(\d+)\)/.exec(paper);
 	if (!match) {
 		return '#14171a';
@@ -972,14 +972,14 @@ export function buildFallbackPage(
 
 // ---- geometry helpers -------------------------------------------------------
 
-interface PixelBox {
+export interface PixelBox {
 	left: number;
 	top: number;
 	width: number;
 	height: number;
 }
 
-function rectToPixels(rect: Rect, render: adapter.PageRender, pxPerViewport: number): PixelBox {
+export function rectToPixels(rect: Rect, render: adapter.PageRender, pxPerViewport: number): PixelBox {
 	const [ax, ay] = render.toViewport(rect[0], rect[3]); // top-left
 	const [bx, by] = render.toViewport(rect[2], rect[1]); // bottom-right
 	const left = Math.min(ax, bx) * pxPerViewport;
@@ -993,7 +993,7 @@ function rectToPixels(rect: Rect, render: adapter.PageRender, pxPerViewport: num
 }
 
 /** Union of a block's line rects, in page pixels. */
-function pixelBox(block: SourceBlock, render: adapter.PageRender, pxPerViewport: number): PixelBox {
+export function pixelBox(block: SourceBlock, render: adapter.PageRender, pxPerViewport: number): PixelBox {
 	let left = Infinity;
 	let top = Infinity;
 	let right = -Infinity;

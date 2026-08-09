@@ -174,6 +174,26 @@ export function columnOf(rect: Rect, bands: ColumnBand[], pageWidth: number): nu
  * bucket the sizes to 0.5pt and take the one covering the most characters,
  * which is the size the reader actually perceives.
  */
+/**
+ * The size a REPLACEMENT should be typeset at: the smallest size in the
+ * paragraph's own body cluster.
+ *
+ * The band [0.75×median, 1.25×median] excludes drop caps and heading-styled
+ * lead-ins above, and superscript citations / footnote marks below — a "(5)"
+ * at 6pt must not drag a 10pt paragraph down, and an ornamental "T" at 22pt
+ * must not blow it up. Within the surviving body cluster the MINIMUM wins
+ * (用户要求: 译文字号与段落有效正文最小字号一致).
+ */
+export function replacementFontSize(sizes: number[]): number {
+	const usable = sizes.filter(s => Number.isFinite(s) && s > 0).sort((a, b) => a - b);
+	if (!usable.length) {
+		return 0;
+	}
+	const median = usable[Math.floor(usable.length / 2)]!;
+	const body = usable.filter(s => s >= median * 0.75 && s <= median * 1.25);
+	return body.length ? body[0]! : median;
+}
+
 export function dominantFontSize(sizes: number[]): number {
 	const usable = sizes.filter(s => Number.isFinite(s) && s > 0);
 	if (!usable.length) {

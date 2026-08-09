@@ -153,3 +153,12 @@ test('font size is clamped only at degenerate extremes', () => {
 	assert.ok(translatedFontSize(1, 0.2, 1) >= 5, 'never invisible');
 	assert.ok(translatedFontSize(90, 4, 10) <= 48, 'never absurd');
 });
+
+test('estimateCjkCapacity scales with the rectangle and never returns absurd budgets', async () => {
+	const { estimateCjkCapacity } = await import('../../src/ui/strictPageReplacement');
+	// A 240×120px box at 12px type ≈ 20 cols × 8 rows ≈ 152 chars.
+	const cap = estimateCjkCapacity(240, 120, 12);
+	assert.ok(cap >= 120 && cap <= 170, `got ${cap}`);
+	assert.ok(estimateCjkCapacity(240, 240, 12) > cap, 'taller box → bigger budget');
+	assert.equal(estimateCjkCapacity(0, 100, 12), 8, 'degenerate boxes floor at 8');
+});

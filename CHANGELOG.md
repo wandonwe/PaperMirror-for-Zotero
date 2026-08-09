@@ -12,7 +12,39 @@ minor releases may change defaults.
 ## [0.6.2] — 2026-08-08
 
 Layout-overflow fixes for the rebuilt (side-by-side) page, from a joint audit,
-followed by the phase-one structural hardening (stop the obvious errors).
+followed by the phase-one structural hardening — and then a course change:
+
+### Changed (architecture)
+
+- **整页对照 is now STRICT in-place replacement** (`strictPageReplacement.ts`).
+  The page the reader sees is the original page — same size, figures, table
+  lines, background and positions — with translations written into exactly
+  the rectangles the source text occupied. No block moves, no page growth, no
+  continuation sheet, no reflow. pageFlow (flow/packing/sweep) is no longer
+  used by this mode; it remains available to the 文章流 mode where reflow is
+  the point.
+- **Fixed geometry, fixed type size.** Fit uses only the leading/tracking
+  ladder (1.42 → 1.18, up to −0.02em); the font size never shrinks. Body
+  blocks are typeset at their own body-cluster MINIMUM size
+  (`replacementFontSize`: sizes filtered to [0.75×, 1.25×] of the median —
+  drop caps and superscript citations excluded — then the smallest survivor),
+  so a decorated first letter never inflates a paragraph and a 6pt citation
+  never shrinks one.
+- **Budgeted compress-and-retry.** A translation that cannot fit its
+  rectangle is re-requested with a character budget
+  (`estimateCjkCapacity` of the box; `charBudget` on the request; prompt
+  rules demand denser academic phrasing, never dropped facts/numbers/units).
+  Up to two rounds; a block that still cannot fit REVERTS to the original
+  text (its masks are wiped) — never clipped, never overlapped, never moved.
+  `PROMPT_VERSION` → 2, invalidating every cache entry produced under the
+  old long-form prompts.
+- **Masks hug the strokes and can never touch a figure.** Per-line masks use
+  font-relative padding (0.08em, clamped 1–3px) instead of a fixed 2px, and
+  the real image rectangles are wiped out of the mask canvas afterwards —
+  `intersection(mask, image) === 0` holds by construction. A "paragraph" box
+  overlapping an image by >15% is treated as an extraction error and left
+  entirely alone. Table regions keep their whole original rendering (the
+  cell-level model with per-cell translation IDs is the next stage).
 
 ### Added
 

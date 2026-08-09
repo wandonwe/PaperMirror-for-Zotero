@@ -63,7 +63,17 @@ export interface TranslationRequest {
 	targetLanguage: LanguageCode;
 	documentTitle: string;
 	previousContext: string;
-	blocks: { id: string; type: BlockType; text: string }[];
+	blocks: {
+		id: string;
+		type: BlockType;
+		text: string;
+		/**
+		 * Layout budget: the translation must fit roughly this many
+		 * target-language characters (strict in-place replacement re-requests
+		 * an over-long translation with this set). Absent = unconstrained.
+		 */
+		charBudget?: number;
+	}[];
 	glossary?: GlossaryRule[];
 }
 

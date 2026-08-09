@@ -22,7 +22,8 @@ import { parseGlossaryJSON } from '../translation/glossary';
 import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationResponse } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
-import { buildFallbackPage, buildOriginalPage, buildTranslatedPage, settleTranslatedPage } from '../ui/translatedPageView';
+import { buildOriginalPage } from '../ui/translatedPageView';
+import { buildStrictPage, revertStrictBlocks, settleStrictPage, type UnfitBlock } from '../ui/strictPageReplacement';
 import { translateFullPdf, bytesToBase64, type TranslateSubmission } from '../translation/pdfService';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
@@ -114,6 +115,8 @@ export class ReaderSession {
 	private pool: string[] = [];
 	/** Real image rects per page (operator list), fetched once per document. */
 	private imageRects = new Map<number, [number, number, number, number][] | null>();
+	/** Compress-and-retry rounds already spent per page (max 2). */
+	private compressRounds = new Map<number, number>();
 	/** True while a full-PDF translation is running on the local bridge. */
 	private exportingPdf = false;
 	/** Most recent deep explanation, for copy / save-to-note. */
@@ -621,41 +624,32 @@ export class ReaderSession {
 			if (!this.imageRects.has(pageIndex)) {
 				this.imageRects.set(pageIndex, await adapter.getImageRectsPdf(this.reader, pageIndex));
 			}
-			const built = buildTranslatedPage(doc, this.reader, {
+			// STRICT in-place replacement: the page keeps its exact original
+			// size and geometry. A translation that cannot fit its source
+			// rectangle triggers up to two budgeted compress-and-retry rounds
+			// (the manager's update re-renders this slot); after that the
+			// block REVERTS to the original text — never clipped or moved.
+			const built = buildStrictPage(doc, {
 				blocks: state.blocks,
 				translations: state.translations,
 				pageIndex,
-				availableWidth: width,
 				render,
 				imageRectsPdf: this.imageRects.get(pageIndex) ?? undefined
 			});
 			if (built) {
 				slot.replaceChildren(applyFit(built.element));
-				// A long translation may have grown the page below the artwork;
-				// the slot must carry the real footprint or the next page will
-				// be drawn over the tail. Runs after EVERY settle (including the
-				// font-readiness re-settle) so the slot never goes stale. A page
-				// that FAILS the final visual check is not shown wrong — it is
-				// swapped for the safe fallback: the untouched original with the
-				// full translation flowed underneath.
-				let degraded = false;
-				settleTranslatedPage(built.element, (layoutOk) => {
-					if (degraded) {
+				settleStrictPage(built.element, (unfit: UnfitBlock[]) => {
+					if (!unfit.length) {
 						return;
 					}
-					if (!layoutOk) {
-						degraded = true;
-						const fallback = buildFallbackPage(doc, render!, state.blocks, state.translations);
-						slot.replaceChildren(applyFit(fallback));
-						const h = fallback.offsetHeight;
-						if (h > 0) {
-							slot.style.height = `${Math.ceil(h * fit)}px`;
-						}
-						return;
+					const rounds = this.compressRounds.get(pageIndex) ?? 0;
+					if (rounds < 2) {
+						this.compressRounds.set(pageIndex, rounds + 1);
+						void this.manager?.compressBlocks(pageIndex, unfit);
 					}
-					const grownHeight = parseFloat(built.element.style.height) || built.element.offsetHeight;
-					if (grownHeight > 0) {
-						slot.style.height = `${Math.ceil(grownHeight * fit)}px`;
+					else {
+						revertStrictBlocks(built.element, unfit.map(u => u.id));
+						logger.info(MODULE, `page ${pageIndex + 1}: ${unfit.length} block(s) kept original (no fit within fixed geometry)`);
 					}
 				});
 				// A single click on translated text must be INERT reading behaviour:
@@ -985,6 +979,7 @@ export class ReaderSession {
 	private restartAfterConfigChange(): void {
 		void this.rebuildPool();
 		this.manager?.resetAll();
+		this.compressRounds.clear();
 		this.detectedSource = null;
 		if (getPref<boolean>('privacyNoticeAccepted', false)) {
 			const page = adapter.getCurrentPageIndex(this.reader);
@@ -998,6 +993,7 @@ export class ReaderSession {
 			return;
 		}
 		const page = adapter.getCurrentPageIndex(this.reader);
+		this.compressRounds.delete(page);
 		this.pane?.setBusy(true);
 		try {
 			// Bypasses the cache; the fresh result overwrites the old entry on write.

@@ -5,7 +5,11 @@
 
 import type { TranslationRequest } from '../types/models';
 
-export const PROMPT_VERSION = 1;
+// v2: layout budgets (charBudget) + compact-translation rules for strict
+// in-place replacement. The bump also invalidates every cached translation
+// produced under the old prompts — old long-form output must not resurface
+// inside fixed-geometry boxes.
+export const PROMPT_VERSION = 2;
 
 export function languageDisplayName(code: string): string {
 	switch (code) {
@@ -34,6 +38,16 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 		'  {"translations":[{"id":"<block id>","translatedText":"<translation>"}]}',
 		'- Include every input block id exactly once.'
 	];
+	if (request.blocks.some(b => typeof b.charBudget === 'number')) {
+		lines.push(
+			'',
+			'Layout budgets:',
+			'- Blocks carrying "charBudget" are re-typeset INSIDE their original rectangle: the translation MUST fit within roughly that many target-language characters.',
+			'- Compress by using dense, standard academic phrasing — never by dropping facts, numbers, units, statistics or citation markers.',
+			'- Do not add explanations, parenthetical glosses, or synonym doubling.',
+			'- Keep abbreviations as-is instead of expanding them when space is tight.'
+		);
+	}
 	if (request.glossary && request.glossary.length) {
 		lines.push('', 'Glossary:');
 		for (const rule of request.glossary) {

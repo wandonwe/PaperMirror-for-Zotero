@@ -29,6 +29,7 @@ import {
 	detectColumns,
 	detectGutters,
 	dominantFontSize,
+	replacementFontSize,
 	joinFragments,
 	linesShareColumn,
 	looksLikeListStart,
@@ -325,13 +326,19 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		// span, or a heading-styled lead-in, and using it skewed the whole
 		// block's translated type size.
 		const repSize = dominantFontSize(group.map(l => l.fontSize)) || group[0]!.fontSize;
+		const type = classify(text, repSize, bodySize, group.length);
+		// Body text is typeset at the MINIMUM of its own body cluster (drop
+		// caps and superscripts excluded); headings keep the dominant size.
+		const fontSize = (type === 'paragraph' || type === 'list' || type === 'caption')
+			? (replacementFontSize(group.map(l => l.fontSize)) || repSize)
+			: repSize;
 		return {
 			group,
 			text,
 			rect,
 			column: columnOf(rect, bands, pageWidth),
-			type: classify(text, repSize, bodySize, group.length),
-			fontSize: repSize,
+			type,
+			fontSize,
 			gapAfter: undefined as number | undefined
 		};
 	}).filter(p => p.text.length >= 2);
@@ -352,7 +359,10 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		}
 		// A merge must re-derive its representative size from ALL member lines
 		// — inheriting the head's alone re-introduces the first-line skew.
-		const fontSize = dominantFontSize(group.map(l => l.fontSize)) || head.fontSize;
+		const sizes = group.map(l => l.fontSize);
+		const fontSize = (head.type === 'paragraph' || head.type === 'list' || head.type === 'caption')
+			? (replacementFontSize(sizes) || head.fontSize)
+			: (dominantFontSize(sizes) || head.fontSize);
 		return { ...head, rect, text, group, fontSize };
 	});
 
@@ -382,7 +392,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			text: joinFragments(label.text, rest.text),
 			group,
 			type: 'caption',
-			fontSize: dominantFontSize(group.map(l => l.fontSize)) || rest.fontSize
+			fontSize: replacementFontSize(group.map(l => l.fontSize)) || rest.fontSize
 		});
 	}
 

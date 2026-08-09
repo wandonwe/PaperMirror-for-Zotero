@@ -110,6 +110,73 @@ export class TranslationManager {
 		}
 	}
 
+	/**
+	 * Strict in-place replacement's compress-and-retry: the listed blocks'
+	 * translations did not fit their fixed rectangles, so they are re-requested
+	 * WITH a character budget (the prompt demands denser phrasing, never
+	 * dropped facts). Updated translations replace the old ones in the page
+	 * state and the cache, and the page re-notifies so the pane re-renders.
+	 */
+	async compressBlocks(pageIndex: number, entries: { id: string; maxChars: number }[]): Promise<void> {
+		const state = this.pages.get(pageIndex);
+		if (this.disposed || !state || state.status !== 'done' || !entries.length) {
+			return;
+		}
+		const wanted = new Map(entries.map(e => [e.id, e.maxChars]));
+		const blocks = state.blocks.filter(b => wanted.has(b.id));
+		if (!blocks.length) {
+			return;
+		}
+		const sampleText = blocks.map(b => b.sourceText).join('\n').slice(0, 4000);
+		const { source, target } = this.deps.getLanguages(sampleText);
+		try {
+			await this.scheduler.enqueue(`page-${pageIndex}-compress`, 15, async (signal) => {
+				const protectedBlocks = blocks.map((block) => {
+					const { text, placeholders } = protectFormulas(block.sourceText);
+					return { block, text, placeholders };
+				});
+				const request: TranslationRequest = {
+					pageIndex,
+					sourceLanguage: source,
+					targetLanguage: target,
+					documentTitle: this.deps.getDocumentTitle(),
+					previousContext: '',
+					blocks: protectedBlocks.map(pb => ({
+						id: pb.block.id,
+						type: pb.block.type,
+						text: pb.text,
+						charBudget: wanted.get(pb.block.id)
+					})),
+					glossary: matchRules(this.deps.getGlossary(), blocks.map(b => b.sourceText))
+				};
+				const response = await this.deps.translateRequest(request, signal);
+				let updated = 0;
+				for (const t of response.translations) {
+					const pb = protectedBlocks.find(p => p.block.id === t.id);
+					if (!pb || !t.translatedText.trim()) {
+						continue;
+					}
+					state.translations.set(t.id, restoreFormulas(t.translatedText, pb.placeholders));
+					updated++;
+				}
+				if (updated) {
+					logger.info(MODULE, `Page ${pageIndex + 1}: ${updated} block(s) re-translated under budget`);
+					this.notify(state);
+					const all: TranslatedBlock[] = state.blocks
+						.filter(b => state.translations.has(b.id))
+						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! }));
+					await this.deps.writeCache(pageIndex, state.blocks, all);
+				}
+			});
+		}
+		catch (e) {
+			if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
+				return;
+			}
+			logger.warn(MODULE, 'compressBlocks failed', e);
+		}
+	}
+
 	/** Force re-translate a page, bypassing cache. */
 	async retranslatePage(pageIndex: number): Promise<void> {
 		this.pages.delete(pageIndex);

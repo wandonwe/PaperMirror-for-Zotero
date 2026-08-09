@@ -239,3 +239,14 @@ test('a comma ending does not merge across real whitespace', () => {
 	]);
 	assert.deepEqual(groups, [[0], [1]]);
 });
+
+test('replacementFontSize: body-cluster minimum, drop caps and superscripts excluded', async () => {
+	const { replacementFontSize } = await import('../../src/reader/paragraphHeuristics');
+	// Body at 9.5/10, a 22pt drop cap, a 6pt superscript citation.
+	assert.equal(replacementFontSize([22, 10, 9.5, 10, 9.5, 10, 6]), 9.5);
+	// Superscript alone must not drag the paragraph down to 6.
+	assert.ok(replacementFontSize([10, 10, 10, 6]) >= 10);
+	// Uniform sizes pass through.
+	assert.equal(replacementFontSize([10, 10, 10]), 10);
+	assert.equal(replacementFontSize([]), 0);
+});
