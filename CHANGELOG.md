@@ -9,6 +9,39 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-08-08
+
+Layout-overflow fixes for the rebuilt (side-by-side) page, from a joint audit.
+
+### Fixed
+
+- **The final overlap sweep can no longer park a block on a figure.** planFlow
+  hops figure/table obstacles, but `resolveOverlaps` — the last global sweep —
+  knew nothing about them: a block pushed down to clear another block could
+  land squarely on a figure. The obstacles now join the sweep as immovable
+  boxes (`obstaclesToBoxes`), with a regression test reproducing the exact
+  push-onto-figure case.
+- **The column-tightening pass no longer undoes the containment ladder.** When
+  a column overflowed the page, the second pass blanket-reset every block in
+  it to line-height 1.34 — making blocks that had settled at 1.24 *taller*
+  and re-breaking their own boxes. It now only ever tightens
+  (`min(current, 1.34)`).
+- **Borderline boxes no longer seep past their bottom edge.** The fit
+  tolerance shrinks from ±2px to ±0.5px, and the containment ladder gains a
+  final 1.18 leading step (matching the overlay's ladder) before the type
+  starts shrinking.
+- **Measure-once insurance.** `pmSettle` is now idempotent (every block resets
+  to its start state first), and if the document's font set is still loading
+  at first measurement, the page re-settles once when it finishes — with the
+  slot height re-synced after every settle. With the system CJK stack this is
+  normally a no-op; it closes the fragility for any late-arriving face.
+
+### Notes
+
+- The overlay's behaviour is unchanged and deliberate: boxes clip with an "…"
+  badge at the 8.5px readability floor (expand caps at 2.2× the original
+  height) and a click expands the paragraph.
+
 ## [0.6.1] — 2026-08-08
 
 ### Changed
@@ -706,7 +739,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.2...v0.5.3

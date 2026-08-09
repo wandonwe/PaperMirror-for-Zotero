@@ -4,6 +4,7 @@ import {
 	assignColumns,
 	clearObstacles,
 	inkToObstacles,
+	obstaclesToBoxes,
 	planFlow,
 	type FlowItem,
 	type FlowObstacle
@@ -195,4 +196,35 @@ test('a block pushed past the bottom keeps going — the page grows instead of c
 	const movable = [{ id: 'a', left: 40, top: 120, width: 200, height: 100 }];
 	const tops = resolveOverlaps(movable, fixed, 6, 1000);
 	assert.equal(tops.get('a'), 906, 'below the fixed block, past the old page bottom');
+});
+
+test('obstaclesToBoxes: an obstacle becomes an immovable box spanning its column band', () => {
+	const bands = new Map([[0, { left: 40, right: 300 }], [1, { left: 320, right: 580 }]]);
+	const boxes = obstaclesToBoxes(
+		[
+			{ column: 0, top: 200, bottom: 380 },
+			{ column: 1, top: 500, bottom: 620 },
+			{ column: 2, top: 10, bottom: 20 },   // no band → dropped
+			{ column: 0, top: 400, bottom: 400 }  // empty span → dropped
+		],
+		bands
+	);
+	assert.deepEqual(boxes, [
+		{ left: 40, top: 200, width: 260, height: 180 },
+		{ left: 320, top: 500, width: 260, height: 120 }
+	]);
+});
+
+test('the final sweep refuses to park a block on a figure (the push-onto-figure gap)', () => {
+	// planFlow hopped the figure, but block b is pushed down by block a in the
+	// FINAL sweep. Without the obstacle box it would land at y=205 — squarely
+	// on the figure (200..380). With it, b clears the figure entirely.
+	const figure = obstaclesToBoxes([{ column: 0, top: 200, bottom: 380 }], new Map([[0, { left: 40, right: 300 }]]));
+	const movable = [
+		{ id: 'a', left: 40, top: 100, width: 200, height: 100 },
+		{ id: 'b', left: 45, top: 110, width: 200, height: 50 }
+	];
+	const tops = resolveOverlaps(movable, figure, 5, 1000);
+	assert.equal(tops.get('a'), 100);
+	assert.equal(tops.get('b'), 385, 'pushed below the figure, not onto it');
 });

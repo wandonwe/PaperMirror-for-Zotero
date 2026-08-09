@@ -31,6 +31,7 @@ import { translatedFontSize } from './pageLayout';
 import {
 	assignColumns,
 	inkToObstacles,
+	obstaclesToBoxes,
 	planFlow,
 	resolveOverlaps,
 	type FlowItem,
@@ -419,28 +420,44 @@ export function buildTranslatedPage(
 	// The element must be in the document to be measurable; the caller inserts
 	// it and then calls settle().
 	(page as HTMLElement & { pmSettle?: () => void }).pmSettle = () => {
+		// Idempotent: reset every block to its starting state first, so the
+		// settle can be re-run (e.g. as font-readiness insurance) without the
+		// previous run's shrunken sizes compounding.
+		for (const item of placed) {
+			item.node.style.fontSize = `${item.startSize}px`;
+			item.node.style.removeProperty('line-height');
+			item.node.style.top = `${item.box.top}px`;
+			item.node.removeAttribute('data-pm-displaced');
+			item.node.removeAttribute('data-pm-overflow');
+		}
+
 		// ---- containment first: fit each region into ITS OWN box -----------
 		// The translation belongs inside the region it replaces. Before the
 		// flow is allowed to move anything, each block walks a typographic
-		// ladder — leading 1.5 → 1.34 → 1.24, then the type down to 88% of the
-		// source size (never below 8.5px) — and only what STILL does not fit
-		// spills into the flow/growth machinery. 中文通常更短, so most regions
-		// settle at 1:1 and the page keeps its exact shape.
+		// ladder — leading 1.5 → 1.34 → 1.24 → 1.18 (matching the overlay's
+		// ladder), then the type down to 88% of the source size (never below
+		// 8.5px) — and only what STILL does not fit spills into the
+		// flow/growth machinery. 中文通常更短, so most regions settle at 1:1
+		// and the page keeps its exact shape.
+		//
+		// Tolerance is ±0.5px: scrollHeight rounds up, and the old ±2px let
+		// borderline blocks seep a couple of pixels past their box bottom.
+		const FIT_SLACK = 0.5;
 		for (const item of placed) {
 			const node = item.node;
 			const boxHeight = item.box.height;
-			if (node.scrollHeight <= boxHeight + 2) {
+			if (node.scrollHeight <= boxHeight + FIT_SLACK) {
 				continue;
 			}
-			for (const leading of ['1.34', '1.24']) {
+			for (const leading of ['1.34', '1.24', '1.18']) {
 				node.style.lineHeight = leading;
-				if (node.scrollHeight <= boxHeight + 2) {
+				if (node.scrollHeight <= boxHeight + FIT_SLACK) {
 					break;
 				}
 			}
 			let size = item.startSize;
 			const floor = Math.max(8.5, item.startSize * 0.88);
-			while (node.scrollHeight > boxHeight + 2 && size > floor) {
+			while (node.scrollHeight > boxHeight + FIT_SLACK && size > floor) {
 				size = Math.max(floor, size * 0.96);
 				node.style.fontSize = `${size.toFixed(1)}px`;
 			}
@@ -476,7 +493,11 @@ export function buildTranslatedPage(
 				const item = placed[i]!;
 				const tightened = Math.max(MIN_FONT_PX, item.startSize * 0.9);
 				item.node.style.fontSize = `${tightened.toFixed(1)}px`;
-				item.node.style.lineHeight = '1.34';
+				// NEVER loosen: a block whose containment ladder already went to
+				// 1.24/1.18 must keep that leading — blanket-resetting to 1.34
+				// made those blocks TALLER and re-broke their own boxes.
+				const current = parseFloat(item.node.style.lineHeight || '1.5');
+				item.node.style.lineHeight = String(Math.min(current, 1.34));
 				items[i]!.naturalHeight = item.node.scrollHeight;
 			}
 			plan = planFlow(items, obstacles, {
@@ -487,8 +508,18 @@ export function buildTranslatedPage(
 		}
 
 		// Last line of defence: whatever the column analysis decided, no two
-		// boxes may end up on the same pixels — and nothing may be printed over
-		// a piece of the original we chose to keep.
+		// boxes may end up on the same pixels — nothing may be printed over a
+		// piece of the original we chose to keep, and nothing may be parked on
+		// a FIGURE either (the obstacles join the sweep as immovable boxes;
+		// planFlow hopped them, but a push in this sweep could land on one).
+		const columnBands = new Map<number, { left: number; right: number }>();
+		placed.forEach((item, i) => {
+			const column = columns[i] ?? 0;
+			const band = columnBands.get(column);
+			columnBands.set(column, band
+				? { left: Math.min(band.left, item.box.left), right: Math.max(band.right, item.box.left + item.box.width) }
+				: { left: item.box.left, right: item.box.left + item.box.width });
+		});
 		const gap = Math.max(4, bodyPt * pxPerPoint * 0.4);
 		const resolved = resolveOverlaps(
 			plan.map((placement) => {
@@ -501,7 +532,7 @@ export function buildTranslatedPage(
 					height: items[Number(placement.id)]!.naturalHeight
 				};
 			}),
-			fixedBoxes,
+			[...fixedBoxes, ...obstaclesToBoxes(obstacles, columnBands)],
 			gap,
 			pageHeightPx
 		);
@@ -534,9 +565,37 @@ export function buildTranslatedPage(
 	return { element: page, hasArtwork, blocksPlaced: placed.length };
 }
 
-/** Run the deferred measurement pass once the page is in the document. */
-export function settleTranslatedPage(element: HTMLElement): void {
-	(element as HTMLElement & { pmSettle?: () => void }).pmSettle?.();
+/**
+ * Run the deferred measurement pass once the page is in the document.
+ *
+ * Insurance: if the document's font set is still loading when the first
+ * measurement runs, the settle re-runs once when it finishes (pmSettle is
+ * idempotent — it resets every block first). With the system CJK stack this
+ * is normally a no-op, but it closes the measure-once fragility for any
+ * environment where a face does arrive late. `onSettled` fires after every
+ * settle so the caller can re-sync the slot height to the (re)grown page.
+ */
+export function settleTranslatedPage(element: HTMLElement, onSettled?: () => void): void {
+	const settle = (element as HTMLElement & { pmSettle?: () => void }).pmSettle;
+	if (!settle) {
+		return;
+	}
+	settle();
+	onSettled?.();
+	try {
+		const fonts = (element.ownerDocument as Document & { fonts?: { status?: string; ready?: Promise<unknown> } }).fonts;
+		if (fonts?.status === 'loading' && fonts.ready) {
+			void fonts.ready.then(() => {
+				if (element.isConnected) {
+					settle();
+					onSettled?.();
+				}
+			});
+		}
+	}
+	catch {
+		// insurance only — never let it break the page
+	}
 }
 
 /**

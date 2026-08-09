@@ -623,14 +623,16 @@ export class ReaderSession {
 			});
 			if (built) {
 				slot.replaceChildren(applyFit(built.element));
-				settleTranslatedPage(built.element);
 				// A long translation may have grown the page below the artwork;
 				// the slot must carry the real footprint or the next page will
-				// be drawn over the tail.
-				const grownHeight = parseFloat(built.element.style.height) || built.element.offsetHeight;
-				if (grownHeight > 0) {
-					slot.style.height = `${Math.ceil(grownHeight * fit)}px`;
-				}
+				// be drawn over the tail. Runs after EVERY settle (including the
+				// font-readiness re-settle) so the slot never goes stale.
+				settleTranslatedPage(built.element, () => {
+					const grownHeight = parseFloat(built.element.style.height) || built.element.offsetHeight;
+					if (grownHeight > 0) {
+						slot.style.height = `${Math.ceil(grownHeight * fit)}px`;
+					}
+				});
 				// A single click on translated text must be INERT reading behaviour:
 				// it only moves the focus highlight. The old handler ran 深度讲解 +
 				// a scroll-to-top + a PDF navigation on every innocent click — the

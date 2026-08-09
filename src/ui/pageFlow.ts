@@ -218,6 +218,35 @@ export interface Box {
 }
 
 /**
+ * Obstacles (figures, tables — per-column vertical spans) as immovable boxes,
+ * so the FINAL overlap sweep can refuse to park a block on top of them.
+ *
+ * planFlow hops obstacles, but resolveOverlaps used to know nothing about
+ * them: a block pushed down to clear ANOTHER block could land squarely on a
+ * figure, and nothing re-checked. Handing the obstacles to the sweep as fixed
+ * boxes closes that gap. Each obstacle takes its column's full x-band.
+ */
+export function obstaclesToBoxes(
+	obstacles: FlowObstacle[],
+	columnBands: Map<number, { left: number; right: number }>
+): Box[] {
+	const boxes: Box[] = [];
+	for (const obstacle of obstacles) {
+		const band = columnBands.get(obstacle.column);
+		if (!band || band.right - band.left <= 0 || obstacle.bottom <= obstacle.top) {
+			continue;
+		}
+		boxes.push({
+			left: band.left,
+			top: obstacle.top,
+			width: band.right - band.left,
+			height: obstacle.bottom - obstacle.top
+		});
+	}
+	return boxes;
+}
+
+/**
  * Final guarantee: nothing overlaps anything, whatever the column analysis
  * decided.
  *
