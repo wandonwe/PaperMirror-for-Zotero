@@ -210,6 +210,7 @@ export class ReaderSession {
 			onToggleSync: enabled => this.setSyncEnabled(enabled),
 			onRetranslate: () => void this.retranslateAll(), // 菜单栏刷新 = 刷新全部
 			onRefreshPage: () => void this.retranslateCurrent(), // 胶囊圆环 = 刷新本页
+			onCancelPage: () => this.cancelCurrentTranslation(), // 胶囊取消 = 停止翻译
 			onSaveNote: () => void this.saveSelectionToNote(),
 			onOpenSettings: () => this.openSettings(),
 			onToggleViewKind: kind => setPref('paneView', kind),
@@ -232,7 +233,8 @@ export class ReaderSession {
 		this.overlay = new PdfOverlay(this.reader, {
 			onCancel: () => this.cancelCurrentTranslation(),
 			onRetry: () => void this.retranslateCurrent(),
-			onViewPartial: () => this.setViewMode('split') // the pane shows per-block detail
+			onViewPartial: () => this.setViewMode('split'), // the pane shows per-block detail
+			onRefreshRing: () => void this.retranslateCurrent() // ring → 刷新本页
 		});
 		this.overlay.setDisplayMode(getPref<OverlayDisplayMode>('overlayDisplayMode', 'dim-original'));
 		this.overlay.setPeekOnHover(getPref<boolean>('overlayPeekHover', true));
@@ -494,67 +496,42 @@ export class ReaderSession {
 			translations: state.translations
 		});
 		if (state.pageIndex === this.lastPageIndex) {
-			const pageNo = String(state.pageIndex + 1);
+			// ONE status system: the capsule. All translation-process feedback
+			// flows through pushOverlayProgress — never the old pane.setStatus,
+			// which caused the "✓ 已翻译" + "0%" double display. The FINAL
+			// done/partial state is posted only by reportPlacement(), so we
+			// never show "done" before layout has actually finished.
+			const common = {
+				currentPage: state.pageIndex + 1,
+				totalPages: adapter.getPageCount(this.reader),
+				segTotal: state.blocks.length,
+				segTranslated: state.translations.size
+			};
 			switch (state.status) {
 				case 'translating':
-				case 'extracting': {
-					const text = getString('papermirror-status-translating-page').replace('%n%', pageNo);
-					this.pane?.setStatus(text, { busy: true });
-					// Rich per-page progress in the consolidated capsule.
+				case 'extracting':
+					this.pushOverlayProgress({ ...common, phase: 'translating', segPlaced: 0, kept: 0 });
+					break;
+				case 'done':
+					// Translation finished; placement runs next. Keep the ring at
+					// its translation level (no reset to 0%) and say 正在适配排版;
+					// reportPlacement() posts the real done/partial when placed.
+					this.pushOverlayProgress({ ...common, phase: 'laying-out', segPlaced: 0, kept: 0 });
+					break;
+				case 'error':
 					this.pushOverlayProgress({
-						phase: 'translating',
-						currentPage: state.pageIndex + 1,
-						totalPages: adapter.getPageCount(this.reader),
-						segTotal: state.blocks.length,
-						segTranslated: state.translations.size,
-						segPlaced: 0,
-						kept: 0
+						...common, phase: 'failed',
+						message: state.error?.message ?? getString('papermirror-status-error'),
+						segPlaced: 0, kept: 0
 					});
 					break;
-				}
-				case 'done': {
-					const text = getString('papermirror-status-done-page').replace('%n%', pageNo);
-					this.pane?.setStatus(text, {
-						check: true,
-						sub: state.fromCache ? getString('papermirror-status-cached') : ''
-					});
-					// Translation is done; strict placement runs next and
-					// reportPlacement() posts the final done/partial state. Show a
-					// laying-out state in the meantime (unless served from cache,
-					// where placement is immediate).
+				case 'no-text-layer':
 					this.pushOverlayProgress({
-						phase: 'laying-out',
-						currentPage: state.pageIndex + 1,
-						totalPages: adapter.getPageCount(this.reader),
-						segTotal: state.blocks.length,
-						segTranslated: state.translations.size,
-						segPlaced: 0,
-						kept: 0
+						...common, phase: 'failed',
+						message: getString('papermirror-no-text-layer'),
+						segPlaced: 0, kept: 0
 					});
 					break;
-				}
-				case 'error': {
-					const text = state.error?.message ?? getString('papermirror-status-error');
-					this.pane?.setStatus(text, { error: true });
-					this.pushOverlayProgress({
-						phase: 'failed', message: text,
-						currentPage: state.pageIndex + 1,
-						totalPages: adapter.getPageCount(this.reader),
-						segTotal: 0, segTranslated: 0, segPlaced: 0, kept: 0
-					});
-					break;
-				}
-				case 'no-text-layer': {
-					const text = getString('papermirror-no-text-layer');
-					this.pane?.setStatus(text, { error: true });
-					this.pushOverlayProgress({
-						phase: 'failed', message: text,
-						currentPage: state.pageIndex + 1,
-						totalPages: adapter.getPageCount(this.reader),
-						segTotal: 0, segTranslated: 0, segPlaced: 0, kept: 0
-					});
-					break;
-				}
 			}
 		}
 	}
@@ -845,7 +822,6 @@ export class ReaderSession {
 		if (!s) {
 			return;
 		}
-		const keptOriginal = s.abandoned + s.untranslated + s.imageExcluded;
 		logger.info(
 			MODULE,
 			`page ${pageIndex + 1} placement: ${s.committed}/${s.replaceable} shown, `
@@ -855,33 +831,24 @@ export class ReaderSession {
 		if (this.destroyed || pageIndex !== adapter.getCurrentPageIndex(this.reader)) {
 			return; // only annotate the page the reader is actually on
 		}
-		// Honest per-page counts for the capsule: segTotal from the page's own
-		// blocks, placed = committed paragraphs + translated table cells, kept =
-		// segments that should have translated but were left original.
-		const state = this.manager?.getPageState(pageIndex);
-		const segTotal = state?.blocks.length ?? s.replaceable;
-		const segTranslated = state?.translations.size ?? s.committed;
-		const segPlaced = s.committed + s.tableTranslated;
+		// ONE consistent 口径: the denominator is the units we actually tried to
+		// translate AND place — committed + translated cells (placed) plus the
+		// real failures (abandoned + untranslated). image/table/too-small are
+		// kept original BY DESIGN, so they are neither placed nor counted as
+		// failures (else every page with a figure would read "partial"). This
+		// keeps placed ≤ total, so the ring can never exceed 100%.
+		const placed = s.committed + s.tableTranslated;
 		const kept = s.abandoned + s.untranslated;
+		const segTotal = placed + kept;
 		this.pushOverlayProgress({
 			phase: kept > 0 ? 'partial' : 'done',
 			currentPage: pageIndex + 1,
 			totalPages: adapter.getPageCount(this.reader),
-			segTotal, segTranslated, segPlaced, kept
+			segTotal,
+			segTranslated: segTotal, // translation itself is complete at this point
+			segPlaced: placed,
+			kept
 		});
-		if (keptOriginal > 0) {
-			const bits: string[] = [];
-			if (s.abandoned) {
-				bits.push(`${s.abandoned} 段过长`);
-			}
-			if (s.untranslated) {
-				bits.push(`${s.untranslated} 段未翻译`);
-			}
-			if (s.imageExcluded) {
-				bits.push(`${s.imageExcluded} 段在图内`);
-			}
-			this.pane?.setStatus('部分内容保留原文', { sub: `本页 ${bits.join('、')}，已保留英文` });
-		}
 	}
 
 	/**

@@ -107,6 +107,8 @@ export interface PaneCallbacks {
 	onRetranslate(): void;
 	/** 状态胶囊圆环 — 刷新本页 (re-translate the current page). */
 	onRefreshPage(): void;
+	/** 状态胶囊取消 — stop the current page's translation. */
+	onCancelPage(): void;
 	onSaveNote(): void;
 	onToggleViewKind(kind: 'page' | 'article'): void;
 	/** 菜单栏直接切换 — no round-trip through the settings pane. */
@@ -220,9 +222,9 @@ export class TranslationPane {
 		this.statusCapsule = new StatusCapsule(
 			() => ({ doc: this.doc, container: this.host }),
 			{
-				onCancel: () => this.callbacks.onRefreshPage(), // cancel routes to a page re-run
+				onCancel: () => this.callbacks.onCancelPage(), // 取消 = 真正停止翻译
 				onRetry: () => this.callbacks.onRefreshPage(),
-				onRefreshRing: () => this.callbacks.onRefreshPage()
+				onRefreshRing: () => this.callbacks.onRefreshPage() // 圆环 = 刷新本页
 			},
 			(doc) => {
 				if (!doc.getElementById('pm-capsule-style')) {

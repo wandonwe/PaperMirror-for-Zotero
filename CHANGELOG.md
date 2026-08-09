@@ -9,6 +9,33 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.7.10] — 2026-08-09
+
+### Fixed
+
+- **状态提示不再双显示 / 不再回退到 0% (one state model).** The capsule and the
+  old pane status pill were both driving translation feedback, so a page showed
+  "✓ 第 3 页已翻译" and a "0%" ring at the same time. All translation-process
+  feedback now flows through the ONE capsule; the old `pane.setStatus` is no
+  longer called for translating/done/error, and the `done` branch no longer
+  shows a completion tick — the FINAL done/partial state is posted only by the
+  placement pass. Non-translation messages (export, open failure) still use the
+  pane pill.
+- **进度百分比连续、不超 100% (combined, monotonic progress).** The ring now
+  shows combined progress `(translated + placed) / (2 × total)` — translation
+  is the first 50%, placement the second — so a fully-translated page entering
+  layout sits at 50% and climbs, instead of resetting to 0%. Placement counts
+  use one consistent denominator (placed + real failures), so the ring can
+  never exceed 100%.
+- **统一的"保留原文"判定.** Partial vs done is decided solely by real failures
+  (`abandoned + untranslated`); intentionally-original content (figures, tables,
+  tiny fragments) is no longer double-counted by a second status component, so
+  the two surfaces can't disagree.
+- **取消/圆环交互修正.** In 对照翻译 mode the capsule's 取消 button now actually
+  cancels the page (it was wired to re-translate); and 覆盖原文 mode's ring now
+  receives its `onRefreshRing` handler, so clicking the ring re-translates the
+  current page in both modes.
+
 ## [0.7.9] — 2026-08-09
 
 ### Changed
@@ -1098,7 +1125,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.9...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.10...HEAD
+[0.7.10]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.9...v0.7.10
 [0.7.9]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.8...v0.7.9
 [0.7.8]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.6...v0.7.7

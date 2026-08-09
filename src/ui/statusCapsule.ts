@@ -119,13 +119,19 @@ export const CAPSULE_CSS = `
 export function capsuleStateFor(m: OverlayProgress): CapsuleState {
 	const pagePos = `第 ${m.currentPage} / ${m.totalPages} 页`;
 	const counts = `翻译 ${m.segTranslated}/${m.segTotal} 段 · 排版 ${m.segPlaced}/${m.segTotal} 段`;
+	// Combined progress across BOTH halves of the work — translation is the
+	// first 50%, placement the second — so the ring climbs 0→100% smoothly and
+	// never resets to 0% when a fully-translated page enters the layout phase.
+	const combined = m.segTotal > 0
+		? (m.segTranslated + m.segPlaced) / (m.segTotal * 2)
+		: null;
 	switch (m.phase) {
 		case 'translating':
 			return {
 				phase: m.phase,
 				glyph: 'ring',
 				indeterminate: m.segTotal <= 0,
-				fraction: m.segTotal > 0 ? m.segTranslated / m.segTotal : null,
+				fraction: combined,
 				main: `正在处理 ${pagePos}`,
 				sub: m.segTotal > 0 ? counts : '正在识别段落',
 				action: { kind: 'cancel', label: '×', title: '取消翻译' }
@@ -134,7 +140,7 @@ export function capsuleStateFor(m: OverlayProgress): CapsuleState {
 			return {
 				phase: m.phase,
 				glyph: 'ring',
-				fraction: m.segTotal > 0 ? m.segPlaced / m.segTotal : null,
+				fraction: combined,
 				main: `正在适配 ${pagePos} 排版`,
 				sub: counts,
 				action: { kind: 'cancel', label: '×', title: '取消' }
@@ -151,7 +157,7 @@ export function capsuleStateFor(m: OverlayProgress): CapsuleState {
 			return {
 				phase: m.phase,
 				glyph: 'warn',
-				fraction: m.segTotal > 0 ? m.segPlaced / m.segTotal : null,
+				fraction: combined,
 				main: `第 ${m.currentPage} 页 · ${m.kept} 段保留原文`,
 				sub: counts,
 				action: { kind: 'view', label: '查看', title: '查看保留原文的段落' }
