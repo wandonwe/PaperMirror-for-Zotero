@@ -121,6 +121,9 @@ function mergeTwo(a: SourceBlock, b: SourceBlock): SourceBlock {
 	return {
 		...a,
 		sourceText: joined,
+		// Representative size follows the LONGER text, not blindly the first
+		// fragment — fragment one may carry a drop cap or lead-in styling.
+		fontSize: (b.sourceText.length > a.sourceText.length ? b.fontSize : a.fontSize) ?? a.fontSize,
 		lineRectsPdf: [...(a.lineRectsPdf ?? []), ...(b.lineRectsPdf ?? [])],
 		boundingBox: a.boundingBox && b.boundingBox
 			? {

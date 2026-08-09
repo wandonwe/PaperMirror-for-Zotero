@@ -11,7 +11,37 @@ minor releases may change defaults.
 
 ## [0.6.2] — 2026-08-08
 
-Layout-overflow fixes for the rebuilt (side-by-side) page, from a joint audit.
+Layout-overflow fixes for the rebuilt (side-by-side) page, from a joint audit,
+followed by the phase-one structural hardening (stop the obvious errors).
+
+### Added
+
+- **Table protection.** Detected table regions (clusters of numeric/symbol
+  cells, transitively merged across column strips, anchored by `Table N`
+  captions, sweeping in row labels beside them) keep their ENTIRE original
+  rendering: no cell is translated, nothing may be parked on the region.
+  Real Table→Row→Cell re-layout stays future work; this stops translated
+  fragments being stamped across data tables today.
+- **Real image boundaries.** The operator list (walked with the matrix stack,
+  via the poll-the-flags pattern — content promises are never awaited) yields
+  every painted image's true rectangle; those join the flow as obstacles with
+  exact horizontal extents and the sweep as no-park boxes. The luminance grid
+  remains the fallback when the operator list is unavailable.
+- **Header/footer guard bands.** Extraction deletes running heads/feet, so
+  the layout never knew the furniture was there. Adaptive bands (never
+  swallowing real source content) now make pushed blocks hop past the footer
+  onto grown paper instead of flowing through it.
+- **Final visual safety check with a safe fallback.** After settling, every
+  page is checked for block-block overlaps, block-on-figure/table/band
+  violations, and sideways clipping. A failing page is not shown wrong — it
+  degrades to the untouched original page with the full translation flowed
+  cleanly underneath.
+- **Representative font size.** Block sizes now come from the MODE of the
+  member lines (`dominantFontSize`) at build and at merge, not the first
+  line — drop caps, superscripts and heading-styled lead-ins no longer skew
+  a whole paragraph's translated size. Region merges follow the longer
+  fragment's size.
+- planFlow only hops obstacles a block actually intersects horizontally.
 
 ### Fixed
 

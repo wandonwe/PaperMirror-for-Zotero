@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
 	assignColumns,
 	clearObstacles,
+	findLayoutProblems,
 	inkToObstacles,
 	obstaclesToBoxes,
 	planFlow,
@@ -271,4 +272,36 @@ test('obstaclesToBoxes falls back to the column band when no extent is known', (
 		new Map([[0, { left: 40, right: 300 }]])
 	);
 	assert.deepEqual(boxes, [{ left: 40, top: 200, width: 260, height: 180 }]);
+});
+
+test('planFlow skips obstacles the block does not horizontally intersect', () => {
+	// Obstacle with a tight extent on the LEFT half of the column; the block
+	// flows down the RIGHT half and must not be stalled by it.
+	const items: FlowItem[] = [
+		{ id: 'a', column: 0, left: 300, width: 200, sourceTop: 150, naturalHeight: 100 }
+	];
+	const obstacles = [{ column: 0, top: 100, bottom: 400, leftPx: 40, rightPx: 120 }];
+	const plan = planFlow(items, obstacles, { pageHeight: 1000, gap: 5 });
+	assert.equal(plan[0]!.top, 150, 'unaffected by a non-intersecting obstacle');
+	// The same obstacle WITHOUT an extent still blocks the whole column.
+	const plan2 = planFlow(items, [{ column: 0, top: 100, bottom: 400 }], { pageHeight: 1000, gap: 5 });
+	assert.equal(plan2[0]!.top, 400, 'extent-less obstacle keeps column semantics');
+});
+
+test('findLayoutProblems reports overlaps and fixed-box violations, forgives slack', () => {
+	const movable = [
+		{ id: 'a', left: 40, top: 100, width: 200, height: 100 },
+		{ id: 'b', left: 60, top: 150, width: 200, height: 100 }, // deep overlap with a
+		{ id: 'c', left: 400, top: 100, width: 200, height: 100 } // clean
+	];
+	const fixed = [{ left: 380, top: 150, width: 240, height: 100 }]; // c penetrates this
+	const problems = findLayoutProblems(movable, fixed, 4);
+	assert.ok(problems.some(p => p.id === 'a' && p.kind === 'block-overlap' && p.otherId === 'b'));
+	assert.ok(problems.some(p => p.id === 'c' && p.kind === 'fixed-overlap'));
+	// 3px penetration is inside the slack → clean page.
+	const grazing = [
+		{ id: 'x', left: 40, top: 100, width: 200, height: 100 },
+		{ id: 'y', left: 40, top: 197, width: 200, height: 100 }
+	];
+	assert.equal(findLayoutProblems(grazing, [], 4).length, 0);
 });

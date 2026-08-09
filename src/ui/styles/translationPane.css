@@ -1354,6 +1354,29 @@
 	overflow: hidden;
 }
 
+/* Degraded rendering for a page whose layout failed the final visual check:
+   the untouched original page with the full translation flowed underneath. */
+.pm-repage-fallback {
+	height: auto;
+}
+.pm-fallback-flow {
+	padding: 14px 26px 20px;
+	border-top: 1px dashed rgba(0, 0, 0, .25);
+	background: #fff;
+	font: 400 13.5px/1.75 -apple-system, "PingFang SC", "Hiragino Sans GB",
+		"Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+	color: #1b1d21;
+}
+.pm-fallback-para {
+	margin: 0 0 .8em;
+	text-align: justify;
+	overflow-wrap: break-word;
+}
+.pm-fallback-para[data-pm-strong="true"] {
+	font-weight: 700;
+	margin-top: 1.1em;
+}
+
 /* Inside a slot the page fills it exactly; the slot carries the frame. */
 .pm-repage-slot .pm-repage {
 	margin: 0;

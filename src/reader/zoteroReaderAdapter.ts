@@ -30,6 +30,7 @@
 import type { PageData } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
+import { imageRectsFromOperatorList } from './imageObstacles';
 
 const MODULE = 'readerAdapter';
 
@@ -686,6 +687,63 @@ export function getAllPageSizes(reader: ReaderLike): { width: number; height: nu
  * context of its own compartment without Xray friction, and the outer pane can
  * still drawImage() from it (the copy path has always done exactly that).
  */
+/**
+ * Real image rectangles for one page, in PDF user-space coordinates, from the
+ * operator list. Same poll-the-flags discipline as renderPageBitmap — content
+ * promises are never awaited. Returns null when the operator list cannot be
+ * had (caller falls back to the luminance grid).
+ */
+export async function getImageRectsPdf(
+	reader: ReaderLike,
+	pageIndex: number
+): Promise<[number, number, number, number][] | null> {
+	const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+	try {
+		const win = reader._internalReader?._primaryView?._iframeWindow;
+		const pdfDocument = win?.PDFViewerApplication?.pdfDocument;
+		if (!pdfDocument?.getPage) {
+			return null;
+		}
+		const got: { page: any; ops: any; failed: boolean } = { page: null, ops: null, failed: false };
+		try {
+			pdfDocument.getPage(pageIndex + 1).then(
+				(p: unknown) => { got.page = p; },
+				() => { got.failed = true; }
+			);
+		}
+		catch {
+			return null;
+		}
+		for (let waited = 0; !got.page && !got.failed && waited < 4000; waited += 50) {
+			await sleep(50);
+		}
+		if (!got.page?.getOperatorList) {
+			return null;
+		}
+		try {
+			got.page.getOperatorList().then(
+				(o: unknown) => { got.ops = o; },
+				() => { got.failed = true; }
+			);
+		}
+		catch {
+			return null;
+		}
+		for (let waited = 0; !got.ops && !got.failed && waited < 5000; waited += 50) {
+			await sleep(50);
+		}
+		if (!got.ops?.fnArray || !got.ops?.argsArray) {
+			return null;
+		}
+		const winOps = (win as { pdfjsLib?: { OPS?: Record<string, number> } } | undefined)?.pdfjsLib?.OPS;
+		return imageRectsFromOperatorList(got.ops.fnArray, got.ops.argsArray, winOps ?? {});
+	}
+	catch (e) {
+		logger.debug(MODULE, 'getImageRectsPdf failed', e);
+		return null;
+	}
+}
+
 export async function renderPageBitmap(
 	reader: ReaderLike,
 	pageIndex: number,

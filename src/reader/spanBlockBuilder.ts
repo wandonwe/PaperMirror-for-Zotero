@@ -312,13 +312,18 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		for (const l of group) {
 			rect = union(rect, l.rect);
 		}
+		// Representative size = the MODE of the paragraph's line sizes, not the
+		// first line's: line one may carry a drop cap, a superscript-heavy
+		// span, or a heading-styled lead-in, and using it skewed the whole
+		// block's translated type size.
+		const repSize = dominantFontSize(group.map(l => l.fontSize)) || group[0]!.fontSize;
 		return {
 			group,
 			text,
 			rect,
 			column: columnOf(rect, bands, pageWidth),
-			type: classify(text, group[0]!.fontSize, bodySize, group.length),
-			fontSize: group[0]!.fontSize,
+			type: classify(text, repSize, bodySize, group.length),
+			fontSize: repSize,
 			gapAfter: undefined as number | undefined
 		};
 	}).filter(p => p.text.length >= 2);
@@ -337,7 +342,10 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			text = joinFragments(text, p.text);
 			group.push(...p.group);
 		}
-		return { ...head, rect, text, group };
+		// A merge must re-derive its representative size from ALL member lines
+		// — inheriting the head's alone re-introduces the first-line skew.
+		const fontSize = dominantFontSize(group.map(l => l.fontSize)) || head.fontSize;
+		return { ...head, rect, text, group, fontSize };
 	});
 
 	let referencesStarted = !!options.referencesAlreadyStarted;

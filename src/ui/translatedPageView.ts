@@ -30,13 +30,16 @@ import * as logger from '../utils/logger';
 import { translatedFontSize } from './pageLayout';
 import {
 	assignColumns,
+	findLayoutProblems,
 	inkToObstacles,
 	obstaclesToBoxes,
 	planFlow,
 	resolveOverlaps,
+	type Box,
 	type FlowItem,
 	type FlowObstacle
 } from './pageFlow';
+import { detectTableRegions } from '../reader/tableGuard';
 
 const MODULE = 'translatedPageView';
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
@@ -78,6 +81,12 @@ export interface TranslatedPageInput {
 	 * before.
 	 */
 	render?: adapter.PageRender;
+	/**
+	 * Real image rectangles from the operator list (PDF user space). They join
+	 * the layout as hard obstacles + no-park boxes; the luminance grid remains
+	 * the fallback when absent.
+	 */
+	imageRectsPdf?: [number, number, number, number][];
 }
 
 export interface TranslatedPageResult {
@@ -296,10 +305,28 @@ export function buildTranslatedPage(
 	// Blocks too small to re-typeset are left alone entirely — no mask, no
 	// text. These are figure-internal labels ("A", axis numbers, legend
 	// words): replacing them wrecks the artwork.
+	//
+	// TABLE PROTECTION comes first: cell fragments re-flowed as prose stamped
+	// translated text across data tables. Detected table regions keep their
+	// ENTIRE original rendering — every block inside is excluded, and the
+	// region rectangle later joins the no-park boxes.
+	const tableGuard = detectTableRegions(
+		translatable.map(b => ({
+			id: b.id,
+			text: b.sourceText,
+			type: b.type,
+			box: pixelBox(b, render, pxPerViewport),
+			fontSize: b.fontSize
+		})),
+		Math.max(6, bodyPt * pxPerPoint)
+	);
 	const replaceable = new Set<string>();
 	for (const block of translatable) {
 		if (input.translations.get(block.id) === undefined) {
 			continue; // not translated yet — leave the original visible
+		}
+		if (tableGuard.excluded.has(block.id)) {
+			continue; // inside a protected table — stays original, untouched
 		}
 		// Titles and headings ARE translated here. The rebuilt page is meant to
 		// read as the paper in Chinese — a Chinese abstract under an English
@@ -410,6 +437,40 @@ export function buildTranslatedPage(
 		.map(b => pixelBox(b, render, pxPerViewport))
 		.filter(b => b.width > 8 && b.height > 4);
 
+	// REAL image boundaries from the operator list: hard no-park boxes, no
+	// guessing. (The luminance grid below remains the fallback detector.)
+	const imageBoxes: Box[] = (input.imageRectsPdf ?? [])
+		.map(r => rectToPixels(r, render, pxPerViewport))
+		.filter(b => b.width > 8 && b.height > 8);
+
+	// Header/footer protection bands. Extraction DELETES running heads and
+	// feet, so the layout never knew the page furniture was there and happily
+	// flowed translations through it. The bands adapt to the page: they never
+	// swallow real source content (they stop at the outermost source block),
+	// so only PUSHED blocks ever interact with them — a pushed block now hops
+	// past the footer onto the grown paper below instead of through it.
+	const allSourceBoxes = translatable.map(b => pixelBox(b, render, pxPerViewport));
+	const contentTop = allSourceBoxes.length ? Math.min(...allSourceBoxes.map(b => b.top)) : pageHeightPx;
+	const contentBottom = allSourceBoxes.length ? Math.max(...allSourceBoxes.map(b => b.top + b.height)) : 0;
+	const guardBands: Box[] = [];
+	const headerHeight = Math.min(pageHeightPx * 0.05, contentTop - 4);
+	if (headerHeight > 6) {
+		guardBands.push({ left: 0, top: 0, width: pageWidthPx, height: headerHeight });
+	}
+	const footerTop = Math.max(pageHeightPx * 0.94, contentBottom + 4);
+	if (pageHeightPx - footerTop > 6) {
+		guardBands.push({ left: 0, top: footerTop, width: pageWidthPx, height: pageHeightPx - footerTop });
+	}
+
+	// Everything the sweep may NEVER cover: kept original text, real images,
+	// protected tables, and the page furniture bands.
+	const noParkBoxes: Box[] = [
+		...fixedBoxes,
+		...imageBoxes,
+		...tableGuard.regions,
+		...guardBands
+	];
+
 	// Obstacles: ink on the original page that is NOT one of our blocks —
 	// figures, plots, logos, stamps. Sampled from the artwork bitmap while it
 	// is still to hand.
@@ -419,7 +480,7 @@ export function buildTranslatedPage(
 
 	// The element must be in the document to be measurable; the caller inserts
 	// it and then calls settle().
-	(page as HTMLElement & { pmSettle?: () => void }).pmSettle = () => {
+	(page as HTMLElement & { pmSettle?: () => boolean }).pmSettle = (): boolean => {
 		// Idempotent: reset every block to its starting state first, so the
 		// settle can be re-run (e.g. as font-readiness insurance) without the
 		// previous run's shrunken sizes compounding. The PAGE HEIGHT resets
@@ -476,7 +537,19 @@ export function buildTranslatedPage(
 			sourceTop: item.box.top,
 			naturalHeight: item.node.scrollHeight
 		}));
-		let plan = planFlow(items, obstacles, {
+		// Real image rects join the flow as obstacles too, carrying their true
+		// horizontal extent — every column they intersect learns to hop them.
+		const presentColumns = [...new Set(items.map(i => i.column))];
+		const imageObstacles: FlowObstacle[] = imageBoxes.flatMap(box =>
+			presentColumns.map(column => ({
+				column,
+				top: box.top,
+				bottom: box.top + box.height,
+				leftPx: box.left,
+				rightPx: box.left + box.width
+			})));
+		const allObstacles = [...obstacles, ...imageObstacles];
+		let plan = planFlow(items, allObstacles, {
 			pageHeight: pageHeightPx,
 			gap: Math.max(4, bodyPt * pxPerPoint * 0.55),
 			bottomMargin: pageHeightPx * 0.04
@@ -503,7 +576,7 @@ export function buildTranslatedPage(
 				item.node.style.lineHeight = String(Math.min(current, 1.34));
 				items[i]!.naturalHeight = item.node.scrollHeight;
 			}
-			plan = planFlow(items, obstacles, {
+			plan = planFlow(items, allObstacles, {
 				pageHeight: pageHeightPx,
 				gap: Math.max(3, bodyPt * pxPerPoint * 0.45),
 				bottomMargin: pageHeightPx * 0.02
@@ -524,6 +597,7 @@ export function buildTranslatedPage(
 				: { left: item.box.left, right: item.box.left + item.box.width });
 		});
 		const gap = Math.max(4, bodyPt * pxPerPoint * 0.4);
+		const sweepFixed = [...noParkBoxes, ...obstaclesToBoxes(obstacles, columnBands)];
 		const resolved = resolveOverlaps(
 			plan.map((placement) => {
 				const item = placed[Number(placement.id)]!;
@@ -535,12 +609,13 @@ export function buildTranslatedPage(
 					height: items[Number(placement.id)]!.naturalHeight
 				};
 			}),
-			[...fixedBoxes, ...obstaclesToBoxes(obstacles, columnBands)],
+			sweepFixed,
 			gap,
 			pageHeightPx
 		);
 
 		let maxBottom = pageHeightPx;
+		const finalBoxes: (Box & { id: string })[] = [];
 		for (const placement of plan) {
 			const item = placed[Number(placement.id)];
 			if (!item) {
@@ -551,17 +626,38 @@ export function buildTranslatedPage(
 			if (top > item.box.top + 0.5) {
 				item.node.setAttribute('data-pm-displaced', 'true');
 			}
-			const bottom = top + items[Number(placement.id)]!.naturalHeight;
+			const height = items[Number(placement.id)]!.naturalHeight;
+			const bottom = top + height;
 			if (bottom > pageHeightPx) {
 				item.node.setAttribute('data-pm-overflow', 'true');
 			}
 			maxBottom = Math.max(maxBottom, bottom);
+			finalBoxes.push({ id: placement.id, left: item.box.left, top, width: item.box.width, height });
 		}
 		// Long translations extend the page below the artwork rather than
 		// piling up on the bottom edge. The extension is plain paper.
 		if (maxBottom > pageHeightPx + 1) {
 			page.style.height = `${Math.ceil(maxBottom + 14)}px`;
 		}
+
+		// ---- final visual safety check -------------------------------------
+		// After all the cleverness: do any two blocks still intersect, does
+		// anything sit on an image/table/band, is anything clipped sideways?
+		// The verdict goes to the caller, which can fall back to a safe
+		// rendering instead of showing a page known to be wrong.
+		const problems = findLayoutProblems(finalBoxes, sweepFixed, 4);
+		let clipped = 0;
+		for (const item of placed) {
+			if (item.node.scrollWidth > item.node.clientWidth + 2) {
+				clipped++;
+			}
+		}
+		const ok = problems.length === 0 && clipped < 3;
+		if (!ok) {
+			logger.warn(MODULE, `page ${input.pageIndex + 1} failed layout check: ${problems.length} overlap(s), ${clipped} clipped`);
+		}
+		page.setAttribute('data-pm-layout-ok', String(ok));
+		return ok;
 	};
 
 	logger.debug(MODULE, `page ${input.pageIndex + 1}: ${placed.length} block(s), artwork=${hasArtwork}`);
@@ -578,13 +674,12 @@ export function buildTranslatedPage(
  * environment where a face does arrive late. `onSettled` fires after every
  * settle so the caller can re-sync the slot height to the (re)grown page.
  */
-export function settleTranslatedPage(element: HTMLElement, onSettled?: () => void): void {
-	const settle = (element as HTMLElement & { pmSettle?: () => void }).pmSettle;
+export function settleTranslatedPage(element: HTMLElement, onSettled?: (layoutOk: boolean) => void): void {
+	const settle = (element as HTMLElement & { pmSettle?: () => boolean }).pmSettle;
 	if (!settle) {
 		return;
 	}
-	settle();
-	onSettled?.();
+	onSettled?.(settle());
 	try {
 		const fonts = (element.ownerDocument as Document & { fonts?: { status?: string; ready?: Promise<unknown> } }).fonts;
 		if (!fonts?.ready) {
@@ -592,8 +687,7 @@ export function settleTranslatedPage(element: HTMLElement, onSettled?: () => voi
 		}
 		const resettle = (): void => {
 			if (element.isConnected) {
-				settle();
-				onSettled?.();
+				onSettled?.(settle());
 			}
 		};
 		// Hook `ready` UNCONDITIONALLY: our own text insertion may be what
@@ -743,6 +837,54 @@ export function buildOriginalPage(
 	}
 	page.appendChild(canvas);
 	return page;
+}
+
+/**
+ * The safe degraded rendering for a page whose settled layout FAILED the
+ * final visual check (blocks overlapping, text on figures). Instead of
+ * showing a page known to be wrong, the reader gets the untouched original
+ * page with the complete translation flowed cleanly underneath — nothing to
+ * collide with, nothing clipped, everything readable.
+ */
+export function buildFallbackPage(
+	doc: Document,
+	render: adapter.PageRender,
+	blocks: SourceBlock[],
+	translations: Map<string, string>
+): HTMLElement {
+	const wrapper = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
+	wrapper.className = 'pm-repage pm-repage-fallback';
+	wrapper.style.width = `${render.viewportWidth}px`;
+	const canvas = doc.createElementNS(HTML_NS, 'canvas') as HTMLCanvasElement;
+	canvas.className = 'pm-repage-canvas';
+	canvas.width = render.canvas.width;
+	canvas.height = render.canvas.height;
+	try {
+		canvas.getContext('2d')?.drawImage(render.canvas, 0, 0);
+	}
+	catch (e) {
+		logger.debug(MODULE, 'fallback bitmap copy failed', e);
+	}
+	wrapper.appendChild(canvas);
+
+	const flow = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
+	flow.className = 'pm-fallback-flow';
+	for (const block of blocks) {
+		const text = translations.get(block.id);
+		if (!text?.trim() || isMetadataBlock(block.sourceText)) {
+			continue;
+		}
+		const p = doc.createElementNS(HTML_NS, 'p') as HTMLElement;
+		p.className = 'pm-fallback-para';
+		if (block.type === 'heading' || block.type === 'title') {
+			p.setAttribute('data-pm-strong', 'true');
+		}
+		p.textContent = text; // SAFE: text node only
+		p.title = block.sourceText;
+		flow.appendChild(p);
+	}
+	wrapper.appendChild(flow);
+	return wrapper;
 }
 
 // ---- geometry helpers -------------------------------------------------------

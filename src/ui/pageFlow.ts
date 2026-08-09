@@ -94,8 +94,14 @@ export function planFlow(
 		for (const item of ordered) {
 			// Rule 1: never above the source position, never above the block before.
 			let top = Math.max(item.sourceTop, cursor);
-			// Rule 3: hop over anything we are not allowed to print on.
-			top = clearObstacles(top, item.naturalHeight, columnObstacles);
+			// Rule 3: hop over anything we are not allowed to print on — but
+			// only obstacles the block actually intersects HORIZONTALLY. An
+			// obstacle carrying a tight ink extent must not stall blocks that
+			// pass beside it in the same column.
+			const relevant = columnObstacles.filter(o =>
+				o.leftPx === undefined || o.rightPx === undefined
+				|| (o.rightPx > item.left && o.leftPx < item.left + item.width));
+			top = clearObstacles(top, item.naturalHeight, relevant);
 			placements.push({
 				id: item.id,
 				top,
@@ -301,6 +307,53 @@ export function obstaclesToBoxes(
  * Deliberately last and deliberately dumb: whatever cleverness upstream gets
  * wrong, "no two boxes may occupy the same pixels" is checked here.
  */
+export interface LayoutProblem {
+	id: string;
+	kind: 'block-overlap' | 'fixed-overlap';
+	otherId?: string;
+}
+
+/**
+ * Final visual safety check, pure geometry: after everything has settled, do
+ * any two translated blocks still intersect, or does a block sit on a piece
+ * of the page it must never cover (figure, table, header/footer band)?
+ *
+ * `slack` forgives sub-visual penetration (rounding, the 12% column-abut
+ * exemption). The caller decides what to do with a failing page — the checker
+ * only reports.
+ */
+export function findLayoutProblems(
+	movable: (Box & { id: string })[],
+	fixed: Box[],
+	slack = 4
+): LayoutProblem[] {
+	const problems: LayoutProblem[] = [];
+	const penetrates = (a: Box, b: Box): boolean => {
+		const w = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
+		const h = Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
+		if (w <= slack || h <= slack) {
+			return false;
+		}
+		// Mirror the sweep's column-abut exemption: a thin shared edge is not
+		// an overlap worth failing a page for.
+		return w > Math.min(a.width, b.width) * 0.12 + slack;
+	};
+	for (let i = 0; i < movable.length; i++) {
+		for (let j = i + 1; j < movable.length; j++) {
+			if (penetrates(movable[i]!, movable[j]!)) {
+				problems.push({ id: movable[i]!.id, kind: 'block-overlap', otherId: movable[j]!.id });
+			}
+		}
+		for (const box of fixed) {
+			if (penetrates(movable[i]!, box)) {
+				problems.push({ id: movable[i]!.id, kind: 'fixed-overlap' });
+				break;
+			}
+		}
+	}
+	return problems;
+}
+
 export function resolveOverlaps(
 	movable: (Box & { id: string })[],
 	fixed: Box[],

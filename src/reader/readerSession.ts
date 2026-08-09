@@ -22,7 +22,7 @@ import { parseGlossaryJSON } from '../translation/glossary';
 import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationResponse } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
-import { buildOriginalPage, buildTranslatedPage, settleTranslatedPage } from '../ui/translatedPageView';
+import { buildFallbackPage, buildOriginalPage, buildTranslatedPage, settleTranslatedPage } from '../ui/translatedPageView';
 import { translateFullPdf, bytesToBase64, type TranslateSubmission } from '../translation/pdfService';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
@@ -112,6 +112,8 @@ export class ReaderSession {
 	private statusHideTimer: ReturnType<typeof setTimeout> | null = null;
 	/** Provider pool (primary first). Rebuilt when translation (re)starts. */
 	private pool: string[] = [];
+	/** Real image rects per page (operator list), fetched once per document. */
+	private imageRects = new Map<number, [number, number, number, number][] | null>();
 	/** True while a full-PDF translation is running on the local bridge. */
 	private exportingPdf = false;
 	/** Most recent deep explanation, for copy / save-to-note. */
@@ -614,20 +616,43 @@ export class ReaderSession {
 		const doc = slot.ownerDocument!;
 		const state = this.manager?.getPageState(pageIndex);
 		if (state && state.status === 'done' && state.blocks.length) {
+			// Real image boundaries (operator list) — fetched once per page and
+			// cached for the document's lifetime; null = fall back to the grid.
+			if (!this.imageRects.has(pageIndex)) {
+				this.imageRects.set(pageIndex, await adapter.getImageRectsPdf(this.reader, pageIndex));
+			}
 			const built = buildTranslatedPage(doc, this.reader, {
 				blocks: state.blocks,
 				translations: state.translations,
 				pageIndex,
 				availableWidth: width,
-				render
+				render,
+				imageRectsPdf: this.imageRects.get(pageIndex) ?? undefined
 			});
 			if (built) {
 				slot.replaceChildren(applyFit(built.element));
 				// A long translation may have grown the page below the artwork;
 				// the slot must carry the real footprint or the next page will
 				// be drawn over the tail. Runs after EVERY settle (including the
-				// font-readiness re-settle) so the slot never goes stale.
-				settleTranslatedPage(built.element, () => {
+				// font-readiness re-settle) so the slot never goes stale. A page
+				// that FAILS the final visual check is not shown wrong — it is
+				// swapped for the safe fallback: the untouched original with the
+				// full translation flowed underneath.
+				let degraded = false;
+				settleTranslatedPage(built.element, (layoutOk) => {
+					if (degraded) {
+						return;
+					}
+					if (!layoutOk) {
+						degraded = true;
+						const fallback = buildFallbackPage(doc, render!, state.blocks, state.translations);
+						slot.replaceChildren(applyFit(fallback));
+						const h = fallback.offsetHeight;
+						if (h > 0) {
+							slot.style.height = `${Math.ceil(h * fit)}px`;
+						}
+						return;
+					}
 					const grownHeight = parseFloat(built.element.style.height) || built.element.offsetHeight;
 					if (grownHeight > 0) {
 						slot.style.height = `${Math.ceil(grownHeight * fit)}px`;
