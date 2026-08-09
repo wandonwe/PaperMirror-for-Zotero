@@ -340,7 +340,10 @@ export function buildTranslatedPage(
 			continue;
 		}
 		const box = pixelBox(block, render, pxPerViewport);
-		if (box.width < 50 || box.height < 9 || block.sourceText.trim().length < 6) {
+		// Captions get a laxer size gate: a rejoined "Figure 6: …" block must
+		// be replaceable even when the label line alone once fell below it.
+		const minWidth = block.type === 'caption' ? 28 : 50;
+		if (box.width < minWidth || box.height < 9 || block.sourceText.trim().length < 6) {
 			continue;
 		}
 		replaceable.add(block.id);
@@ -390,6 +393,7 @@ export function buildTranslatedPage(
 		node: HTMLElement;
 		box: PixelBox;
 		startSize: number;
+		type: string;
 	}
 	const placed: PlacedItem[] = [];
 	for (const block of translatable) {
@@ -422,7 +426,7 @@ export function buildTranslatedPage(
 		node.textContent = translated; // SAFE: text node only, never innerHTML
 		node.title = block.sourceText;
 		textLayer.appendChild(node);
-		placed.push({ node, box, startSize });
+		placed.push({ node, box, startSize, type: block.type });
 	}
 
 	if (!placed.length) {
@@ -462,12 +466,40 @@ export function buildTranslatedPage(
 		guardBands.push({ left: 0, top: footerTop, width: pageWidthPx, height: pageHeightPx - footerTop });
 	}
 
+	// FIGURE GROUPS: a caption belongs to its image. The strip between an
+	// image's bottom edge and its caption's top is part of the group — nothing
+	// may be parked in it, so the caption is never separated from its figure.
+	const captionGapBoxes: Box[] = [];
+	for (const block of translatable) {
+		if (block.type !== 'caption') {
+			continue;
+		}
+		const cap = pixelBox(block, render, pxPerViewport);
+		for (const img of imageBoxes) {
+			const gap = cap.top - (img.top + img.height);
+			const hOverlap = Math.min(cap.left + cap.width, img.left + img.width)
+				- Math.max(cap.left, img.left);
+			if (gap >= 0 && gap <= bodyPt * pxPerPoint * 2.5 && hOverlap > cap.width * 0.3) {
+				if (gap > 1) {
+					captionGapBoxes.push({
+						left: Math.min(img.left, cap.left),
+						top: img.top + img.height,
+						width: Math.max(img.width, cap.width),
+						height: gap
+					});
+				}
+				break;
+			}
+		}
+	}
+
 	// Everything the sweep may NEVER cover: kept original text, real images,
-	// protected tables, and the page furniture bands.
+	// protected tables, figure↔caption gaps, and the page furniture bands.
 	const noParkBoxes: Box[] = [
 		...fixedBoxes,
 		...imageBoxes,
 		...tableGuard.regions,
+		...captionGapBoxes,
 		...guardBands
 	];
 
@@ -487,9 +519,11 @@ export function buildTranslatedPage(
 		// too — a previous run may have grown the page, and if this run needs
 		// less the stale growth would leave a band of blank paper below.
 		page.style.height = `${pageHeightPx}px`;
+		page.querySelector('.pm-continuation')?.remove();
 		for (const item of placed) {
 			item.node.style.fontSize = `${item.startSize}px`;
 			item.node.style.removeProperty('line-height');
+			item.node.style.removeProperty('display'); // un-exile continuation blocks
 			item.node.style.top = `${item.box.top}px`;
 			item.node.removeAttribute('data-pm-displaced');
 			item.node.removeAttribute('data-pm-overflow');
@@ -529,18 +563,25 @@ export function buildTranslatedPage(
 
 		const columns = assignColumns(placed.map(p => ({ left: p.box.left, width: p.box.width })));
 		// Natural height at the source size — one measurement per block.
+		// Structural blocks (headings, titles, captions) ANCHOR at their source
+		// position; ordinary body text packs upward to reclaim the whitespace a
+		// shorter Chinese paragraph leaves — the "great blank holes" fix.
 		const items: FlowItem[] = placed.map((item, i) => ({
 			id: String(i),
 			column: columns[i] ?? 0,
 			left: item.box.left,
 			width: item.box.width,
 			sourceTop: item.box.top,
-			naturalHeight: item.node.scrollHeight
+			naturalHeight: item.node.scrollHeight,
+			anchor: item.type !== 'paragraph' && item.type !== 'list'
 		}));
-		// Real image rects join the flow as obstacles too, carrying their true
-		// horizontal extent — every column they intersect learns to hop them.
+		// Real image rects, table regions, kept-original text and the
+		// figure↔caption gaps ALL join the flow as obstacles with true
+		// horizontal extents — packing body text upward is only safe when the
+		// flow knows everything it must not climb onto.
 		const presentColumns = [...new Set(items.map(i => i.column))];
-		const imageObstacles: FlowObstacle[] = imageBoxes.flatMap(box =>
+		const hardBoxes: Box[] = [...imageBoxes, ...tableGuard.regions, ...fixedBoxes, ...captionGapBoxes];
+		const boxObstacles: FlowObstacle[] = hardBoxes.flatMap(box =>
 			presentColumns.map(column => ({
 				column,
 				top: box.top,
@@ -548,7 +589,7 @@ export function buildTranslatedPage(
 				leftPx: box.left,
 				rightPx: box.left + box.width
 			})));
-		const allObstacles = [...obstacles, ...imageObstacles];
+		const allObstacles = [...obstacles, ...boxObstacles];
 		let plan = planFlow(items, allObstacles, {
 			pageHeight: pageHeightPx,
 			gap: Math.max(4, bodyPt * pxPerPoint * 0.55),
@@ -614,19 +655,37 @@ export function buildTranslatedPage(
 			pageHeightPx
 		);
 
+		// True continuation instead of scattering blocks past the footer. A
+		// block whose final position STARTS at or beyond the footer zone does
+		// not belong on this page any more — parking it absolutely below the
+		// artwork produced "footer in the middle of the article, fragments
+		// after it, single-word slivers at the very bottom". Those blocks are
+		// pulled out of the absolute layout entirely and re-flowed, in reading
+		// order, on a tidy continuation sheet appended after the page.
+		const footerTopPx = guardBands.length && guardBands[guardBands.length - 1]!.top > pageHeightPx / 2
+			? guardBands[guardBands.length - 1]!.top
+			: pageHeightPx;
 		let maxBottom = pageHeightPx;
 		const finalBoxes: (Box & { id: string })[] = [];
+		const continuation: { item: PlacedItem; column: number; sourceTop: number }[] = [];
 		for (const placement of plan) {
-			const item = placed[Number(placement.id)];
+			const index = Number(placement.id);
+			const item = placed[index];
 			if (!item) {
 				continue;
 			}
 			const top = resolved.get(placement.id) ?? placement.top;
+			const height = items[index]!.naturalHeight;
+			if (top >= footerTopPx - 1) {
+				continuation.push({ item, column: items[index]!.column, sourceTop: item.box.top });
+				item.node.style.display = 'none';
+				continue;
+			}
+			item.node.style.removeProperty('display');
 			item.node.style.top = `${top}px`;
 			if (top > item.box.top + 0.5) {
 				item.node.setAttribute('data-pm-displaced', 'true');
 			}
-			const height = items[Number(placement.id)]!.naturalHeight;
 			const bottom = top + height;
 			if (bottom > pageHeightPx) {
 				item.node.setAttribute('data-pm-overflow', 'true');
@@ -634,10 +693,34 @@ export function buildTranslatedPage(
 			maxBottom = Math.max(maxBottom, bottom);
 			finalBoxes.push({ id: placement.id, left: item.box.left, top, width: item.box.width, height });
 		}
-		// Long translations extend the page below the artwork rather than
-		// piling up on the bottom edge. The extension is plain paper.
-		if (maxBottom > pageHeightPx + 1) {
-			page.style.height = `${Math.ceil(maxBottom + 14)}px`;
+		// Blocks that merely poke past the artwork still grow the page a little
+		// (plain paper); the continuation sheet then starts below them.
+		page.querySelector('.pm-continuation')?.remove();
+		let pageBottom = Math.max(pageHeightPx, Math.ceil(maxBottom + (maxBottom > pageHeightPx ? 14 : 0)));
+		if (continuation.length) {
+			const sheet = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
+			sheet.className = 'pm-continuation';
+			sheet.style.top = `${pageBottom + 10}px`;
+			const label = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
+			label.className = 'pm-continuation-label';
+			label.textContent = '⬐ 本页译文续 (continued)';
+			sheet.appendChild(label);
+			// Reading order: column-major, then source position.
+			continuation.sort((a, b) => a.column - b.column || a.sourceTop - b.sourceTop);
+			for (const entry of continuation) {
+				const p = doc.createElementNS(HTML_NS, 'p') as HTMLElement;
+				p.className = 'pm-continuation-para';
+				if (entry.item.type === 'heading' || entry.item.type === 'title') {
+					p.setAttribute('data-pm-strong', 'true');
+				}
+				p.textContent = entry.item.node.textContent ?? '';
+				sheet.appendChild(p);
+			}
+			page.appendChild(sheet);
+			pageBottom += 10 + sheet.offsetHeight + 12;
+		}
+		if (pageBottom > pageHeightPx + 1) {
+			page.style.height = `${pageBottom}px`;
 		}
 
 		// ---- final visual safety check -------------------------------------

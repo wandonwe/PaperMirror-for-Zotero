@@ -1354,6 +1354,36 @@
 	overflow: hidden;
 }
 
+/* Continuation sheet: blocks pushed past the footer leave the absolute
+   layout and re-flow here, in reading order, after the original page —
+   real pagination instead of fragments scattered below the footer. */
+.pm-continuation {
+	position: absolute;
+	left: 4%;
+	width: 92%;
+	padding: 8px 0 4px;
+	border-top: 1px dashed rgba(0, 0, 0, .28);
+	font: 400 13px/1.7 -apple-system, "PingFang SC", "Hiragino Sans GB",
+		"Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+	color: var(--pm-repage-ink, #1b1d21);
+}
+.pm-continuation-label {
+	margin-bottom: 6px;
+	font: 500 10px/1 Inter, system-ui, sans-serif;
+	letter-spacing: .05em;
+	color: #97a0ad;
+	text-transform: uppercase;
+}
+.pm-continuation-para {
+	margin: 0 0 .7em;
+	text-align: justify;
+	overflow-wrap: break-word;
+}
+.pm-continuation-para[data-pm-strong="true"] {
+	font-weight: 700;
+	margin-top: 1em;
+}
+
 /* Degraded rendering for a page whose layout failed the final visual check:
    the untouched original page with the full translation flowed underneath. */
 .pm-repage-fallback {

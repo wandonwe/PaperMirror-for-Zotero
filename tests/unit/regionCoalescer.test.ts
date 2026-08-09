@@ -131,3 +131,27 @@ test('mid-sentence fragments join with a space; finished tight lines too', () =>
 	const d = block('d', 'The next line, tightly below.', { topY: 688 });
 	assert.equal(separatorBetween(c, d), ' ');
 });
+
+// ---- shard absorption -------------------------------------------------------
+
+test('a bare citation marker is absorbed into the previous region', () => {
+	const a = block('a', 'Coronary inflammation predicts adverse outcomes in this cohort', { topY: 700 });
+	const shard = block('b', '(5,6).', { topY: 687, width: 30, fontSize: 7 }); // superscript-ish size
+	const regions = coalesceRegions([a, shard]);
+	assert.equal(regions.length, 1, 'citation shard merged');
+	assert.ok(regions[0]!.sourceText.endsWith('(5,6).'));
+});
+
+test('a torn-off lowercase continuation is absorbed despite a font mismatch', () => {
+	const a = block('a', 'The attenuation of the polarized beam is measured after the', { topY: 700 });
+	const shard = block('b', 'ated light is isolated in the detector.', { topY: 660, fontSize: 8 });
+	const regions = coalesceRegions([a, shard]);
+	assert.equal(regions.length, 1, 'continuation shard merged into its paragraph');
+});
+
+test('a shard with no adjacent body neighbour survives unmerged', () => {
+	const h = block('h', 'Methods', { topY: 700, type: 'heading' });
+	const shard = block('s', '(12).', { topY: 300, width: 26 });
+	const regions = coalesceRegions([h, shard]);
+	assert.equal(regions.length, 2, 'nothing eligible to absorb it — kept');
+});

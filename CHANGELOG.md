@@ -42,6 +42,27 @@ followed by the phase-one structural hardening (stop the obvious errors).
   a whole paragraph's translated size. Region merges follow the longer
   fragment's size.
 - planFlow only hops obstacles a block actually intersects horizontally.
+- **Shard absorption.** Bare citation markers ("(5,6)."), superscript runs
+  and torn-off lowercase continuations ("ated light is isolated…") are no
+  longer independent blocks: a looser second coalescing pass folds them into
+  the adjacent body region, so they translate with their sentence instead of
+  surviving as English crumbs below the replacement threshold.
+- **Figure groups.** A bare "Figure N:"/"图 N" label re-unites with the
+  caption text PDF.js tore it from (the union classifies as one caption and
+  is translated whole), captions get a laxer replacement size gate, and the
+  strip between an image and its caption is a no-park zone — the caption can
+  grow downward but can never be separated from its figure.
+- **Real pagination instead of unbounded growth.** Blocks pushed to or past
+  the footer zone leave the absolute layout entirely and re-flow, in
+  column-major reading order, on a tidy continuation sheet appended after
+  the page ("本页译文续") — no more footer stranded mid-article with
+  fragments and single-word slivers scattered after it.
+- **Body text packs upward.** planFlow gains anchor semantics: headings,
+  titles and captions still hold their source position, but ordinary body
+  paragraphs now pack from the column cursor, reclaiming the whitespace a
+  shorter Chinese paragraph leaves. Packing knows every hard box (images,
+  tables, kept-original text, caption gaps) as obstacles, so it can never
+  climb onto anything. Legacy callers without the flag keep the old rule.
 
 ### Fixed
 

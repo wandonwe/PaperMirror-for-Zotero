@@ -263,6 +263,14 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612): SpanLin
 	return paragraphs;
 }
 
+/**
+ * A block that is ONLY a figure label — "Figure 6:", "Fig. 2.", "图 3" —
+ * with the caption text torn into the next block.
+ */
+export function isBareFigureLabel(text: string): boolean {
+	return /^(figure|fig\.?|图)\s*\d+\s*[.:：]?\s*$/i.test(text.trim());
+}
+
 function classify(text: string, fontSize: number, bodySize: number, lineCount: number): BlockType {
 	if (/^(figure|fig\.?|table|图|表|圖)\s*\d+/i.test(text)) {
 		return /^(table|表)/i.test(text) ? 'table' : 'caption';
@@ -347,6 +355,36 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		const fontSize = dominantFontSize(group.map(l => l.fontSize)) || head.fontSize;
 		return { ...head, rect, text, group, fontSize };
 	});
+
+	// Caption label reunification. PDF.js frequently tears "Figure 6:" off
+	// its caption text: the label alone classifies as a caption, and the
+	// description behind it degrades to ordinary body text (translated and
+	// re-flowed away from its figure) while the tiny English label survives
+	// untouched. A bare label merges with the block that follows it in the
+	// same column, and the union is a caption.
+	for (let i = merged.length - 2; i >= 0; i--) {
+		const label = merged[i]!;
+		const rest = merged[i + 1]!;
+		if (!isBareFigureLabel(label.text)) {
+			continue;
+		}
+		const vGap = label.rect[1] - rest.rect[3];
+		const hOverlap = Math.min(label.rect[2], rest.rect[2]) - Math.max(label.rect[0], rest.rect[0]);
+		const em = Math.max(label.fontSize, 6);
+		if (vGap > em * 1.6 || vGap < -em * 1.2 || hOverlap < -em) {
+			continue;
+		}
+		const rect = union(label.rect, rest.rect);
+		const group = [...label.group, ...rest.group];
+		merged.splice(i, 2, {
+			...label,
+			rect,
+			text: joinFragments(label.text, rest.text),
+			group,
+			type: 'caption',
+			fontSize: dominantFontSize(group.map(l => l.fontSize)) || rest.fontSize
+		});
+	}
 
 	let referencesStarted = !!options.referencesAlreadyStarted;
 	const blocks: SourceBlock[] = [];

@@ -36,6 +36,18 @@ export interface FlowItem {
 	sourceTop: number;
 	/** Height the translated text needs at its chosen size. */
 	naturalHeight: number;
+	/**
+	 * Anchor semantics (opt-in):
+	 *   true  — structural block (heading, title, caption): its source top is
+	 *           a hard floor, exactly the old rule.
+	 *   false — ordinary body text: PACKS from the column cursor, reclaiming
+	 *           the whitespace shorter Chinese leaves behind. It may rise
+	 *           above its source position but never above the block before it
+	 *           or into an obstacle.
+	 *   undefined — legacy behaviour (same as true); callers that don't know
+	 *           about anchors keep exactly the old layout.
+	 */
+	anchor?: boolean;
 }
 
 export interface FlowObstacle {
@@ -92,8 +104,19 @@ export function planFlow(
 		const ordered = [...list].sort((a, b) => a.sourceTop - b.sourceTop);
 		let cursor = -Infinity;
 		for (const item of ordered) {
-			// Rule 1: never above the source position, never above the block before.
-			let top = Math.max(item.sourceTop, cursor);
+			// Rule 1 (anchored / legacy): never above the source position, never
+			// above the block before. Body text with anchor === false instead
+			// PACKS from the cursor — the whitespace a shorter translation
+			// leaves is reclaimed rather than preserved as a hole. The first
+			// block of a column always keeps its source top, so columns stay
+			// aligned with the page's own grid.
+			let top: number;
+			if (item.anchor === false && cursor !== -Infinity) {
+				top = cursor;
+			}
+			else {
+				top = Math.max(item.sourceTop, cursor);
+			}
 			// Rule 3: hop over anything we are not allowed to print on — but
 			// only obstacles the block actually intersects HORIZONTALLY. An
 			// obstacle carrying a tight ink extent must not stall blocks that

@@ -139,9 +139,64 @@ function mergeTwo(a: SourceBlock, b: SourceBlock): SourceBlock {
 }
 
 /**
+ * A SHARD: a fragment extraction should never have made a block of — a bare
+ * citation marker "(5,6).", a superscript run, or the torn-off tail of a
+ * sentence ("ated light is isolated…"). Left alone, shards either translate
+ * as gibberish or fall below the replacement size threshold and survive as
+ * English crumbs inside a Chinese paragraph.
+ */
+export function isShard(block: SourceBlock): boolean {
+	if (!isBodyBlock(block)) {
+		return false;
+	}
+	const t = block.sourceText.trim();
+	if (!t) {
+		return false;
+	}
+	// Bare citation/reference markers.
+	if (/^[[(]?\d+(\s*[,–—-]\s*\d+)*[\])]?[.,]?$/.test(t)) {
+		return true;
+	}
+	// Tiny fragments of any kind.
+	if (t.length <= 12) {
+		return true;
+	}
+	// A torn-off continuation: starts lowercase mid-word/mid-sentence.
+	return t.length <= 60 && /^[a-z]/.test(t);
+}
+
+/**
+ * Absorption is deliberately LOOSER than canMerge: a shard belongs to its
+ * neighbour even when the font drifted (superscripts) or the gap is odd —
+ * geometry only has to say "same column, adjacent-ish".
+ */
+export function canAbsorb(host: SourceBlock, shard: SourceBlock): boolean {
+	if (!isBodyBlock(host) || !host.lineRectsPdf?.length || !shard.lineRectsPdf?.length) {
+		return false;
+	}
+	const rh = unionRect(host.lineRectsPdf as Rect[]);
+	const rs = unionRect(shard.lineRectsPdf as Rect[]);
+	// Same column at a relaxed 40%, or the shard sits inside the host's span.
+	const overlap = Math.min(rh[2], rs[2]) - Math.max(rh[0], rs[0]);
+	const narrower = Math.min(rh[2] - rh[0], rs[2] - rs[0]);
+	if (narrower > 0 && overlap / narrower < 0.4) {
+		return false;
+	}
+	const em = Math.max(host.fontSize ?? 10, 6);
+	// Vertically adjacent or overlapping, up to 3em apart either way.
+	const gap = Math.max(rh[1] - rs[3], rs[1] - rh[3]);
+	if ((host.sourceText.length + shard.sourceText.length) > MAX_REGION_CHARS) {
+		return false;
+	}
+	return gap <= em * 3;
+}
+
+/**
  * Coalesce a page's blocks into regions. Order is preserved; only
  * consecutive-in-reading-order body blocks merge, so a heading between two
- * paragraphs always splits them.
+ * paragraphs always splits them. Shards then get a second, looser pass:
+ * anything that should never have been its own block is absorbed into the
+ * nearest adjacent body region (previous first, next as fallback).
  */
 export function coalesceRegions(blocks: SourceBlock[]): SourceBlock[] {
 	const out: SourceBlock[] = [];
@@ -152,6 +207,24 @@ export function coalesceRegions(blocks: SourceBlock[]): SourceBlock[] {
 		}
 		else {
 			out.push({ ...block });
+		}
+	}
+	// Shard absorption. Backward into the previous region reads naturally
+	// (citations follow the text they cite); forward is the fallback.
+	for (let i = out.length - 1; i >= 0; i--) {
+		const shard = out[i]!;
+		if (!isShard(shard)) {
+			continue;
+		}
+		const prev = out[i - 1];
+		const next = out[i + 1];
+		if (prev && canAbsorb(prev, shard)) {
+			out[i - 1] = mergeTwo(prev, shard);
+			out.splice(i, 1);
+		}
+		else if (next && canAbsorb(next, shard)) {
+			out[i + 1] = mergeTwo(shard, next);
+			out.splice(i, 1);
 		}
 	}
 	// Re-number so ids stay unique and ordered after merging.

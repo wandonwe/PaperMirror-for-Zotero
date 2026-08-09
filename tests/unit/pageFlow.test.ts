@@ -305,3 +305,34 @@ test('findLayoutProblems reports overlaps and fixed-box violations, forgives sla
 	];
 	assert.equal(findLayoutProblems(grazing, [], 4).length, 0);
 });
+
+test('body text with anchor:false packs upward; anchored blocks hold their source top', () => {
+	// Column: heading at 100 (anchor), short paragraph at 200 whose Chinese is
+	// 40px tall, next paragraph at 400. Legacy left a 160px hole; packing pulls
+	// the second paragraph up to the cursor. The heading itself never moves.
+	const items: FlowItem[] = [
+		{ id: 'h', column: 0, left: 40, width: 200, sourceTop: 100, naturalHeight: 20, anchor: true },
+		{ id: 'p1', column: 0, left: 40, width: 200, sourceTop: 200, naturalHeight: 40, anchor: false },
+		{ id: 'p2', column: 0, left: 40, width: 200, sourceTop: 400, naturalHeight: 40, anchor: false }
+	];
+	const plan = planFlow(items, [], { pageHeight: 1000, gap: 10 });
+	const by = new Map(plan.map(p => [p.id, p.top]));
+	assert.equal(by.get('h'), 100, 'anchor holds');
+	assert.equal(by.get('p1'), 130, 'first body block packs to the cursor');
+	assert.equal(by.get('p2'), 180, 'the hole at 400 is reclaimed');
+	// Legacy items (no anchor field) keep the old never-up rule.
+	const legacy = planFlow(items.map(({ anchor: _a, ...rest }) => rest), [], { pageHeight: 1000, gap: 10 });
+	assert.equal(new Map(legacy.map(p => [p.id, p.top])).get('p2'), 400, 'legacy semantics untouched');
+});
+
+test('packing still hops obstacles', () => {
+	const items: FlowItem[] = [
+		{ id: 'a', column: 0, left: 40, width: 200, sourceTop: 100, naturalHeight: 50, anchor: false },
+		{ id: 'b', column: 0, left: 40, width: 200, sourceTop: 500, naturalHeight: 50, anchor: false }
+	];
+	const obstacles = [{ column: 0, top: 160, bottom: 300, leftPx: 40, rightPx: 240 }];
+	const plan = planFlow(items, obstacles, { pageHeight: 1000, gap: 10 });
+	const by = new Map(plan.map(p => [p.id, p.top]));
+	assert.equal(by.get('a'), 100);
+	assert.equal(by.get('b'), 300, 'packs up to the obstacle bottom, not into it');
+});

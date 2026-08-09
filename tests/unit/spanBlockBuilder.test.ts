@@ -193,3 +193,12 @@ test('block order is sequential and ids are unique within a page', () => {
 	assert.deepEqual(blocks.map(b => b.order), [0, 1]);
 	assert.equal(new Set(blocks.map(b => b.id)).size, 2);
 });
+
+test('isBareFigureLabel matches torn-off labels only', async () => {
+	const { isBareFigureLabel } = await import('../../src/reader/spanBlockBuilder');
+	assert.equal(isBareFigureLabel('Figure 6:'), true);
+	assert.equal(isBareFigureLabel('Fig. 2.'), true);
+	assert.equal(isBareFigureLabel('图 3'), true);
+	assert.equal(isBareFigureLabel('Figure 6: Photon-counting detector design.'), false);
+	assert.equal(isBareFigureLabel('Configure 6:'), false);
+});
