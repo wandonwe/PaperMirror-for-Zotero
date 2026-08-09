@@ -9,10 +9,23 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
-## [0.6.2] — 2026-08-08
+## [0.7.0] — 2026-08-09
 
-Layout-overflow fixes for the rebuilt (side-by-side) page, from a joint audit,
-followed by the phase-one structural hardening — and then a course change:
+**修复表格和图片排版问题 (table & figure layout fixes).** 整页对照重写为严格
+原位替换:译文永远写在原文的矩形里,表格整体保留原样,图片零像素变化,页面
+尺寸与原版完全一致。This release folds five review rounds of layout work into
+one architecture: strict in-place replacement.
+
+### Added
+
+- **刷新 = 只重译当前页,并轮换引擎.** The refresh button re-translates ONLY
+  the page you are on (bypassing its cache), and when 多服务商并行 is active
+  it also deals that page to the NEXT engine in the pool — a page that came
+  out poorly on one service gets a genuinely different translator, with the
+  cache entry keyed to the newly chosen engine. Rotation resets when the
+  provider/language configuration changes.
+- GitHub Releases now carry this changelog section as their release notes
+  (the auto-generated commit list follows below).
 
 ### Changed (architecture)
 
@@ -829,8 +842,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.2...HEAD
-[0.6.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.1...v0.6.2
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.5.2...v0.5.3

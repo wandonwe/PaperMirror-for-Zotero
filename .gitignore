@@ -16,6 +16,6 @@ dist/
 *.log
 tmp/
 _to_delete/
+release-notes.md
 _staging/
 _trash/
-_icon-sync.zip

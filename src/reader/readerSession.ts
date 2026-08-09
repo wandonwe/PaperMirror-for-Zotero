@@ -117,6 +117,22 @@ export class ReaderSession {
 	private imageRects = new Map<number, [number, number, number, number][] | null>();
 	/** Compress-and-retry rounds already spent per page (max 2). */
 	private compressRounds = new Map<number, number>();
+	/**
+	 * 刷新-driven engine rotation. With a provider pool active, hitting 刷新 on
+	 * a page bumps its offset so the RE-translation is dealt to the NEXT
+	 * engine in the pool — a page that came out poorly on one service gets a
+	 * genuinely different translator, not the same one again.
+	 */
+	private pageProviderOffset = new Map<number, number>();
+
+	/** The engine responsible for a page, honouring the 刷新 rotation. */
+	private providerForPage(pageIndex: number): string {
+		if (this.pool.length > 1) {
+			const offset = this.pageProviderOffset.get(pageIndex) ?? 0;
+			return pickProviderForPage(this.pool, pageIndex + offset);
+		}
+		return getPref<string>('provider', 'bing-free');
+	}
 	/** True while a full-PDF translation is running on the local bridge. */
 	private exportingPdf = false;
 	/** Most recent deep explanation, for copy / save-to-note. */
@@ -402,8 +418,8 @@ export class ReaderSession {
 	}
 
 	private async translateRequest(request: TranslationRequest, signal: AbortSignal): Promise<TranslationResponse> {
-		const chosen = this.pool.length > 1 && typeof request.pageIndex === 'number'
-			? pickProviderForPage(this.pool, request.pageIndex)
+		const chosen = typeof request.pageIndex === 'number'
+			? this.providerForPage(request.pageIndex)
 			: getPref<string>('provider', 'bing-free');
 		const settings = await this.providerSettingsFor(chosen);
 		const provider = getProvider(settings.providerId);
@@ -424,9 +440,7 @@ export class ReaderSession {
 		if (!item) {
 			return null;
 		}
-		const chosen = this.pool.length > 1
-			? pickProviderForPage(this.pool, pageIndex)
-			: getPref<string>('provider', 'bing-free');
+		const chosen = this.providerForPage(pageIndex);
 		const settings = await this.providerSettingsFor(chosen);
 		const { source, target } = this.resolveLanguages(texts.join('\n').slice(0, 2000));
 		return {
@@ -980,6 +994,7 @@ export class ReaderSession {
 		void this.rebuildPool();
 		this.manager?.resetAll();
 		this.compressRounds.clear();
+		this.pageProviderOffset.clear();
 		this.detectedSource = null;
 		if (getPref<boolean>('privacyNoticeAccepted', false)) {
 			const page = adapter.getCurrentPageIndex(this.reader);
@@ -994,6 +1009,11 @@ export class ReaderSession {
 		}
 		const page = adapter.getCurrentPageIndex(this.reader);
 		this.compressRounds.delete(page);
+		// Pool active → deal this page to the next engine before re-translating.
+		if (this.pool.length > 1) {
+			this.pageProviderOffset.set(page, ((this.pageProviderOffset.get(page) ?? 0) + 1) % this.pool.length);
+			logger.info(MODULE, `刷新 page ${page + 1} → provider ${this.providerForPage(page)}`);
+		}
 		this.pane?.setBusy(true);
 		try {
 			// Bypasses the cache; the fresh result overwrites the old entry on write.
