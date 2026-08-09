@@ -82,3 +82,55 @@ test('higher priority runs first', async () => {
 	await Promise.all([block, low, high]);
 	assert.deepEqual(order, ['block', 'high', 'low']);
 });
+
+test('isQueued is true only while WAITING, false once running', async () => {
+	const scheduler = new RequestScheduler({ maxConcurrent: 1, delayFn: noDelay });
+	let release!: () => void;
+	const running = scheduler.enqueue('run', 10, async () => {
+		await new Promise<void>(r => { release = r; });
+	});
+	const waiting = scheduler.enqueue('wait', 1, async () => 'w');
+	assert.equal(scheduler.isQueued('run'), false, 'the active job is not "queued"');
+	assert.equal(scheduler.isScheduled('run'), true, 'but it IS scheduled');
+	assert.equal(scheduler.isQueued('wait'), true, 'the waiting job is queued');
+	release();
+	await running; await waiting;
+});
+
+test('promote raises a queued job so it runs next', async () => {
+	const scheduler = new RequestScheduler({ maxConcurrent: 1, delayFn: noDelay });
+	const order: string[] = [];
+	const block = scheduler.enqueue('block', 100, async () => {
+		await new Promise(r => setTimeout(r, 10));
+		order.push('block');
+	});
+	const a = scheduler.enqueue('a', 5, async () => { order.push('a'); });
+	const b = scheduler.enqueue('b', 1, async () => { order.push('b'); });
+	// b was lowest; promote it above a — it must now run before a.
+	scheduler.promote('b', 900);
+	await Promise.all([block, a, b]);
+	assert.deepEqual(order, ['block', 'b', 'a']);
+});
+
+test('reservedForeground keeps a slot free so the current page never waits', async () => {
+	// 2 slots, 1 reserved → background may hold at most 1 slot. Two background
+	// prefetches are enqueued and would fill both slots under the old scheduler;
+	// a foreground job enqueued AFTER them must still start immediately.
+	const scheduler = new RequestScheduler({ maxConcurrent: 2, reservedForeground: 1, delayFn: noDelay });
+	const running = new Set<string>();
+	let fgStarted = false;
+	const hold = (k: string) => scheduler.enqueue(k, 1, async () => {
+		running.add(k);
+		await new Promise(r => setTimeout(r, 30));
+		running.delete(k);
+	});
+	const bg1 = hold('bg1');
+	const bg2 = hold('bg2');
+	await new Promise(r => setTimeout(r, 5));
+	// Only ONE background job may be active at once (cap = 2 - 1).
+	assert.equal(running.size, 1, 'background is capped to leave the reserved slot free');
+	const fg = scheduler.enqueue('fg', 900, async () => { fgStarted = true; }, { foreground: true });
+	await new Promise(r => setTimeout(r, 5));
+	assert.equal(fgStarted, true, 'the foreground page started at once, not after a prefetch finished');
+	await Promise.all([bg1, bg2, fg]);
+});

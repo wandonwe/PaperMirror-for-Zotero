@@ -9,6 +9,32 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.8.6] — 2026-08-09
+
+### Changed
+
+- **圆环颜色改为状态语义 (semantic ring colours).** The ring colour now means a
+  STATE, never a provider or a per-page hue: 翻译中蓝 `#6C9BFF`, 排版紫
+  `#8B7CF6`, 完成绿 `#37C871`, 部分完成橙 `#F5A623`, 失败红 `#FF6B6B`, 已停止灰
+  `#8B93A1`, 空闲深灰蓝 `#748096`, 底部轨道 `rgba(255,255,255,.16)`. All routed
+  through CSS variables. The centre percentage is ALWAYS white (never tinted by
+  the ring), and the stop button is red only on hover — not a permanent alarm.
+- **永远优先翻译当前页 (the visible page always wins scheduling).** Two scheduler
+  gaps closed:
+  - **已排队页可被提升 (queued pages can be promoted).** Navigating to a page that
+    was already enqueued as a low-priority prefetch used to hit an early return
+    and keep its prefetch priority. `RequestScheduler.promote()` now raises it to
+    the foreground current-page priority (and `setCurrentPage` calls it), so it
+    stops waiting behind neighbours.
+  - **当前页专属并发槽 (a reserved foreground slot).** The scheduler reserves one
+    slot for foreground work (`reservedForeground`), so background prefetch can
+    never occupy every slot and make the visible page wait for a neighbour to
+    finish. Even on the free engines' 2 slots, prefetch is capped at 1.
+- Prefetch window narrowed to `[current, next, previous]` (dropped current+2);
+  explicit priority tiers (retranslate 1000 > current 900 > compress 850 > next
+  100 > previous 80 > second-next 20); neighbour prefetch is never enqueued
+  until the current page is done; pages leaving the window are cancelled.
+
 ## [0.8.5] — 2026-08-09
 
 ### Changed

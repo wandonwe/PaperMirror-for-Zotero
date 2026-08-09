@@ -105,6 +105,16 @@ export const CAPSULE_CLASS = 'pm-status-capsule';
 
 export const CAPSULE_CSS = `
 .${CAPSULE_CLASS} {
+	/* Ring colour is SEMANTIC — it means a state, never a provider or a random
+	   per-page hue. Centralised as variables so every arc rule reads from here. */
+	--pm-ring-active: #6c9bff;   /* 识别/翻译中 — 蓝 */
+	--pm-ring-layout: #8b7cf6;   /* 排版适配中 — 紫 */
+	--pm-ring-done: #37c871;     /* 完成 — 绿 */
+	--pm-ring-partial: #f5a623;  /* 部分完成，有内容保留原文 — 橙 */
+	--pm-ring-failed: #ff6b6b;   /* 失败，需用户处理 — 红 */
+	--pm-ring-stopped: #8b93a1;  /* 用户主动停止 — 灰 */
+	--pm-ring-idle: #748096;     /* 空闲常驻，可点击刷新 — 深灰蓝 */
+	--pm-ring-track: rgba(255, 255, 255, .16); /* 未完成部分的底部轨道 */
 	position: fixed;
 	right: 22px;
 	bottom: 22px;
@@ -150,8 +160,8 @@ export const CAPSULE_CSS = `
 	pointer-events: none; /* 外圈只显示进度，不承担点击 */
 }
 .${CAPSULE_CLASS} .pm-ring-progress circle { fill: none; stroke-width: 3.5; }
-.${CAPSULE_CLASS} .pm-track { stroke: rgba(255, 255, 255, .16); }
-.${CAPSULE_CLASS} .pm-arc { stroke: #6c9bff; stroke-linecap: round; transition: stroke-dashoffset .3s ease, stroke .2s ease; }
+.${CAPSULE_CLASS} .pm-track { stroke: var(--pm-ring-track); }
+.${CAPSULE_CLASS} .pm-arc { stroke: var(--pm-ring-active); stroke-linecap: round; transition: stroke-dashoffset .3s ease, stroke .2s ease; }
 /* Center button = 刷新本页. FULLY reset the native <button> (appearance/margin/
    min-width/text-align/text-indent/box-sizing) so no host default shifts the %,
    and make it a full 34×34 disc concentric with the SVG — "100%" never overflows
@@ -187,6 +197,8 @@ export const CAPSULE_CSS = `
 	display: grid;
 	place-items: center;
 	pointer-events: none;
+	color: #eef1f5; /* the % is ALWAYS white — never tinted by the ring colour,
+	                   so orange/red small text stays readable */
 }
 .${CAPSULE_CLASS} .pm-body { flex: 1 1 auto; min-width: 0; cursor: pointer; }
 .${CAPSULE_CLASS} .pm-main { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -202,11 +214,13 @@ export const CAPSULE_CSS = `
 	border: none;
 	border-radius: 8px;
 	background: rgba(255, 255, 255, .08);
-	color: inherit;
+	color: #eef1f5;
 	font: inherit;
 	cursor: pointer;
 }
-.${CAPSULE_CLASS} .pm-action:hover { background: rgba(255, 255, 255, .18); }
+/* The stop button is only RED on hover — a warning at the moment of intent, not
+   a permanently alarming red sitting in the corner. */
+.${CAPSULE_CLASS} .pm-action:hover { color: #fff; background: rgba(255, 107, 107, .24); }
 /* Collapsed: SAME 56×56 outer size as the expanded capsule's height — no more
    padding:6px + shell:56 = 68px jump. The shell fills the 56 square (easy hit
    target), the SVG stays 34×34 so the RING itself does not grow; only the
@@ -223,10 +237,13 @@ export const CAPSULE_CSS = `
 .${CAPSULE_CLASS}[data-pm-collapsed="true"] .pm-ring-shell:hover { background: rgba(255, 255, 255, .1); }
 .${CAPSULE_CLASS}[data-pm-collapsed="true"] .pm-body,
 .${CAPSULE_CLASS}[data-pm-collapsed="true"] .pm-action { display: none; }
-.${CAPSULE_CLASS}[data-pm-phase="done"] .pm-arc { stroke: #37c871; }
-.${CAPSULE_CLASS}[data-pm-phase="partial"] .pm-arc { stroke: #f5a623; }
-.${CAPSULE_CLASS}[data-pm-phase="failed"] .pm-arc { stroke: #ff6b6b; }
-.${CAPSULE_CLASS}[data-pm-phase="cancelled"] .pm-arc { stroke: rgba(255, 255, 255, .4); }
+.${CAPSULE_CLASS}[data-pm-phase="translating"] .pm-arc { stroke: var(--pm-ring-active); }
+.${CAPSULE_CLASS}[data-pm-phase="laying-out"] .pm-arc { stroke: var(--pm-ring-layout); }
+.${CAPSULE_CLASS}[data-pm-phase="done"] .pm-arc { stroke: var(--pm-ring-done); }
+.${CAPSULE_CLASS}[data-pm-phase="partial"] .pm-arc { stroke: var(--pm-ring-partial); }
+.${CAPSULE_CLASS}[data-pm-phase="failed"] .pm-arc { stroke: var(--pm-ring-failed); }
+.${CAPSULE_CLASS}[data-pm-phase="cancelled"] .pm-arc { stroke: var(--pm-ring-stopped); }
+.${CAPSULE_CLASS}[data-pm-phase="idle"] .pm-arc { stroke: var(--pm-ring-idle); }
 .${CAPSULE_CLASS}[data-pm-indeterminate="true"] .pm-ring-progress { animation: pm-capsule-spin 1s linear infinite; }
 @keyframes pm-capsule-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
 `;

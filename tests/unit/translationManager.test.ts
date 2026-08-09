@@ -341,6 +341,42 @@ test('looksTranslated rejects a HALF-translated / mixed response, not just pure 
 	);
 });
 
+test('navigating to a QUEUED prefetch page promotes it to run now (not stuck)', async () => {
+	// Problem one: a page enqueued as a low-priority prefetch used to be
+	// unreachable — ensurePage early-returned on isScheduled, so navigating to it
+	// left it at prefetch priority behind a blocked neighbour. It must now be
+	// promoted to the foreground and run immediately.
+	const { PaperMirrorError } = await import('../../src/types/models');
+	const order: number[] = [];
+	const { deps } = makeDeps({
+		pageCount: () => 10,
+		extractPage: async (p) => [{
+			id: `page-${p}-block-0`, pageIndex: p, order: 0, type: 'paragraph',
+			sourceText: `Body text for page ${p} with enough words here now.`
+		}],
+		translateRequest: async (request: TranslationRequest, signal?: AbortSignal): Promise<TranslationResponse> => {
+			const p = request.pageIndex ?? -1;
+			if (p === 6) {
+				// page 6 seizes the single slot and holds it until aborted.
+				await new Promise<void>((_resolve, reject) => {
+					signal?.addEventListener?.('abort', () => reject(new PaperMirrorError('CANCELLED', 'aborted')));
+				});
+			}
+			order.push(p);
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '译文内容' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: true, maxConcurrent: 1, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(5);
+	await new Promise(r => setTimeout(r, 20));
+	assert.ok(order.includes(5), 'the current page 5 translated');
+	assert.ok(!order.includes(4), 'page 4 is queued behind the blocked page 6 prefetch');
+	manager.setCurrentPage(4); // page 4 was a queued prefetch → promote + run
+	await new Promise(r => setTimeout(r, 20));
+	assert.ok(order.includes(4), 'navigating to the queued page runs it now, not stuck behind page 6');
+	manager.dispose();
+});
+
 test('优先翻译当前页: the current page translates before any neighbour is prefetched', async () => {
 	const order: number[] = [];
 	const { deps } = makeDeps({

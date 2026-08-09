@@ -43,8 +43,24 @@ const SALVAGE_WARN_THRESHOLD = 24;
  */
 const SALVAGE_CONCURRENCY = 4;
 
-/** The visible page's scheduler priority — dominant over neighbour prefetch (1). */
-const CURRENT_PAGE_PRIORITY = 100;
+/**
+ * Scheduler priorities. The current visible page and its work always dominate
+ * neighbour prefetch, so the page the reader is looking at is never queued
+ * behind pages they have not scrolled to yet. Numeric gaps leave room to insert
+ * finer tiers later without renumbering.
+ */
+const PRIORITY = {
+	/** 重新翻译本页 — an explicit user action, the most urgent thing there is. */
+	CURRENT_RETRANSLATE: 1000,
+	/** The visible page's first translation. */
+	CURRENT_PAGE: 900,
+	/** The visible page's strict-layout compress-and-retry. */
+	CURRENT_COMPRESS: 850,
+	/** Prefetch: the next page is likelier to be read than the previous. */
+	NEXT_PAGE: 100,
+	PREVIOUS_PAGE: 80,
+	SECOND_NEXT_PAGE: 20
+} as const;
 
 /**
  * Accept a response as a REAL translation, not an echo or a half-translation.
@@ -147,6 +163,11 @@ export class TranslationManager {
 			// page-sized requests in flight; the free engines stay at 2 (the
 			// session clamps before it gets here).
 			maxConcurrent: Math.min(6, Math.max(1, options?.maxConcurrent ?? 2)),
+			// Reserve ONE slot for the current page so background prefetch can
+			// never occupy every slot and make the visible page wait for a
+			// neighbour to finish. Even at the free engines' 2 slots, prefetch is
+			// capped at 1 and a foreground page always has a slot to start in.
+			reservedForeground: 1,
 			delayFn: options?.delayFn
 		});
 	}
@@ -162,21 +183,32 @@ export class TranslationManager {
 		}
 		this.currentPage = pageIndex;
 		const wanted = this.wantedPages();
-		// Drop queued work for pages no longer near the viewport — but keep the
-		// compress-and-retry tasks of pages still wanted: cancelling those on
-		// every scroll wasted the strict renderer's budget rounds and long
-		// blocks ended up reverting to the original text.
+		// 1. Drop queued/running work for pages that left the prefetch window, so
+		//    a fast run of scrolls does not leave the current page stuck behind
+		//    stale prefetches holding the slots — but KEEP the compress-and-retry
+		//    tasks of pages still wanted: cancelling those on every scroll wasted
+		//    the strict renderer's budget rounds and long blocks reverted.
 		const keep = new Set<string>();
 		for (const p of wanted) {
 			keep.add(`page-${p}`);
 			keep.add(`page-${p}-compress`);
 		}
 		this.scheduler.cancelExcept(keep);
-		// 优先翻译当前页: the page the reader is on gets a dominant priority AND
-		// the concurrency to itself — neighbour prefetch is not enqueued until the
-		// current page is done, so a slow free engine never spends its 2 slots on
-		// pages ahead while the visible page waits.
-		void this.ensurePage(pageIndex, CURRENT_PAGE_PRIORITY);
+		// 2. 优先翻译当前页 (ALWAYS): if the page was already queued as a background
+		//    prefetch, promote it to the foreground reserved slot instead of
+		//    returning early (the bug: a queued prefetch kept its low priority
+		//    forever); otherwise create it as a foreground task. Either way it now
+		//    owns a reserved slot and cannot wait on a neighbour.
+		const key = `page-${pageIndex}`;
+		if (this.scheduler.isQueued(key)) {
+			this.scheduler.promote(key, PRIORITY.CURRENT_PAGE, true);
+		}
+		else {
+			void this.ensurePage(pageIndex, PRIORITY.CURRENT_PAGE, { foreground: true });
+		}
+		// 3. Neighbour prefetch is enqueued ONLY once the current page is done
+		//    (here if it was already cached/done; otherwise translatePage triggers
+		//    it on completion).
 		if (this.pages.get(pageIndex)?.status === 'done') {
 			this.prefetchNeighbours();
 		}
@@ -187,10 +219,19 @@ export class TranslationManager {
 		if (this.disposed || !this.prefetchEnabled) {
 			return;
 		}
+		// Hard guard: NEVER add background prefetch while the current page is
+		// still unfinished — it must not compete for slots with the visible page.
+		if (this.pages.get(this.currentPage)?.status !== 'done') {
+			return;
+		}
 		for (const page of this.wantedPages()) {
-			if (page !== this.currentPage) {
-				void this.ensurePage(page, 1);
+			if (page === this.currentPage) {
+				continue;
 			}
+			const priority = page === this.currentPage + 1 ? PRIORITY.NEXT_PAGE
+				: page === this.currentPage - 1 ? PRIORITY.PREVIOUS_PAGE
+					: PRIORITY.SECOND_NEXT_PAGE;
+			void this.ensurePage(page, priority, { foreground: false });
 		}
 	}
 
@@ -221,7 +262,7 @@ export class TranslationManager {
 		const sampleText = blocks.map(b => b.sourceText).join('\n').slice(0, 4000);
 		const { source, target } = this.deps.getLanguages(sampleText);
 		try {
-			await this.scheduler.enqueue(`page-${pageIndex}-compress`, 15, async (signal) => {
+			await this.scheduler.enqueue(`page-${pageIndex}-compress`, PRIORITY.CURRENT_COMPRESS, async (signal) => {
 				const protectedBlocks = blocks.map((block) => {
 					const { text, placeholders } = protectFormulas(block.sourceText);
 					return { block, text, placeholders };
@@ -263,7 +304,7 @@ export class TranslationManager {
 						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! }));
 					await this.deps.writeCache(pageIndex, state.blocks, all);
 				}
-			});
+			}, { foreground: true }); // compress serves the VISIBLE page's layout
 		}
 		catch (e) {
 			if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
@@ -278,7 +319,7 @@ export class TranslationManager {
 	async retranslatePage(pageIndex: number): Promise<void> {
 		this.pages.delete(pageIndex);
 		this.scheduler.cancel(`page-${pageIndex}`);
-		await this.ensurePage(pageIndex, 20, { bypassCache: true });
+		await this.ensurePage(pageIndex, PRIORITY.CURRENT_RETRANSLATE, { bypassCache: true, foreground: true });
 	}
 
 	/**
@@ -317,7 +358,10 @@ export class TranslationManager {
 			return [this.currentPage];
 		}
 		const count = this.deps.pageCount();
-		const pages = [this.currentPage, this.currentPage + 1, this.currentPage - 1, this.currentPage + 2];
+		// [current, next, previous] — the next page is the likeliest to be read.
+		// current+2 is deliberately dropped: on the free engines (low concurrency)
+		// prefetching two pages ahead rarely pays off and steals a slot.
+		const pages = [this.currentPage, this.currentPage + 1, this.currentPage - 1];
 		return pages.filter(p => p >= 0 && (count <= 0 || p < count));
 	}
 
@@ -332,7 +376,7 @@ export class TranslationManager {
 		}
 	}
 
-	async ensurePage(pageIndex: number, priority: number, options?: { bypassCache?: boolean }): Promise<void> {
+	async ensurePage(pageIndex: number, priority: number, options?: { bypassCache?: boolean; foreground?: boolean }): Promise<void> {
 		if (this.disposed) {
 			return;
 		}
@@ -378,7 +422,7 @@ export class TranslationManager {
 						clearTimeout(watchdog);
 					}
 				}
-			});
+			}, { foreground: options?.foreground ?? false });
 		}
 		catch (e) {
 			const error = e instanceof PaperMirrorError ? e : new PaperMirrorError('UNKNOWN', String(e));
