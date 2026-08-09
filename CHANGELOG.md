@@ -9,6 +9,33 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.7.4] — 2026-08-09
+
+### Fixed
+
+- **冒号/分号行不再断段 (colon/semicolon merge contradiction).** `endsSentence`
+  counted ":" and ";" as sentence-final, while `danglingEnd` counted the same
+  marks as mid-sentence — so a line ending in a colon or semicolon satisfied
+  both, and the merge condition (`!endsSentence && (startsContinuation ||
+  danglingEnd)`) always rejected it. Such a line was stranded as its own
+  one-line block and left in English. Colon and semicolon are no longer treated
+  as sentence-final, so these lines rejoin their paragraph.
+- **译文完整性/语言校验 (target-language check).** A response was accepted as a
+  translation as long as it was non-empty — so a provider that echoed the
+  English back, or returned it untranslated, was stored as "done" and the page
+  showed English that was indistinguishable from a layout failure. Responses are
+  now checked: for a Chinese target, a translation of prose (≥3 English words in
+  the source) must contain CJK characters, or it is treated as missing and goes
+  through the retry/salvage path; a page that still can't be fully translated is
+  left uncached so a revisit retries. Acronym/numeric cells (legitimately
+  CJK-free) and non-CJK targets are unaffected.
+
+Still ahead (from the review, not yet done): atomic per-semantic-paragraph
+commit so a residual multi-block paragraph can't show half Chinese/half
+English; absorbing long (>60-char) continuation fragments the paragraph merge
+still misses; retrying a whole failed segment rather than many line fragments;
+and an end-to-end two-column page test asserting no non-term English remains.
+
 ## [0.7.3] — 2026-08-09
 
 ### Fixed
@@ -980,7 +1007,8 @@ Initial working plugin for Zotero 9.0.x.
   subset of Noto Sans SC, plus an optional local BabelDOC bridge for full
   layout re-flow.
 
-[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.4...HEAD
+[0.7.4]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/wandonwe/PaperMirror-for-Zotero/compare/v0.7.0...v0.7.1

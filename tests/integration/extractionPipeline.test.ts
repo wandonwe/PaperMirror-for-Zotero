@@ -124,7 +124,7 @@ test('50+ page document: pages translate independently and cache', async () => {
 	let translateCalls = 0;
 	const deps: TranslationDeps = {
 		extractPage: async (p) => [{ id: `page-${p}-block-0`, pageIndex: p, order: 0, type: 'paragraph', sourceText: `Body text for page ${p}.` }],
-		translateRequest: async (req) => { translateCalls++; return { translations: req.blocks.map(b => ({ id: b.id, translatedText: 'z' })) }; },
+		translateRequest: async (req) => { translateCalls++; return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '译' })) }; },
 		readCache: async (p) => cache.get(p) ?? null,
 		writeCache: async (p, _b, t) => { cache.set(p, t); },
 		getLanguages: () => ({ source: 'en', target: 'zh-CN' }),

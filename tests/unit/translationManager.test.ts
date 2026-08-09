@@ -67,17 +67,17 @@ test('retries only missing ids', async () => {
 			attempt++;
 			if (attempt === 1) {
 				// Return only the first block
-				return { translations: [{ id: request.blocks[0]!.id, translatedText: 'ok' }] };
+				return { translations: [{ id: request.blocks[0]!.id, translatedText: '确定' }] };
 			}
 			// Retry: return the requested (missing) blocks
-			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: 'retry' })) };
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '重试译文' })) };
 		}
 	});
 	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
 	await manager.ensurePage(0, 10);
 	const state = manager.getPageState(0)!;
 	assert.equal(state.translations.size, 2);
-	assert.equal(state.translations.get('page-0-block-1'), 'retry');
+	assert.equal(state.translations.get('page-0-block-1'), '重试译文');
 	manager.dispose();
 });
 
@@ -283,5 +283,44 @@ test('salvage recovers ALL dropped ids, not just the first eight', async () => {
 	assert.equal(state.status, 'done');
 	assert.equal(state.translations.size, N, 'every block is translated, not just 8');
 	assert.ok(singleCalls >= N - 2, `salvage ran for all the dropped blocks (ran ${singleCalls})`);
+	manager.dispose();
+});
+
+test('looksTranslated rejects echoed English prose but accepts CJK and acronym cells', async () => {
+	const { looksTranslated } = await import('../../src/translation/translationManager');
+	// Provider echoes the English source unchanged → rejected for a zh target.
+	assert.equal(
+		looksTranslated('PCCT improved feature visualization despite lower dose', 'PCCT improved feature visualization despite lower dose', 'zh-CN'),
+		false
+	);
+	// A real Chinese translation → accepted.
+	assert.equal(looksTranslated('PCCT improved feature visualization', 'PCCT 改善了特征可视化', 'zh-CN'), true);
+	// A short acronym/numeric cell with no CJK → accepted (nothing to translate).
+	assert.equal(looksTranslated('PCCT (n=30)', 'PCCT (n=30)', 'zh-CN'), true);
+	// Non-CJK target → no cheap check, accept.
+	assert.equal(looksTranslated('some source text here', 'some source text here', 'fr'), true);
+});
+
+test('an echoed-English response is treated as untranslated, not accepted', async () => {
+	const { deps } = makeDeps({
+		extractPage: async (pageIndex) => [{
+			id: `page-${pageIndex}-block-0`, pageIndex, order: 0, type: 'paragraph',
+			sourceText: 'PCCT improved feature visualization despite a lower radiation dose.'
+		}],
+		// Batch echoes English; single-block salvage returns real Chinese.
+		translateRequest: async (request) => {
+			if (request.blocks.length === 1) {
+				return { translations: [{ id: request.blocks[0]!.id, translatedText: 'PCCT 在更低辐射剂量下改善了特征可视化。' }] };
+			}
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: b.text })) }; // echo
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	assert.equal(
+		manager.getPageState(0)!.translations.get('page-0-block-0'),
+		'PCCT 在更低辐射剂量下改善了特征可视化。',
+		'the echoed English was rejected and salvage produced the real translation'
+	);
 	manager.dispose();
 });

@@ -44,6 +44,29 @@ const SALVAGE_WARN_THRESHOLD = 24;
 const SALVAGE_CONCURRENCY = 4;
 
 /**
+ * Guard against a provider that returns the source text UNCHANGED (or otherwise
+ * fails to translate) being accepted as a valid translation. For a Chinese
+ * target a real translation of prose always contains CJK characters; English
+ * echoed straight back has none. Only enforced on prose sources (≥3 alphabetic
+ * words) so acronym/numeric cells like "PCCT (n=30)" — legitimately CJK-free —
+ * are still accepted. Non-CJK targets have no cheap check, so they pass.
+ */
+export function looksTranslated(source: string, translated: string, targetLang: string): boolean {
+	const t = translated.trim();
+	if (!t) {
+		return false;
+	}
+	if (!/^zh/i.test(targetLang)) {
+		return true;
+	}
+	const proseWords = (source.match(/[A-Za-z]{2,}/g) ?? []).length;
+	if (proseWords < 3) {
+		return true; // acronym / numeric / symbol cell — may legitimately have no CJK
+	}
+	return /[㐀-鿿豈-﫿]/.test(t);
+}
+
+/**
  * Absolute ceiling for one page end to end (extraction + all chunks). Long
  * pages with several chunks are fine at 60 s per request; five minutes means
  * something is stuck, not slow.
@@ -354,6 +377,10 @@ export class TranslationManager {
 		const sampleText = blocks.map(b => b.sourceText).join('\n').slice(0, 4000);
 		const { source, target } = this.deps.getLanguages(sampleText);
 		const glossary = matchRules(this.deps.getGlossary(), blocks.map(b => b.sourceText));
+		const sourceById = new Map(blocks.map(b => [b.id, b.sourceText]));
+		// Accept a response only if it is actually translated (not echoed English).
+		const accept = (id: string, text: string): boolean =>
+			text.trim().length > 0 && looksTranslated(sourceById.get(id) ?? '', text, target);
 
 		// Protect formulas per block
 		const protectedBlocks = blocks.map((block) => {
@@ -384,7 +411,12 @@ export class TranslationManager {
 			};
 
 			let response = await this.deps.translateRequest(request, signal);
-			let received = new Map(response.translations.map(t => [t.id, t.translatedText]));
+			const received = new Map<string, string>();
+			for (const t of response.translations) {
+				if (accept(t.id, t.translatedText)) {
+					received.set(t.id, t.translatedText);
+				}
+			}
 
 			// Retry only missing ids once (spec 4.3)
 			const missing = chunk.filter(b => !received.has(b.id));
@@ -400,7 +432,9 @@ export class TranslationManager {
 				try {
 					response = await this.deps.translateRequest(retryRequest, signal);
 					for (const t of response.translations) {
-						received.set(t.id, t.translatedText);
+						if (accept(t.id, t.translatedText)) {
+							received.set(t.id, t.translatedText);
+						}
 					}
 				}
 				catch (e) {
@@ -434,8 +468,10 @@ export class TranslationManager {
 							signal
 						);
 						// One block in → whatever comes back IS its translation,
-						// even if the model rewrote the id.
-						const first = single.translations.find(t => t.translatedText.trim().length > 0);
+						// even if the model rewrote the id — but only if it is
+						// actually translated, not the English echoed back.
+						const first = single.translations.find(t =>
+							looksTranslated(block.sourceText, t.translatedText, target));
 						if (first) {
 							received.set(block.id, first.translatedText);
 						}

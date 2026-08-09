@@ -266,3 +266,20 @@ test('planMerges uses geometry over the (unstable) column index when rects exist
 		{ text: 'continues here', column: 0, type: 'paragraph', rect: [320, 700, 558, 712] }
 	]), [[0], [1]]);
 });
+
+test('endsSentence: colon and semicolon do NOT end a sentence', async () => {
+	const { endsSentence } = await import('../../src/reader/paragraphHeuristics');
+	assert.equal(endsSentence('the modifications include the following:'), false);
+	assert.equal(endsSentence('improved sharpness;'), false);
+	assert.equal(endsSentence('This is done.'), true);
+	assert.equal(endsSentence('Really?'), true);
+	assert.equal(endsSentence('结论。'), true);
+});
+
+test('planMerges rejoins a fragment after a colon-ending line', () => {
+	// Was blocked by the endsSentence/danglingEnd contradiction.
+	assert.deepEqual(planMerges([
+		{ text: 'the modifications include the following:', column: 0, type: 'paragraph', gapAfter: 2, fontSize: 10, rect: [54, 700, 292, 712] },
+		{ text: 'sharper kernels and thinner sections', column: 0, type: 'paragraph', rect: [54, 686, 292, 698] }
+	]), [[0, 1]]);
+});

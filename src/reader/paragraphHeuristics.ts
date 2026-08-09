@@ -226,9 +226,16 @@ export function reachesRightMargin(rect: Rect, columnRight: number, fontSize: nu
 	return rect[2] >= columnRight - slack;
 }
 
-/** Ends with terminal punctuation, so a following break is plausible. */
+/**
+ * Ends with SENTENCE-terminal punctuation, so a following break is plausible.
+ * A colon or semicolon is NOT sentence-final — "the following:" and a clause
+ * ending in ";" continue onto the next line. They were wrongly listed here,
+ * which both forced a break and made the `danglingEnd` rule (which treats ":"
+ * and ";" as mid-sentence) dead code — a direct contradiction that left
+ * colon/semicolon lines stranded as their own untranslated one-line blocks.
+ */
 export function endsSentence(text: string): boolean {
-	return /[.!?。！？；;:：]["'”’」』)\]]*\s*$/.test(text.trim());
+	return /[.!?。！？]["'”’」』)\]]*\s*$/.test(text.trim());
 }
 
 /** Starts the way a continuation does, not the way a new paragraph does. */
