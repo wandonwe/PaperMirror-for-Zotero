@@ -48,7 +48,9 @@ export class RequestScheduler {
 	private active = new Map<string, Job<unknown>>();
 	private delayFn: (ms: number) => Promise<void>;
 	private disposed = false;
-	/** Configured per-lane page cap (the provider's steady-state limit). */
+	/** Adaptive floor per lane (429/timeout can drop no lower). */
+	private laneCapMin = new Map<string, number>();
+	/** Configured per-lane page cap ceiling (sustained success grows toward it). */
 	private laneCapMax = new Map<string, number>();
 	/** Current per-lane cap, after adaptive throttling. */
 	private laneCapCur = new Map<string, number>();
@@ -103,17 +105,24 @@ export class RequestScheduler {
 	}
 
 	/**
-	 * Configure per-lane (per-provider) page caps. Resets each lane's adaptive
-	 * current cap to its configured max. Lanes not listed are unconstrained.
+	 * Configure per-lane (per-provider) page caps. Each lane may be a fixed number
+	 * (min=1, initial=max=n) or a BAND {min, initial, max} — auto mode uses a band
+	 * so sustained success grows the lane from `initial` toward `max` while a 429
+	 * drops it toward `min`. Lanes not listed are unconstrained.
 	 */
-	configureLanes(caps: Record<string, number>): void {
+	configureLanes(caps: Record<string, number | { min: number; initial: number; max: number }>): void {
+		this.laneCapMin.clear();
 		this.laneCapMax.clear();
 		this.laneCapCur.clear();
 		this.laneSuccess.clear();
-		for (const [lane, cap] of Object.entries(caps)) {
-			const c = Math.max(1, Math.floor(cap));
-			this.laneCapMax.set(lane, c);
-			this.laneCapCur.set(lane, c);
+		for (const [lane, spec] of Object.entries(caps)) {
+			const band = typeof spec === 'number' ? { min: 1, initial: spec, max: spec } : spec;
+			const max = Math.max(1, Math.floor(band.max));
+			const min = Math.max(1, Math.min(Math.floor(band.min), max));
+			const initial = Math.max(min, Math.min(Math.floor(band.initial), max));
+			this.laneCapMin.set(lane, min);
+			this.laneCapMax.set(lane, max);
+			this.laneCapCur.set(lane, initial);
 		}
 		this.pump();
 	}
@@ -293,8 +302,9 @@ export class RequestScheduler {
 			return;
 		}
 		const cur = this.laneCapCur.get(lane) ?? this.laneCapMax.get(lane)!;
+		const floor = this.laneCapMin.get(lane) ?? 1;
 		const next = kind === 'rate' ? Math.floor(cur / 2) : cur - 1;
-		this.laneCapCur.set(lane, Math.max(1, next));
+		this.laneCapCur.set(lane, Math.max(floor, next));
 		this.laneSuccess.set(lane, 0);
 	}
 

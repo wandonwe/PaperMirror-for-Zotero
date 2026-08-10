@@ -17,6 +17,13 @@
  *   - provider-change auto-fill of Base URL placeholder + default model
  */
 
+import {
+	normalizePerfMode,
+	normalizeGlobalMax,
+	poolLanePlan,
+	type ProviderCapability
+} from '../translation/providerPool';
+
 interface ProviderInfo {
 	id: string;
 	displayName: string;
@@ -122,15 +129,59 @@ interface PaperMirrorPublicAPI {
 
 		// ---- 性能与并行 -----------------------------------------------------
 		{
+			// Live preview of the resolved schedule for the current mode + pool.
+			const previewLabel = byId<HTMLElement & { value: string }>('papermirror-perf-preview');
+			const updatePreview = (): void => {
+				if (!previewLabel) {
+					return;
+				}
+				const mode = normalizePerfMode(getPref('perfMode'));
+				const globalMax = normalizeGlobalMax(getPref('maxConcurrentRequests'));
+				const providers = api()?.listProviders() ?? [];
+				const primary = String(byId<HTMLElement & { value: string }>('papermirror-provider')?.value || getPref('provider') || 'bing-free');
+				let checked: string[] = [];
+				try {
+					const raw = JSON.parse(String(getPref('parallelProviders') ?? '[]'));
+					checked = Array.isArray(raw) ? raw.filter((x: unknown): x is string => typeof x === 'string') : [];
+				}
+				catch {
+					checked = [];
+				}
+				const enabledIds = [primary, ...checked.filter(id => id !== primary)];
+				const caps: ProviderCapability[] = enabledIds.map((id) => {
+					const p = providers.find(pv => pv.id === id);
+					const local = id === 'ollama' || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(p?.defaultBaseURL || '');
+					return { id, requiresApiKey: p?.requiresApiKey ?? false, local };
+				});
+				const plan = poolLanePlan(caps, mode);
+				const parallel = Math.min(globalMax, plan.initialSum);
+				const perProvider = enabledIds.map((id) => {
+					const name = providers.find(pv => pv.id === id)?.displayName ?? id;
+					return `${name} ${plan.laneBands[id]?.initial ?? 1}`;
+				}).join(' · ');
+				previewLabel.value = `当前配置:预计并行 ${parallel} 页 · 当前页优先｜${perProvider}`;
+			};
+
+			const modeGroup = byId<HTMLElement & { value: string }>('papermirror-perfmode');
+			if (modeGroup) {
+				modeGroup.value = normalizePerfMode(getPref('perfMode'));
+				modeGroup.addEventListener('command', () => {
+					setPref('perfMode', normalizePerfMode(modeGroup.value));
+					updatePreview();
+				});
+			}
+
 			const concurrencyInput = byId<HTMLInputElement>('papermirror-concurrency');
 			if (concurrencyInput) {
-				// 0 = auto (compute from the enabled providers); 1–24 = manual cap.
-				const current = Number(getPref('maxConcurrentRequests') ?? 0);
-				concurrencyInput.value = String(Math.min(24, Math.max(0, Number.isFinite(current) ? current : 0)));
+				// Plain global ceiling now: 1–24, default 12 (migrate 0/legacy → 12).
+				const migrated = normalizeGlobalMax(getPref('maxConcurrentRequests'));
+				setPref('maxConcurrentRequests', migrated); // persist the migration
+				concurrencyInput.value = String(migrated);
 				concurrencyInput.addEventListener('change', () => {
-					const next = Math.min(24, Math.max(0, Math.round(Number(concurrencyInput.value) || 0)));
+					const next = normalizeGlobalMax(Number(concurrencyInput.value));
 					concurrencyInput.value = String(next);
 					setPref('maxConcurrentRequests', next);
+					updatePreview();
 				});
 			}
 
@@ -195,8 +246,10 @@ interface PaperMirrorPublicAPI {
 					rows.push(row);
 				}
 				poolHost.replaceChildren(...rows);
+				updatePreview();
 			};
 			void renderPool();
+			updatePreview();
 			byId<HTMLElement>('papermirror-provider')?.addEventListener('command', () => {
 				void renderPool();
 			});

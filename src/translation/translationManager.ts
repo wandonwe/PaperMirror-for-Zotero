@@ -268,8 +268,8 @@ export class TranslationManager {
 		this.scheduler.setGlobalMax(n);
 	}
 
-	/** Per-provider page caps (host: from each provider's concurrency profile). */
-	setLaneCaps(caps: Record<string, number>): void {
+	/** Per-provider page caps/bands (host: from each provider's mode profile). */
+	setLaneCaps(caps: Record<string, number | { min: number; initial: number; max: number }>): void {
 		this.scheduler.configureLanes(caps);
 	}
 

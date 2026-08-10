@@ -13,6 +13,7 @@ export type PrefKey
 	| 'targetLanguage'
 	| 'timeoutMs'
 	| 'maxConcurrentRequests'
+	| 'perfMode'
 	| 'customPrompt'
 	| 'translateCaptions'
 	| 'translateReferences'

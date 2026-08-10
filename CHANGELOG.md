@@ -9,6 +9,37 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-08-10
+
+### Added
+
+- **性能模式:稳定 ｜ 自动(推荐) ｜ 高速 (performance modes).** 「性能与并行」now
+  has three modes that control how EACH provider runs — its per-lane
+  concurrency band, prefetch reach and dynamic throttling:
+  - **稳定** — free 1 / cloud LLM 2 / local 1 / paid-MT 2; prefetch +2/−1. Fewest
+    requests, highest success rate, least likely to hit limits.
+  - **自动(默认)** — free 1 / cloud LLM 3→6 / local 1→2 / paid-MT 3→4; prefetch
+    +min(2N,10)/−1. Each lane grows on sustained success and backs off on
+    429/timeout, per provider.
+  - **高速** — free 1 / cloud LLM 6 / local 2 / paid-MT 4; prefetch +12/−2. Fills
+    each provider's capacity and prefetches aggressively; still auto-throttles on
+    429/timeout and never exceeds a provider's own limit or the global ceiling.
+
+### Changed
+
+- **「最大并行页面数」改为纯全局上限 (global ceiling, no more 0=自动).** Now a plain
+  number 1–24 (default 12) capping the pages ALL providers run at once. The
+  actual parallelism is `min(global ceiling, Σ current lane caps, schedulable
+  pages)`, so raising it never forces a provider past its own lane. Legacy
+  values migrate: 0/absent → 12, >24 → 24, 1–6 kept.
+- **调度带上下限 (adaptive bands with min/initial/max).** Lane caps are now bands:
+  auto mode grows a lane from its initial toward its max on a run of clean
+  successes and backs off toward its min on 429/timeout; stable and high are
+  fixed. Only the erroring provider is throttled.
+- Settings pane: mode radios + a live 「当前配置」preview (预计并行 N 页 · 当前页
+  优先, with each provider's current lane), and the global-ceiling field
+  relabelled and re-ranged 1–24.
+
 ## [0.8.10] — 2026-08-09
 
 ### Fixed

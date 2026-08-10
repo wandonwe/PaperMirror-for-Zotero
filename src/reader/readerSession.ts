@@ -13,7 +13,7 @@ import {
 } from '../notes/noteService';
 import { getApiKey } from '../security/credentialStore';
 import { getProvider, listProviders } from '../translation/providers/registry';
-import { buildPool, pickProviderForPage, poolConcurrencyPlan, prefetchWindowFor, type ProviderCapability } from '../translation/providerPool';
+import { buildPool, pickProviderForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
 import { endpointHost, supportsCharBudget } from '../translation/providers/types';
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
 import { TranslationManager, type PageTranslationState } from '../translation/translationManager';
@@ -436,20 +436,29 @@ export class ReaderSession {
 		if (!this.manager) {
 			return;
 		}
+		const caps = this.poolCapabilities();
+		const mode = normalizePerfMode(getPref<string>('perfMode', DEFAULT_PERF_MODE));
+		const plan = poolLanePlan(caps, mode);
+		// 全局上限 is now a plain user number (1–24, default 12), no 0=auto. The
+		// scheduler enforces min(globalMax, Σ lane caps, schedulable pages), so
+		// setting 24 never forces providers past their own lanes.
+		const globalMax = normalizeGlobalMax(getPref<number>('maxConcurrentRequests', GLOBAL_MAX_DEFAULT));
+		this.manager.setLaneCaps(plan.laneBands);
+		this.manager.setGlobalConcurrency(globalMax);
+		const win = prefetchWindowFor(mode, Math.max(1, this.pool.length));
+		this.manager.setPrefetchWindow(win.forward, win.backward);
+		logger.info(MODULE, `Concurrency plan: mode=${mode}, global ${globalMax}, ~${Math.min(globalMax, plan.initialSum)} parallel, lanes ${JSON.stringify(plan.laneBands)}, prefetch +${win.forward}/-${win.backward}`);
+	}
+
+	/** The current pool as capability descriptors (id + key + local). */
+	private poolCapabilities(): ProviderCapability[] {
 		const caps: ProviderCapability[] = this.pool.map((id) => {
 			const p = getProvider(id);
 			const local = id === 'ollama'
 				|| /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(p.defaultBaseURL || '');
 			return { id, requiresApiKey: p.requiresApiKey, local };
 		});
-		const plan = poolConcurrencyPlan(caps.length ? caps : [{ id: 'bing-free', requiresApiKey: false, local: false }]);
-		const override = Math.max(0, Math.floor(getPref<number>('maxConcurrentRequests', 0)));
-		const globalMax = override > 0 ? Math.min(24, Math.max(1, override)) : plan.globalMax;
-		this.manager.setLaneCaps(plan.laneCaps);
-		this.manager.setGlobalConcurrency(globalMax);
-		const win = prefetchWindowFor(Math.max(1, this.pool.length));
-		this.manager.setPrefetchWindow(win.forward, win.backward);
-		logger.info(MODULE, `Concurrency plan: global ${globalMax}${override > 0 ? ' (manual)' : ' (auto)'}, lanes ${JSON.stringify(plan.laneCaps)}, prefetch +${win.forward}/-${win.backward}`);
+		return caps.length ? caps : [{ id: 'bing-free', requiresApiKey: false, local: false }];
 	}
 
 	private resolveLanguages(sample: string): { source: string; target: string } {

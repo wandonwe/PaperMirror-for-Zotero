@@ -43,42 +43,110 @@ const FREE_MT = new Set(['bing-free', 'google-free']);
 /** Traditional paid MT (not prompt-driven) — a modest fixed lane. */
 const PAID_MT = new Set(['deepl']);
 
-/** Steady-state page concurrency for one provider. */
-export function pageConcurrencyFor(cap: ProviderCapability): number {
-	if (cap.local) {
-		return 1; // local model: hardware-bound, one page at a time
-	}
-	if (FREE_MT.has(cap.id)) {
-		return 1; // free engine already fans out ~3 requests internally
-	}
-	if (PAID_MT.has(cap.id)) {
-		return 3; // DeepL-style paid MT
-	}
-	if (cap.requiresApiKey) {
-		return 3; // cloud LLM default (advanced override is future work)
-	}
-	return 1; // unknown / keyless → conservative
+/** 性能模式 — controls per-provider concurrency, prefetch reach and throttling. */
+export type PerfMode = 'stable' | 'auto' | 'high';
+
+export const DEFAULT_PERF_MODE: PerfMode = 'auto';
+
+export function normalizePerfMode(value: unknown): PerfMode {
+	return value === 'stable' || value === 'high' ? value : 'auto';
 }
 
 /**
- * The whole pool's schedule: each provider's own lane cap, plus the global cap
- * (sum of lanes, clamped to a sane [2, 24]) so the pool multiplies throughput
- * without any single provider exceeding its own limit.
+ * A provider lane's concurrency BAND for a given mode: where it starts
+ * (initial), how low adaptive throttling may drive it (min, the 429/timeout
+ * floor), and how high sustained success may grow it (max). Stable and high
+ * modes are effectively fixed (initial === max); auto mode grows within a range.
  */
-export function poolConcurrencyPlan(caps: ProviderCapability[]): { globalMax: number; laneCaps: Record<string, number> } {
-	const laneCaps: Record<string, number> = {};
-	let sum = 0;
-	for (const c of caps) {
-		const n = pageConcurrencyFor(c);
-		laneCaps[c.id] = n;
-		sum += n;
-	}
-	return { globalMax: Math.max(2, Math.min(24, sum)), laneCaps };
+export interface LaneBand {
+	min: number;
+	initial: number;
+	max: number;
 }
 
-/** Prefetch window: more independent providers ⇒ more future pages in flight. */
-export function prefetchWindowFor(poolSize: number): { forward: number; backward: number } {
-	return { forward: Math.max(1, Math.min(2 * poolSize, 12)), backward: 1 };
+/** The provider "type" that decides its band. */
+function providerType(cap: ProviderCapability): 'free' | 'paid-mt' | 'local' | 'llm' | 'unknown' {
+	if (cap.local) {
+		return 'local';
+	}
+	if (FREE_MT.has(cap.id)) {
+		return 'free';
+	}
+	if (PAID_MT.has(cap.id)) {
+		return 'paid-mt';
+	}
+	if (cap.requiresApiKey) {
+		return 'llm';
+	}
+	return 'unknown';
+}
+
+/**
+ * Per-type, per-mode lane bands. Free engines are always a single lane; cloud
+ * LLMs grow to 6 in auto and sit at 6 in high; local models stay tiny. The min
+ * is the adaptive floor (a 429 can always drop a lane toward 1).
+ */
+export function laneBandFor(cap: ProviderCapability, mode: PerfMode): LaneBand {
+	const type = providerType(cap);
+	if (type === 'free' || type === 'unknown') {
+		return { min: 1, initial: 1, max: 1 };
+	}
+	if (type === 'local') {
+		return mode === 'stable' ? { min: 1, initial: 1, max: 1 }
+			: mode === 'high' ? { min: 1, initial: 2, max: 2 }
+				: { min: 1, initial: 1, max: 2 }; // auto: 1→2
+	}
+	if (type === 'paid-mt') {
+		return mode === 'stable' ? { min: 1, initial: 2, max: 2 }
+			: mode === 'high' ? { min: 1, initial: 4, max: 4 }
+				: { min: 1, initial: 3, max: 4 }; // auto: 3→4
+	}
+	// cloud LLM
+	return mode === 'stable' ? { min: 1, initial: 2, max: 2 }
+		: mode === 'high' ? { min: 1, initial: 6, max: 6 }
+			: { min: 1, initial: 3, max: 6 }; // auto: 3→6
+}
+
+/**
+ * The whole pool's lane plan for a mode: each provider's band, plus the sum of
+ * INITIAL lane caps (the expected steady-state parallelism, before the global
+ * ceiling and dynamic growth). The global ceiling is a SEPARATE user setting,
+ * not derived here.
+ */
+export function poolLanePlan(caps: ProviderCapability[], mode: PerfMode): { laneBands: Record<string, LaneBand>; initialSum: number } {
+	const laneBands: Record<string, LaneBand> = {};
+	let initialSum = 0;
+	for (const c of caps) {
+		const band = laneBandFor(c, mode);
+		laneBands[c.id] = band;
+		initialSum += band.initial;
+	}
+	return { laneBands, initialSum: Math.max(1, initialSum) };
+}
+
+/** Prefetch window per mode: stable 2/1, auto min(2N,10)/1, high 12/2. */
+export function prefetchWindowFor(mode: PerfMode, poolSize: number): { forward: number; backward: number } {
+	if (mode === 'stable') {
+		return { forward: 2, backward: 1 };
+	}
+	if (mode === 'high') {
+		return { forward: 12, backward: 2 };
+	}
+	return { forward: Math.max(1, Math.min(2 * poolSize, 10)), backward: 1 };
+}
+
+/** Global ceiling setting: plain number, 1–24, default 12 (0/legacy → 12). */
+export const GLOBAL_MAX_DEFAULT = 12;
+export const GLOBAL_MAX_MIN = 1;
+export const GLOBAL_MAX_MAX = 24;
+
+/** Migrate a stored 最大并行页面数 value: 0/absent → 12, clamp to [1,24]. */
+export function normalizeGlobalMax(value: unknown): number {
+	const n = Math.round(Number(value));
+	if (!Number.isFinite(n) || n <= 0) {
+		return GLOBAL_MAX_DEFAULT;
+	}
+	return Math.max(GLOBAL_MAX_MIN, Math.min(GLOBAL_MAX_MAX, n));
 }
 
 /** Primary first, extras after, duplicates removed, order stable. */

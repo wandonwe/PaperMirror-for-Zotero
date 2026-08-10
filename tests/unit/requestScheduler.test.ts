@@ -208,3 +208,28 @@ test('adaptive: a timeout drops the lane cap by one', async () => {
 	}, { lane: 'A' }));
 	assert.equal(scheduler.laneCap('A'), 3, 'lane A 4 → 3 after a timeout');
 });
+
+test('adaptive band: sustained success grows a lane from initial toward max', async () => {
+	// Auto-mode band: start 3, grow to 6. Global 1 serialises so successes count
+	// one at a time; 5 clean successes should lift the lane cap by one.
+	const scheduler = new RequestScheduler({ maxConcurrent: 1, delayFn: noDelay });
+	scheduler.configureLanes({ A: { min: 1, initial: 3, max: 6 } });
+	assert.equal(scheduler.laneCap('A'), 3, 'starts at the band initial');
+	for (let i = 0; i < 5; i++) {
+		await scheduler.enqueue(`a${i}`, 1, async () => 'ok', { lane: 'A' });
+	}
+	assert.equal(scheduler.laneCap('A'), 4, 'grew 3 → 4 after a run of successes');
+});
+
+test('adaptive band: a 429 cannot drop a lane below its min floor', async () => {
+	const scheduler = new RequestScheduler({ maxConcurrent: 4, maxRetries: 0, delayFn: noDelay });
+	scheduler.configureLanes({ A: { min: 2, initial: 4, max: 6 } });
+	await assert.rejects(scheduler.enqueue('a1', 1, async () => {
+		throw new PaperMirrorError('RATE_LIMITED', 'slow', { retryable: false });
+	}, { lane: 'A' }));
+	assert.equal(scheduler.laneCap('A'), 2, '4 → 2 (halved to the floor)');
+	await assert.rejects(scheduler.enqueue('a2', 1, async () => {
+		throw new PaperMirrorError('RATE_LIMITED', 'slow', { retryable: false });
+	}, { lane: 'A' }));
+	assert.equal(scheduler.laneCap('A'), 2, 'stays at the min floor, not below');
+});

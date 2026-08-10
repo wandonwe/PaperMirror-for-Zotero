@@ -175,10 +175,20 @@
 			<label class="pm-title" value="性能与并行"/>
 		</hbox>
 		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 4px;">
-			<label value="最大并行页面数" control="papermirror-concurrency"/>
-			<html:input type="number" id="papermirror-concurrency" min="0" max="24" style="width: 4.5em;"/>
-			<label class="pm-desc" style="margin-top: 0;" value="0 = 自动(按启用的服务商各自能力求和,上限24);每个服务商独立限流"/>
+			<label value="性能模式"/>
 		</hbox>
+		<radiogroup id="papermirror-perfmode" style="margin: 2px 0 2px 0;">
+			<radio value="stable" label="稳定"/>
+			<radio value="auto" label="自动(推荐)"/>
+			<radio value="high" label="高速"/>
+		</radiogroup>
+		<label class="pm-desc" style="margin-top: 0;" value="性能模式决定每个服务商的并发、预取范围和动态限流。稳定=最省额度;自动=按响应动态调节;高速=尽量填满各家能力。"/>
+		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 8px;">
+			<label value="最大并行页面数(全局)" control="papermirror-concurrency"/>
+			<html:input type="number" id="papermirror-concurrency" min="1" max="24" style="width: 4.5em;"/>
+		</hbox>
+		<label class="pm-desc" style="margin-top: 0;" value="所有服务商合计最多同时处理的页面数,默认12,可设1–24。每个服务商仍独立限流,实际并行数可能更低。"/>
+		<label id="papermirror-perf-preview" class="pm-desc" style="margin-top: 4px; opacity: .85;" value=""/>
 		<hbox class="pm-line" style="margin-top: 8px;">
 			<label value="并行翻译服务商(与主服务商轮流分担页面)"/>
 		</hbox>
