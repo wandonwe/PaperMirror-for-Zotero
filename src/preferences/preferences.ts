@@ -41,6 +41,7 @@ import {
 	MODEL_GROUP_LABELS,
 	type CatalogModel
 } from '../translation/providers/modelCatalog';
+import { supportsReasoningControl } from '../translation/providers/advancedParams';
 
 interface ProviderInfo {
 	id: string;
@@ -56,8 +57,8 @@ interface PaperMirrorPublicAPI {
 	listProviders(): ProviderInfo[];
 	getApiKey(providerId: string): Promise<string>;
 	setApiKey(providerId: string, key: string): Promise<void>;
-	describeEndpoint(providerId: string, apiBaseURL: string): string;
-	testConnection(overrides?: { providerId?: string; apiBaseURL?: string; model?: string }): Promise<{ ok: boolean; message?: string; httpStatus?: number; modelAvailable?: boolean; elapsedMs?: number }>;
+	describeEndpoint(providerId: string, apiBaseURL: string, apiPath?: string): string;
+	testConnection(overrides?: { providerId?: string; apiBaseURL?: string; model?: string; apiPath?: string; reasoning?: string; maxOutputTokens?: number; temperature?: number }): Promise<{ ok: boolean; message?: string; httpStatus?: number; modelAvailable?: boolean; elapsedMs?: number }>;
 	cache: { totalSizeBytes(): Promise<number>; clearAll(): Promise<void> };
 	glossary: {
 		getLinesText(): string;
@@ -402,6 +403,13 @@ interface PaperMirrorPublicAPI {
 		const baseCustomNote = byId<HTMLElement>('papermirror-baseurl-custom-note');
 		const endpointNote = byId<HTMLElement>('papermirror-endpoint-note');
 		const apiKeyInput = byId<HTMLInputElement>('papermirror-apikey');
+		// Advanced params (opt-in, per-provider).
+		const advancedSection = byId<HTMLElement>('papermirror-advanced-section');
+		const reasoningSelect = byId<HTMLElement & { value: string }>('papermirror-reasoning');
+		const reasoningNote = byId<HTMLElement>('papermirror-reasoning-note');
+		const apiPathInput = byId<HTMLInputElement>('papermirror-apipath');
+		const maxTokensInput = byId<HTMLInputElement>('papermirror-maxtokens');
+		const temperatureInput = byId<HTMLInputElement>('papermirror-temperature');
 
 		const currentProviderId = (): string =>
 			String(providerList?.value || getPref('provider') || 'bing-free');
@@ -430,6 +438,18 @@ interface PaperMirrorPublicAPI {
 			}
 			if ((next.customModel ?? '').trim() === '') {
 				delete next.customModel;
+			}
+			if ((next.apiPath ?? '').trim() === '') {
+				delete next.apiPath;
+			}
+			if (!next.reasoning) {
+				delete next.reasoning;
+			}
+			if (!(typeof next.maxOutputTokens === 'number' && next.maxOutputTokens > 0)) {
+				delete next.maxOutputTokens;
+			}
+			if (typeof next.temperature !== 'number' || !Number.isFinite(next.temperature)) {
+				delete next.temperature;
 			}
 			profiles[id] = next;
 			setPref('providerProfiles', serializeProviderProfiles(profiles));
@@ -563,20 +583,74 @@ interface PaperMirrorPublicAPI {
 				baseCustomNote.textContent = typed && typed !== def ? '· 当前使用自定义地址' : '';
 			}
 			if (endpointNote) {
-				const url = api()?.describeEndpoint(currentProviderId(), typed) ?? '';
+				const url = api()?.describeEndpoint(currentProviderId(), typed, (apiPathInput?.value ?? '').trim()) ?? '';
 				endpointNote.textContent = url ? `实际请求地址: ${url}` : '';
 			}
 		};
 
-		/** Load the whole model+address block for the current provider. */
+		/** Load the advanced-params block for the current provider. */
+		const loadAdvanced = (): void => {
+			const id = currentProviderId();
+			const needs = providerNeedsModel(id); // non-LLM engines take no advanced params
+			if (advancedSection) {
+				advancedSection.style.display = needs ? '' : 'none';
+			}
+			if (!needs) {
+				return;
+			}
+			const profile = currentProfile();
+			if (reasoningSelect) {
+				const supported = supportsReasoningControl(id);
+				reasoningSelect.value = profile.reasoning ?? '';
+				(reasoningSelect as unknown as HTMLElement & { disabled?: boolean }).disabled = !supported;
+				if (reasoningNote) {
+					reasoningNote.textContent = supported
+						? '翻译建议设为「最低」:新推理模型更快更省;留「默认」则用服务商默认。'
+						: '该服务商暂不支持推理强度调节(留默认即可)。';
+				}
+			}
+			if (apiPathInput) {
+				apiPathInput.value = profile.apiPath ?? '';
+			}
+			if (maxTokensInput) {
+				maxTokensInput.value = profile.maxOutputTokens ? String(profile.maxOutputTokens) : '';
+			}
+			if (temperatureInput) {
+				temperatureInput.value = typeof profile.temperature === 'number' ? String(profile.temperature) : '';
+			}
+		};
+
+		/** Load the whole model+address+advanced block for the current provider. */
 		const loadProviderConfig = (): void => {
 			const profile = currentProfile();
 			if (baseUrlInput) {
 				baseUrlInput.value = profile.apiBaseUrl ?? '';
 			}
 			populateModelSelector();
+			loadAdvanced();
 			updateBaseUrlNotes();
 		};
+
+		// ---- advanced-param change handlers (all opt-in; empty = unset) ------
+		reasoningSelect?.addEventListener('command', () => {
+			patchProfile({ reasoning: (reasoningSelect.value || undefined) as ProviderProfile['reasoning'] });
+		});
+		apiPathInput?.addEventListener('change', () => {
+			patchProfile({ apiPath: (apiPathInput.value ?? '').trim() });
+			updateBaseUrlNotes();
+		});
+		apiPathInput?.addEventListener('input', updateBaseUrlNotes);
+		const commitMaxTokens = (): void => {
+			const n = Math.floor(Number(maxTokensInput?.value));
+			patchProfile({ maxOutputTokens: Number.isFinite(n) && n > 0 ? n : undefined });
+		};
+		maxTokensInput?.addEventListener('change', commitMaxTokens);
+		const commitTemperature = (): void => {
+			const raw = (temperatureInput?.value ?? '').trim();
+			const n = Number(raw);
+			patchProfile({ temperature: raw !== '' && Number.isFinite(n) ? n : undefined });
+		};
+		temperatureInput?.addEventListener('change', commitTemperature);
 
 		modelSelect?.addEventListener('command', () => {
 			if (modelSelect.value === CUSTOM_SENTINEL) {
@@ -692,10 +766,17 @@ interface PaperMirrorPublicAPI {
 			testResult.removeAttribute('data-state');
 			void (async () => {
 				try {
+					const maxTok = Math.floor(Number(maxTokensInput?.value));
+					const tempRaw = (temperatureInput?.value ?? '').trim();
+					const tempNum = Number(tempRaw);
 					const result = await api()?.testConnection({
 						providerId: currentProviderId(),
 						apiBaseURL: (baseUrlInput?.value ?? '').trim(),
-						model: selectedModel()
+						model: selectedModel(),
+						apiPath: (apiPathInput?.value ?? '').trim() || undefined,
+						reasoning: reasoningSelect?.value || undefined,
+						maxOutputTokens: Number.isFinite(maxTok) && maxTok > 0 ? maxTok : undefined,
+						temperature: tempRaw !== '' && Number.isFinite(tempNum) ? tempNum : undefined
 					});
 					if (!result) {
 						testResult.value = 'PaperMirror not running';

@@ -25,7 +25,32 @@ function headers(settings: ProviderSettings): Record<string, string> {
 }
 
 function messagesURL(settings: ProviderSettings): string {
+	const path = (settings.apiPath ?? '').trim();
+	if (path) {
+		const b = (settings.apiBaseURL || DEFAULT_BASE).replace(/\/+$/, '');
+		return b + (path.startsWith('/') ? path : `/${path}`);
+	}
 	return anthropicMessagesURL(settings.apiBaseURL, DEFAULT_BASE);
+}
+
+/**
+ * Advanced body fields for Anthropic (opt-in). Extended thinking is enabled only
+ * at reasoning 'high' (translation rarely needs it); thinking mode forbids a
+ * custom temperature, so temperature is applied only when thinking is off. The
+ * `thinking` blocks in the reply are ignored by extractText (text parts only).
+ */
+function advancedBody(settings: ProviderSettings, defaultMax: number): Record<string, unknown> {
+	const maxTokens = settings.maxOutputTokens && settings.maxOutputTokens > 0
+		? Math.floor(settings.maxOutputTokens)
+		: defaultMax;
+	const out: Record<string, unknown> = { max_tokens: maxTokens };
+	if (settings.reasoning === 'high') {
+		out.thinking = { type: 'enabled', budget_tokens: Math.max(1024, Math.min(4096, Math.floor(maxTokens / 2))) };
+	}
+	else if (typeof settings.temperature === 'number' && Number.isFinite(settings.temperature)) {
+		out.temperature = settings.temperature;
+	}
+	return out;
 }
 
 function extractText(json: unknown): string {
@@ -76,7 +101,7 @@ export const anthropicProvider: TranslationProvider = {
 			headers: headers(settings),
 			body: {
 				model: settings.model || DEFAULT_MODEL,
-				max_tokens: 8192,
+				...advancedBody(settings, 8192),
 				system: buildSystemPrompt(request, settings.customPrompt),
 				messages: [{ role: 'user', content: buildUserPayload(request) }]
 			},
@@ -93,7 +118,7 @@ export const anthropicProvider: TranslationProvider = {
 			headers: headers(settings),
 			body: {
 				model: settings.model || DEFAULT_MODEL,
-				max_tokens: 4096,
+				...advancedBody(settings, 4096),
 				messages: [{ role: 'user', content: prompt }]
 			},
 			timeoutMs: settings.timeoutMs,

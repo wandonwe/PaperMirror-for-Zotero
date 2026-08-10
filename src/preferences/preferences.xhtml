@@ -180,6 +180,43 @@
 		<html:div class="pm-desc"><html:span id="papermirror-endpoint-note"></html:span></html:div>
 	</vbox>
 
+	<!-- ======================= 高级参数(每个服务商独立,选填) ======================= -->
+	<vbox class="pm-section" id="papermirror-advanced-section">
+		<hbox class="pm-line">
+			<label class="pm-title" value="高级参数(选填)"/>
+		</hbox>
+		<hbox class="pm-line" style="justify-content: space-between; margin-top: 4px;">
+			<label value="推理强度 / 思考" control="papermirror-reasoning"/>
+			<menulist id="papermirror-reasoning" native="true">
+				<menupopup>
+					<menuitem label="默认" value=""/>
+					<menuitem label="最低(翻译推荐)" value="minimal"/>
+					<menuitem label="低" value="low"/>
+					<menuitem label="中" value="medium"/>
+					<menuitem label="高" value="high"/>
+				</menupopup>
+			</menulist>
+		</hbox>
+		<html:div class="pm-desc"><html:span id="papermirror-reasoning-note"></html:span></html:div>
+
+		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 8px;">
+			<label value="自定义 API Path"/>
+		</hbox>
+		<html:div class="pm-field">
+			<html:div><html:input type="text" id="papermirror-apipath" spellcheck="false" placeholder="留空使用默认路径,例如 /v1/chat/completions"/></html:div>
+		</html:div>
+
+		<hbox class="pm-line" style="justify-content: space-between; margin-top: 8px;">
+			<label value="最大输出 token 数" control="papermirror-maxtokens"/>
+			<html:input type="number" id="papermirror-maxtokens" min="0" step="1" style="width: 7em; text-align: right;" placeholder="默认"/>
+		</hbox>
+		<hbox class="pm-line" style="justify-content: space-between; margin-top: 8px;">
+			<label value="温度 temperature" control="papermirror-temperature"/>
+			<html:input type="number" id="papermirror-temperature" min="0" max="2" step="0.1" style="width: 7em; text-align: right;" placeholder="默认"/>
+		</hbox>
+		<html:div class="pm-desc">按各服务商官方 API 适配,均为选填,留空即用服务商默认。批量翻译建议「最大输出 token」留空以免截断;新推理模型(gpt-5.x、Gemini/Claude 思考版)把「推理强度」设为最低通常更快更省。</html:div>
+	</vbox>
+
 	<!-- ======================= 语言与请求 ======================= -->
 	<vbox class="pm-section">
 		<hbox class="pm-line">

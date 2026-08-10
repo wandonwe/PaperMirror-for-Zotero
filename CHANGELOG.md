@@ -15,6 +15,24 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.11] — 2026-08-10
+
+### Added
+
+- **每个服务商的高级参数(Bob 风格,全部选填).** 在「模型/地址」下新增「高级参数」区,按各家
+  官方 API 适配,**均为选填——不设置则请求体与之前完全一致(零回归)**:
+  - **推理强度 / 思考**:默认 / 最低 / 低 / 中 / 高。翻译建议设「最低」——gpt-5.x、Gemini、
+    Claude 等推理/思考模型会更快更省。映射:OpenAI/OpenRouter → `reasoning_effort`;
+    Gemini → `reasoning_effort`(「最低」→ `none` 关闭思考);Anthropic → 仅「高」启用
+    extended thinking;其它服务商暂不下发该参数(避免 400)。
+  - **自定义 API Path**:单独的请求路径字段(留空用默认 `/v1/chat/completions` 等),应对特殊
+    代理/网关;「实际请求地址」预览会实时反映。
+  - **最大输出 token 数**:OpenAI 官方端点用 `max_completion_tokens`,其它兼容端点用
+    `max_tokens`;批量翻译建议留空以免截断。
+  - **温度 temperature**:留空用服务商默认(部分新模型只接受默认温度)。
+- 每个参数按服务商各自保存;连接测试使用当前(未保存的)高级参数实测;非 LLM 引擎
+  (微软/谷歌/DeepL)不显示高级参数。
+
 ## [0.9.10] — 2026-08-10
 
 ### Fixed

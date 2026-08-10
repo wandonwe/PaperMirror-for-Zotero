@@ -532,6 +532,7 @@ export class ReaderSession {
 	private async providerSettingsFor(providerId: string): Promise<ProviderSettings & { allowInsecureHTTP?: boolean }> {
 		const profiles = parseProviderProfiles(getPref<string>('providerProfiles', '{}'));
 		const { apiBaseURL, model } = effectiveProviderConfig(profiles, providerId);
+		const profile = profiles[providerId] ?? {};
 		const apiKey = await getApiKey(providerId);
 		return {
 			providerId,
@@ -540,7 +541,12 @@ export class ReaderSession {
 			model,
 			timeoutMs: getPref<number>('timeoutMs', 60000),
 			customPrompt: getPref<string>('customPrompt', ''),
-			allowInsecureHTTP: getPref<boolean>('allowHTTPEndpoint', false)
+			allowInsecureHTTP: getPref<boolean>('allowHTTPEndpoint', false),
+			// Advanced, opt-in per-provider params (unset → request unchanged).
+			apiPath: (profile.apiPath ?? '').trim() || undefined,
+			reasoning: profile.reasoning,
+			maxOutputTokens: profile.maxOutputTokens,
+			temperature: profile.temperature
 		};
 	}
 

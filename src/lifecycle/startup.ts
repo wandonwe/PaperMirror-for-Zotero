@@ -267,7 +267,7 @@ export async function startup(params: StartupParams): Promise<void> {
 		 * override — used by the settings pane's "实际请求地址" preview so it can
 		 * never drift from the transport. Empty override = provider default.
 		 */
-		describeEndpoint(providerId: string, apiBaseURL: string): string {
+		describeEndpoint(providerId: string, apiBaseURL: string, apiPath?: string): string {
 			try {
 				const provider = getProvider(providerId);
 				return provider.endpointFor?.({
@@ -275,7 +275,8 @@ export async function startup(params: StartupParams): Promise<void> {
 					apiBaseURL: (apiBaseURL ?? '').trim(),
 					apiKey: '',
 					model: '',
-					timeoutMs: 0
+					timeoutMs: 0,
+					apiPath: (apiPath ?? '').trim() || undefined
 				} as ProviderSettings) ?? '';
 			}
 			catch {
@@ -288,18 +289,23 @@ export async function startup(params: StartupParams): Promise<void> {
 		 * always read from the secure store for the tested provider; it is never
 		 * accepted here and never returned in the result.
 		 */
-		async testConnection(overrides?: { providerId?: string; apiBaseURL?: string; model?: string }): Promise<ValidationResult> {
+		async testConnection(overrides?: { providerId?: string; apiBaseURL?: string; model?: string; apiPath?: string; reasoning?: string; maxOutputTokens?: number; temperature?: number }): Promise<ValidationResult> {
 			const providerId = overrides?.providerId || getPref<string>('provider', 'bing-free');
 			const provider = getProvider(providerId);
 			const profiles = parseProviderProfiles(getPref<string>('providerProfiles', '{}'));
 			const stored = effectiveProviderConfig(profiles, providerId);
+			const profile = profiles[providerId] ?? {};
 			const settings: ProviderSettings & { allowInsecureHTTP?: boolean } = {
 				providerId,
 				apiBaseURL: (overrides?.apiBaseURL ?? stored.apiBaseURL).trim(),
 				apiKey: await getApiKey(providerId),
 				model: (overrides?.model ?? stored.model).trim(),
 				timeoutMs: getPref<number>('timeoutMs', 60000),
-				allowInsecureHTTP: getPref<boolean>('allowHTTPEndpoint', false)
+				allowInsecureHTTP: getPref<boolean>('allowHTTPEndpoint', false),
+				apiPath: ((overrides?.apiPath ?? profile.apiPath) ?? '').trim() || undefined,
+				reasoning: overrides?.reasoning ?? profile.reasoning,
+				maxOutputTokens: overrides?.maxOutputTokens ?? profile.maxOutputTokens,
+				temperature: overrides?.temperature ?? profile.temperature
 			};
 			return provider.validateConfiguration(settings);
 		},

@@ -10,7 +10,8 @@ import { buildSystemPrompt, buildUserPayload } from '../promptBuilder';
 import { validateResponse } from '../responseValidator';
 import { requestJSON } from './httpClient';
 import type { TranslateOptions, TranslationProvider } from './types';
-import { openaiChatURL } from './urls';
+import { openaiChatURL, resolveChatURL } from './urls';
+import { openaiChatExtras } from './advancedParams';
 
 export interface OpenAICompatibleConfig {
 	id: string;
@@ -27,7 +28,7 @@ export interface OpenAICompatibleConfig {
 }
 
 export function chatURL(settings: ProviderSettings, defaultBase: string, noV1Suffix = false): string {
-	return openaiChatURL(settings.apiBaseURL, defaultBase, noV1Suffix);
+	return resolveChatURL(settings.apiBaseURL, defaultBase, noV1Suffix, settings.apiPath);
 }
 
 function extractText(json: unknown): string {
@@ -107,7 +108,9 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 						{ role: 'user', content: buildUserPayload(request) }
 					],
 					// Ask compliant servers for strict JSON; harmless elsewhere
-					response_format: { type: 'json_object' }
+					response_format: { type: 'json_object' },
+					// Opt-in advanced params (reasoning_effort / temperature / max tokens)
+					...openaiChatExtras(settings, config.id)
 				},
 				timeoutMs: settings.timeoutMs,
 				signal: options.signal,
@@ -123,7 +126,8 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 				headers: headers(settings),
 				body: {
 					model: settings.model || config.defaultModel,
-					messages: [{ role: 'user', content: prompt }]
+					messages: [{ role: 'user', content: prompt }],
+					...openaiChatExtras(settings, config.id)
 				},
 				timeoutMs: settings.timeoutMs,
 				signal: options.signal,

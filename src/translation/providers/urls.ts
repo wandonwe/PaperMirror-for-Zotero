@@ -28,6 +28,20 @@ export function openaiChatURL(base: string, defaultBase: string, noV1Suffix = fa
 	return b.includes('/chat/completions') ? b : `${b}/chat/completions`;
 }
 
+/**
+ * Chat URL honouring a user-supplied custom Path (Bob-style): when apiPath is
+ * set, it is appended to the Base URL verbatim (the user takes full control of
+ * the path); otherwise fall back to the normal /v1/chat/completions building.
+ */
+export function resolveChatURL(base: string, defaultBase: string, noV1Suffix: boolean, apiPath?: string): string {
+	const path = (apiPath ?? '').trim();
+	if (path) {
+		const b = (base || defaultBase).replace(/\/+$/, '');
+		return b + (path.startsWith('/') ? path : `/${path}`);
+	}
+	return openaiChatURL(base, defaultBase, noV1Suffix);
+}
+
 /** Full Anthropic native messages URL, guarding against a doubled /v1. */
 export function anthropicMessagesURL(base: string, defaultBase: string): string {
 	let b = (base || defaultBase).replace(/\/+$/, '');

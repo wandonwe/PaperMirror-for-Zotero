@@ -24,6 +24,15 @@ export interface ProviderProfile {
 	model?: string;
 	/** Last custom model the user typed for this provider (restored on switch). */
 	customModel?: string;
+	// ---- advanced params (all opt-in; unset = request body unchanged) --------
+	/** Custom request path (e.g. /v1/chat/completions). */
+	apiPath?: string;
+	/** Reasoning/thinking effort: '' | minimal | low | medium | high. */
+	reasoning?: string;
+	/** Max output tokens (0/undefined = provider default). */
+	maxOutputTokens?: number;
+	/** Sampling temperature (undefined = provider default). */
+	temperature?: number;
 }
 
 export type ProviderProfiles = Record<string, ProviderProfile>;
@@ -52,6 +61,18 @@ export function parseProviderProfiles(raw: string | undefined | null): ProviderP
 			}
 			if (typeof v.customModel === 'string') {
 				profile.customModel = v.customModel;
+			}
+			if (typeof v.apiPath === 'string') {
+				profile.apiPath = v.apiPath;
+			}
+			if (v.reasoning === 'minimal' || v.reasoning === 'low' || v.reasoning === 'medium' || v.reasoning === 'high') {
+				profile.reasoning = v.reasoning;
+			}
+			if (typeof v.maxOutputTokens === 'number' && Number.isFinite(v.maxOutputTokens) && v.maxOutputTokens > 0) {
+				profile.maxOutputTokens = Math.floor(v.maxOutputTokens);
+			}
+			if (typeof v.temperature === 'number' && Number.isFinite(v.temperature)) {
+				profile.temperature = v.temperature;
 			}
 			out[id] = profile;
 		}
