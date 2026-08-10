@@ -14,9 +14,9 @@ const openaiProvider = createOpenAICompatibleProvider({
 	id: 'openai',
 	displayName: 'OpenAI',
 	defaultBaseURL: 'https://api.openai.com',
-	// gpt-4o-mini is ageing; gpt-5-mini is the current cost-effective default
-	// (verified 2026-08-10, developers.openai.com). Kept in sync w/ modelCatalog.
-	defaultModel: 'gpt-5-mini'
+	// GPT-5.6 family is current; Luna is the cost-optimized tier (verified
+	// 2026-08-10, developers.openai.com). Kept in sync w/ modelCatalog.
+	defaultModel: 'gpt-5.6-luna'
 });
 
 const openaiCompatibleProvider = createOpenAICompatibleProvider({
@@ -51,8 +51,10 @@ const presetProviders: TranslationProvider[] = [
 	createOpenAICompatibleProvider({
 		id: 'moonshot',
 		displayName: 'Kimi (Moonshot AI)',
-		defaultBaseURL: 'https://api.moonshot.cn',
-		defaultModel: 'moonshot-v1-8k'
+		// Base moved to api.moonshot.ai; moonshot-v1-* sunsetting, kimi-k3 current
+		// (verified 2026-08-10, platform.kimi.ai). Kept in sync w/ modelCatalog.
+		defaultBaseURL: 'https://api.moonshot.ai',
+		defaultModel: 'kimi-k3'
 	}),
 	createOpenAICompatibleProvider({
 		id: 'qwen',
@@ -65,7 +67,9 @@ const presetProviders: TranslationProvider[] = [
 		id: 'zhipu',
 		displayName: '智谱 GLM',
 		defaultBaseURL: 'https://open.bigmodel.cn/api/paas/v4',
-		defaultModel: 'glm-4-flash'
+		// The bare glm-4-flash alias is retired; the free model is now dated
+		// (verified 2026-08-10, docs.bigmodel.cn). Kept in sync w/ modelCatalog.
+		defaultModel: 'glm-4-flash-250414'
 	}),
 	createOpenAICompatibleProvider({
 		id: 'gemini',
@@ -80,7 +84,8 @@ const presetProviders: TranslationProvider[] = [
 		id: 'openrouter',
 		displayName: 'OpenRouter',
 		defaultBaseURL: 'https://openrouter.ai/api/v1',
-		defaultModel: 'openai/gpt-4o-mini',
+		// openai/gpt-4o-mini slug retired; use a current, confirmed slug.
+		defaultModel: 'deepseek/deepseek-v4-flash-latest',
 		noV1Suffix: true
 	}),
 	createOpenAICompatibleProvider({
@@ -100,7 +105,7 @@ const presetProviders: TranslationProvider[] = [
 		id: 'ollama',
 		displayName: 'Ollama (本地)',
 		defaultBaseURL: 'http://localhost:11434',
-		defaultModel: 'qwen2.5',
+		defaultModel: 'qwen3',
 		requiresApiKey: false,
 		allowInsecureHTTP: () => true // localhost only by default URL
 	})

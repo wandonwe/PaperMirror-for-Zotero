@@ -9,6 +9,30 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.9.5] — 2026-08-10
+
+### Fixed
+
+- **内置模型清单里部分模型不可用.** Re-verified every provider's model IDs against
+  official docs and replaced retired ones:
+  - **OpenAI**: `gpt-5-mini` / `gpt-4o-mini` → the current **GPT-5.6** family
+    (`gpt-5.6-luna` default, plus `gpt-5.6-terra` / `gpt-5.6-sol`).
+  - **Kimi (Moonshot)**: `moonshot-v1-*` is being sunset and `kimi-k2` / `kimi-latest`
+    were discontinued → **`kimi-k3`** (plus `kimi-k2.6` / `kimi-k2.7-code` / `kimi-k2.5`).
+    The default Base URL also moved to **`https://api.moonshot.ai`**.
+  - **智谱 GLM**: the bare `glm-4-flash` / `glm-4-air` / `glm-4-flashx` aliases are
+    retired → the dated IDs **`glm-4-flash-250414`** (free), `glm-4-air-250414`,
+    `glm-4-flashx-250414` (plus `glm-4-plus` / `glm-4-airx`).
+  - **DeepSeek**: removed the discontinued `deepseek-chat`; keeps `deepseek-v4-flash`
+    (default) / `deepseek-v4-pro`.
+  - **OpenRouter**: refreshed to current slugs (`deepseek/deepseek-v4-flash-latest`
+    default, `deepseek/deepseek-v4-pro`, `google/gemini-2.5-flash`).
+  - **Gemini**: added `gemini-3.5-flash` / `gemini-3.6-flash` (2.5-flash still default).
+  - **Anthropic**: added `claude-fable-5`. **Qwen**: added `qwen3.7-plus/flash`.
+    **Ollama**: suggestions bumped to `qwen3` / `llama3.3` / `gemma3`.
+- The catalog remains a *fallback*, never a whitelist — any model you have typed
+  yourself is still shown and used; only the built-in suggestions changed.
+
 ## [0.9.4] — 2026-08-10
 
 ### Added

@@ -42,11 +42,11 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 		checked: CHECKED,
 		source: 'https://developers.openai.com/api/docs/models',
 		models: [
-			{ id: 'gpt-5-mini', label: 'GPT-5 mini (推荐)', recommended: true },
-			{ id: 'gpt-5', label: 'GPT-5' },
-			{ id: 'gpt-5-nano', label: 'GPT-5 nano (最省)' },
-			{ id: 'gpt-4o', label: 'GPT-4o' },
-			{ id: 'gpt-4o-mini', label: 'GPT-4o mini (旧)', legacy: true }
+			// GPT-5.6 family (sol/terra/luna). The older gpt-5-mini / gpt-4o-mini
+			// IDs are being retired, so they are not offered here.
+			{ id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna (推荐 · 省)', recommended: true },
+			{ id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra (均衡)' },
+			{ id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol (最强)' }
 		]
 	},
 	anthropic: {
@@ -56,6 +56,7 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 			{ id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (推荐)', recommended: true },
 			{ id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 (最省)' },
 			{ id: 'claude-opus-4-8', label: 'Claude Opus 4.8 (最强)' },
+			{ id: 'claude-fable-5', label: 'Claude Fable 5 (旗舰)' },
 			{ id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 (旧)', legacy: true }
 		]
 	},
@@ -64,57 +65,64 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 		source: 'https://ai.google.dev/gemini-api/docs/models',
 		models: [
 			{ id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (推荐)', recommended: true },
-			{ id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
+			{ id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (新)' },
+			{ id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (最新)' },
 			{ id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (最省)' },
 			{ id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (最强)' }
 		]
 	},
 	deepseek: {
 		checked: CHECKED,
-		source: 'https://api-docs.deepseek.com/updates/',
+		source: 'https://api-docs.deepseek.com/quick_start/pricing',
 		models: [
+			// deepseek-chat / deepseek-reasoner were discontinued 2026-07-24.
 			{ id: 'deepseek-v4-flash', label: 'DeepSeek V4-Flash (推荐)', recommended: true },
-			{ id: 'deepseek-v4-pro', label: 'DeepSeek V4-Pro (最强)' },
-			{ id: 'deepseek-chat', label: 'deepseek-chat (已停用)', legacy: true }
+			{ id: 'deepseek-v4-pro', label: 'DeepSeek V4-Pro (最强)' }
 		]
 	},
 	moonshot: {
 		checked: CHECKED,
 		source: 'https://platform.kimi.ai/docs/models',
 		models: [
-			{ id: 'moonshot-v1-8k', label: 'moonshot-v1-8k (推荐)', recommended: true },
-			{ id: 'moonshot-v1-32k', label: 'moonshot-v1-32k' },
-			{ id: 'moonshot-v1-128k', label: 'moonshot-v1-128k (长文)' },
-			{ id: 'kimi-k2', label: 'Kimi K2' }
+			// moonshot-v1-* is being sunset; kimi-latest / kimi-k2 discontinued.
+			// Current Kimi models run on base https://api.moonshot.ai/v1.
+			{ id: 'kimi-k3', label: 'Kimi K3 (推荐)', recommended: true },
+			{ id: 'kimi-k2.6', label: 'Kimi K2.6 (性价比)' },
+			{ id: 'kimi-k2.7-code', label: 'Kimi K2.7 Code (代码)' },
+			{ id: 'kimi-k2.5', label: 'Kimi K2.5 (最省)' }
 		]
 	},
 	qwen: {
 		checked: CHECKED,
-		source: 'https://help.aliyun.com/zh/model-studio/models',
+		source: 'https://help.aliyun.com/zh/model-studio/getting-started/models',
 		models: [
+			// Alibaba keeps qwen-plus/max/turbo as stable aliases → latest snapshot.
 			{ id: 'qwen-plus', label: 'qwen-plus (推荐)', recommended: true },
 			{ id: 'qwen-max', label: 'qwen-max (最强)' },
 			{ id: 'qwen-turbo', label: 'qwen-turbo (最省)' },
-			{ id: 'qwen-long', label: 'qwen-long (长文)' }
+			{ id: 'qwen3.7-plus', label: 'qwen3.7-plus (新)' },
+			{ id: 'qwen3.7-flash', label: 'qwen3.7-flash (新·快)' }
 		]
 	},
 	zhipu: {
 		checked: CHECKED,
 		source: 'https://docs.bigmodel.cn/cn/guide/models/text/glm-4',
 		models: [
-			{ id: 'glm-4-flash', label: 'GLM-4-Flash (推荐 · 免费)', recommended: true },
+			// The free/current IDs are DATED; the bare glm-4-flash alias is retired.
+			{ id: 'glm-4-flash-250414', label: 'GLM-4-Flash (推荐 · 免费)', recommended: true },
 			{ id: 'glm-4-plus', label: 'GLM-4-Plus (最强)' },
-			{ id: 'glm-4-air', label: 'GLM-4-Air (性价比)' },
-			{ id: 'glm-4-flashx', label: 'GLM-4-FlashX (快)' }
+			{ id: 'glm-4-air-250414', label: 'GLM-4-Air (性价比)' },
+			{ id: 'glm-4-flashx-250414', label: 'GLM-4-FlashX (快)' },
+			{ id: 'glm-4-airx', label: 'GLM-4-AirX (高速)' }
 		]
 	},
 	openrouter: {
 		checked: CHECKED,
 		source: 'https://openrouter.ai/models',
 		models: [
-			{ id: 'openai/gpt-4o-mini', label: 'openai/gpt-4o-mini (推荐)', recommended: true },
-			{ id: 'anthropic/claude-sonnet-4.5', label: 'anthropic/claude-sonnet-4.5' },
-			{ id: 'deepseek/deepseek-chat', label: 'deepseek/deepseek-chat' },
+			// OpenRouter is a meta-router with hundreds of models — type any slug.
+			{ id: 'deepseek/deepseek-v4-flash-latest', label: 'deepseek/deepseek-v4-flash-latest (推荐)', recommended: true },
+			{ id: 'deepseek/deepseek-v4-pro', label: 'deepseek/deepseek-v4-pro' },
 			{ id: 'google/gemini-2.5-flash', label: 'google/gemini-2.5-flash' }
 		]
 	},
@@ -122,9 +130,9 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 		checked: CHECKED,
 		source: 'https://www.siliconflow.com/models',
 		models: [
+			// SiliconFlow hosts 200+ models (Qwen3, DeepSeek-V4…) — type any id.
 			{ id: 'Qwen/Qwen2.5-7B-Instruct', label: 'Qwen2.5-7B-Instruct (推荐 · 免费)', recommended: true },
-			{ id: 'Qwen/Qwen2.5-72B-Instruct', label: 'Qwen2.5-72B-Instruct (最强)' },
-			{ id: 'deepseek-ai/DeepSeek-V3', label: 'DeepSeek-V3' }
+			{ id: 'Qwen/Qwen2.5-72B-Instruct', label: 'Qwen2.5-72B-Instruct (较强)' }
 		]
 	},
 	groq: {
@@ -141,9 +149,10 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 		checked: CHECKED,
 		source: 'https://ollama.com/library',
 		models: [
-			{ id: 'qwen2.5', label: 'qwen2.5 (推荐)', recommended: true },
-			{ id: 'llama3.1', label: 'llama3.1' },
-			{ id: 'gemma2', label: 'gemma2' },
+			// Local — you must `ollama pull` the model first; type whatever you have.
+			{ id: 'qwen3', label: 'qwen3 (推荐)', recommended: true },
+			{ id: 'llama3.3', label: 'llama3.3' },
+			{ id: 'gemma3', label: 'gemma3' },
 			{ id: 'mistral', label: 'mistral' }
 		]
 	}

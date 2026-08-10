@@ -22,16 +22,21 @@ test('providerNeedsModel: false for fixed MT engines, true for LLMs', () => {
 });
 
 test('recommendedModelFor returns the recommended (or first) entry', () => {
-	assert.equal(recommendedModelFor('openai'), 'gpt-5-mini');
+	assert.equal(recommendedModelFor('openai'), 'gpt-5.6-luna');
 	assert.equal(recommendedModelFor('deepseek'), 'deepseek-v4-flash');
 	assert.equal(recommendedModelFor('gemini'), 'gemini-2.5-flash');
+	assert.equal(recommendedModelFor('moonshot'), 'kimi-k3');
+	assert.equal(recommendedModelFor('zhipu'), 'glm-4-flash-250414');
 	assert.equal(recommendedModelFor('custom'), ''); // no catalog
 });
 
 test('catalogHasModel distinguishes catalog picks from custom ones', () => {
-	assert.equal(catalogHasModel('openai', 'gpt-5-mini'), true);
+	assert.equal(catalogHasModel('openai', 'gpt-5.6-luna'), true);
 	assert.equal(catalogHasModel('openai', 'my-finetune-123'), false);
 	assert.equal(catalogHasModel('openai', ''), false);
+	// retired IDs are no longer in the catalog
+	assert.equal(catalogHasModel('moonshot', 'moonshot-v1-8k'), false);
+	assert.equal(catalogHasModel('zhipu', 'glm-4-flash'), false);
 });
 
 test('every catalog entry records a checked date and an official source', () => {
