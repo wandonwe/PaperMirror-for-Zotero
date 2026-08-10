@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chunkBlocks, chunkByModules, trailingContext, MAX_BLOCKS_PER_REQUEST } from '../../src/translation/segmenter';
+import { chunkBlocks, chunkByModules, planChunks, trailingContext, MAX_BLOCKS_PER_REQUEST } from '../../src/translation/segmenter';
 import { buildLayoutModules } from '../../src/reader/layoutModules';
 import type { BlockType, SourceBlock } from '../../src/types/models';
 
@@ -98,4 +98,47 @@ test('chunkByModules covers every block exactly once', () => {
 	const chunks = chunkByModules(blocks, buildLayoutModules(blocks), 6000);
 	const ids = chunks.flat().map(b => b.id).sort();
 	assert.deepEqual(ids, ['cap', 'h', 'p1', 'p2']);
+});
+
+// ---- soft-boundary planner (planChunks) ------------------------------------
+
+test('planChunks packs many short subheading modules into one high-fill request', () => {
+	const blocks: SourceBlock[] = [];
+	for (let i = 0; i < 4; i++) {
+		blocks.push(typed(`h${i}`, 'heading', 20));
+		blocks.push(typed(`p${i}`, 'paragraph', 1000));
+	}
+	const chunks = planChunks(blocks, buildLayoutModules(blocks));
+	assert.equal(chunks.length, 1, 'four short modules → one request, not four');
+	assert.equal(chunks[0]!.blocks.length, 8);
+	assert.equal(chunks[0]!.moduleContext, '');
+});
+
+test('planChunks splits an oversized module and carries the heading as moduleContext', () => {
+	const h = typed('h', 'heading', 30);
+	h.sourceText = 'Effects of fluid administration';
+	const blocks = [h, typed('p1', 'paragraph', 6000), typed('p2', 'paragraph', 6000)];
+	const chunks = planChunks(blocks, buildLayoutModules(blocks), { charBudget: 8000 });
+	assert.ok(chunks.length >= 2);
+	assert.equal(chunks[0]!.moduleContext, '', 'the chunk holding the heading needs no context');
+	const cont = chunks.slice(1).find(c => c.blocks.every(b => b.id !== 'h'));
+	assert.ok(cont, 'a continuation chunk exists');
+	assert.equal(cont!.moduleContext, 'Effects of fluid administration');
+	// heading is only ever sent once (it stays in its own chunk).
+	assert.equal(chunks.flatMap(c => c.blocks).filter(b => b.id === 'h').length, 1);
+});
+
+test('planChunks never splits a single block and preserves reading order', () => {
+	const blocks = [typed('h', 'heading', 20), typed('big', 'paragraph', 20000)];
+	const chunks = planChunks(blocks, buildLayoutModules(blocks), { charBudget: 8000 });
+	assert.deepEqual(chunks.flatMap(c => c.blocks.map(b => b.id)), ['h', 'big']);
+});
+
+test('planChunks respects the character budget', () => {
+	const blocks = [typed('a', 'paragraph', 5000), typed('b', 'paragraph', 5000)];
+	assert.equal(planChunks(blocks, buildLayoutModules(blocks), { charBudget: 8000 }).length, 2);
+});
+
+test('planChunks of empty input is empty', () => {
+	assert.deepEqual(planChunks([], []), []);
 });

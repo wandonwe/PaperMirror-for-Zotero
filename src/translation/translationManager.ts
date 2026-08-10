@@ -24,7 +24,7 @@ import * as logger from '../utils/logger';
 import { protectFormulas, restoreFormulas } from '../reader/formulaGuard';
 import { matchRules } from './glossary';
 import { RequestScheduler } from './requestScheduler';
-import { chunkByModules, trailingContext } from './segmenter';
+import { planChunks, trailingContext } from './segmenter';
 import { buildLayoutModules } from '../reader/layoutModules';
 import { fnv1a64 } from '../cache/cacheSchema';
 
@@ -773,15 +773,21 @@ export class TranslationManager {
 			return { block, text, placeholders };
 		});
 
-		// Chunk by semantic module so a heading and its paragraphs reach the
-		// model together (context), while every block still returns/replaces by
-		// its own id.
-		const chunks = chunkByModules(toTranslate, buildLayoutModules(toTranslate));
+		// Plan requests: semantic modules are SOFT boundaries (context tags), the
+		// character budget is the real request boundary — a page with many short
+		// subheadings packs into 1–2 high-fill requests, not 4–8 half-empty ones.
+		const chunks = planChunks(toTranslate, buildLayoutModules(toTranslate));
+		// Hard ceiling on requests for this page so a misbehaving engine can never
+		// turn one page into a request storm: 2× the planned chunks, plus 2. Once
+		// hit, salvage stops and the remaining blocks are left for 「刷新本页」.
+		const pageRequestCap = chunks.length * 2 + 2;
+		const canSpend = (): boolean => metrics.requestCount < pageRequestCap;
 		let previous: SourceBlock[] = [];
 		const results: TranslatedBlock[] = [];
 		let untranslatedCount = 0;
 
-		for (const chunk of chunks) {
+		for (const plan of chunks) {
+			const chunk = plan.blocks;
 			if (signal.aborted) {
 				throw new PaperMirrorError('CANCELLED', 'cancelled');
 			}
@@ -791,6 +797,7 @@ export class TranslationManager {
 				targetLanguage: target,
 				documentTitle: this.deps.getDocumentTitle(),
 				previousContext: this.deps.useContext() ? trailingContext(previous) : '',
+				moduleContext: this.deps.useContext() ? (plan.moduleContext || undefined) : undefined,
 				blocks: chunk.map((b) => {
 					const pb = protectedBlocks.find(p => p.block.id === b.id)!;
 					// 首次请求即携带排版预算: most paragraphs then fit on the first
@@ -810,7 +817,7 @@ export class TranslationManager {
 
 			// Retry only missing ids once (spec 4.3)
 			const missing = chunk.filter(b => !received.has(b.id));
-			if (missing.length) {
+			if (missing.length && canSpend()) {
 				logger.debug(MODULE, `Retrying ${missing.length} missing block(s) on page ${pageIndex}`);
 				const retryRequest: TranslationRequest = {
 					...request,
@@ -854,10 +861,13 @@ export class TranslationManager {
 			// (3–5 blocks — id drift is rare at this size) instead of jumping
 			// straight to one request per block. Only the leftovers of the
 			// grouped pass fall through to single-block salvage.
-			if (afterRetry.length >= 3) {
+			if (afterRetry.length >= 3 && canSpend()) {
 				for (let i = 0; i < afterRetry.length; i += SALVAGE_BATCH_SIZE) {
 					if (signal.aborted) {
 						throw new PaperMirrorError('CANCELLED', 'cancelled');
+					}
+					if (!canSpend()) {
+						break;
 					}
 					const group = afterRetry.slice(i, i + SALVAGE_BATCH_SIZE).filter(b => !received.has(b.id));
 					if (!group.length) {
@@ -893,7 +903,7 @@ export class TranslationManager {
 			// misalign. Without this pass the block silently stayed English and
 			// the page rendered mixed-language (the JACC report).
 			const stillMissing = chunk.filter(b => !received.has(b.id));
-			if (stillMissing.length) {
+			if (stillMissing.length && canSpend()) {
 				logger.warn(MODULE, `Salvaging ${stillMissing.length} block(s) on page ${pageIndex} (concurrency ${SALVAGE_CONCURRENCY})`);
 				if (stillMissing.length > SALVAGE_WARN_THRESHOLD) {
 					logger.warn(MODULE, `Page ${pageIndex + 1}: provider dropped ${stillMissing.length} ids — salvaging all, but this engine is misbehaving`);
@@ -903,6 +913,9 @@ export class TranslationManager {
 				// suffer id drift, and running a few at once keeps a long page
 				// from stalling for a minute on sequential round-trips.
 				const salvageOne = async (block: SourceBlock): Promise<void> => {
+					if (!canSpend()) {
+						return;
+					}
 					const pb = protectedBlocks.find(p => p.block.id === block.id)!;
 					try {
 						metrics.salvageCount++;
@@ -929,6 +942,9 @@ export class TranslationManager {
 				for (let i = 0; i < stillMissing.length; i += SALVAGE_CONCURRENCY) {
 					if (signal.aborted) {
 						throw new PaperMirrorError('CANCELLED', 'cancelled');
+					}
+					if (!canSpend()) {
+						break;
 					}
 					const wave = stillMissing.slice(i, i + SALVAGE_CONCURRENCY);
 					const settled = await Promise.allSettled(wave.map(salvageOne));
@@ -973,7 +989,9 @@ export class TranslationManager {
 		// blocks (single-block requests, capped), patch their entries in place,
 		// and merge into `results` so the fix reaches the cache — the page is not
 		// re-extracted or re-rendered wholesale.
-		await this.resolveEnglishResidue(state, blocks, results, source, target, signal, countedTranslate);
+		if (canSpend()) {
+			await this.resolveEnglishResidue(state, blocks, results, source, target, signal, countedTranslate);
+		}
 
 		state.status = 'done';
 		this.notify(state);

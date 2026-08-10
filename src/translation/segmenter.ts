@@ -6,9 +6,11 @@
 import type { SourceBlock } from '../types/models';
 import type { LayoutModule } from '../reader/layoutModules';
 
-/** Conservative per-request budget in characters (≈ safe for all providers). */
-export const DEFAULT_CHUNK_BUDGET = 6000;
+/** Per-request budget in characters. Higher fill = fewer round-trips. */
+export const DEFAULT_CHUNK_BUDGET = 8000;
 export const MAX_BLOCKS_PER_REQUEST = 24;
+/** Below this fill fraction we keep packing across a module boundary. */
+export const DEFAULT_TARGET_FILL = 0.85;
 
 export function chunkBlocks(blocks: SourceBlock[], budget: number = DEFAULT_CHUNK_BUDGET): SourceBlock[][] {
 	const chunks: SourceBlock[][] = [];
@@ -99,6 +101,99 @@ export function chunkByModules(blocks: SourceBlock[], modules: LayoutModule[], b
 	if (leftovers.length) {
 		chunks.push(...chunkBlocks(leftovers, budget));
 	}
+	return chunks;
+}
+
+/**
+ * Soft-boundary translation planner (spec: modules become CONTEXT tags, the
+ * character budget is the real request boundary).
+ *
+ * Difference from chunkByModules: a semantic module is a *preferred* break, not
+ * a hard one. We pack blocks greedily to a high fill; a module boundary only
+ * ends a chunk when the chunk is already at/above the target fill, so a page
+ * with many short subheadings no longer explodes into 4–8 half-empty requests.
+ * When a heading-anchored module DOES get split across chunks, the continuation
+ * chunk carries the heading as `moduleContext` — the model gets the section
+ * heading for understanding, and the heading is translated only once (it stays
+ * a normal block in its own chunk; it is never re-sent for translation).
+ *
+ * A single SourceBlock is never split. Output preserves reading order.
+ */
+export interface PlannedChunk {
+	blocks: SourceBlock[];
+	/** Section heading for understanding only; '' when none applies. */
+	moduleContext: string;
+}
+
+export function planChunks(
+	blocks: SourceBlock[],
+	modules: LayoutModule[],
+	opts?: { charBudget?: number; maxBlocks?: number; targetFill?: number }
+): PlannedChunk[] {
+	const charBudget = opts?.charBudget ?? DEFAULT_CHUNK_BUDGET;
+	const maxBlocks = opts?.maxBlocks ?? MAX_BLOCKS_PER_REQUEST;
+	const targetFill = opts?.targetFill ?? DEFAULT_TARGET_FILL;
+	if (!blocks.length) {
+		return [];
+	}
+
+	const byId = new Map(blocks.map(b => [b.id, b]));
+	const moduleOf = new Map<string, string>();
+	const anchorOf = new Map<string, string>();
+	const headingOf = new Map<string, string>();
+	for (const mod of modules) {
+		anchorOf.set(mod.id, mod.anchorId);
+		if (mod.anchorType === 'heading') {
+			headingOf.set(mod.id, byId.get(mod.anchorId)?.sourceText ?? '');
+		}
+		for (const id of mod.memberIds) {
+			moduleOf.set(id, mod.id);
+		}
+	}
+
+	const contextFor = (chunkBlocks: SourceBlock[]): string => {
+		const first = chunkBlocks[0];
+		if (!first) {
+			return '';
+		}
+		const mid = moduleOf.get(first.id);
+		if (!mid || !headingOf.has(mid)) {
+			return '';
+		}
+		// Only a CONTINUATION (the heading block landed in an earlier chunk) needs
+		// the heading echoed as context.
+		const anchorId = anchorOf.get(mid);
+		const hasAnchor = chunkBlocks.some(b => b.id === anchorId);
+		return hasAnchor ? '' : (headingOf.get(mid) ?? '');
+	};
+
+	const chunks: PlannedChunk[] = [];
+	let cur: SourceBlock[] = [];
+	let size = 0;
+	const flush = (): void => {
+		if (cur.length) {
+			chunks.push({ blocks: cur, moduleContext: contextFor(cur) });
+			cur = [];
+			size = 0;
+		}
+	};
+	for (let i = 0; i < blocks.length; i++) {
+		const b = blocks[i]!;
+		const bs = b.sourceText.length;
+		const startsNewModule = i > 0 && moduleOf.get(b.id) !== moduleOf.get(blocks[i - 1]!.id);
+		// Prefer to keep modules whole: end the chunk at a module boundary once it
+		// is already full enough.
+		if (cur.length && startsNewModule && size >= charBudget * targetFill) {
+			flush();
+		}
+		// Hard boundary: never exceed the budget or the block ceiling.
+		if (cur.length && (size + bs > charBudget || cur.length >= maxBlocks)) {
+			flush();
+		}
+		cur.push(b);
+		size += bs;
+	}
+	flush();
 	return chunks;
 }
 

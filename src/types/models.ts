@@ -83,6 +83,11 @@ export interface TranslationRequest {
 	targetLanguage: LanguageCode;
 	documentTitle: string;
 	previousContext: string;
+	/**
+	 * Section heading these blocks fall under, when a module was split across
+	 * requests. Understanding-only: the model must NOT translate or return it.
+	 */
+	moduleContext?: string;
 	blocks: {
 		id: string;
 		type: BlockType;

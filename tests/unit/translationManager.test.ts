@@ -258,9 +258,13 @@ test('a compress for a page no longer wanted IS cancelled on scroll', async () =
 	manager.dispose();
 });
 
-test('salvage recovers ALL dropped ids, not just the first eight', async () => {
+test('salvage is BOUNDED: a dropping provider cannot cause a request storm', async () => {
+	// New contract (0.9.8): total requests for a page are capped at 2×chunks + 2,
+	// so an engine that keeps dropping ids can never explode into per-block
+	// storms. Whatever comes back within budget is kept; the rest is left for
+	// 「刷新本页」 (and the circuit breaker reroutes to a backup engine).
 	const N = 12;
-	let singleCalls = 0;
+	let totalCalls = 0;
 	const { deps } = makeDeps({
 		extractPage: async (pageIndex) => Array.from({ length: N }, (_, i) => ({
 			id: `page-${pageIndex}-block-${i}`,
@@ -268,25 +272,20 @@ test('salvage recovers ALL dropped ids, not just the first eight', async () => {
 			sourceText: `Paragraph ${i} with enough text to be a real block on page ${pageIndex}.`
 		})),
 		translateRequest: async (request) => {
-			if (request.blocks.length > 1) {
-				// A provider that drops everything but the first block of any batch.
-				return { translations: [{ id: request.blocks[0]!.id, translatedText: '批量译文内容' }] };
-			}
-			// Single-block salvage always succeeds (no id drift possible).
-			singleCalls++;
-			return { translations: [{ id: request.blocks[0]!.id, translatedText: '单块译文救回内容' }] };
+			totalCalls++;
+			// A provider that drops everything but the first block of any batch,
+			// and even fails single-block salvage → worst case for the budget.
+			return { translations: [{ id: request.blocks[0]!.id, translatedText: '批量译文内容' }] };
 		}
 	});
 	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
 	await manager.ensurePage(0, 10);
 	const state = manager.getPageState(0)!;
 	assert.equal(state.status, 'done');
-	assert.equal(state.translations.size, N, 'every block is translated, not just 8');
-	// 分级补救: the grouped tier recovers some blocks in small batches first, so
-	// FEWER single-block requests fire than one-per-dropped-block — while still
-	// converting every survivor.
-	assert.ok(singleCalls > 0, 'single-block tier still runs for the leftovers');
-	assert.ok(singleCalls <= N - 3, `grouped tier reduced the single-block requests (ran ${singleCalls})`);
+	// N short blocks → one planned chunk → cap = 2×1 + 2 = 4 total requests.
+	assert.ok(totalCalls <= 4, `page requests are bounded, ran ${totalCalls}`);
+	// Successful blocks are always retained (never re-requested or dropped).
+	assert.ok(state.translations.size >= 1 && state.translations.size < N, `kept ${state.translations.size} recovered blocks`);
 	manager.dispose();
 });
 
