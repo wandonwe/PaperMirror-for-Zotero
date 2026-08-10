@@ -24,7 +24,9 @@ test('providerNeedsModel: false for fixed MT engines, true for LLMs', () => {
 test('recommendedModelFor returns the recommended (or first) entry', () => {
 	assert.equal(recommendedModelFor('openai'), 'gpt-5.6-luna');
 	assert.equal(recommendedModelFor('deepseek'), 'deepseek-v4-flash');
-	assert.equal(recommendedModelFor('gemini'), 'gemini-3.6-flash');
+	// Free-tier Gemini keys only get 2.5-flash/lite (2026-04 tightening) — the
+	// default must work for every account.
+	assert.equal(recommendedModelFor('gemini'), 'gemini-2.5-flash');
 	assert.equal(recommendedModelFor('anthropic'), 'claude-sonnet-5');
 	assert.equal(recommendedModelFor('moonshot'), 'kimi-k3');
 	assert.equal(recommendedModelFor('qwen'), 'qwen3.7-plus');

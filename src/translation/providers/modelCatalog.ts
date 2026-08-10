@@ -71,15 +71,15 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 		checked: CHECKED,
 		source: 'https://ai.google.dev/gemini-api/docs/models',
 		models: [
-			{ id: 'gemini-3.6-flash', group: 'recommended', recommended: true },
-			{ id: 'gemini-3.5-flash', group: 'quality' },
-			{ id: 'gemini-2.5-pro', group: 'quality' },
-			{ id: 'gemini-3.5-flash-lite', group: 'fast' },
-			{ id: 'gemini-3.1-flash-lite', group: 'fast' },
-			{ id: 'gemini-3.1-pro-preview', label: 'gemini-3.1-pro-preview（预览）', group: 'preview' },
-			{ id: 'gemini-3-flash-preview', label: 'gemini-3-flash-preview（预览）', group: 'preview' },
-			{ id: 'gemini-2.5-flash', group: 'legacy' },
-			{ id: 'gemini-2.5-flash-lite', group: 'legacy' }
+			// 2026-04 起 Google 收紧免费档:免费 API Key 只开放 2.5-flash / lite;
+			// 3.x 与 Pro 需付费档 — 默认必须选对所有账户都可用的。
+			{ id: 'gemini-2.5-flash', group: 'recommended', recommended: true },
+			{ id: 'gemini-2.5-flash-lite', group: 'fast' },
+			{ id: 'gemini-3.6-flash', label: 'gemini-3.6-flash（需付费档）', group: 'quality' },
+			{ id: 'gemini-3.5-flash', label: 'gemini-3.5-flash（需付费档）', group: 'quality' },
+			{ id: 'gemini-2.5-pro', label: 'gemini-2.5-pro（需付费档）', group: 'quality' },
+			{ id: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite（需付费档）', group: 'fast' },
+			{ id: 'gemini-3.1-pro-preview', label: 'gemini-3.1-pro-preview（预览·需付费档）', group: 'preview' }
 		]
 	},
 	anthropic: {

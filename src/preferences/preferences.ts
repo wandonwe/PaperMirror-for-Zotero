@@ -726,7 +726,7 @@ interface PaperMirrorPublicAPI {
 		const TEST_MESSAGES: Record<string, string> = {
 			NO_API_KEY: '未填写 API Key',
 			INVALID_API_KEY: 'API Key 无效或无权限',
-			INVALID_MODEL: '模型不存在或地址路径不正确',
+			INVALID_MODEL: '模型不存在、当前账户不可用(如免费档限制),或地址路径不正确',
 			RATE_LIMITED: '触发限流,请稍后再试',
 			QUOTA_EXCEEDED: '额度或余额不足',
 			TIMEOUT: '请求超时,请检查网络或稍后再试',

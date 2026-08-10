@@ -15,6 +15,16 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.13] — 2026-08-10
+
+### Fixed
+
+- **Gemini 只有 2.5-flash / 2.5-flash-lite 可用.** 根因是 Google 2026-04 收紧了
+  API 免费档:Pro 与 3.x 系模型转为付费档专属,免费 Key 仅开放 2.5-flash / lite。
+  默认模型改回对所有账户都可用的 **`gemini-2.5-flash`**;3.x 与 Pro 保留在列表中并
+  标注「需付费档」。连接测试的"模型不存在"提示补充了"当前账户不可用(如免费档限制)"
+  这一常见原因。
+
 ## [0.9.12] — 2026-08-10
 
 ### Changed

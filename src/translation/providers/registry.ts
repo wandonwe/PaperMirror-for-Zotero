@@ -77,8 +77,10 @@ const presetProviders: TranslationProvider[] = [
 		id: 'gemini',
 		displayName: 'Google Gemini',
 		defaultBaseURL: 'https://generativelanguage.googleapis.com/v1beta/openai',
-		// 3.6-flash is the current recommended fast tier (2026-08-10, ai.google.dev).
-		defaultModel: 'gemini-3.6-flash',
+		// 2.5-flash is the ONLY fast tier open to free-tier keys since Google's
+		// 2026-04 free-tier tightening (3.x / Pro are paid-only) — the default
+		// must work for every account. Kept in sync w/ modelCatalog.
+		defaultModel: 'gemini-2.5-flash',
 		noV1Suffix: true
 	}),
 	createOpenAICompatibleProvider({
