@@ -70,6 +70,15 @@ export class TextExtractor {
 	private referencesStartedByPage = new Map<number, boolean>();
 	private fullText: adapter.FullTextInfo | null = null;
 	private bodyFontSize = 0;
+	/**
+	 * PageData captured by prime() for the page open at startup, reused ONCE by
+	 * the first extractPage() of that page. Without this, opening the reader
+	 * fetches the current page's char stream twice — prime() for the body font
+	 * size, then extractPage() for the real work — up to two 8 s round-trips
+	 * back to back on a slow PDF. One-shot: cleared on use so a re-translate
+	 * always re-reads fresh data.
+	 */
+	private primedPageData: { pageIndex: number; data: Awaited<ReturnType<typeof adapter.getPageData>> } | null = null;
 
 	constructor(reader: ReaderLike, options: { includeReferences: boolean }) {
 		this.reader = reader;
@@ -112,14 +121,27 @@ export class TextExtractor {
 		}
 	}
 
+	/**
+	 * getPageData for a page, reusing prime()'s one-shot capture for the page it
+	 * primed so the current page is never fetched twice on open.
+	 */
+	private async getPageData(pageIndex: number): Promise<Awaited<ReturnType<typeof adapter.getPageData>>> {
+		if (this.primedPageData && this.primedPageData.pageIndex === pageIndex) {
+			const cached = this.primedPageData.data;
+			this.primedPageData = null; // one-shot: re-translate must re-read fresh
+			return cached;
+		}
+		return withTimeout(
+			adapter.getPageData(this.reader, pageIndex),
+			PAGE_DATA_TIMEOUT_MS,
+			`getPageData(page ${pageIndex + 1})`
+		);
+	}
+
 	async extractPage(pageIndex: number): Promise<SourceBlock[]> {
 		// --- path 1: the fork's char stream (best structure) -----------------
 		try {
-			const { pageData, pageWidth, pageHeight } = await withTimeout(
-				adapter.getPageData(this.reader, pageIndex),
-				PAGE_DATA_TIMEOUT_MS,
-				`getPageData(page ${pageIndex + 1})`
-			);
+			const { pageData, pageWidth, pageHeight } = await this.getPageData(pageIndex);
 			if (pageData.chars.length) {
 				const result = buildBlocks(pageData.chars, {
 					pageIndex,
@@ -336,12 +358,15 @@ export class TextExtractor {
 		}
 		const pageIndex = adapter.getCurrentPageIndex(this.reader);
 		try {
-			const { pageData } = await withTimeout(
+			const result = await withTimeout(
 				adapter.getPageData(this.reader, pageIndex),
 				PAGE_DATA_TIMEOUT_MS,
 				'getPageData(prime)'
 			);
-			const sizes = pageData.chars
+			// Keep the char stream so the first extractPage() of this page reuses
+			// it instead of paying for a second round-trip.
+			this.primedPageData = { pageIndex, data: result };
+			const sizes = result.pageData.chars
 				.filter(c => typeof c.fontSize === 'number' && !c.ignorable)
 				.map(c => c.fontSize as number)
 				.sort((a, b) => a - b);

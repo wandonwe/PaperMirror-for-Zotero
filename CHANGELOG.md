@@ -9,6 +9,31 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+- Planned (needs real-PDF validation): build a unified PageLayout before any
+  merging; detect tables at extraction time with stable per-cell ids so the
+  translator receives text cells; make region coalescing table-structure-aware
+  instead of removing it; run page extraction on its own local queue so a slow
+  PDF.js call never occupies a provider concurrency slot.
+
+## [0.9.6] — 2026-08-10
+
+### Fixed
+
+- **首次打开慢:当前页被提取两次.** Opening the reader ran `getPageData()` for the
+  current page twice back to back — once in `prime()` to measure the body font
+  size, then again in `extractPage()` for the real work — up to two 8 s
+  round-trips on a slow PDF. `prime()` now keeps that page's char stream and the
+  first `extractPage()` of the page reuses it (one-shot; a re-translate still
+  re-reads fresh), removing the duplicate round-trip.
+
+### Notes
+
+- This is the first, zero-risk step of the extraction-pipeline review. The larger
+  items (table modeling moved ahead of translation with per-cell ids;
+  structure-aware coalescing; a separate extraction queue) change table geometry
+  and layout and must be validated against real PDFs, so they are staged in
+  Unreleased rather than shipped blind.
+
 ## [0.9.5] — 2026-08-10
 
 ### Fixed
