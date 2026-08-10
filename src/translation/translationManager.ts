@@ -206,7 +206,11 @@ function targetLanguageRatio(text: string): number {
  * pages with several chunks are fine at 60 s per request; five minutes means
  * something is stuck, not slow.
  */
-const PAGE_WATCHDOG_MS = 300000;
+const PAGE_WATCHDOG_MS = 120000;
+/** Per-request transient-error retries (network/timeout/rate-limit), replacing
+ *  the old whole-page scheduler retry. Small and local so one blip doesn't fail
+ *  a chunk, without ever re-running extraction. */
+const REQUEST_RETRIES = 2;
 
 export interface PageTranslationState {
 	pageIndex: number;
@@ -271,11 +275,14 @@ export class TranslationManager {
 	private prefetchBackward = 1;
 	/** Pages whose provider has already been reported unstable (fire once). */
 	private unstableFired = new Set<number>();
+	/** Injected (tests) or real timer delay, for request-level retry backoff. */
+	private delay: (ms: number) => Promise<void>;
 
 	constructor(deps: TranslationDeps, events: ManagerEvents, options?: { maxConcurrent?: number; reservedForeground?: number; prefetch?: boolean; delayFn?: (ms: number) => Promise<void> }) {
 		this.deps = deps;
 		this.events = events;
 		this.prefetchEnabled = options?.prefetch ?? true;
+		this.delay = options?.delayFn ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
 		this.scheduler = new RequestScheduler({
 			// The GLOBAL cap; the host (session) reconfigures it from the live
 			// provider pool via setGlobalConcurrency / setLaneCaps. Per-provider
@@ -591,7 +598,16 @@ export class TranslationManager {
 						clearTimeout(watchdog);
 					}
 				}
-			}, { foreground: options?.foreground ?? false, lane: this.laneFor(pageIndex) });
+			}, {
+				foreground: options?.foreground ?? false,
+				lane: this.laneFor(pageIndex),
+				// A page task runs at MOST once. A retryable failure must NOT re-run
+				// the whole translatePage (re-extract + re-translate everything) —
+				// that was the 4×watchdog ≈ many-minutes hang. Transient network
+				// blips are retried at the individual-request level instead, and
+				// already-translated blocks are kept; the rest is left for 「刷新本页」.
+				maxRetries: 0
+			});
 		}
 		catch (e) {
 			const error = e instanceof PaperMirrorError ? e : new PaperMirrorError('UNKNOWN', String(e));
@@ -690,7 +706,27 @@ export class TranslationManager {
 		const metrics = { requestCount: 0, salvageCount: 0, startedAt: Date.now() };
 		const countedTranslate = async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
 			metrics.requestCount++;
-			return this.deps.translateRequest(request, sig);
+			// Request-level retry (network/timeout/rate-limit only): the page task
+			// no longer re-runs on failure, so a transient blip is handled HERE
+			// instead of re-extracting the whole page.
+			let lastError: unknown;
+			for (let attempt = 0; attempt <= REQUEST_RETRIES; attempt++) {
+				if (sig.aborted) {
+					throw new PaperMirrorError('CANCELLED', 'cancelled');
+				}
+				try {
+					return await this.deps.translateRequest(request, sig);
+				}
+				catch (e) {
+					lastError = e;
+					const err = e instanceof PaperMirrorError ? e : new PaperMirrorError('UNKNOWN', String(e));
+					if (err.code === 'CANCELLED' || !err.retryable || attempt === REQUEST_RETRIES) {
+						throw err;
+					}
+					await this.delay(Math.min(2000, 400 * (attempt + 1)));
+				}
+			}
+			throw lastError instanceof Error ? lastError : new PaperMirrorError('UNKNOWN', String(lastError));
 		};
 
 		// 1. Extract
@@ -807,8 +843,21 @@ export class TranslationManager {
 				glossary
 			};
 
-			let response = await countedTranslate(request, signal);
 			const received = new Map<string, string>();
+			let response: TranslationResponse = { translations: [] };
+			try {
+				response = await countedTranslate(request, signal);
+			}
+			catch (e) {
+				// The page task no longer retries wholesale, so a chunk's hard
+				// failure must NOT abandon the page — treat its blocks as missing
+				// (salvage may recover them; later chunks still run). Cancellation
+				// still stops everything.
+				if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
+					throw e;
+				}
+				logger.warn(MODULE, `Chunk request failed on page ${pageIndex}; continuing`, e);
+			}
 			for (const t of response.translations) {
 				if (accept(t.id, t.translatedText)) {
 					received.set(t.id, t.translatedText);

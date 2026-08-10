@@ -233,3 +233,16 @@ test('adaptive band: a 429 cannot drop a lane below its min floor', async () => 
 	}, { lane: 'A' }));
 	assert.equal(scheduler.laneCap('A'), 2, 'stays at the min floor, not below');
 });
+
+test('per-job maxRetries:0 overrides the scheduler default (page task runs once)', async () => {
+	const scheduler = new RequestScheduler({ maxConcurrent: 1, maxRetries: 3, delayFn: noDelay });
+	let attempts = 0;
+	await assert.rejects(
+		scheduler.enqueue('page-7', 0, async () => {
+			attempts++;
+			throw new PaperMirrorError('TIMEOUT', 'slow', { retryable: true });
+		}, { maxRetries: 0 }),
+		/slow/
+	);
+	assert.equal(attempts, 1, 'a maxRetries:0 job is attempted exactly once even for a retryable error');
+});

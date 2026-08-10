@@ -15,6 +15,25 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.9] — 2026-08-10
+
+### Fixed
+
+- **翻页后"卡住很久"的根因:取消整页级自动重试(P0).** 一个页面过去是一个可重试的
+  调度任务——可重试错误会把**整个** `translatePage` 重跑(重新提取 PDF、重新分批、重新
+  翻译、重新补救),最多 3 次重试 × 300 秒看门狗,最坏接近 20 分钟才真正失败。现在:
+  - 页面调度任务 **`maxRetries: 0`**(最多执行一次,绝不整页重跑);
+  - 瞬时错误(网络/超时/限流)改为在**单个请求层**重试(最多 2 次、短退避),不再重新提取;
+  - 单个 chunk 请求彻底失败**不再拖垮整页**——其区块交给(已封顶的)补救,后续 chunk 继续;
+  - 页面看门狗 **300s → 120s**;已翻译的区块始终即时保留。
+  - 调度器新增 per-job `maxRetries` 覆盖(默认仍沿用全局值)。
+
+### Notes
+
+- 这是调度架构 P0 的第一项(消除"卡住")。其余 P0/P1——整表"完整保护"、active 页面升级为
+  前台(`promoteActive`)、提取队列与 API 队列分离、整页任务拆成 chunk 级任务、真实阶段
+  文案——会改动表格几何与调度粒度,需在真实 PDF 上验证,按"我改一块、你装 xpi 实测"推进。
+
 ## [0.9.8] — 2026-08-10
 
 ### Changed

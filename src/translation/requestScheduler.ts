@@ -39,6 +39,8 @@ interface Job<T> {
 	foreground: boolean;
 	/** The provider lane this job belongs to; '' = no per-lane constraint. */
 	lane: string;
+	/** Per-job retry ceiling; falls back to the scheduler-wide maxRetries. */
+	maxRetries?: number;
 }
 
 export class RequestScheduler {
@@ -156,7 +158,7 @@ export class RequestScheduler {
 	 * Enqueue a job. If a job with the same key is already queued or running,
 	 * the existing promise semantics are preserved by rejecting the duplicate.
 	 */
-	enqueue<T>(key: string, priority: number, run: (signal: AbortSignal) => Promise<T>, opts?: { foreground?: boolean; lane?: string }): Promise<T> {
+	enqueue<T>(key: string, priority: number, run: (signal: AbortSignal) => Promise<T>, opts?: { foreground?: boolean; lane?: string; maxRetries?: number }): Promise<T> {
 		if (this.disposed) {
 			return Promise.reject(new PaperMirrorError('CANCELLED', 'Scheduler disposed.'));
 		}
@@ -173,7 +175,8 @@ export class RequestScheduler {
 				controller: new AbortController(),
 				attempts: 0,
 				foreground: opts?.foreground ?? false,
-				lane: opts?.lane ?? ''
+				lane: opts?.lane ?? '',
+				maxRetries: opts?.maxRetries
 			};
 			this.queue.push(job as Job<unknown>);
 			this.queue.sort((a, b) => b.priority - a.priority);
@@ -351,7 +354,8 @@ export class RequestScheduler {
 							this.penalizeLane(job.lane, 'timeout');
 						}
 					}
-					if (cancelled || !error.retryable || job.attempts > this.options.maxRetries) {
+					const retryCap = job.maxRetries ?? this.options.maxRetries;
+					if (cancelled || !error.retryable || job.attempts > retryCap) {
 						job.reject(cancelled ? new PaperMirrorError('CANCELLED', 'Translation was cancelled.') : error);
 						return;
 					}
