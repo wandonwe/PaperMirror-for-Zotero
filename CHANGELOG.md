@@ -15,6 +15,17 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.10] — 2026-08-10
+
+### Fixed
+
+- **gpt-5.x 等新模型"测试连接"误报"模型不存在".** OpenAI 的推理模型(gpt-5.x)在
+  chat/completions 上**拒绝旧的 `max_tokens` 参数**,必须用 `max_completion_tokens`。
+  连接测试原本发送 `max_tokens: 32`,导致合法的 gpt-5.5 返回 400 并被归类为"模型不存在
+  /路径不对"。现在对官方 OpenAI 端点(`openai`)改用 `max_completion_tokens`(对
+  gpt-4o 与 gpt-5.x 都适用),其它 OpenAI 兼容端点仍用 `max_tokens`。
+  (实际翻译请求本就不带 `max_tokens`,所以翻译可能一直是好的——坏的只是测试。)
+
 ## [0.9.9] — 2026-08-10
 
 ### Fixed

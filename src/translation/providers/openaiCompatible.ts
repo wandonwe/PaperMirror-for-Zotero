@@ -73,7 +73,14 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 					headers: headers(settings),
 					body: {
 						model: settings.model || config.defaultModel,
-						max_tokens: 32,
+						// OpenAI's reasoning models (gpt-5.x) REJECT the legacy
+						// `max_tokens` on chat/completions — they require
+						// `max_completion_tokens`. Use the new key for the official
+						// OpenAI endpoint (works for gpt-4o and gpt-5.x alike) and
+						// keep `max_tokens` for other OpenAI-compatible servers that
+						// don't recognise the new one. Without this, a valid gpt-5.x
+						// model tests as "模型不存在" (a 400 that mentions "model").
+						...(config.id === 'openai' ? { max_completion_tokens: 32 } : { max_tokens: 32 }),
 						messages: [
 							{ role: 'user', content: 'Reply with the single word: ok' }
 						]
