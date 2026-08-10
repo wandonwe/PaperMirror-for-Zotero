@@ -1,6 +1,6 @@
 {
 	"name": "zotero-bilingual-reader",
-	"version": "0.9.2",
+	"version": "0.9.4",
 	"description": "PaperMirror for Zotero — bilingual side-by-side reading mode for the Zotero PDF reader",
 	"private": true,
 	"license": "AGPL-3.0-or-later",

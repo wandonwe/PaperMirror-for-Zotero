@@ -10,6 +10,7 @@ import { buildSystemPrompt, buildUserPayload } from '../promptBuilder';
 import { validateResponse } from '../responseValidator';
 import { requestJSON } from './httpClient';
 import type { TranslateOptions, TranslationProvider } from './types';
+import { openaiChatURL } from './urls';
 
 export interface OpenAICompatibleConfig {
 	id: string;
@@ -26,15 +27,7 @@ export interface OpenAICompatibleConfig {
 }
 
 export function chatURL(settings: ProviderSettings, defaultBase: string, noV1Suffix = false): string {
-	let base = (settings.apiBaseURL || defaultBase).replace(/\/+$/, '');
-	// Accept bases with or without a version segment
-	if (!noV1Suffix && !/\/v\d+[a-z]*$/.test(base) && !base.includes('/chat/completions')) {
-		base += '/v1';
-	}
-	if (base.includes('/chat/completions')) {
-		return base;
-	}
-	return `${base}/chat/completions`;
+	return openaiChatURL(settings.apiBaseURL, defaultBase, noV1Suffix);
 }
 
 function extractText(json: unknown): string {
@@ -69,6 +62,10 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 		defaultModel: config.defaultModel,
 		requiresApiKey: config.requiresApiKey ?? (config.id !== 'custom'),
 		supportsCharBudget: true,
+
+		endpointFor(settings: ProviderSettings): string {
+			return chatURL(settings, config.defaultBaseURL, config.noV1Suffix);
+		},
 
 		async validateConfiguration(settings: ProviderSettings): Promise<ValidationResult> {
 			try {

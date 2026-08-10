@@ -1,10 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chunkBlocks, trailingContext, MAX_BLOCKS_PER_REQUEST } from '../../src/translation/segmenter';
-import type { SourceBlock } from '../../src/types/models';
+import { chunkBlocks, chunkByModules, trailingContext, MAX_BLOCKS_PER_REQUEST } from '../../src/translation/segmenter';
+import { buildLayoutModules } from '../../src/reader/layoutModules';
+import type { BlockType, SourceBlock } from '../../src/types/models';
 
 function block(id: string, len: number): SourceBlock {
 	return { id, pageIndex: 0, order: 0, type: 'paragraph', sourceText: 'x'.repeat(len) };
+}
+
+function typed(id: string, type: BlockType, len: number, column = 0): SourceBlock {
+	return { id, pageIndex: 0, order: 0, type, sourceText: 'x'.repeat(len), column };
 }
 
 test('chunks by character budget', () => {
@@ -33,4 +38,64 @@ test('trailingContext truncates to the tail', () => {
 
 test('trailingContext of empty list is empty', () => {
 	assert.equal(trailingContext([]), '');
+});
+
+// ---- module-aware chunking -------------------------------------------------
+
+test('chunkByModules keeps a heading and its paragraphs in one request', () => {
+	const blocks = [
+		typed('h', 'heading', 40),
+		typed('p1', 'paragraph', 1000),
+		typed('p2', 'paragraph', 1000)
+	];
+	const chunks = chunkByModules(blocks, buildLayoutModules(blocks), 6000);
+	assert.equal(chunks.length, 1);
+	assert.deepEqual(chunks[0]!.map(b => b.id), ['h', 'p1', 'p2']);
+});
+
+test('chunkByModules lets several small modules share one request', () => {
+	const blocks = [
+		typed('h1', 'heading', 20), typed('a', 'paragraph', 500),
+		typed('h2', 'heading', 20), typed('b', 'paragraph', 500)
+	];
+	const chunks = chunkByModules(blocks, buildLayoutModules(blocks), 6000);
+	assert.equal(chunks.length, 1);
+	assert.equal(chunks[0]!.length, 4);
+});
+
+test('chunkByModules starts a fresh request when the next module would overflow', () => {
+	const blocks = [
+		typed('h1', 'heading', 20), typed('a', 'paragraph', 3500),
+		typed('h2', 'heading', 20), typed('b', 'paragraph', 3500)
+	];
+	const chunks = chunkByModules(blocks, buildLayoutModules(blocks), 6000);
+	assert.equal(chunks.length, 2);
+	assert.deepEqual(chunks[0]!.map(b => b.id), ['h1', 'a']);
+	assert.deepEqual(chunks[1]!.map(b => b.id), ['h2', 'b']);
+});
+
+test('chunkByModules splits an oversized module but keeps block order', () => {
+	const blocks = [
+		typed('h', 'heading', 20),
+		typed('p1', 'paragraph', 5000),
+		typed('p2', 'paragraph', 5000)
+	];
+	const chunks = chunkByModules(blocks, buildLayoutModules(blocks), 6000);
+	assert.ok(chunks.length >= 2);
+	assert.deepEqual(chunks.flat().map(b => b.id), ['h', 'p1', 'p2']);
+});
+
+test('chunkByModules falls back to chunkBlocks when there are no modules', () => {
+	const blocks = [block('a', 3000), block('b', 3000), block('c', 3000)];
+	assert.equal(chunkByModules(blocks, [], 6000).length, 2);
+});
+
+test('chunkByModules covers every block exactly once', () => {
+	const blocks = [
+		typed('h', 'heading', 20, 0), typed('p1', 'paragraph', 100, 0),
+		typed('p2', 'paragraph', 100, 1), typed('cap', 'caption', 50, 1)
+	];
+	const chunks = chunkByModules(blocks, buildLayoutModules(blocks), 6000);
+	const ids = chunks.flat().map(b => b.id).sort();
+	assert.deepEqual(ids, ['cap', 'h', 'p1', 'p2']);
 });

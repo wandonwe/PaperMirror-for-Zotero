@@ -25,6 +25,20 @@ import {
 	customBandFor,
 	type ProviderCapability
 } from '../translation/providerPool';
+import {
+	parseProviderProfiles,
+	serializeProviderProfiles,
+	type ProviderProfiles,
+	type ProviderProfile
+} from '../translation/providerProfiles';
+import {
+	catalogModelsFor,
+	recommendedModelFor,
+	providerNeedsModel,
+	catalogHasModel,
+	catalogProvenance,
+	type CatalogModel
+} from '../translation/providers/modelCatalog';
 
 interface ProviderInfo {
 	id: string;
@@ -40,7 +54,8 @@ interface PaperMirrorPublicAPI {
 	listProviders(): ProviderInfo[];
 	getApiKey(providerId: string): Promise<string>;
 	setApiKey(providerId: string, key: string): Promise<void>;
-	testConnection(): Promise<{ ok: boolean; message?: string; httpStatus?: number; modelAvailable?: boolean; elapsedMs?: number }>;
+	describeEndpoint(providerId: string, apiBaseURL: string): string;
+	testConnection(overrides?: { providerId?: string; apiBaseURL?: string; model?: string }): Promise<{ ok: boolean; message?: string; httpStatus?: number; modelAvailable?: boolean; elapsedMs?: number }>;
 	cache: { totalSizeBytes(): Promise<number>; clearAll(): Promise<void> };
 	glossary: {
 		getLinesText(): string;
@@ -367,11 +382,24 @@ interface PaperMirrorPublicAPI {
 				});
 			}
 		}
-		const baseUrlInput = byId<HTMLInputElement>('papermirror-baseurl');
-		const modelInput = byId<HTMLInputElement>('papermirror-model');
-		const endpointNote = byId<HTMLElement & { value: string }>('papermirror-endpoint-note');
-		const apiKeyInput = byId<HTMLInputElement>('papermirror-apikey');
+		// ---- per-provider model / Base URL profiles (0.9.3) -----------------
+		//
+		// Each provider keeps its OWN Base URL and model in the providerProfiles
+		// pref, so switching provider never carries one provider's model into
+		// another (the cross-provider bleed this release removes). The engine
+		// reads the same pref; this pane is the editor.
 
+		const CUSTOM_SENTINEL = '__pm_custom__';
+
+		const baseUrlInput = byId<HTMLInputElement>('papermirror-baseurl');
+		const modelSelect = byId<HTMLElement & { value: string }>('papermirror-model-select');
+		const modelCustomRow = byId<HTMLElement>('papermirror-model-custom-row');
+		const modelCustomInput = byId<HTMLInputElement>('papermirror-model-custom');
+		const modelNote = byId<HTMLElement>('papermirror-model-note');
+		const baseDefaultNote = byId<HTMLElement>('papermirror-baseurl-default');
+		const baseCustomNote = byId<HTMLElement>('papermirror-baseurl-custom-note');
+		const endpointNote = byId<HTMLElement>('papermirror-endpoint-note');
+		const apiKeyInput = byId<HTMLInputElement>('papermirror-apikey');
 
 		const currentProviderId = (): string =>
 			String(providerList?.value || getPref('provider') || 'bing-free');
@@ -382,69 +410,207 @@ interface PaperMirrorPublicAPI {
 			return providers.find(p => p.id === id) ?? null;
 		}
 
-		/** True when the model field still holds a value we auto-filled. */
-		function modelIsAutoFilled(value: string): boolean {
-			const trimmed = value.trim();
-			if (!trimmed) {
-				return true;
-			}
-			return (api()?.listProviders() ?? []).some(p => p.defaultModel === trimmed);
-		}
+		const readProfiles = (): ProviderProfiles =>
+			parseProviderProfiles(String(getPref('providerProfiles') ?? '{}'));
 
-		/**
-		 * Fill in everything the provider can supply so only the API key is
-		 * required. The Base URL field is filled with the effective endpoint
-		 * (e.g. https://api.openai.com/v1) when empty, and also shown as the
-		 * placeholder. A model the user typed themselves is never overwritten.
-		 */
-		function applyProviderDefaults(providerChanged: boolean): void {
-			const provider = currentProviderInfo();
-			if (!provider) {
+		const currentProfile = (): ProviderProfile => readProfiles()[currentProviderId()] ?? {};
+
+		/** Merge a patch into the current provider's profile; empties are pruned. */
+		const patchProfile = (patch: ProviderProfile): void => {
+			const id = currentProviderId();
+			const profiles = readProfiles();
+			const next: ProviderProfile = { ...(profiles[id] ?? {}), ...patch };
+			if ((next.apiBaseUrl ?? '').trim() === '') {
+				delete next.apiBaseUrl;
+			}
+			if ((next.model ?? '').trim() === '') {
+				delete next.model;
+			}
+			if ((next.customModel ?? '').trim() === '') {
+				delete next.customModel;
+			}
+			profiles[id] = next;
+			setPref('providerProfiles', serializeProviderProfiles(profiles));
+		};
+
+		/** The model the UI currently represents (custom input wins in custom mode). */
+		const selectedModel = (): string => {
+			const id = currentProviderId();
+			if (!providerNeedsModel(id)) {
+				return '';
+			}
+			if (modelSelect?.value === CUSTOM_SENTINEL) {
+				return (modelCustomInput?.value ?? '').trim();
+			}
+			return String(modelSelect?.value ?? '').trim();
+		};
+
+		const doc = (): Document => (modelSelect?.ownerDocument ?? document);
+		const makeMenuItem = (value: string, label: string): Element => {
+			const d = doc() as Document & { createXULElement?: (t: string) => Element };
+			const item = d.createXULElement
+				? d.createXULElement('menuitem')
+				: d.createElementNS('http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul', 'menuitem');
+			item.setAttribute('value', value);
+			item.setAttribute('label', label);
+			return item;
+		};
+
+		/** Build the model dropdown for a provider + select the stored value. */
+		function populateModelSelector(): void {
+			const id = currentProviderId();
+			const needs = providerNeedsModel(id);
+			if (modelSelect) {
+				(modelSelect as unknown as HTMLElement).style.display = needs ? '' : 'none';
+			}
+			const byIdRow = byId<HTMLElement>('papermirror-model-row');
+			if (byIdRow) {
+				byIdRow.style.display = needs ? '' : 'none';
+			}
+			if (!needs) {
+				if (modelCustomRow) {
+					modelCustomRow.style.display = 'none';
+				}
+				if (modelNote) {
+					modelNote.textContent = '该服务商无需选择模型。';
+				}
 				return;
 			}
-			const effectiveBase = provider.displayBaseURL || provider.defaultBaseURL || '';
-			if (baseUrlInput) {
-				baseUrlInput.placeholder = effectiveBase || 'https://…';
-				const knownBases = (api()?.listProviders() ?? [])
-					.map(p => p.displayBaseURL || p.defaultBaseURL)
-					.filter(Boolean);
-				const isAutoFilled = !baseUrlInput.value.trim() || knownBases.includes(baseUrlInput.value.trim());
-				if (effectiveBase && (providerChanged ? isAutoFilled : !baseUrlInput.value.trim())) {
-					baseUrlInput.value = effectiveBase;
-					setPref('apiBaseURL', effectiveBase);
+			const profile = currentProfile();
+			const stored = (profile.model ?? '').trim();
+			const catalog: CatalogModel[] = catalogModelsFor(id);
+			// Rebuild the menupopup.
+			const popup = modelSelect?.querySelector('menupopup');
+			if (popup && modelSelect) {
+				popup.replaceChildren();
+				for (const m of catalog) {
+					popup.appendChild(makeMenuItem(m.id, m.label || m.id));
+				}
+				// A saved model that is NOT in the catalog is never dropped — show
+				// it as the current custom model.
+				if (stored && !catalogHasModel(id, stored)) {
+					popup.appendChild(makeMenuItem(stored, `当前自定义: ${stored}`));
+				}
+				popup.appendChild(makeMenuItem(CUSTOM_SENTINEL, '自定义模型…'));
+
+				// Decide the selection.
+				if (!stored) {
+					modelSelect.value = catalog.length
+						? (recommendedModelFor(id) || catalog[0]!.id)
+						: CUSTOM_SENTINEL;
+				}
+				else {
+					// Both catalog hits and saved custom models use the exact id;
+					// the custom one was just appended above so it selects fine.
+					modelSelect.value = stored;
 				}
 			}
-			if (modelInput && provider.defaultModel) {
-				const canReplace = providerChanged ? modelIsAutoFilled(modelInput.value) : !modelInput.value.trim();
-				if (canReplace) {
-					modelInput.value = provider.defaultModel;
-					setPref('model', provider.defaultModel);
-				}
+			// Custom input row visibility + value.
+			const showCustom = modelSelect?.value === CUSTOM_SENTINEL;
+			if (modelCustomRow) {
+				modelCustomRow.style.display = showCustom ? '' : 'none';
+			}
+			if (modelCustomInput) {
+				modelCustomInput.value = (profile.customModel ?? (showCustom ? stored : '')) || '';
+			}
+			// Provenance note.
+			if (modelNote) {
+				const prov = catalogProvenance(id);
+				modelNote.textContent = prov
+					? `留空即用推荐模型。模型清单核对于 ${prov.checked},以各服务商官方文档为准。`
+					: '请输入该服务商的模型名称。';
 			}
 		}
 
-		const updateEndpointNote = (): void => {
+		const updateBaseUrlNotes = (): void => {
 			const provider = currentProviderInfo();
-			const base = String(
-				(baseUrlInput?.value.trim() || '')
-				|| provider?.displayBaseURL
-				|| provider?.defaultBaseURL
-				|| ''
-			);
+			const def = provider?.displayBaseURL || provider?.defaultBaseURL || '';
+			if (baseUrlInput) {
+				baseUrlInput.placeholder = def ? `留空使用官方地址 ${def}` : 'https://…';
+			}
+			if (baseDefaultNote) {
+				baseDefaultNote.textContent = def ? `默认地址: ${def}` : '';
+			}
+			const typed = (baseUrlInput?.value ?? '').trim();
+			if (baseCustomNote) {
+				baseCustomNote.textContent = typed && typed !== def ? '· 当前使用自定义地址' : '';
+			}
 			if (endpointNote) {
-				endpointNote.textContent = base ? `实际请求地址: ${base}` : '';
+				const url = api()?.describeEndpoint(currentProviderId(), typed) ?? '';
+				endpointNote.textContent = url ? `实际请求地址: ${url}` : '';
 			}
 		};
 
+		/** Load the whole model+address block for the current provider. */
+		const loadProviderConfig = (): void => {
+			const profile = currentProfile();
+			if (baseUrlInput) {
+				baseUrlInput.value = profile.apiBaseUrl ?? '';
+			}
+			populateModelSelector();
+			updateBaseUrlNotes();
+		};
+
+		modelSelect?.addEventListener('command', () => {
+			if (modelSelect.value === CUSTOM_SENTINEL) {
+				if (modelCustomRow) {
+					modelCustomRow.style.display = '';
+				}
+				// Prefer a remembered custom model; fall back to whatever model is
+				// currently stored (e.g. a migrated custom id) so switching to the
+				// custom row never silently drops it.
+				const prof = currentProfile();
+				const cm = (prof.customModel ?? '').trim() || (prof.model ?? '').trim();
+				if (modelCustomInput && !modelCustomInput.value) {
+					modelCustomInput.value = cm;
+				}
+				const v = (modelCustomInput?.value ?? '').trim();
+				patchProfile({ model: v, customModel: v });
+			}
+			else {
+				if (modelCustomRow) {
+					modelCustomRow.style.display = 'none';
+				}
+				// A recommended/catalog pick — keep any remembered custom model.
+				patchProfile({ model: String(modelSelect.value ?? '').trim() });
+			}
+			updateBaseUrlNotes();
+		});
+		modelCustomInput?.addEventListener('change', () => {
+			const v = (modelCustomInput.value ?? '').trim();
+			patchProfile({ model: v, customModel: v });
+		});
+		modelCustomInput?.addEventListener('blur', () => {
+			const v = (modelCustomInput.value ?? '').trim();
+			patchProfile({ model: v, customModel: v });
+		});
+
+		baseUrlInput?.addEventListener('change', () => {
+			patchProfile({ apiBaseUrl: (baseUrlInput.value ?? '').trim() });
+			updateBaseUrlNotes();
+		});
+		baseUrlInput?.addEventListener('input', updateBaseUrlNotes);
+		byId('papermirror-baseurl-restore')?.addEventListener('command', () => {
+			if (baseUrlInput) {
+				baseUrlInput.value = '';
+			}
+			patchProfile({ apiBaseUrl: '' });
+			updateBaseUrlNotes();
+		});
+		byId('papermirror-baseurl-restore')?.addEventListener('click', () => {
+			if (baseUrlInput) {
+				baseUrlInput.value = '';
+			}
+			patchProfile({ apiBaseUrl: '' });
+			updateBaseUrlNotes();
+		});
+
 		providerList?.addEventListener('command', () => {
 			// Zotero's declarative binding already stored the new provider.
-			applyProviderDefaults(true);
+			loadProviderConfig();
 			void loadApiKey();
-			updateEndpointNote();
 		});
-		baseUrlInput?.addEventListener('change', updateEndpointNote);
-		applyProviderDefaults(false);
-		updateEndpointNote();
+		loadProviderConfig();
 
 		// ---- API key (credential store, never a plain pref) -----------------
 
@@ -469,22 +635,41 @@ interface PaperMirrorPublicAPI {
 		apiKeyInput?.addEventListener('blur', commitApiKey);
 		void loadApiKey();
 
-		// ---- test connection -------------------------------------------------
+		// ---- test connection (live, unsaved values; never prints the key) ----
 
 		const testResult = byId<HTMLElement & { value: string }>('papermirror-test-result');
+		const TEST_MESSAGES: Record<string, string> = {
+			NO_API_KEY: '未填写 API Key',
+			INVALID_API_KEY: 'API Key 无效或无权限',
+			INVALID_MODEL: '模型不存在或地址路径不正确',
+			RATE_LIMITED: '触发限流,请稍后再试',
+			QUOTA_EXCEEDED: '额度或余额不足',
+			TIMEOUT: '请求超时,请检查网络或稍后再试',
+			NETWORK: '网络错误或服务器错误',
+			HTTP_INSECURE: '接口不是 HTTPS(可在高级设置中允许)',
+			BAD_RESPONSE: '返回内容异常,地址或路径可能不正确',
+			UNKNOWN: '未知错误'
+		};
 		let testing = false;
 		const runTest = (): void => {
 			if (testing || !testResult) {
 				return;
 			}
 			testing = true;
-			// Persist a key typed but not yet committed before testing.
+			// Persist a key + config typed but not yet committed before testing.
 			commitApiKey();
+			if (baseUrlInput) {
+				patchProfile({ apiBaseUrl: (baseUrlInput.value ?? '').trim() });
+			}
 			testResult.value = '…';
 			testResult.removeAttribute('data-state');
 			void (async () => {
 				try {
-					const result = await api()?.testConnection();
+					const result = await api()?.testConnection({
+						providerId: currentProviderId(),
+						apiBaseURL: (baseUrlInput?.value ?? '').trim(),
+						model: selectedModel()
+					});
 					if (!result) {
 						testResult.value = 'PaperMirror not running';
 						testResult.setAttribute('data-state', 'fail');
@@ -495,7 +680,10 @@ interface PaperMirrorPublicAPI {
 						testResult.setAttribute('data-state', 'ok');
 					}
 					else {
-						testResult.value = `✗ ${result.message ?? 'failed'}${result.httpStatus ? ' · HTTP ' + result.httpStatus : ''}`;
+						// Differentiated, friendly Chinese message. NEVER the key.
+						const code = result.message ?? 'UNKNOWN';
+						const friendly = TEST_MESSAGES[code] ?? `失败: ${code}`;
+						testResult.value = `✗ ${friendly}${result.httpStatus ? ' · HTTP ' + result.httpStatus : ''}`;
 						testResult.setAttribute('data-state', 'fail');
 					}
 				}

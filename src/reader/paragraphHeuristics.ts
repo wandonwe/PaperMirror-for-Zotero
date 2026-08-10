@@ -284,6 +284,30 @@ export function isSectionNumberHeading(text: string): boolean {
 	return /^\d+(\.\d+)+\s+\S/.test(text.trim());
 }
 
+/**
+ * Is this a BOLD font, judging by the PDF font name? Embedded fonts name their
+ * weight in the PostScript name — "…-Bold", "…,Bold", "Helvetica-Black",
+ * "NimbusRomNo9L-Medi", Computer Modern's "CMBX10" (bold extended), TeX's
+ * "…-bx". A bold subheading typeset at the body size is invisible to a
+ * size-only classifier; this is the extra signal that catches it (spec §5).
+ * Deliberately conservative — "-Medi"/"Semilight" style ambiguous weights are
+ * treated as NOT bold to avoid promoting body text.
+ */
+export function isBoldFontName(fontName: string | undefined): boolean {
+	if (!fontName) {
+		return false;
+	}
+	const n = fontName.toLowerCase();
+	if (/(semilight|extralight|ultralight|thin|light|regular|roman|book|medium|-medi\b)/.test(n)) {
+		// An explicit non-bold weight wins even if "black" appears as a family
+		// name (rare), so check these first and bail.
+		if (!/bold|black|heavy/.test(n)) {
+			return false;
+		}
+	}
+	return /(bold|black|heavy|semibold|demibold|-bd\b|,bd\b|cmbx|-bx\b|[-_]b\b)/.test(n);
+}
+
 export interface MergeableParagraph {
 	text: string;
 	/** Column index; only same-column neighbours may merge. -1 = full width. */

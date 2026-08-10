@@ -153,20 +153,30 @@
 		<html:div class="pm-desc">密钥保存在系统凭据库(Mozilla Login Manager),不写入任何配置文件,也绝不会随日志或导出泄露。免费引擎与 Ollama 无需填写。</html:div>
 	</vbox>
 
-	<!-- ======================= 模型 / 地址 ======================= -->
+	<!-- ======================= 模型 / 地址 (每个服务商独立保存) ======================= -->
 	<vbox class="pm-section">
 		<hbox class="pm-line">
-			<label class="pm-title" data-l10n-id="papermirror-prefs-model" control="papermirror-model"/>
+			<label class="pm-title" data-l10n-id="papermirror-prefs-model" control="papermirror-model-select"/>
 		</hbox>
-		<html:div class="pm-field">
-			<html:div><html:input type="text" id="papermirror-model" preference="extensions.zotero.bilingualReader.model" spellcheck="false" placeholder="留空使用该服务商的默认模型"/></html:div>
+		<!-- LLM 服务商: 推荐模型下拉 + 自定义模型 -->
+		<html:div id="papermirror-model-row" class="pm-field">
+			<menulist id="papermirror-model-select" native="true">
+				<menupopup/>
+			</menulist>
 		</html:div>
+		<html:div id="papermirror-model-custom-row" class="pm-field" style="display: none;">
+			<html:div><html:input type="text" id="papermirror-model-custom" spellcheck="false" placeholder="输入自定义模型名称,例如 gpt-4o"/></html:div>
+		</html:div>
+		<html:div class="pm-desc"><html:span id="papermirror-model-note"></html:span></html:div>
+
 		<hbox class="pm-line" style="margin-top: 12px;">
 			<label class="pm-title" data-l10n-id="papermirror-prefs-baseurl" control="papermirror-baseurl"/>
+			<button id="papermirror-baseurl-restore" label="恢复默认地址"/>
 		</hbox>
 		<html:div class="pm-field">
-			<html:div><html:input type="text" id="papermirror-baseurl" preference="extensions.zotero.bilingualReader.apiBaseURL" placeholder="留空使用官方地址 https://…"/></html:div>
+			<html:div><html:input type="text" id="papermirror-baseurl" spellcheck="false" placeholder="留空使用官方地址 https://…"/></html:div>
 		</html:div>
+		<html:div class="pm-desc"><html:span id="papermirror-baseurl-default"></html:span> <html:span id="papermirror-baseurl-custom-note"></html:span></html:div>
 		<html:div class="pm-desc"><html:span id="papermirror-endpoint-note"></html:span></html:div>
 	</vbox>
 

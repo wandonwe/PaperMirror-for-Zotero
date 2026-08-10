@@ -24,7 +24,8 @@ import * as logger from '../utils/logger';
 import { protectFormulas, restoreFormulas } from '../reader/formulaGuard';
 import { matchRules } from './glossary';
 import { RequestScheduler } from './requestScheduler';
-import { chunkBlocks, trailingContext } from './segmenter';
+import { chunkByModules, trailingContext } from './segmenter';
+import { buildLayoutModules } from '../reader/layoutModules';
 import { fnv1a64 } from '../cache/cacheSchema';
 
 const MODULE = 'translationManager';
@@ -772,7 +773,10 @@ export class TranslationManager {
 			return { block, text, placeholders };
 		});
 
-		const chunks = chunkBlocks(toTranslate);
+		// Chunk by semantic module so a heading and its paragraphs reach the
+		// model together (context), while every block still returns/replaces by
+		// its own id.
+		const chunks = chunkByModules(toTranslate, buildLayoutModules(toTranslate));
 		let previous: SourceBlock[] = [];
 		const results: TranslatedBlock[] = [];
 		let untranslatedCount = 0;

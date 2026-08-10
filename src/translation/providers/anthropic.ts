@@ -8,9 +8,12 @@ import { buildSystemPrompt, buildUserPayload } from '../promptBuilder';
 import { validateResponse } from '../responseValidator';
 import { requestJSON } from './httpClient';
 import type { TranslateOptions, TranslationProvider } from './types';
+import { anthropicMessagesURL } from './urls';
 
 const DEFAULT_BASE = 'https://api.anthropic.com';
-const DEFAULT_MODEL = 'claude-sonnet-4-5';
+// Verified 2026-08-10 (platform.claude.com models). 4-5 is still valid but 4-6
+// is the current recommended Sonnet — kept in sync with modelCatalog.
+const DEFAULT_MODEL = 'claude-sonnet-4-6';
 const API_VERSION = '2023-06-01';
 
 function headers(settings: ProviderSettings): Record<string, string> {
@@ -22,8 +25,7 @@ function headers(settings: ProviderSettings): Record<string, string> {
 }
 
 function messagesURL(settings: ProviderSettings): string {
-	const base = (settings.apiBaseURL || DEFAULT_BASE).replace(/\/+$/, '');
-	return `${base}/v1/messages`;
+	return anthropicMessagesURL(settings.apiBaseURL, DEFAULT_BASE);
 }
 
 function extractText(json: unknown): string {
@@ -41,6 +43,10 @@ export const anthropicProvider: TranslationProvider = {
 	defaultModel: DEFAULT_MODEL,
 	requiresApiKey: true,
 	supportsCharBudget: true,
+
+	endpointFor(settings: ProviderSettings): string {
+		return messagesURL(settings);
+	},
 
 	async validateConfiguration(settings: ProviderSettings): Promise<ValidationResult> {
 		if (!settings.apiKey) {

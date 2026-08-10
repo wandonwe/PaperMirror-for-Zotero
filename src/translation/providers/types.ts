@@ -41,6 +41,14 @@ export interface TranslationProvider {
 	 */
 	supportsCharBudget?: boolean;
 
+	/**
+	 * The exact URL a request will be sent to for these settings. Used by the
+	 * settings pane's "实际请求地址" preview so it can never drift from the
+	 * transport. Providers with no configurable endpoint (free scrapers) leave
+	 * it undefined.
+	 */
+	endpointFor?(settings: ProviderSettings): string;
+
 	validateConfiguration(settings: ProviderSettings): Promise<ValidationResult>;
 
 	translate(

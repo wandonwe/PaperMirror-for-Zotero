@@ -19,6 +19,7 @@ import { canExplain, explainText, parseExplanationSections, type ExplanationSect
 import { TranslationManager, type PageTranslationState } from '../translation/translationManager';
 import { PROMPT_VERSION } from '../translation/promptBuilder';
 import { parseGlossaryJSON } from '../translation/glossary';
+import { parseProviderProfiles, effectiveProviderConfig } from '../translation/providerProfiles';
 import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationResponse } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
@@ -523,21 +524,20 @@ export class ReaderSession {
 	}
 
 	/**
-	 * Settings for one pool member. The PRIMARY provider carries the user's
-	 * Base URL / model overrides; extras run on their own defaults with their
-	 * own stored keys — the overrides belong to the provider they were typed
-	 * for, and leaking an OpenAI base URL into a DeepSeek request would be a
-	 * silent misroute.
+	 * Settings for one pool member. EVERY provider — primary and parallel alike
+	 * — reads its OWN Base URL / model from its own profile (0.9.3). Overrides
+	 * belong to the provider they were typed for; leaking an OpenAI base URL or
+	 * model into a Gemini request was the cross-provider bleed this replaces.
 	 */
 	private async providerSettingsFor(providerId: string): Promise<ProviderSettings & { allowInsecureHTTP?: boolean }> {
-		const primary = getPref<string>('provider', 'bing-free');
-		const isPrimary = providerId === primary;
+		const profiles = parseProviderProfiles(getPref<string>('providerProfiles', '{}'));
+		const { apiBaseURL, model } = effectiveProviderConfig(profiles, providerId);
 		const apiKey = await getApiKey(providerId);
 		return {
 			providerId,
-			apiBaseURL: isPrimary ? getPref<string>('apiBaseURL', '') : '',
+			apiBaseURL,
 			apiKey,
-			model: isPrimary ? getPref<string>('model', '') : '',
+			model,
 			timeoutMs: getPref<number>('timeoutMs', 60000),
 			customPrompt: getPref<string>('customPrompt', ''),
 			allowInsecureHTTP: getPref<boolean>('allowHTTPEndpoint', false)

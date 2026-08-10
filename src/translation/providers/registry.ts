@@ -14,7 +14,9 @@ const openaiProvider = createOpenAICompatibleProvider({
 	id: 'openai',
 	displayName: 'OpenAI',
 	defaultBaseURL: 'https://api.openai.com',
-	defaultModel: 'gpt-4o-mini'
+	// gpt-4o-mini is ageing; gpt-5-mini is the current cost-effective default
+	// (verified 2026-08-10, developers.openai.com). Kept in sync w/ modelCatalog.
+	defaultModel: 'gpt-5-mini'
 });
 
 const openaiCompatibleProvider = createOpenAICompatibleProvider({
@@ -42,7 +44,9 @@ const presetProviders: TranslationProvider[] = [
 		id: 'deepseek',
 		displayName: 'DeepSeek 深度求索',
 		defaultBaseURL: 'https://api.deepseek.com',
-		defaultModel: 'deepseek-chat'
+		// deepseek-chat/deepseek-reasoner were discontinued 2026-07-24; V4-Flash
+		// is the current default (verified 2026-08-10, api-docs.deepseek.com).
+		defaultModel: 'deepseek-v4-flash'
 	}),
 	createOpenAICompatibleProvider({
 		id: 'moonshot',

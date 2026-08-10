@@ -10,6 +10,8 @@ import {
 	columnOf,
 	detectColumns,
 	dominantFontSize,
+	endsSentence,
+	isBoldFontName,
 	joinFragments,
 	LINE_HYPHENS,
 	linesShareColumn,
@@ -368,9 +370,20 @@ export function classifyBlock(p: Paragraph, bodyFontSize: number, pageWidth: num
 	if (p.lines.length <= 2 && fontRatio >= 1.35 && text.length < 250) {
 		return 'title';
 	}
+	// A BOLD, short, left-standing line at (or near) body size is a subheading
+	// even though its font size gives it away to nobody — this is the signal the
+	// old size-only rule missed (spec §5). Guarded hard: ≤2 lines, under ~90
+	// chars, and NOT ending like a sentence, so a bold emphasis run inside a
+	// paragraph or a bold author line is not promoted to a heading.
+	const boldHeading = isBoldFontName(p.fontName)
+		&& p.lines.length <= 2
+		&& fontRatio >= 0.98
+		&& text.length < 90
+		&& !endsSentence(text);
 	if (p.lines.length <= 2 && text.length < 160
 		&& (fontRatio >= 1.1
 			|| isSectionNumberHeading(text)
+			|| boldHeading
 			|| /^(abstract|introduction|methods?|materials and methods|results|discussion|conclusions?|acknowledg(e)?ments?|references|摘要|引言|前言|方法|结果|讨论|结论|致谢)\s*$/i.test(text))) {
 		return 'heading';
 	}
@@ -407,6 +420,9 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 
 	const bodySize = options.bodyFontSize || medianFontSize(paragraphs);
 
+	// Column band per final paragraph, so semantic modules never cross columns.
+	const columnBands = detectColumns(paragraphs.map(p => p.rect as Rect), pageWidth);
+
 	let referencesStarted = !!options.referencesAlreadyStarted;
 	const blocks: SourceBlock[] = [];
 	let order = 0;
@@ -438,6 +454,7 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 			boundingBox: toBoundingBox(p.rect, pageHeight),
 			lineRectsPdf: p.lines.map(line => [...line.rect] as [number, number, number, number]),
 			fontSize: p.fontSize,
+			column: columnOf(p.rect as Rect, columnBands, pageWidth),
 			isReference
 		});
 		order++;

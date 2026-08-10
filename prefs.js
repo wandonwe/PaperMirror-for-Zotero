@@ -6,8 +6,15 @@
 
 // Default: free Bing engine — works out of the box with no API key.
 pref('extensions.zotero.bilingualReader.provider', 'bing-free');
+// Legacy GLOBAL Base URL / model (pre-0.9.3). Kept for one-time migration into
+// per-provider profiles; the engine now reads providerProfiles instead.
 pref('extensions.zotero.bilingualReader.apiBaseURL', '');
 pref('extensions.zotero.bilingualReader.model', '');
+// Per-provider config profiles (0.9.3): {providerId: {apiBaseUrl, model, customModel}}.
+// Each provider keeps its OWN Base URL / model so nothing bleeds across providers.
+pref('extensions.zotero.bilingualReader.providerProfiles', '{}');
+// 0 until the one-time legacy-globals → current-provider migration has run.
+pref('extensions.zotero.bilingualReader.providerConfigMigrated', false);
 pref('extensions.zotero.bilingualReader.sourceLanguage', 'auto');
 pref('extensions.zotero.bilingualReader.targetLanguage', 'auto');
 pref('extensions.zotero.bilingualReader.timeoutMs', 60000);

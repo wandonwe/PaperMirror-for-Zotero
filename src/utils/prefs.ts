@@ -9,6 +9,8 @@ export type PrefKey
 	= 'provider'
 	| 'apiBaseURL'
 	| 'model'
+	| 'providerProfiles'
+	| 'providerConfigMigrated'
 	| 'sourceLanguage'
 	| 'targetLanguage'
 	| 'timeoutMs'

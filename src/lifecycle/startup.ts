@@ -7,6 +7,13 @@ import * as cacheManager from '../cache/cacheManager';
 import { ReaderToolbarController } from '../reader/readerToolbar';
 import { deleteApiKey, getApiKey, setApiKey } from '../security/credentialStore';
 import { getProvider, listProviders } from '../translation/providers/registry';
+import {
+	parseProviderProfiles,
+	serializeProviderProfiles,
+	effectiveProviderConfig,
+	migrateLegacyGlobals
+} from '../translation/providerProfiles';
+import { catalogModelsFor, recommendedModelFor, providerNeedsModel } from '../translation/providers/modelCatalog';
 import { parseGlossaryJSON, parseGlossaryLines, serializeGlossary, serializeGlossaryLines } from '../translation/glossary';
 import type { ProviderSettings, ValidationResult } from '../types/models';
 import { getString, initL10n } from '../utils/l10n';
@@ -62,6 +69,37 @@ function migrateToOverlayArchitecture(): void {
 	}
 }
 
+/**
+ * One-time migration to per-provider config profiles (0.9.3).
+ *
+ * Before 0.9.3 the Base URL and model were single GLOBAL prefs. On first run we
+ * fold whatever is in them into the CURRENTLY-SELECTED provider's profile only —
+ * never into any other provider (that global-sharing was the cross-provider
+ * bleed this release removes). The legacy prefs are left untouched; the engine
+ * simply stops reading them.
+ */
+function migrateProviderConfig(): void {
+	try {
+		if (getPref<boolean>('providerConfigMigrated', false)) {
+			return;
+		}
+		const profiles = parseProviderProfiles(getPref<string>('providerProfiles', '{}'));
+		const { profiles: next, changed } = migrateLegacyGlobals(profiles, {
+			provider: getPref<string>('provider', 'bing-free'),
+			apiBaseURL: getPref<string>('apiBaseURL', ''),
+			model: getPref<string>('model', '')
+		});
+		if (changed) {
+			setPref('providerProfiles', serializeProviderProfiles(next));
+			logger.info(MODULE, 'Migrated legacy Base URL / model into the current provider profile');
+		}
+		setPref('providerConfigMigrated', true);
+	}
+	catch (e) {
+		logger.warn(MODULE, 'Provider-config migration failed (harmless)', e);
+	}
+}
+
 export async function startup(params: StartupParams): Promise<void> {
 	// The Zotero plugin sandbox lacks AbortController; install our
 	// cooperative-cancellation polyfill before anything can request one.
@@ -80,6 +118,7 @@ export async function startup(params: StartupParams): Promise<void> {
 	setFontSource(params.rootURI + 'content/fonts/NotoSansSC-PM.ttf');
 
 	migrateToOverlayArchitecture();
+	migrateProviderConfig();
 
 	toolbarController = new ReaderToolbarController(params.id);
 	toolbarController.init();
@@ -177,9 +216,11 @@ export async function startup(params: StartupParams): Promise<void> {
 			const providerId = getPref<string>('provider', 'bing-free');
 			const provider = getProvider(providerId);
 			const apiKey = await getApiKey(providerId);
+			const profiles = parseProviderProfiles(getPref<string>('providerProfiles', '{}'));
+			const cfg = effectiveProviderConfig(profiles, providerId);
 			lines.push(`Provider: ${providerId} (${provider.displayName})`);
-			lines.push(`  base URL: ${getPref<string>('apiBaseURL', '') || '(default) ' + (provider.displayBaseURL || provider.defaultBaseURL)}`);
-			lines.push(`  model: ${getPref<string>('model', '') || '(default) ' + (provider.defaultModel || 'n/a')}`);
+			lines.push(`  base URL: ${cfg.apiBaseURL || '(default) ' + (provider.displayBaseURL || provider.defaultBaseURL)}`);
+			lines.push(`  model: ${cfg.model || '(default) ' + (provider.defaultModel || 'n/a')}`);
 			lines.push(`  API key configured: ${apiKey.length > 0}${provider.requiresApiKey ? '' : ' (not required)'}`);
 			lines.push(`  languages: ${getPref<string>('sourceLanguage', 'auto')} → ${getPref<string>('targetLanguage', 'auto')}`);
 			lines.push(`Privacy notice accepted: ${!!getPref<boolean>('privacyNoticeAccepted', false)}`);
@@ -191,9 +232,9 @@ export async function startup(params: StartupParams): Promise<void> {
 				const started = Date.now();
 				const result = await provider.validateConfiguration({
 					providerId,
-					apiBaseURL: getPref<string>('apiBaseURL', ''),
+					apiBaseURL: cfg.apiBaseURL,
 					apiKey,
-					model: getPref<string>('model', ''),
+					model: cfg.model,
 					timeoutMs: 20000,
 					allowInsecureHTTP: getPref<boolean>('allowHTTPEndpoint', false)
 				} as ProviderSettings);
@@ -212,19 +253,51 @@ export async function startup(params: StartupParams): Promise<void> {
 			defaultBaseURL: p.defaultBaseURL,
 			displayBaseURL: p.displayBaseURL ?? p.defaultBaseURL,
 			defaultModel: p.defaultModel,
-			requiresApiKey: p.requiresApiKey
+			requiresApiKey: p.requiresApiKey,
+			// 0.9.3 provider-config UI
+			needsModel: providerNeedsModel(p.id),
+			models: catalogModelsFor(p.id),
+			recommendedModel: recommendedModelFor(p.id) || p.defaultModel
 		})),
 		getApiKey,
 		setApiKey,
 		deleteApiKey,
-		async testConnection(): Promise<ValidationResult> {
-			const providerId = getPref<string>('provider', 'bing-free');
+		/**
+		 * The exact URL a request will hit for a given provider + Base URL
+		 * override — used by the settings pane's "实际请求地址" preview so it can
+		 * never drift from the transport. Empty override = provider default.
+		 */
+		describeEndpoint(providerId: string, apiBaseURL: string): string {
+			try {
+				const provider = getProvider(providerId);
+				return provider.endpointFor?.({
+					providerId,
+					apiBaseURL: (apiBaseURL ?? '').trim(),
+					apiKey: '',
+					model: '',
+					timeoutMs: 0
+				} as ProviderSettings) ?? '';
+			}
+			catch {
+				return '';
+			}
+		},
+		/**
+		 * Test the connection using LIVE, possibly-unsaved settings from the
+		 * pane. Overrides let the user hit "测试" before saving. The API key is
+		 * always read from the secure store for the tested provider; it is never
+		 * accepted here and never returned in the result.
+		 */
+		async testConnection(overrides?: { providerId?: string; apiBaseURL?: string; model?: string }): Promise<ValidationResult> {
+			const providerId = overrides?.providerId || getPref<string>('provider', 'bing-free');
 			const provider = getProvider(providerId);
+			const profiles = parseProviderProfiles(getPref<string>('providerProfiles', '{}'));
+			const stored = effectiveProviderConfig(profiles, providerId);
 			const settings: ProviderSettings & { allowInsecureHTTP?: boolean } = {
 				providerId,
-				apiBaseURL: getPref<string>('apiBaseURL', ''),
+				apiBaseURL: (overrides?.apiBaseURL ?? stored.apiBaseURL).trim(),
 				apiKey: await getApiKey(providerId),
-				model: getPref<string>('model', ''),
+				model: (overrides?.model ?? stored.model).trim(),
 				timeoutMs: getPref<number>('timeoutMs', 60000),
 				allowInsecureHTTP: getPref<boolean>('allowHTTPEndpoint', false)
 			};

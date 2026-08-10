@@ -9,6 +9,86 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.9.4] — 2026-08-10
+
+### Added
+
+- **语义模块锚点 (semantic layout modules).** Blocks are now grouped into modules
+  anchored on structure — a heading and the paragraphs beneath it, a figure, a
+  table, the references section, or a virtual 「column-continuation」anchor for the
+  top of a column that continues a section with no heading of its own. A module
+  is used only to give the model the section's CONTEXT: every heading, paragraph,
+  caption and reference still carries its own id, rectangle and translation and
+  is replaced in place independently — modules are never rendered as one merged
+  block. New pure module `reader/layoutModules.ts` (`buildLayoutModules`).
+- **模块级翻译分批.** Requests are now chunked by module (`chunkByModules`), so a
+  heading reaches the model together with its paragraphs instead of being split
+  across requests by a blind character budget. Small modules still share a
+  request; a module larger than the budget is split but keeps reading order.
+
+### Fixed
+
+- **粗体小标题被当成正文.** Heading detection was size-only, so a bold subheading
+  typeset at the body size (very common in medical/《…》journals) was classified as
+  a paragraph and merged into the text around it. `classifyBlock` now also uses
+  the embedded font weight (`isBoldFontName`): a bold, short, non-sentence line at
+  body size is recognised as a subheading. Guarded hard (≤2 lines, <90 chars, not
+  ending like a sentence) so bold emphasis inside a paragraph is not promoted.
+- **模块不再跨栏.** Each block now records its column; a module never spans the
+  gutter, so a right-column heading can no longer be associated with left-column
+  body. Figures, tables and the references heading are hard anchors that break the
+  running body.
+
+### Notes
+
+- Per-block in-place replacement, rectangles and the strict-fit renderer are
+  unchanged — this release changes how blocks are GROUPED for context, not how
+  they are replaced. `SourceBlock` gains optional `column` and `moduleId` fields.
+
+## [0.9.3] — 2026-08-10
+
+### Fixed
+
+- **Cross-provider配置串味 (root cause).** Base URL and model were single GLOBAL
+  prefs shared by every provider, so a model typed for one provider (e.g.
+  `gpt-4o`) stayed in the field after switching to another (e.g. Gemini) and was
+  sent there → `INVALID_MODEL` / HTTP 404. Each provider now keeps its OWN Base
+  URL / model / custom model in a per-provider profile (`providerProfiles`), and
+  BOTH the primary and every parallel provider read from their own profile — no
+  more bleed. Old global values migrate ONCE into the currently-selected
+  provider only.
+
+### Added
+
+- **Per-provider 模型选择器.** LLM providers show a dropdown of current models
+  (recommended first, marked 推荐) plus 自定义模型…; the custom model is saved per
+  provider and restored when you switch back. A saved model that is not in the
+  built-in list is never dropped — it is shown as the current custom model. The
+  built-in model catalog records the date it was checked and cites each
+  provider's official docs; it is a fallback, never a whitelist. Fixed MT engines
+  (Microsoft/Google/DeepL) hide the field with 「该服务商无需选择模型」.
+- **Per-provider Base URL 编辑.** Each provider shows its 默认地址, a
+  「当前使用自定义地址」marker when overridden, a 「恢复默认地址」button, and a separate
+  「实际请求地址」line computed from the SAME URL builder the transport uses (so the
+  preview can never drift). URL normalization avoids `/v1/v1`,
+  `/chat/completions/chat/completions`, and the doubled native paths for
+  Anthropic (`/v1/messages`) and DeepL (`/v2/translate`).
+- **差异化的连接测试.** 「测试」now runs against the LIVE, unsaved Base URL / model in
+  the pane and reports a specific reason — API Key 无效 / 模型不存在或路径不对 /
+  限流 / 额度不足 / 超时 / 网络错误 etc. The API Key is never printed in any result.
+
+### Changed
+
+- Refreshed default models to current, verified IDs (2026-08-10, official docs):
+  OpenAI `gpt-4o-mini` → `gpt-5-mini`, DeepSeek `deepseek-chat` (discontinued
+  2026-07-24) → `deepseek-v4-flash`, Anthropic default → `claude-sonnet-4-6`.
+  Any model you have saved yourself is untouched.
+
+### Security
+
+- API keys continue to live only in the OS credential store (Mozilla Login
+  Manager) — never in `providerProfiles`, never in logs, never in the test result.
+
 ## [0.9.2] — 2026-08-10
 
 ### Added

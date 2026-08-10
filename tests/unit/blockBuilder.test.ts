@@ -115,3 +115,50 @@ test('plain-text fallback splits paragraphs and honors references', () => {
 	assert.ok(result.blocks.some(b => b.sourceText === 'First paragraph.'));
 	assert.ok(!result.blocks.some(b => b.sourceText.includes('cited work')));
 });
+
+// ---- bold-aware heading detection (spec §5) --------------------------------
+
+import { classifyBlock } from '../../src/reader/blockBuilder';
+import { isBoldFontName } from '../../src/reader/paragraphHeuristics';
+
+function para(text: string, fontName: string, fontSize: number, lines = 1): Parameters<typeof classifyBlock>[0] {
+	const line = { start: 0, end: 0, rect: [0, 0, 100, 10] as [number, number, number, number], fontSize, fontName };
+	return {
+		lines: Array.from({ length: lines }, () => line),
+		text,
+		rect: [0, 0, 100, 10] as [number, number, number, number],
+		fontSize,
+		fontName
+	};
+}
+
+test('isBoldFontName recognises embedded bold weights, rejects normal ones', () => {
+	assert.equal(isBoldFontName('ABCDEF+TimesNewRoman-Bold'), true);
+	assert.equal(isBoldFontName('Arial-BoldMT'), true);
+	assert.equal(isBoldFontName('CMBX10'), true); // Computer Modern bold extended
+	assert.equal(isBoldFontName('Helvetica'), false);
+	assert.equal(isBoldFontName('NimbusRomNo9L-Regu'), false);
+	assert.equal(isBoldFontName('Minion-Medi'), false);
+	assert.equal(isBoldFontName(undefined), false);
+});
+
+test('a bold, short line at body size is a heading even without a size jump', () => {
+	assert.equal(
+		classifyBlock(para('Beneficial effects of vasodilating substances', 'Helvetica-Bold', 10), 10, 612),
+		'heading'
+	);
+});
+
+test('the same line NOT bold, at body size, stays a paragraph', () => {
+	assert.equal(
+		classifyBlock(para('Deleterious effects of inotropic therapy', 'Times-Roman', 10), 10, 612),
+		'paragraph'
+	);
+});
+
+test('a bold run that ends like a sentence is not promoted to a heading', () => {
+	assert.equal(
+		classifyBlock(para('This is an important bold emphasis inside the body.', 'Arial-Bold', 10), 10, 612),
+		'paragraph'
+	);
+});

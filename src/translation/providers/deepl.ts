@@ -8,6 +8,7 @@ import type { ProviderSettings, TranslationRequest, TranslationResponse, Validat
 import { PaperMirrorError } from '../../types/models';
 import { requestJSON } from './httpClient';
 import type { TranslateOptions, TranslationProvider } from './types';
+import { deeplTranslateURL } from './urls';
 
 const DEFAULT_BASE_FREE = 'https://api-free.deepl.com';
 const DEFAULT_BASE_PRO = 'https://api.deepl.com';
@@ -17,6 +18,10 @@ function baseURL(settings: ProviderSettings): string {
 		return settings.apiBaseURL.replace(/\/+$/, '');
 	}
 	return settings.apiKey.endsWith(':fx') ? DEFAULT_BASE_FREE : DEFAULT_BASE_PRO;
+}
+
+function translateURL(settings: ProviderSettings): string {
+	return deeplTranslateURL(baseURL(settings));
 }
 
 function mapLang(code: string, isTarget: boolean): string {
@@ -37,12 +42,16 @@ export const deeplProvider: TranslationProvider = {
 	defaultModel: '',
 	requiresApiKey: true,
 
+	endpointFor(settings: ProviderSettings): string {
+		return translateURL(settings);
+	},
+
 	async validateConfiguration(settings: ProviderSettings): Promise<ValidationResult> {
 		if (!settings.apiKey) {
 			return { ok: false, message: 'NO_API_KEY' };
 		}
 		try {
-			const { status, elapsedMs } = await requestJSON(`${baseURL(settings)}/v2/translate`, {
+			const { status, elapsedMs } = await requestJSON(translateURL(settings), {
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `DeepL-Auth-Key ${settings.apiKey}`
@@ -69,7 +78,7 @@ export const deeplProvider: TranslationProvider = {
 		if (source) {
 			body.source_lang = source;
 		}
-		const { json } = await requestJSON(`${baseURL(settings)}/v2/translate`, {
+		const { json } = await requestJSON(translateURL(settings), {
 			headers: {
 				'Content-Type': 'application/json',
 				Authorization: `DeepL-Auth-Key ${settings.apiKey}`

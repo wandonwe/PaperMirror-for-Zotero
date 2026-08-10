@@ -39,6 +39,19 @@ export interface SourceBlock {
 	 */
 	fontSize?: number;
 	/**
+	 * Which text column this block sits in (0-based, left to right). -1 marks a
+	 * full-width block that spans the gutter (title, abstract). Semantic modules
+	 * never cross columns, so this is how module grouping stays column-safe.
+	 */
+	column?: number;
+	/**
+	 * The semantic module this block belongs to (see reader/layoutModules). A
+	 * module groups a heading with its following paragraphs for TRANSLATION
+	 * CONTEXT only — every block still carries its own id, rect and translation,
+	 * and is replaced in place independently.
+	 */
+	moduleId?: string;
+	/**
 	 * When this block is a coalesced semantic paragraph group, the ids of the
 	 * original extraction fragments it was built from (reading order). The
 	 * group is the atomic unit for translation, measurement and commit; this
