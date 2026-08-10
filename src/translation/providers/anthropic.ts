@@ -44,11 +44,15 @@ function advancedBody(settings: ProviderSettings, defaultMax: number): Record<st
 		? Math.floor(settings.maxOutputTokens)
 		: defaultMax;
 	const out: Record<string, unknown> = { max_tokens: maxTokens };
-	if (settings.reasoning === 'high') {
+	if (settings.reasoning === 'high' || settings.reasoning === 'xhigh') {
 		out.thinking = { type: 'enabled', budget_tokens: Math.max(1024, Math.min(4096, Math.floor(maxTokens / 2))) };
 	}
-	else if (typeof settings.temperature === 'number' && Number.isFinite(settings.temperature)) {
-		out.temperature = settings.temperature;
+	else {
+		// 温度默认 0 — deterministic output suits translation (thinking mode
+		// forbids a custom temperature, hence the else branch).
+		out.temperature = typeof settings.temperature === 'number' && Number.isFinite(settings.temperature)
+			? settings.temperature
+			: 0;
 	}
 	return out;
 }

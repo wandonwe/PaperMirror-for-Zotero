@@ -15,6 +15,23 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.12] — 2026-08-10
+
+### Changed
+
+- **模型下拉取消分组标题.** The model picker is now a FLAT list (still ordered
+  推荐 → 高质量 → 快速 → 预览 → 旧版) ending in 自定义模型… — no category headers.
+- **推理强度改为官方英文取值.** 默认设置 / minimal / low / medium / high / **xhigh**
+  (xhigh 为 OpenAI gpt-5.4+ 的官方档位)。映射:OpenAI/OpenRouter → 原样下发
+  `reasoning_effort`;Gemini → minimal→`none`、xhigh→`high`;Anthropic → high/xhigh
+  启用 extended thinking;其它服务商不下发。
+- **最大输出 token 改为下拉选择.** 默认(不限制)/ 1024 / 2048 / 3072 / 4096 / 8192。
+  批量翻译仍建议保持默认以免 JSON 截断丢段。
+- **温度默认 0.** 翻译确定性最好。未显式设置时,对安全的服务商默认下发
+  `temperature: 0`(deepseek/qwen/zhipu/moonshot/siliconflow/groq/gemini/ollama/
+  兼容端点/Anthropic 非思考模式);OpenAI 官方端点与 OpenRouter 不注入默认值
+  (gpt-5.x 仅接受默认温度),显式设置则始终照发。
+
 ## [0.9.11] — 2026-08-10
 
 ### Added

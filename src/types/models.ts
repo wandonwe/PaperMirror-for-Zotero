@@ -136,7 +136,7 @@ export interface ProviderSettings {
 	// ---- advanced, per-provider, all opt-in (unset = request unchanged) ------
 	/** Custom request path appended to the Base URL (e.g. /v1/chat/completions). */
 	apiPath?: string;
-	/** Reasoning/thinking effort: '' | minimal | low | medium | high. */
+	/** Reasoning/thinking effort: '' | minimal | low | medium | high | xhigh. */
 	reasoning?: string;
 	/** Max output tokens; 0/undefined = provider default (batch: keep unset). */
 	maxOutputTokens?: number;

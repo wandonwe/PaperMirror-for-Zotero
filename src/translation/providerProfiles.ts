@@ -27,7 +27,7 @@ export interface ProviderProfile {
 	// ---- advanced params (all opt-in; unset = request body unchanged) --------
 	/** Custom request path (e.g. /v1/chat/completions). */
 	apiPath?: string;
-	/** Reasoning/thinking effort: '' | minimal | low | medium | high. */
+	/** Reasoning/thinking effort: '' | minimal | low | medium | high | xhigh. */
 	reasoning?: string;
 	/** Max output tokens (0/undefined = provider default). */
 	maxOutputTokens?: number;
@@ -65,7 +65,7 @@ export function parseProviderProfiles(raw: string | undefined | null): ProviderP
 			if (typeof v.apiPath === 'string') {
 				profile.apiPath = v.apiPath;
 			}
-			if (v.reasoning === 'minimal' || v.reasoning === 'low' || v.reasoning === 'medium' || v.reasoning === 'high') {
+			if (v.reasoning === 'minimal' || v.reasoning === 'low' || v.reasoning === 'medium' || v.reasoning === 'high' || v.reasoning === 'xhigh') {
 				profile.reasoning = v.reasoning;
 			}
 			if (typeof v.maxOutputTokens === 'number' && Number.isFinite(v.maxOutputTokens) && v.maxOutputTokens > 0) {

@@ -186,14 +186,15 @@
 			<label class="pm-title" value="高级参数(选填)"/>
 		</hbox>
 		<hbox class="pm-line" style="justify-content: space-between; margin-top: 4px;">
-			<label value="推理强度 / 思考" control="papermirror-reasoning"/>
+			<label value="推理强度" control="papermirror-reasoning"/>
 			<menulist id="papermirror-reasoning" native="true">
 				<menupopup>
-					<menuitem label="默认" value=""/>
-					<menuitem label="最低(翻译推荐)" value="minimal"/>
-					<menuitem label="低" value="low"/>
-					<menuitem label="中" value="medium"/>
-					<menuitem label="高" value="high"/>
+					<menuitem label="默认设置" value=""/>
+					<menuitem label="minimal" value="minimal"/>
+					<menuitem label="low" value="low"/>
+					<menuitem label="medium" value="medium"/>
+					<menuitem label="high" value="high"/>
+					<menuitem label="xhigh" value="xhigh"/>
 				</menupopup>
 			</menulist>
 		</hbox>
@@ -208,13 +209,22 @@
 
 		<hbox class="pm-line" style="justify-content: space-between; margin-top: 8px;">
 			<label value="最大输出 token 数" control="papermirror-maxtokens"/>
-			<html:input type="number" id="papermirror-maxtokens" min="0" step="1" style="width: 7em; text-align: right;" placeholder="默认"/>
+			<menulist id="papermirror-maxtokens" native="true">
+				<menupopup>
+					<menuitem label="默认(不限制)" value=""/>
+					<menuitem label="1024 tokens" value="1024"/>
+					<menuitem label="2048 tokens" value="2048"/>
+					<menuitem label="3072 tokens" value="3072"/>
+					<menuitem label="4096 tokens" value="4096"/>
+					<menuitem label="8192 tokens" value="8192"/>
+				</menupopup>
+			</menulist>
 		</hbox>
 		<hbox class="pm-line" style="justify-content: space-between; margin-top: 8px;">
 			<label value="温度 temperature" control="papermirror-temperature"/>
-			<html:input type="number" id="papermirror-temperature" min="0" max="2" step="0.1" style="width: 7em; text-align: right;" placeholder="默认"/>
+			<html:input type="number" id="papermirror-temperature" min="0" max="2" step="0.1" style="width: 7em; text-align: right;"/>
 		</hbox>
-		<html:div class="pm-desc">按各服务商官方 API 适配,均为选填,留空即用服务商默认。批量翻译建议「最大输出 token」留空以免截断;新推理模型(gpt-5.x、Gemini/Claude 思考版)把「推理强度」设为最低通常更快更省。</html:div>
+		<html:div class="pm-desc">按各服务商官方 API 适配。推理强度取值与官方一致(minimal/low/medium/high/xhigh,xhigh 仅部分 OpenAI 模型支持);温度默认 0(翻译更稳定,个别只接受默认温度的模型如报错可留空);批量翻译建议「最大输出 token」保持默认以免截断。</html:div>
 	</vbox>
 
 	<!-- ======================= 语言与请求 ======================= -->

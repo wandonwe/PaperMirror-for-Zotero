@@ -8,35 +8,46 @@ const base = (over: Partial<ProviderSettings>): ProviderSettings => ({
 	providerId: 'x', apiBaseURL: '', apiKey: '', model: '', timeoutMs: 1000, ...over
 });
 
-test('normalizeReasoning keeps valid levels, drops anything else', () => {
+test('normalizeReasoning keeps valid levels (incl. xhigh), drops anything else', () => {
 	assert.equal(normalizeReasoning('minimal'), 'minimal');
 	assert.equal(normalizeReasoning('high'), 'high');
+	assert.equal(normalizeReasoning('xhigh'), 'xhigh');
 	assert.equal(normalizeReasoning('off'), '');
 	assert.equal(normalizeReasoning(undefined), '');
 });
 
-test('openaiChatExtras is EMPTY when nothing is set (zero regression)', () => {
+test('default temperature 0 for safe providers; openai/openrouter left alone', () => {
+	// 温度默认 0(翻译更稳定)— but openai gpt-5.x / openrouter auto-routing only
+	// accept the default temperature, so no default is injected there.
+	assert.deepEqual(openaiChatExtras(base({}), 'deepseek'), { temperature: 0 });
+	assert.deepEqual(openaiChatExtras(base({}), 'qwen'), { temperature: 0 });
 	assert.deepEqual(openaiChatExtras(base({}), 'openai'), {});
-	assert.deepEqual(openaiChatExtras(base({}), 'deepseek'), {});
+	assert.deepEqual(openaiChatExtras(base({}), 'openrouter'), {});
 });
 
-test('openaiChatExtras: temperature passes through when set', () => {
+test('openaiChatExtras: explicit temperature always passes through', () => {
 	assert.deepEqual(openaiChatExtras(base({ temperature: 0 }), 'openai'), { temperature: 0 });
+	assert.deepEqual(openaiChatExtras(base({ temperature: 0.7 }), 'deepseek'), { temperature: 0.7 });
 });
 
 test('openaiChatExtras: max tokens key differs for the official OpenAI endpoint', () => {
 	assert.deepEqual(openaiChatExtras(base({ maxOutputTokens: 500 }), 'openai'), { max_completion_tokens: 500 });
-	assert.deepEqual(openaiChatExtras(base({ maxOutputTokens: 500 }), 'deepseek'), { max_tokens: 500 });
+	assert.deepEqual(
+		openaiChatExtras(base({ maxOutputTokens: 500 }), 'deepseek'),
+		{ temperature: 0, max_tokens: 500 }
+	);
 	// zero / negative is ignored
 	assert.deepEqual(openaiChatExtras(base({ maxOutputTokens: 0 }), 'openai'), {});
 });
 
-test('openaiChatExtras: reasoning_effort only for supported providers, gemini minimal→none', () => {
+test('reasoning_effort mapping: official levels; gemini minimal→none, xhigh→high', () => {
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'minimal' }), 'openai'), { reasoning_effort: 'minimal' });
+	assert.deepEqual(openaiChatExtras(base({ reasoning: 'xhigh' }), 'openai'), { reasoning_effort: 'xhigh' });
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'low' }), 'openrouter'), { reasoning_effort: 'low' });
-	assert.deepEqual(openaiChatExtras(base({ reasoning: 'minimal' }), 'gemini'), { reasoning_effort: 'none' });
+	assert.deepEqual(openaiChatExtras(base({ reasoning: 'minimal' }), 'gemini'), { temperature: 0, reasoning_effort: 'none' });
+	assert.deepEqual(openaiChatExtras(base({ reasoning: 'xhigh' }), 'gemini'), { temperature: 0, reasoning_effort: 'high' });
 	// providers not known to accept it → omitted (never risk a 400)
-	assert.deepEqual(openaiChatExtras(base({ reasoning: 'high' }), 'deepseek'), {});
+	assert.deepEqual(openaiChatExtras(base({ reasoning: 'high' }), 'deepseek'), { temperature: 0 });
 });
 
 test('supportsReasoningControl: LLM reasoning providers only', () => {

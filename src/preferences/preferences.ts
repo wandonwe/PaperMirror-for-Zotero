@@ -38,7 +38,6 @@ import {
 	catalogHasModel,
 	catalogProvenance,
 	MODEL_GROUP_ORDER,
-	MODEL_GROUP_LABELS,
 	type CatalogModel
 } from '../translation/providers/modelCatalog';
 import { supportsReasoningControl } from '../translation/providers/advancedParams';
@@ -408,7 +407,7 @@ interface PaperMirrorPublicAPI {
 		const reasoningSelect = byId<HTMLElement & { value: string }>('papermirror-reasoning');
 		const reasoningNote = byId<HTMLElement>('papermirror-reasoning-note');
 		const apiPathInput = byId<HTMLInputElement>('papermirror-apipath');
-		const maxTokensInput = byId<HTMLInputElement>('papermirror-maxtokens');
+		const maxTokensSelect = byId<HTMLElement & { value: string }>('papermirror-maxtokens');
 		const temperatureInput = byId<HTMLInputElement>('papermirror-temperature');
 
 		const currentProviderId = (): string =>
@@ -479,15 +478,6 @@ interface PaperMirrorPublicAPI {
 			item.setAttribute('label', label);
 			return item;
 		};
-		// A non-selectable group heading (推荐 / 高质量 / …).
-		const makeHeader = (label: string): Element => {
-			const item = makeXUL('menuitem');
-			item.setAttribute('value', '');
-			item.setAttribute('label', label);
-			item.setAttribute('disabled', 'true');
-			item.setAttribute('data-pm-header', 'true');
-			return item;
-		};
 		const makeSeparator = (): Element => makeXUL('menuseparator');
 
 		/** Build the model dropdown for a provider + select the stored value. */
@@ -517,22 +507,16 @@ interface PaperMirrorPublicAPI {
 			const popup = modelSelect?.querySelector('menupopup');
 			if (popup && modelSelect) {
 				popup.replaceChildren();
-				// Grouped: 推荐 / 高质量 / 快速·低成本 / 预览版 / 旧版兼容, each with a
-				// non-selectable heading, then a separator, then 自定义模型….
+				// FLAT list (no category headers), ordered 推荐 → 高质量 → 快速 →
+				// 预览 → 旧版, then a separator and 自定义模型….
 				for (const group of MODEL_GROUP_ORDER) {
-					const inGroup = catalog.filter(m => m.group === group);
-					if (!inGroup.length) {
-						continue;
-					}
-					popup.appendChild(makeHeader(MODEL_GROUP_LABELS[group]));
-					for (const m of inGroup) {
+					for (const m of catalog.filter(x => x.group === group)) {
 						popup.appendChild(makeMenuItem(m.id, m.label || m.id));
 					}
 				}
 				// A saved model that is NOT in the catalog is never dropped — show
-				// it as the current custom model under its own heading.
+				// it as-is so it stays selectable.
 				if (stored && !catalogHasModel(id, stored)) {
-					popup.appendChild(makeHeader('当前自定义'));
 					popup.appendChild(makeMenuItem(stored, stored));
 				}
 				if (catalog.length) {
@@ -605,18 +589,19 @@ interface PaperMirrorPublicAPI {
 				(reasoningSelect as unknown as HTMLElement & { disabled?: boolean }).disabled = !supported;
 				if (reasoningNote) {
 					reasoningNote.textContent = supported
-						? '翻译建议设为「最低」:新推理模型更快更省;留「默认」则用服务商默认。'
-						: '该服务商暂不支持推理强度调节(留默认即可)。';
+						? '控制模型的推理深度,仅部分模型支持。翻译建议 minimal(更快更省);默认设置即用服务商默认。'
+						: '该服务商暂不支持推理强度调节(留默认设置即可)。';
 				}
 			}
 			if (apiPathInput) {
 				apiPathInput.value = profile.apiPath ?? '';
 			}
-			if (maxTokensInput) {
-				maxTokensInput.value = profile.maxOutputTokens ? String(profile.maxOutputTokens) : '';
+			if (maxTokensSelect) {
+				maxTokensSelect.value = profile.maxOutputTokens ? String(profile.maxOutputTokens) : '';
 			}
 			if (temperatureInput) {
-				temperatureInput.value = typeof profile.temperature === 'number' ? String(profile.temperature) : '';
+				// 温度默认 0(翻译更稳定);显式存过则回显存储值。
+				temperatureInput.value = typeof profile.temperature === 'number' ? String(profile.temperature) : '0';
 			}
 		};
 
@@ -640,11 +625,10 @@ interface PaperMirrorPublicAPI {
 			updateBaseUrlNotes();
 		});
 		apiPathInput?.addEventListener('input', updateBaseUrlNotes);
-		const commitMaxTokens = (): void => {
-			const n = Math.floor(Number(maxTokensInput?.value));
+		maxTokensSelect?.addEventListener('command', () => {
+			const n = Math.floor(Number(maxTokensSelect.value));
 			patchProfile({ maxOutputTokens: Number.isFinite(n) && n > 0 ? n : undefined });
-		};
-		maxTokensInput?.addEventListener('change', commitMaxTokens);
+		});
 		const commitTemperature = (): void => {
 			const raw = (temperatureInput?.value ?? '').trim();
 			const n = Number(raw);
@@ -766,7 +750,7 @@ interface PaperMirrorPublicAPI {
 			testResult.removeAttribute('data-state');
 			void (async () => {
 				try {
-					const maxTok = Math.floor(Number(maxTokensInput?.value));
+					const maxTok = Math.floor(Number(maxTokensSelect?.value));
 					const tempRaw = (temperatureInput?.value ?? '').trim();
 					const tempNum = Number(tempRaw);
 					const result = await api()?.testConnection({

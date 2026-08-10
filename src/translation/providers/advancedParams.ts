@@ -14,23 +14,38 @@
 
 import type { ProviderSettings } from '../../types/models';
 
-export type ReasoningLevel = '' | 'minimal' | 'low' | 'medium' | 'high';
+export type ReasoningLevel = '' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 
-/** OpenAI-compatible providers whose chat endpoint accepts `reasoning_effort`. */
+/** OpenAI-compatible providers whose chat endpoint accepts `reasoning_effort`.
+ *  Values follow OpenAI's official levels (minimal/low/medium/high/xhigh —
+ *  xhigh exists on gpt-5.4+; unsupported levels are the model's own 400). */
 const REASONING_EFFORT_PROVIDERS = new Set(['openai', 'gemini', 'openrouter']);
 
+/** Providers where a DEFAULT temperature 0 is safe (translation-stable).
+ *  Excluded: 'openai' (gpt-5.x reasoning models accept only the default
+ *  temperature) and 'openrouter' (auto-routing may land on such a model).
+ *  An EXPLICIT user-set temperature is always sent regardless. */
+const DEFAULT_TEMP_PROVIDERS = new Set([
+	'deepseek', 'moonshot', 'qwen', 'zhipu', 'siliconflow', 'groq',
+	'gemini', 'ollama', 'openai-compatible', 'custom'
+]);
+
 export function normalizeReasoning(v: string | undefined): ReasoningLevel {
-	return v === 'minimal' || v === 'low' || v === 'medium' || v === 'high' ? v : '';
+	return v === 'minimal' || v === 'low' || v === 'medium' || v === 'high' || v === 'xhigh' ? v : '';
 }
 
 /**
  * Extra body fields to merge into an OpenAI-compatible chat request for this
- * provider, given the user's advanced settings. Returns {} when nothing is set.
+ * provider, given the user's advanced settings.
  */
 export function openaiChatExtras(settings: ProviderSettings, providerId: string): Record<string, unknown> {
 	const out: Record<string, unknown> = {};
 	if (typeof settings.temperature === 'number' && Number.isFinite(settings.temperature)) {
 		out.temperature = settings.temperature;
+	}
+	else if (DEFAULT_TEMP_PROVIDERS.has(providerId)) {
+		// 温度默认 0: deterministic output suits translation best.
+		out.temperature = 0;
 	}
 	if (typeof settings.maxOutputTokens === 'number' && settings.maxOutputTokens > 0) {
 		// gpt-5.x rejects max_tokens on the official OpenAI endpoint.
@@ -39,8 +54,13 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
 	}
 	const eff = normalizeReasoning(settings.reasoning);
 	if (eff && REASONING_EFFORT_PROVIDERS.has(providerId)) {
-		// Google's OpenAI-compat uses "none" to disable thinking (no "minimal").
-		out.reasoning_effort = providerId === 'gemini' && eff === 'minimal' ? 'none' : eff;
+		if (providerId === 'gemini') {
+			// Google's OpenAI-compat levels: none/low/medium/high.
+			out.reasoning_effort = eff === 'minimal' ? 'none' : eff === 'xhigh' ? 'high' : eff;
+		}
+		else {
+			out.reasoning_effort = eff;
+		}
 	}
 	return out;
 }
