@@ -15,6 +15,15 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.16] — 2026-08-10
+
+### Changed
+
+- **模型下拉只显示纯模型 ID(Bob 插件风格).** 移除所有「需付费档」「预览」等文字标注 —
+  Gemini 与通义千问的残留标注全部清掉,下拉里就是干净的模型名。账户档位不足时由
+  连接测试的错误提示说明("当前账户不可用,如免费档限制"),不再写进列表。
+- 「自定义模型」输入框的提示语随服务商变化(如 Gemini 下显示 `e.g. gemini-2.5-flash`)。
+
 ## [0.9.15] — 2026-08-10
 
 ### Changed

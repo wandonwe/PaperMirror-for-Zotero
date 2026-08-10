@@ -75,11 +75,14 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 			// 3.x 与 Pro 需付费档 — 默认必须选对所有账户都可用的。
 			{ id: 'gemini-2.5-flash', group: 'recommended', recommended: true },
 			{ id: 'gemini-2.5-flash-lite', group: 'fast' },
-			{ id: 'gemini-3.6-flash', label: 'gemini-3.6-flash（需付费档）', group: 'quality' },
-			{ id: 'gemini-3.5-flash', label: 'gemini-3.5-flash（需付费档）', group: 'quality' },
-			{ id: 'gemini-2.5-pro', label: 'gemini-2.5-pro（需付费档）', group: 'quality' },
-			{ id: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite（需付费档）', group: 'fast' },
-			{ id: 'gemini-3.1-pro-preview', label: 'gemini-3.1-pro-preview（预览·需付费档）', group: 'preview' }
+			// Bob-plugin style: raw model ids only, no annotations. (2.5-flash/lite
+			// are the free-tier models; the rest need a paid-tier key — the
+			// test-connection error explains that when it applies.)
+			{ id: 'gemini-3.6-flash', group: 'quality' },
+			{ id: 'gemini-3.5-flash', group: 'quality' },
+			{ id: 'gemini-2.5-pro', group: 'quality' },
+			{ id: 'gemini-3.5-flash-lite', group: 'fast' },
+			{ id: 'gemini-3.1-pro-preview', group: 'preview' }
 		]
 	},
 	anthropic: {
@@ -121,7 +124,7 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 			{ id: 'qwen3.7-plus', group: 'recommended', recommended: true },
 			{ id: 'qwen3.7-max', group: 'quality' },
 			{ id: 'qwen3.6-flash', group: 'fast' },
-			{ id: 'qwen3.8-max-preview', label: 'qwen3.8-max-preview（预览）', group: 'preview' },
+			{ id: 'qwen3.8-max-preview', group: 'preview' },
 			{ id: 'qwen3.6-plus', group: 'legacy' }
 		]
 	},

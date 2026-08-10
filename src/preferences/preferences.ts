@@ -546,6 +546,9 @@ interface PaperMirrorPublicAPI {
 			}
 			if (modelCustomInput) {
 				modelCustomInput.value = (profile.customModel ?? (showCustom ? stored : '')) || '';
+				// Provider-aware hint (Bob style): e.g. gemini-2.5-flash for Gemini.
+				const rec = recommendedModelFor(id);
+				modelCustomInput.placeholder = rec ? `e.g. ${rec}` : '输入自定义模型名称';
 			}
 			// Provenance note.
 			if (modelNote) {
