@@ -145,9 +145,10 @@ test('displayBaseURL exposes the effective endpoint users recognise', () => {
 	assert.equal(providers.find(p => p.id === 'deepseek')!.displayBaseURL, 'https://api.deepseek.com/v1');
 	// Providers whose base already carries a version segment stay unchanged
 	assert.equal(providers.find(p => p.id === 'openrouter')!.displayBaseURL, 'https://openrouter.ai/api/v1');
+	// Gemini runs on the NATIVE API (Bob-plugin style): the base is the host.
 	assert.equal(
 		providers.find(p => p.id === 'gemini')!.displayBaseURL,
-		'https://generativelanguage.googleapis.com/v1beta/openai'
+		'https://generativelanguage.googleapis.com'
 	);
 	// Non-OpenAI-compatible providers keep their own base
 	assert.equal(providers.find(p => p.id === 'bing-free')!.displayBaseURL, undefined);

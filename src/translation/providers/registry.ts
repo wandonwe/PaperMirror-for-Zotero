@@ -4,6 +4,7 @@
 
 import type { ProviderSettings } from '../../types/models';
 import { anthropicProvider } from './anthropic';
+import { geminiNativeProvider } from './geminiNative';
 import { bingFreeProvider } from './bingFree';
 import { deeplProvider } from './deepl';
 import { googleFreeProvider } from './googleFree';
@@ -73,16 +74,9 @@ const presetProviders: TranslationProvider[] = [
 		// group (2026-08-10, docs.bigmodel.cn). Kept in sync w/ modelCatalog.
 		defaultModel: 'glm-5'
 	}),
-	createOpenAICompatibleProvider({
-		id: 'gemini',
-		displayName: 'Google Gemini',
-		defaultBaseURL: 'https://generativelanguage.googleapis.com/v1beta/openai',
-		// 2.5-flash is the ONLY fast tier open to free-tier keys since Google's
-		// 2026-04 free-tier tightening (3.x / Pro are paid-only) — the default
-		// must work for every account. Kept in sync w/ modelCatalog.
-		defaultModel: 'gemini-2.5-flash',
-		noV1Suffix: true
-	}),
+	// Gemini runs on the NATIVE generateContent API (Bob-plugin style):
+	// first-class thinkingConfig / JSON mode, proxy-friendly Base URL.
+	geminiNativeProvider,
 	createOpenAICompatibleProvider({
 		id: 'openrouter',
 		displayName: 'OpenRouter',

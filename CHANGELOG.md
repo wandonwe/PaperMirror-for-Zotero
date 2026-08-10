@@ -15,6 +15,27 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.15] — 2026-08-10
+
+### Changed
+
+- **Gemini 改走 Google 原生 generateContent API(参照 Bob Gemini 插件设计).**
+  Base URL 默认 `https://generativelanguage.googleapis.com`(便于代理转发,同
+  bob-plugin-gemini);请求打到 `/v1beta/models/{model}:generateContent`,Key 走
+  `x-goog-api-key` 头(绝不进 URL/日志)。带来的实质改进:
+  - 「深度思考」用**一等公民** `thinkingConfig`:禁用思考 → `thinkingBudget: 0`,
+    自动思考 → `thinkingBudget: -1`(此前经 OpenAI 兼容层二手模拟);
+  - 严格 JSON 输出用官方 `responseMimeType: "application/json"`;
+  - 温度 / 最大输出 token 进 `generationConfig`(温度默认 0);
+  - 连接测试关思考 + 小输出上限,更快更省。
+  自定义 API Path 仍可整体覆盖路径(网关场景)。
+
+### Removed
+
+- **仓库清理**:删除 5 个历史版本发布说明(`发布说明-0.9.x.md`)——内容已完整存在于
+  CHANGELOG.md 与 GitHub Releases;`.gitignore` 新增会话传输包(`pm-*.tgz`)与
+  版本发布说明的忽略规则,仓库根目录不再越积越杂。
+
 ## [0.9.14] — 2026-08-10
 
 ### Changed

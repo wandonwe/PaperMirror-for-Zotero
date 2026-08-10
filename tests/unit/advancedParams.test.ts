@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeReasoning, openaiChatExtras, supportsReasoningControl } from '../../src/translation/providers/advancedParams';
 import { resolveChatURL } from '../../src/translation/providers/urls';
+import { geminiGenerateURL, geminiGenerationConfig } from '../../src/translation/providers/geminiNative';
 import type { ProviderSettings } from '../../src/types/models';
 
 const base = (over: Partial<ProviderSettings>): ProviderSettings => ({
@@ -40,26 +41,45 @@ test('openaiChatExtras: max tokens key differs for the official OpenAI endpoint'
 	assert.deepEqual(openaiChatExtras(base({ maxOutputTokens: 0 }), 'openai'), {});
 });
 
-test('gemini 深度思考: disabled→reasoning_effort none, auto→dynamic thinking budget', () => {
+test('gemini 深度思考 (native adapter): disabled→budget 0, auto→budget -1, default→omitted', () => {
 	assert.deepEqual(
-		openaiChatExtras(base({ reasoning: 'disabled' }), 'gemini'),
-		{ temperature: 0, reasoning_effort: 'none' }
+		geminiGenerationConfig(base({ reasoning: 'disabled' })),
+		{ temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
 	);
 	assert.deepEqual(
-		openaiChatExtras(base({ reasoning: 'auto' }), 'gemini'),
-		{ temperature: 0, extra_body: { google: { thinking_config: { thinking_budget: -1 } } } }
+		geminiGenerationConfig(base({ reasoning: 'auto' })),
+		{ temperature: 0, thinkingConfig: { thinkingBudget: -1 } }
+	);
+	assert.deepEqual(geminiGenerationConfig(base({})), { temperature: 0 });
+	// json mode + user-set advanced values flow into generationConfig
+	assert.deepEqual(
+		geminiGenerationConfig(base({ temperature: 0.5, maxOutputTokens: 4096 }), { json: true }),
+		{ temperature: 0.5, maxOutputTokens: 4096, responseMimeType: 'application/json' }
 	);
 	// disabled/auto are Gemini-only vocabulary — OpenAI/OpenRouter never emit them.
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'disabled' }), 'openai'), {});
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'auto' }), 'openrouter'), {});
 });
 
-test('reasoning_effort mapping: official levels; gemini minimal→none, xhigh→high', () => {
+test('gemini native URL: model in the path; custom Base URL / apiPath override', () => {
+	assert.equal(
+		geminiGenerateURL(base({ model: 'gemini-2.5-flash' })),
+		'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+	);
+	assert.equal(
+		geminiGenerateURL(base({ apiBaseURL: 'https://my-proxy.example', model: 'gemini-2.5-flash-lite' })),
+		'https://my-proxy.example/v1beta/models/gemini-2.5-flash-lite:generateContent'
+	);
+	assert.equal(
+		geminiGenerateURL(base({ apiBaseURL: 'https://gw.example', apiPath: '/custom/gemini' })),
+		'https://gw.example/custom/gemini'
+	);
+});
+
+test('reasoning_effort mapping: official levels for OpenAI/OpenRouter only', () => {
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'minimal' }), 'openai'), { reasoning_effort: 'minimal' });
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'xhigh' }), 'openai'), { reasoning_effort: 'xhigh' });
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'low' }), 'openrouter'), { reasoning_effort: 'low' });
-	assert.deepEqual(openaiChatExtras(base({ reasoning: 'minimal' }), 'gemini'), { temperature: 0, reasoning_effort: 'none' });
-	assert.deepEqual(openaiChatExtras(base({ reasoning: 'xhigh' }), 'gemini'), { temperature: 0, reasoning_effort: 'high' });
 	// providers not known to accept it → omitted (never risk a 400)
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'high' }), 'deepseek'), { temperature: 0 });
 });

@@ -23,8 +23,10 @@ export type ReasoningLevel = '' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh
 
 /** OpenAI-compatible providers whose chat endpoint accepts `reasoning_effort`.
  *  Values follow OpenAI's official levels (minimal/low/medium/high/xhigh —
- *  xhigh exists on gpt-5.4+; unsupported levels are the model's own 400). */
-const REASONING_EFFORT_PROVIDERS = new Set(['openai', 'gemini', 'openrouter']);
+ *  xhigh exists on gpt-5.4+; unsupported levels are the model's own 400).
+ *  Gemini is NOT here anymore: it runs on the native generateContent API and
+ *  handles 深度思考 via thinkingConfig in its own adapter (geminiNative). */
+const REASONING_EFFORT_PROVIDERS = new Set(['openai', 'openrouter']);
 
 /** Providers where a DEFAULT temperature 0 is safe (translation-stable).
  *  Excluded: 'openai' (gpt-5.x reasoning models accept only the default
@@ -32,7 +34,7 @@ const REASONING_EFFORT_PROVIDERS = new Set(['openai', 'gemini', 'openrouter']);
  *  An EXPLICIT user-set temperature is always sent regardless. */
 const DEFAULT_TEMP_PROVIDERS = new Set([
 	'deepseek', 'moonshot', 'qwen', 'zhipu', 'siliconflow', 'groq',
-	'gemini', 'ollama', 'openai-compatible', 'custom'
+	'ollama', 'openai-compatible', 'custom'
 ]);
 
 export function normalizeReasoning(v: string | undefined): ReasoningLevel {
@@ -59,30 +61,16 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
 		out[key] = Math.floor(settings.maxOutputTokens);
 	}
 	const eff = normalizeReasoning(settings.reasoning);
-	if (eff && REASONING_EFFORT_PROVIDERS.has(providerId)) {
-		if (providerId === 'gemini') {
-			// Gemini 深度思考 (Bob-style): 禁用思考 → reasoning_effort "none";
-			// 自动思考 → dynamic thinking budget (-1) via Google's extra_body;
-			// legacy effort levels still map (minimal→none, xhigh→high).
-			if (eff === 'disabled' || eff === 'minimal') {
-				out.reasoning_effort = 'none';
-			}
-			else if (eff === 'auto') {
-				out.extra_body = { google: { thinking_config: { thinking_budget: -1 } } };
-			}
-			else {
-				out.reasoning_effort = eff === 'xhigh' ? 'high' : eff;
-			}
-		}
-		else if (eff !== 'disabled' && eff !== 'auto') {
-			// OpenAI/OpenRouter take the official effort ladder only.
-			out.reasoning_effort = eff;
-		}
+	if (eff && eff !== 'disabled' && eff !== 'auto' && REASONING_EFFORT_PROVIDERS.has(providerId)) {
+		// OpenAI/OpenRouter take the official effort ladder only; the Gemini
+		// 深度思考 vocabulary (disabled/auto) never leaves the native adapter.
+		out.reasoning_effort = eff;
 	}
 	return out;
 }
 
-/** True when this provider's UI should offer reasoning/thinking control. */
+/** True when this provider's UI should offer reasoning/thinking control.
+ *  (Gemini qualifies via its native thinkingConfig, not reasoning_effort.) */
 export function supportsReasoningControl(providerId: string): boolean {
-	return REASONING_EFFORT_PROVIDERS.has(providerId) || providerId === 'anthropic';
+	return REASONING_EFFORT_PROVIDERS.has(providerId) || providerId === 'anthropic' || providerId === 'gemini';
 }

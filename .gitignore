@@ -19,3 +19,10 @@ _to_delete/
 release-notes.md
 _staging/
 _trash/
+
+# Session transfer bundles (never belong in the repo)
+pm-*.tgz
+pm_sync*.tgz
+
+# Versioned release notes live in CHANGELOG.md + GitHub Releases
+发布说明-*.md

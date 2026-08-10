@@ -50,9 +50,10 @@ test('provider.endpointFor reflects the real transport URL', () => {
 	assert.equal(getProvider('openai').endpointFor!(s('')), 'https://api.openai.com/v1/chat/completions');
 	assert.equal(getProvider('anthropic').endpointFor!(s('')), 'https://api.anthropic.com/v1/messages');
 	assert.equal(getProvider('deepl').endpointFor!(s('')), 'https://api.deepl.com/v2/translate');
+	// Gemini: NATIVE generateContent endpoint, model in the path.
 	assert.equal(
 		getProvider('gemini').endpointFor!(s('')),
-		'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+		'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
 	);
 	// A custom base flows straight through the same builder.
 	assert.equal(getProvider('openai').endpointFor!(s('https://mirror.example/v1')), 'https://mirror.example/v1/chat/completions');
