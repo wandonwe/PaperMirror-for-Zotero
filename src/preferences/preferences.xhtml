@@ -33,6 +33,38 @@
 			margin-top: 5px;
 			white-space: normal;
 		}
+		/* Performance summary card + provider chips. */
+		#papermirror-prefs .pm-perf-card {
+			border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+			border-radius: 8px;
+			background: color-mix(in srgb, currentColor 5%, transparent);
+			padding: 8px 10px;
+		}
+		#papermirror-prefs .pm-perf-head { font-weight: 600; font-size: .95em; }
+		#papermirror-prefs .pm-perf-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+		#papermirror-prefs .pm-perf-chip {
+			border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+			border-radius: 999px;
+			padding: 1px 9px;
+			font-size: .85em;
+			white-space: nowrap;
+		}
+		#papermirror-prefs .pm-perf-chip[data-pm-locked="true"] { opacity: .6; }
+		/* Horizontal, segmented mode selector — selection shown by background AND
+		   border AND the native radio mark, never colour alone. */
+		#papermirror-perfmode { display: flex; flex-wrap: wrap; gap: 6px; }
+		#papermirror-perfmode radio {
+			border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+			border-radius: 7px;
+			padding: 3px 10px;
+		}
+		#papermirror-perfmode radio[selected="true"] {
+			border-color: color-mix(in srgb, currentColor 55%, transparent);
+			background: color-mix(in srgb, currentColor 12%, transparent);
+			font-weight: 600;
+		}
+		#papermirror-prefs .pm-custom-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+		#papermirror-prefs .pm-custom-row input[type="number"] { width: 4em; text-align: right; }
 		#papermirror-prefs .pm-field { margin-top: 7px; display: flex; gap: 6px; align-items: center; }
 		#papermirror-prefs .pm-field > div, #papermirror-prefs .pm-grow { flex: 1 1 auto; min-width: 0; }
 		#papermirror-prefs input[type="text"],
@@ -177,18 +209,26 @@
 		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 4px;">
 			<label value="性能模式"/>
 		</hbox>
-		<radiogroup id="papermirror-perfmode" style="margin: 2px 0 2px 0;">
+		<radiogroup id="papermirror-perfmode" orient="horizontal" style="margin: 2px 0 2px 0;">
 			<radio value="stable" label="稳定"/>
 			<radio value="auto" label="自动(推荐)"/>
 			<radio value="high" label="高速"/>
+			<radio value="custom" label="自定义"/>
 		</radiogroup>
-		<label class="pm-desc" style="margin-top: 0;" value="性能模式决定每个服务商的并发、预取范围和动态限流。稳定=最省额度;自动=按响应动态调节;高速=尽量填满各家能力。"/>
+		<label id="papermirror-perfmode-desc" class="pm-desc" style="margin-top: 0;" value=""/>
 		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 8px;">
-			<label value="最大并行页面数(全局)" control="papermirror-concurrency"/>
-			<html:input type="number" id="papermirror-concurrency" min="1" max="24" style="width: 4.5em;"/>
+			<label value="最大并行页面数(全局)" control="papermirror-concurrency" style="flex: 1;"/>
+			<html:input type="number" id="papermirror-concurrency" min="1" max="24" style="width: 4.5em; text-align: right;"/>
 		</hbox>
-		<label class="pm-desc" style="margin-top: 0;" value="所有服务商合计最多同时处理的页面数,默认12,可设1–24。每个服务商仍独立限流,实际并行数可能更低。"/>
-		<label id="papermirror-perf-preview" class="pm-desc" style="margin-top: 4px; opacity: .85;" value=""/>
+		<label class="pm-desc" style="margin-top: 0;" value="限制所有服务商合计同时处理的页面数,范围1–24。每个服务商仍独立限流,实际并行数可能更低。"/>
+		<!-- 自定义模式:每个已启用服务商的最大并行页面数 -->
+		<html:div id="papermirror-custom-rows" class="pm-field" style="flex-direction: column; align-items: stretch; gap: 3px; margin-top: 6px; display: none;"></html:div>
+		<!-- 当前配置摘要卡 -->
+		<html:div id="papermirror-perf-card" class="pm-perf-card" style="margin-top: 8px;">
+			<html:div id="papermirror-perf-preview" class="pm-perf-head"></html:div>
+			<html:div id="papermirror-perf-chips" class="pm-perf-chips"></html:div>
+			<html:div id="papermirror-perf-why" class="pm-desc" style="margin-top: 2px;"></html:div>
+		</html:div>
 		<hbox class="pm-line" style="margin-top: 8px;">
 			<label value="并行翻译服务商(与主服务商轮流分担页面)"/>
 		</hbox>

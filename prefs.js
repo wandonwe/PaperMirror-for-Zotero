@@ -12,7 +12,8 @@ pref('extensions.zotero.bilingualReader.sourceLanguage', 'auto');
 pref('extensions.zotero.bilingualReader.targetLanguage', 'auto');
 pref('extensions.zotero.bilingualReader.timeoutMs', 60000);
 pref('extensions.zotero.bilingualReader.maxConcurrentRequests', 12); // global page ceiling 1-24
-pref('extensions.zotero.bilingualReader.perfMode', 'auto'); // stable | auto | high
+pref('extensions.zotero.bilingualReader.perfMode', 'auto'); // stable | auto | high | custom
+pref('extensions.zotero.bilingualReader.providerConcurrency', '{}'); // custom mode: {providerId: pages}
 pref('extensions.zotero.bilingualReader.customPrompt', '');
 pref('extensions.zotero.bilingualReader.translateCaptions', true);
 pref('extensions.zotero.bilingualReader.translateReferences', false);

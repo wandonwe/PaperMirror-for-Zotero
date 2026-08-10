@@ -44,12 +44,12 @@ const FREE_MT = new Set(['bing-free', 'google-free']);
 const PAID_MT = new Set(['deepl']);
 
 /** 性能模式 — controls per-provider concurrency, prefetch reach and throttling. */
-export type PerfMode = 'stable' | 'auto' | 'high';
+export type PerfMode = 'stable' | 'auto' | 'high' | 'custom';
 
 export const DEFAULT_PERF_MODE: PerfMode = 'auto';
 
 export function normalizePerfMode(value: unknown): PerfMode {
-	return value === 'stable' || value === 'high' ? value : 'auto';
+	return value === 'stable' || value === 'high' || value === 'custom' ? value : 'auto';
 }
 
 /**
@@ -81,13 +81,54 @@ function providerType(cap: ProviderCapability): 'free' | 'paid-mt' | 'local' | '
 	return 'unknown';
 }
 
+export type ProviderKind = 'free' | 'paid-mt' | 'local' | 'llm' | 'unknown';
+
+/** The provider "kind" that decides its band and its custom-range limits. */
+export function providerKind(cap: ProviderCapability): ProviderKind {
+	return providerType(cap);
+}
+
+/**
+ * The custom-mode range for a provider: the min/max a user may set, whether the
+ * field is LOCKED (free engines are fixed at 1), and the default value for a
+ * newly-enabled provider. Cloud LLM 1–6 (default 3); paid-MT 1–4 (default 3);
+ * local 1–2 (default 1); free fixed 1.
+ */
+export function customLaneRange(cap: ProviderCapability): { min: number; max: number; locked: boolean; default: number } {
+	switch (providerType(cap)) {
+		case 'llm':
+			return { min: 1, max: 6, locked: false, default: 3 };
+		case 'paid-mt':
+			return { min: 1, max: 4, locked: false, default: 3 };
+		case 'local':
+			return { min: 1, max: 2, locked: false, default: 1 };
+		default: // free / unknown
+			return { min: 1, max: 1, locked: true, default: 1 };
+	}
+}
+
+/** A custom-mode lane band from the user's value, clamped to the provider range. */
+export function customBandFor(cap: ProviderCapability, value: number | undefined): LaneBand {
+	const range = customLaneRange(cap);
+	const raw = Number.isFinite(value) ? Math.round(value as number) : range.default;
+	const fixed = Math.max(range.min, Math.min(range.max, raw));
+	// Fixed (initial === max) — no dynamic growth — but min 1 so safe throttling
+	// (a 429/timeout) can still drop the lane; recovery caps back at the value.
+	return { min: 1, initial: fixed, max: fixed };
+}
+
 /**
  * Per-type, per-mode lane bands. Free engines are always a single lane; cloud
  * LLMs grow to 6 in auto and sit at 6 in high; local models stay tiny. The min
- * is the adaptive floor (a 429 can always drop a lane toward 1).
+ * is the adaptive floor (a 429 can always drop a lane toward 1). Custom mode
+ * needs the user's per-provider value, so use poolLanePlan(caps, 'custom',
+ * values) — laneBandFor('custom') falls back to each type's default.
  */
 export function laneBandFor(cap: ProviderCapability, mode: PerfMode): LaneBand {
 	const type = providerType(cap);
+	if (mode === 'custom') {
+		return customBandFor(cap, customLaneRange(cap).default);
+	}
 	if (type === 'free' || type === 'unknown') {
 		return { min: 1, initial: 1, max: 1 };
 	}
@@ -110,14 +151,16 @@ export function laneBandFor(cap: ProviderCapability, mode: PerfMode): LaneBand {
 /**
  * The whole pool's lane plan for a mode: each provider's band, plus the sum of
  * INITIAL lane caps (the expected steady-state parallelism, before the global
- * ceiling and dynamic growth). The global ceiling is a SEPARATE user setting,
- * not derived here.
+ * ceiling and dynamic growth). In 'custom' mode `customValues` supplies each
+ * provider's user-set value. The global ceiling is a SEPARATE user setting.
  */
-export function poolLanePlan(caps: ProviderCapability[], mode: PerfMode): { laneBands: Record<string, LaneBand>; initialSum: number } {
+export function poolLanePlan(caps: ProviderCapability[], mode: PerfMode, customValues?: Record<string, number>): { laneBands: Record<string, LaneBand>; initialSum: number } {
 	const laneBands: Record<string, LaneBand> = {};
 	let initialSum = 0;
 	for (const c of caps) {
-		const band = laneBandFor(c, mode);
+		const band = mode === 'custom'
+			? customBandFor(c, customValues?.[c.id])
+			: laneBandFor(c, mode);
 		laneBands[c.id] = band;
 		initialSum += band.initial;
 	}

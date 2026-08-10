@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPool, pickProviderForPage, laneBandFor, poolLanePlan, prefetchWindowFor, normalizeGlobalMax, normalizePerfMode } from '../../src/translation/providerPool';
+import { buildPool, pickProviderForPage, laneBandFor, poolLanePlan, prefetchWindowFor, normalizeGlobalMax, normalizePerfMode, customLaneRange, customBandFor } from '../../src/translation/providerPool';
 
 test('pages deal round-robin across the pool, deterministically', () => {
 	const pool = ['openai', 'deepseek', 'moonshot'];
@@ -80,4 +80,35 @@ test('normalizePerfMode: defaults to auto for anything unknown', () => {
 	assert.equal(normalizePerfMode('auto'), 'auto');
 	assert.equal(normalizePerfMode('nonsense'), 'auto');
 	assert.equal(normalizePerfMode(undefined), 'auto');
+});
+
+test('normalizePerfMode accepts custom', () => {
+	assert.equal(normalizePerfMode('custom'), 'custom');
+});
+
+test('customLaneRange: per-type limits, free locked', () => {
+	assert.deepEqual(customLaneRange({ id: 'openai', requiresApiKey: true, local: false }), { min: 1, max: 6, locked: false, default: 3 });
+	assert.deepEqual(customLaneRange({ id: 'deepl', requiresApiKey: true, local: false }), { min: 1, max: 4, locked: false, default: 3 });
+	assert.deepEqual(customLaneRange({ id: 'ollama', requiresApiKey: false, local: true }), { min: 1, max: 2, locked: false, default: 1 });
+	assert.deepEqual(customLaneRange({ id: 'bing-free', requiresApiKey: false, local: false }), { min: 1, max: 1, locked: true, default: 1 });
+});
+
+test('customBandFor: clamps to the provider range; undefined → default', () => {
+	const llm = { id: 'openai', requiresApiKey: true, local: false };
+	assert.deepEqual(customBandFor(llm, 4), { min: 1, initial: 4, max: 4 });
+	assert.deepEqual(customBandFor(llm, 99), { min: 1, initial: 6, max: 6 }); // clamp to 6
+	assert.deepEqual(customBandFor(llm, undefined), { min: 1, initial: 3, max: 3 }); // default 3
+	// Free is always 1 regardless of the requested value.
+	assert.deepEqual(customBandFor({ id: 'bing-free', requiresApiKey: false, local: false }, 5), { min: 1, initial: 1, max: 1 });
+});
+
+test('poolLanePlan(custom) uses the user values, free stays 1', () => {
+	const caps = [
+		{ id: 'openai', requiresApiKey: true, local: false },
+		{ id: 'bing-free', requiresApiKey: false, local: false }
+	];
+	const plan = poolLanePlan(caps, 'custom', { openai: 5 });
+	assert.equal(plan.laneBands.openai!.initial, 5);
+	assert.equal(plan.laneBands['bing-free']!.initial, 1);
+	assert.equal(plan.initialSum, 6);
 });

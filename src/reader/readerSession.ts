@@ -438,7 +438,7 @@ export class ReaderSession {
 		}
 		const caps = this.poolCapabilities();
 		const mode = normalizePerfMode(getPref<string>('perfMode', DEFAULT_PERF_MODE));
-		const plan = poolLanePlan(caps, mode);
+		const plan = poolLanePlan(caps, mode, mode === 'custom' ? this.customConcurrency() : undefined);
 		// 全局上限 is now a plain user number (1–24, default 12), no 0=auto. The
 		// scheduler enforces min(globalMax, Σ lane caps, schedulable pages), so
 		// setting 24 never forces providers past their own lanes.
@@ -469,6 +469,26 @@ export class ReaderSession {
 			// fall through
 		}
 		return adapter.getViewerPxPerPoint(this.reader);
+	}
+
+	/** Per-provider custom concurrency values (custom mode), from the pref JSON. */
+	private customConcurrency(): Record<string, number> {
+		try {
+			const raw = JSON.parse(getPref<string>('providerConcurrency', '{}'));
+			if (raw && typeof raw === 'object') {
+				const out: Record<string, number> = {};
+				for (const [k, v] of Object.entries(raw)) {
+					if (typeof v === 'number' && Number.isFinite(v)) {
+						out[k] = v;
+					}
+				}
+				return out;
+			}
+		}
+		catch {
+			// malformed pref → defaults
+		}
+		return {};
 	}
 
 	/** The current pool as capability descriptors (id + key + local). */

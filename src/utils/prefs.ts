@@ -14,6 +14,7 @@ export type PrefKey
 	| 'timeoutMs'
 	| 'maxConcurrentRequests'
 	| 'perfMode'
+	| 'providerConcurrency'
 	| 'customPrompt'
 	| 'translateCaptions'
 	| 'translateReferences'

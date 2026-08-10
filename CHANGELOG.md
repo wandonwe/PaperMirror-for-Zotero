@@ -9,6 +9,32 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.9.2] — 2026-08-10
+
+### Added
+
+- **自定义性能模式 (custom performance mode).** A fourth mode alongside 稳定/自动/
+  高速 that sets the max parallel pages PER enabled provider: cloud LLM 1–6
+  (default 3), traditional paid MT 1–4 (default 3), Ollama 1–2 (default 1); free
+  engines are shown as 1 and locked. Each provider's value is saved separately
+  (`providerConcurrency` pref), kept when switching to another mode and restored
+  on return; a newly-enabled LLM defaults to 3; safe throttling (429/timeout
+  back-off) still applies. 「恢复默认」resets only the concurrency values, not keys
+  or provider selection.
+- **性能与并行 settings redesign.** Horizontal segmented mode selector (selection
+  shown by background + border + the native mark, not colour alone) with a
+  description that changes per mode; a 「当前配置」summary card showing 预计并行 N
+  页 · 当前页优先 (· 自动调节中 in auto), per-provider chips (wrapping, free chips
+  dimmed), and an explicit line for why the real parallelism can be below the
+  global ceiling (全局上限 vs 服务商能力合计). Custom mode expands per-provider
+  page-limit rows. The summary updates immediately on any change.
+
+### Notes
+
+- The global 最大并行页面数 (1–24, default 12) and the actual-parallelism rule
+  `min(global, Σ lane caps, schedulable pages)` are unchanged from 0.9.0; the
+  wording avoids implying throughput always multiplies by provider count.
+
 ## [0.9.1] — 2026-08-10
 
 ### Fixed

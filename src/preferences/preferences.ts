@@ -21,6 +21,8 @@ import {
 	normalizePerfMode,
 	normalizeGlobalMax,
 	poolLanePlan,
+	customLaneRange,
+	customBandFor,
 	type ProviderCapability
 } from '../translation/providerPool';
 
@@ -129,37 +131,131 @@ interface PaperMirrorPublicAPI {
 
 		// ---- 性能与并行 -----------------------------------------------------
 		{
-			// Live preview of the resolved schedule for the current mode + pool.
-			const previewLabel = byId<HTMLElement & { value: string }>('papermirror-perf-preview');
-			const updatePreview = (): void => {
-				if (!previewLabel) {
+			const MODE_DESC: Record<string, string> = {
+				stable: '降低并发和预取范围,减少限流、超时及额度消耗。',
+				auto: '根据响应速度和限流情况,自动调整每个服务商的并发。',
+				high: '提高并发和预取范围,适合额度充足的多个服务商。',
+				custom: '分别设置每个已启用服务商的最大并行页面数。'
+			};
+			const readChecked = (): string[] => {
+				try {
+					const raw = JSON.parse(String(getPref('parallelProviders') ?? '[]'));
+					return Array.isArray(raw) ? raw.filter((x: unknown): x is string => typeof x === 'string') : [];
+				}
+				catch { return []; }
+			};
+			const readCustom = (): Record<string, number> => {
+				try {
+					const raw = JSON.parse(String(getPref('providerConcurrency') ?? '{}'));
+					const out: Record<string, number> = {};
+					if (raw && typeof raw === 'object') {
+						for (const [k, v] of Object.entries(raw)) {
+							if (typeof v === 'number' && Number.isFinite(v)) {
+								out[k] = v;
+							}
+						}
+					}
+					return out;
+				}
+				catch { return {}; }
+			};
+			const writeCustom = (map: Record<string, number>): void => setPref('providerConcurrency', JSON.stringify(map));
+			const capOf = (id: string): ProviderCapability => {
+				const p = (api()?.listProviders() ?? []).find(pv => pv.id === id);
+				const local = id === 'ollama' || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(p?.defaultBaseURL || '');
+				return { id, requiresApiKey: p?.requiresApiKey ?? false, local };
+			};
+			const enabledIds = (): string[] => {
+				const primary = String(byId<HTMLElement & { value: string }>('papermirror-provider')?.value || getPref('provider') || 'bing-free');
+				return [primary, ...readChecked().filter(id => id !== primary)];
+			};
+			const nameOf = (id: string): string => (api()?.listProviders() ?? []).find(pv => pv.id === id)?.displayName ?? id;
+
+			const descEl = byId<HTMLElement & { value: string }>('papermirror-perfmode-desc');
+			const previewHead = byId<HTMLElement>('papermirror-perf-preview');
+			const chipsEl = byId<HTMLElement>('papermirror-perf-chips');
+			const whyEl = byId<HTMLElement>('papermirror-perf-why');
+			const customHost = byId<HTMLElement>('papermirror-custom-rows');
+
+			const updateSummary = (): void => {
+				const mode = normalizePerfMode(getPref('perfMode'));
+				if (descEl) {
+					descEl.value = MODE_DESC[mode] ?? '';
+				}
+				const globalMax = normalizeGlobalMax(getPref('maxConcurrentRequests'));
+				const ids = enabledIds();
+				const caps = ids.map(capOf);
+				const plan = poolLanePlan(caps, mode, mode === 'custom' ? readCustom() : undefined);
+				const parallel = Math.min(globalMax, plan.initialSum);
+				if (previewHead) {
+					previewHead.textContent = `预计并行 ${parallel} 页 · 当前页优先${mode === 'auto' ? ' · 自动调节中' : ''}`;
+				}
+				if (chipsEl) {
+					const chips = ids.map((id) => {
+						const chip = document.createElement('span');
+						chip.className = 'pm-perf-chip';
+						chip.textContent = `${nameOf(id)} ${plan.laneBands[id]?.initial ?? 1}`;
+						if (customLaneRange(capOf(id)).locked) {
+							chip.setAttribute('data-pm-locked', 'true');
+						}
+						return chip;
+					});
+					chipsEl.replaceChildren(...chips);
+				}
+				if (whyEl) {
+					whyEl.textContent = `全局上限 ${globalMax},服务商能力合计 ${plan.initialSum},因此实际并行上限为 ${parallel} 页。`;
+				}
+			};
+
+			const renderCustomRows = (): void => {
+				if (!customHost) {
 					return;
 				}
 				const mode = normalizePerfMode(getPref('perfMode'));
-				const globalMax = normalizeGlobalMax(getPref('maxConcurrentRequests'));
-				const providers = api()?.listProviders() ?? [];
-				const primary = String(byId<HTMLElement & { value: string }>('papermirror-provider')?.value || getPref('provider') || 'bing-free');
-				let checked: string[] = [];
-				try {
-					const raw = JSON.parse(String(getPref('parallelProviders') ?? '[]'));
-					checked = Array.isArray(raw) ? raw.filter((x: unknown): x is string => typeof x === 'string') : [];
+				customHost.style.display = mode === 'custom' ? 'flex' : 'none';
+				if (mode !== 'custom') {
+					customHost.replaceChildren();
+					return;
 				}
-				catch {
-					checked = [];
+				const custom = readCustom();
+				const rows: HTMLElement[] = [];
+				const heading = document.createElement('div');
+				heading.className = 'pm-desc';
+				heading.textContent = '单服务商最大并行页面数';
+				rows.push(heading);
+				for (const id of enabledIds()) {
+					const cap = capOf(id);
+					const range = customLaneRange(cap);
+					const row = document.createElement('div');
+					row.className = 'pm-custom-row';
+					const label = document.createElement('span');
+					label.textContent = nameOf(id) + (range.locked ? '(锁定)' : '');
+					const input = document.createElement('input');
+					input.type = 'number';
+					input.min = String(range.min);
+					input.max = String(range.max);
+					input.value = String(customBandFor(cap, custom[id]).initial);
+					input.disabled = range.locked;
+					input.addEventListener('change', () => {
+						const v = Math.max(range.min, Math.min(range.max, Math.round(Number(input.value) || range.default)));
+						input.value = String(v);
+						const map = readCustom();
+						map[id] = v;
+						writeCustom(map);
+						updateSummary();
+					});
+					row.append(label, input);
+					rows.push(row);
 				}
-				const enabledIds = [primary, ...checked.filter(id => id !== primary)];
-				const caps: ProviderCapability[] = enabledIds.map((id) => {
-					const p = providers.find(pv => pv.id === id);
-					const local = id === 'ollama' || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(p?.defaultBaseURL || '');
-					return { id, requiresApiKey: p?.requiresApiKey ?? false, local };
+				const restore = document.createElement('button');
+				restore.textContent = '恢复默认';
+				restore.addEventListener('click', () => {
+					writeCustom({});
+					renderCustomRows();
+					updateSummary();
 				});
-				const plan = poolLanePlan(caps, mode);
-				const parallel = Math.min(globalMax, plan.initialSum);
-				const perProvider = enabledIds.map((id) => {
-					const name = providers.find(pv => pv.id === id)?.displayName ?? id;
-					return `${name} ${plan.laneBands[id]?.initial ?? 1}`;
-				}).join(' · ');
-				previewLabel.value = `当前配置:预计并行 ${parallel} 页 · 当前页优先｜${perProvider}`;
+				rows.push(restore);
+				customHost.replaceChildren(...rows);
 			};
 
 			const modeGroup = byId<HTMLElement & { value: string }>('papermirror-perfmode');
@@ -167,43 +263,31 @@ interface PaperMirrorPublicAPI {
 				modeGroup.value = normalizePerfMode(getPref('perfMode'));
 				modeGroup.addEventListener('command', () => {
 					setPref('perfMode', normalizePerfMode(modeGroup.value));
-					updatePreview();
+					renderCustomRows();
+					updateSummary();
 				});
 			}
 
 			const concurrencyInput = byId<HTMLInputElement>('papermirror-concurrency');
 			if (concurrencyInput) {
-				// Plain global ceiling now: 1–24, default 12 (migrate 0/legacy → 12).
+				// Plain global ceiling: 1–24, default 12 (migrate 0/legacy → 12).
 				const migrated = normalizeGlobalMax(getPref('maxConcurrentRequests'));
-				setPref('maxConcurrentRequests', migrated); // persist the migration
+				setPref('maxConcurrentRequests', migrated);
 				concurrencyInput.value = String(migrated);
 				concurrencyInput.addEventListener('change', () => {
 					const next = normalizeGlobalMax(Number(concurrencyInput.value));
 					concurrencyInput.value = String(next);
 					setPref('maxConcurrentRequests', next);
-					updatePreview();
+					updateSummary();
 				});
 			}
 
-			// The provider-pool checkboxes: one per service that could pull its
-			// weight — key already stored, or no key needed. Rendered from the
-			// live roster, and RE-rendered whenever the primary provider
-			// changes or a key is saved: the first version drew the list once
-			// at load, so a key typed a minute later (or a provider switch)
-			// left every LLM row stuck on 「未配置密钥」.
 			const poolHost = byId<HTMLElement>('papermirror-pool');
 			const renderPool = async (): Promise<void> => {
 				if (!poolHost) {
 					return;
 				}
-				let checked: string[] = [];
-				try {
-					const raw = JSON.parse(String(getPref('parallelProviders') ?? '[]'));
-					checked = Array.isArray(raw) ? raw.filter((x: unknown): x is string => typeof x === 'string') : [];
-				}
-				catch {
-					checked = [];
-				}
+				const checked = readChecked();
 				const providers = api()?.listProviders() ?? [];
 				const primary = String(byId<HTMLElement & { value: string }>('papermirror-provider')?.value || getPref('provider') || 'bing-free');
 				const rows: HTMLElement[] = [];
@@ -227,15 +311,16 @@ interface PaperMirrorPublicAPI {
 					box.checked = checked.includes(provider.id);
 					box.disabled = !usable;
 					box.addEventListener('change', () => {
-						const next = new Set(checked);
+						const set = new Set(readChecked());
 						if (box.checked) {
-							next.add(provider.id);
+							set.add(provider.id);
 						}
 						else {
-							next.delete(provider.id);
+							set.delete(provider.id);
 						}
-						checked = [...next];
-						setPref('parallelProviders', JSON.stringify(checked));
+						setPref('parallelProviders', JSON.stringify([...set]));
+						renderCustomRows();
+						updateSummary();
 					});
 					const text = document.createElement('span');
 					text.textContent = usable ? provider.displayName : `${provider.displayName}(未配置密钥)`;
@@ -246,15 +331,16 @@ interface PaperMirrorPublicAPI {
 					rows.push(row);
 				}
 				poolHost.replaceChildren(...rows);
-				updatePreview();
+				renderCustomRows();
+				updateSummary();
 			};
 			void renderPool();
-			updatePreview();
+			renderCustomRows();
+			updateSummary();
 			byId<HTMLElement>('papermirror-provider')?.addEventListener('command', () => {
 				void renderPool();
 			});
 			byId<HTMLInputElement>('papermirror-apikey')?.addEventListener('change', () => {
-				// setApiKey is async; give the credential store a beat.
 				setTimeout(() => void renderPool(), 400);
 			});
 		}
