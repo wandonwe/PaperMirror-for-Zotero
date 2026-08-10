@@ -11,9 +11,9 @@ import type { TranslateOptions, TranslationProvider } from './types';
 import { anthropicMessagesURL } from './urls';
 
 const DEFAULT_BASE = 'https://api.anthropic.com';
-// Verified 2026-08-10 (platform.claude.com models). 4-5 is still valid but 4-6
-// is the current recommended Sonnet — kept in sync with modelCatalog.
-const DEFAULT_MODEL = 'claude-sonnet-4-6';
+// claude-sonnet-5 is the current recommended Sonnet for translation (balanced
+// quality/latency; 2026-08-10, platform.claude.com). Kept in sync w/ modelCatalog.
+const DEFAULT_MODEL = 'claude-sonnet-5';
 const API_VERSION = '2023-06-01';
 
 function headers(settings: ProviderSettings): Record<string, string> {

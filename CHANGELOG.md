@@ -15,6 +15,34 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.7] — 2026-08-10
+
+### Changed
+
+- **模型选择器改版:分组 + 精选清单.** Each provider now offers a curated set of
+  *current, paper-translation-suitable text models*, grouped in the picker as
+  推荐 / 高质量 / 快速·低成本 / 预览版 / 旧版兼容, then a separator and 自定义模型….
+  Image, audio/realtime, embedding, code-only, safety and retiring models are
+  deliberately excluded. The list is a picker convenience, never a call
+  whitelist — any model you type is still used, and preview models are labelled
+  as such.
+- **Refreshed default models** (low-latency / stable structured output over the
+  strongest/most-expensive): OpenAI `gpt-5.6-luna`, Gemini `gemini-3.6-flash`,
+  Anthropic `claude-sonnet-5`, Qwen `qwen3.7-plus`, Zhipu `glm-5`, Kimi `kimi-k3`,
+  DeepSeek `deepseek-v4-flash`, Groq `llama-3.3-70b-versatile`, OpenRouter
+  `openrouter/auto`, SiliconFlow `deepseek-ai/DeepSeek-V4-Flash`, Ollama `qwen3.5`.
+- Retired aliases moved to 旧版兼容 or dropped: Qwen `qwen-plus/max/turbo`,
+  Zhipu bare `glm-4-*` (dated ids kept under 旧版), OpenAI `gpt-4.1*`/`gpt-5-mini`.
+- OpenAI-compatible / Custom endpoints show only 自定义模型… (unknown backend);
+  Microsoft / Google / DeepL show no model field (fixed server-side model).
+
+### Notes
+
+- No account isolation and no online model-list fetching, by design — the
+  built-in list plus a custom entry covers it. Model ids are compiled from each
+  provider's official docs (2026-08-10); aggregator ids (OpenRouter/SiliconFlow)
+  follow their consoles, so the custom entry is always available.
+
 ## [0.9.6] — 2026-08-10
 
 ### Fixed

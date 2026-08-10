@@ -37,6 +37,8 @@ import {
 	providerNeedsModel,
 	catalogHasModel,
 	catalogProvenance,
+	MODEL_GROUP_ORDER,
+	MODEL_GROUP_LABELS,
 	type CatalogModel
 } from '../translation/providers/modelCatalog';
 
@@ -445,16 +447,28 @@ interface PaperMirrorPublicAPI {
 			return String(modelSelect?.value ?? '').trim();
 		};
 
+		const XUL_NS = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
 		const doc = (): Document => (modelSelect?.ownerDocument ?? document);
-		const makeMenuItem = (value: string, label: string): Element => {
+		const makeXUL = (tag: string): Element => {
 			const d = doc() as Document & { createXULElement?: (t: string) => Element };
-			const item = d.createXULElement
-				? d.createXULElement('menuitem')
-				: d.createElementNS('http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul', 'menuitem');
+			return d.createXULElement ? d.createXULElement(tag) : d.createElementNS(XUL_NS, tag);
+		};
+		const makeMenuItem = (value: string, label: string): Element => {
+			const item = makeXUL('menuitem');
 			item.setAttribute('value', value);
 			item.setAttribute('label', label);
 			return item;
 		};
+		// A non-selectable group heading (推荐 / 高质量 / …).
+		const makeHeader = (label: string): Element => {
+			const item = makeXUL('menuitem');
+			item.setAttribute('value', '');
+			item.setAttribute('label', label);
+			item.setAttribute('disabled', 'true');
+			item.setAttribute('data-pm-header', 'true');
+			return item;
+		};
+		const makeSeparator = (): Element => makeXUL('menuseparator');
 
 		/** Build the model dropdown for a provider + select the stored value. */
 		function populateModelSelector(): void {
@@ -483,13 +497,26 @@ interface PaperMirrorPublicAPI {
 			const popup = modelSelect?.querySelector('menupopup');
 			if (popup && modelSelect) {
 				popup.replaceChildren();
-				for (const m of catalog) {
-					popup.appendChild(makeMenuItem(m.id, m.label || m.id));
+				// Grouped: 推荐 / 高质量 / 快速·低成本 / 预览版 / 旧版兼容, each with a
+				// non-selectable heading, then a separator, then 自定义模型….
+				for (const group of MODEL_GROUP_ORDER) {
+					const inGroup = catalog.filter(m => m.group === group);
+					if (!inGroup.length) {
+						continue;
+					}
+					popup.appendChild(makeHeader(MODEL_GROUP_LABELS[group]));
+					for (const m of inGroup) {
+						popup.appendChild(makeMenuItem(m.id, m.label || m.id));
+					}
 				}
 				// A saved model that is NOT in the catalog is never dropped — show
-				// it as the current custom model.
+				// it as the current custom model under its own heading.
 				if (stored && !catalogHasModel(id, stored)) {
-					popup.appendChild(makeMenuItem(stored, `当前自定义: ${stored}`));
+					popup.appendChild(makeHeader('当前自定义'));
+					popup.appendChild(makeMenuItem(stored, stored));
+				}
+				if (catalog.length) {
+					popup.appendChild(makeSeparator());
 				}
 				popup.appendChild(makeMenuItem(CUSTOM_SENTINEL, '自定义模型…'));
 
