@@ -899,7 +899,14 @@ export function getPageScrollFraction(reader: ReaderLike, pageIndex: number): nu
 			return null;
 		}
 		const offset = container.scrollTop - div.offsetTop;
-		return Math.max(0, Math.min(1, offset / div.clientHeight));
+		// UNTRUNCATED anchor ratio: allow slightly negative / >1 so the pane maps
+		// the reader's real position even when the page is only partly in view
+		// (a page-top just above the viewport, a short page scrolled past). The
+		// old 0–1 clamp snapped every partial position to the page edge, which is
+		// what made the right side jump on page transitions. A wide guard keeps a
+		// stray value from throwing the pane far off.
+		const ratio = offset / div.clientHeight;
+		return Number.isFinite(ratio) ? Math.max(-0.5, Math.min(1.5, ratio)) : null;
 	}
 	catch {
 		return null;

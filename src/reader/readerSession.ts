@@ -333,7 +333,7 @@ export class ReaderSession {
 				return;
 			}
 			// Zoom on the left → the right pages match the new glyph size.
-			this.pane?.setDisplayScale(adapter.getViewerPxPerPoint(this.reader));
+			this.pane?.setDisplayScale(this.actualPxPerPoint());
 			if (this.sync?.enabled) {
 				const current = adapter.getCurrentPageIndex(this.reader);
 				const fraction = adapter.getPageScrollFraction(this.reader, current);
@@ -448,6 +448,27 @@ export class ReaderSession {
 		const win = prefetchWindowFor(mode, Math.max(1, this.pool.length));
 		this.manager.setPrefetchWindow(win.forward, win.backward);
 		logger.info(MODULE, `Concurrency plan: mode=${mode}, global ${globalMax}, ~${Math.min(globalMax, plan.initialSum)} parallel, lanes ${JSON.stringify(plan.laneBands)}, prefetch +${win.forward}/-${win.backward}`);
+	}
+
+	/**
+	 * px-per-point derived from the LEFT page's ACTUAL rendered size, not from
+	 * viewport.scale — so the right page ends up the same CSS pixel size as the
+	 * PDF page beside it (≤1px), instead of a re-derived size that drifts. Falls
+	 * back to the viewer scale when the current page isn't measurable yet.
+	 */
+	private actualPxPerPoint(): number {
+		try {
+			const idx = adapter.getCurrentPageIndex(this.reader);
+			const div = adapter.getPageView(this.reader, idx)?.div;
+			const pts = adapter.getAllPageSizes(this.reader)?.[idx];
+			if (div?.clientWidth && pts?.width) {
+				return div.clientWidth / pts.width;
+			}
+		}
+		catch {
+			// fall through
+		}
+		return adapter.getViewerPxPerPoint(this.reader);
 	}
 
 	/** The current pool as capability descriptors (id + key + local). */
@@ -862,7 +883,12 @@ export class ReaderSession {
 					this.manager?.setCurrentPage(page);
 				}
 				this.pane?.setCurrentPage(page);
-				this.sync?.onPdfPageChanged(page);
+				// NO forced scrollToPage on a page change: the continuous
+				// updateviewarea → setPdfScrollFraction anchor sync already keeps
+				// the pane aligned to the reader's exact position. Snapping the
+				// pane to the new page's TOP here is what made the right side jump
+				// to the page start mid-scroll; page-change only updates the label
+				// and translation priority now.
 				// If nothing is actively running, the resting ring must retarget
 				// the new page (✓ vs ↻) instead of showing the old page's state.
 				if (!this.tasks.size) {
@@ -903,7 +929,7 @@ export class ReaderSession {
 		const trySizes = (): boolean => {
 			const sizes = adapter.getAllPageSizes(this.reader);
 			if (sizes?.length) {
-				this.pane?.setDisplayScale(adapter.getViewerPxPerPoint(this.reader));
+				this.pane?.setDisplayScale(this.actualPxPerPoint());
 				this.pane?.setDocumentPages(sizes);
 				// Open the pane at the page the reader is on.
 				this.pane?.scrollToPage(adapter.getCurrentPageIndex(this.reader));

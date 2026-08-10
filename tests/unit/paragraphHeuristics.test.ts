@@ -283,3 +283,32 @@ test('planMerges rejoins a fragment after a colon-ending line', () => {
 		{ text: 'sharper kernels and thinner sections', column: 0, type: 'paragraph', rect: [54, 686, 292, 698] }
 	]), [[0, 1]]);
 });
+
+test('joinLines de-hyphenates line-broken words across all four hyphens', async () => {
+	const { joinLines } = await import('../../src/reader/paragraphHeuristics');
+	// U+002D, U+00AD, U+2010, U+2011 — all rejoin when Latin on both sides.
+	assert.equal(joinLines(['sen-', 'sory']), 'sensory');
+	assert.equal(joinLines(['func­', 'tional']), 'functional');
+	assert.equal(joinLines(['inter‐', 'est']), 'interest');
+	assert.equal(joinLines(['non‑', 'linear']), 'nonlinear');
+	// A numeric range keeps its hyphen (letter not on both sides).
+	assert.equal(joinLines(['3-', '5 mg']), '3- 5 mg');
+	// Ordinary wrap joins with a space; CJK joins without one.
+	assert.equal(joinLines(['hello', 'world']), 'hello world');
+	assert.equal(joinLines(['中文', '断行']), '中文断行');
+});
+
+test('ordered-list vs section-number classification', async () => {
+	const { isOrderedListStart, isSectionNumberHeading } = await import('../../src/reader/paragraphHeuristics');
+	// single-level numbers / parens → ordered list
+	assert.equal(isOrderedListStart('1. First item'), true);
+	assert.equal(isOrderedListStart('2) Second'), true);
+	assert.equal(isOrderedListStart('10. Tenth'), true);
+	assert.equal(isOrderedListStart('(3) Third'), true);
+	// multi-level section numbers → NOT a list (they are headings)
+	assert.equal(isOrderedListStart('1.1 Background'), false);
+	assert.equal(isOrderedListStart('4.6.1 Results'), false);
+	assert.equal(isSectionNumberHeading('1.1 Background'), true);
+	assert.equal(isSectionNumberHeading('4.6.1 Results'), true);
+	assert.equal(isSectionNumberHeading('3. Methods'), false);
+});

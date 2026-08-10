@@ -11,8 +11,11 @@ import {
 	detectColumns,
 	dominantFontSize,
 	joinFragments,
+	LINE_HYPHENS,
 	linesShareColumn,
 	looksLikeListStart,
+	isOrderedListStart,
+	isSectionNumberHeading,
 	planMerges,
 	reachesRightMargin,
 	shouldBreak,
@@ -131,12 +134,16 @@ export function textForRange(chars: PdfChar[], start: number, end: number): stri
 		parts.push(ch.c);
 		const isLineEnd = !!ch.lineBreakAfter || !!ch.paragraphBreakAfter;
 		if (isLineEnd && i < end) {
-			// De-hyphenate: "exam-\nple" -> "example". Only for pure ASCII word joins.
+			// De-hyphenate "exam-\nple" -> "example" for any line hyphen (- ­ ‐ ‑)
+			// when a Latin letter sits on BOTH sides (so "3-\n5" ranges survive).
 			const prev = parts[parts.length - 1];
+			const beforeHyphen = parts[parts.length - 2];
 			const next = chars
 				.slice(i + 1, Math.min(i + 3, end + 1))
 				.find(c => c && !c.ignorable);
-			if (prev === '-' && next && /[a-z]/.test(next.c)) {
+			if (prev && new RegExp(`^[${LINE_HYPHENS}]$`).test(prev)
+				&& beforeHyphen && /[A-Za-z]$/.test(beforeHyphen)
+				&& next && /[A-Za-z]/.test(next.c)) {
 				parts.pop();
 				continue;
 			}
@@ -352,18 +359,18 @@ export function classifyBlock(p: Paragraph, bodyFontSize: number, pageWidth: num
 	if (/^(figure|fig\.?|table|图|表|圖)\s*\d+/i.test(text)) {
 		return text.toLowerCase().startsWith('table') || /^表/.test(text) ? 'table' : 'caption';
 	}
-	if (/^[•▪◦‣·o*-]\s+/.test(text) || /^\(?\d{1,2}[.)]\s+\S/.test(text) && text.length < 300) {
-		if (/^[•▪◦‣·*-]\s+/.test(text)) {
-			return 'list';
-		}
-	}
 	const fontRatio = bodyFontSize > 0 && p.fontSize > 0 ? p.fontSize / bodyFontSize : 1;
+	// Bullet lists always; a single-level numbered item is a list only at body
+	// font size — a larger numbered line ("3. Model Architecture") is a heading.
+	if (/^[•▪◦‣·o*-]\s+/.test(text) || (isOrderedListStart(text) && fontRatio < 1.1)) {
+		return 'list';
+	}
 	if (p.lines.length <= 2 && fontRatio >= 1.35 && text.length < 250) {
 		return 'title';
 	}
 	if (p.lines.length <= 2 && text.length < 160
 		&& (fontRatio >= 1.1
-			|| /^(\d+\.?)+\s+\S/.test(text)
+			|| isSectionNumberHeading(text)
 			|| /^(abstract|introduction|methods?|materials and methods|results|discussion|conclusions?|acknowledg(e)?ments?|references|摘要|引言|前言|方法|结果|讨论|结论|致谢)\s*$/i.test(text))) {
 		return 'heading';
 	}

@@ -9,6 +9,52 @@ minor releases may change defaults.
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-08-10
+
+### Fixed
+
+断句与残留 (in-page segmentation):
+
+- **行尾断词不再残留 (line-break de-hyphenation).** Line-broken words rejoin across
+  all four hyphens — `-` `­` `‐` `‑` — when a Latin letter sits on both sides, so
+  `sen-`/`sory` → `sensory` and no more `ional` / `est` / `sory` fragments. The
+  span path joins a paragraph's lines with `joinLines()` (de-hyphenate + CJK
+  without spaces) instead of a naive space-join; the char-stream path was widened
+  to the same hyphen set and both letter cases.
+- **编号列表不再误判为大标题 (numbered list vs section heading).** A single-level
+  `1.` / `2)` / `10.` at body font size is a list item; a larger numbered line
+  (`3. Model Architecture`) or a multi-level `1.1` / `4.6.1` is a heading. A
+  short numbered list at a page foot is no longer read as a title.
+- **段内英文残留局部补译 (local English-residue re-translation).** A block that
+  passed validation but still carries a run of 6+ consecutive untranslated
+  English words is re-translated ON ITS OWN (single-block request, capped 8/page)
+  and patched in place — the block is replaced only if the retry clears the
+  residue, and the page is never re-extracted or wholesale re-rendered.
+
+对照同步 (side-by-side sync):
+
+- **换页不再跳到页首 (no snap on page change).** A page change no longer forces the
+  pane to the new page's top; the continuous updateviewarea → anchor sync keeps
+  the two sides aligned to the reader's exact position, so page transitions are
+  smooth. Page-change now only updates the label and translation priority.
+- **锚点不再被截断 (untruncated scroll anchor).** The page scroll ratio is no longer
+  clamped to 0–1, so a partly-visible page maps to the real position instead of
+  snapping to an edge (drift-free across many pages because each page anchors on
+  its own offset).
+- **右页尺寸取自左页实际像素 (right page matches the left page's actual size).** The
+  pane's display scale is derived from the current PDF page's real rendered
+  `clientWidth` rather than re-deriving from PDF-points × viewport scale, so
+  corresponding pages match within ~1px.
+
+### Deferred
+
+- Absolute-positioned page labels (step 6) — the per-page anchored sync already
+  prevents cumulative drift, so this was unnecessary for correctness and would
+  have required an `offsetParent` refactor; left as-is.
+- True cross-page sentence merge (step 8) — kept out per the review's own
+  recommendation; the next visit re-runs; a cross-page 断词 is de-hyphenated
+  within a page but not merged across the page boundary yet.
+
 ## [0.9.0] — 2026-08-10
 
 ### Added

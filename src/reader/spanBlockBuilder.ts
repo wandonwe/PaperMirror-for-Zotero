@@ -31,8 +31,11 @@ import {
 	dominantFontSize,
 	replacementFontSize,
 	joinFragments,
+	joinLines,
 	linesShareColumn,
 	looksLikeListStart,
+	isOrderedListStart,
+	isSectionNumberHeading,
 	planMerges,
 	reachesRightMargin,
 	shouldBreak,
@@ -277,16 +280,22 @@ function classify(text: string, fontSize: number, bodySize: number, lineCount: n
 	if (/^(figure|fig\.?|table|图|表|圖)\s*\d+/i.test(text)) {
 		return /^(table|表)/i.test(text) ? 'table' : 'caption';
 	}
-	if (looksLikeListStart(text) && /^[•▪◦‣·*–—-]\s/.test(text.trim())) {
+	const ratio = bodySize > 0 ? fontSize / bodySize : 1;
+	// Bullet lists are always lists; a single-level numbered item ("1." "2)"
+	// "10.") is a list ONLY at body font size — a larger "3. Model Architecture"
+	// is a section heading, so it falls through to the heading test below. This is
+	// what keeps a page-foot numbered list from being read as a big heading while
+	// still recognising numbered section headings.
+	if ((looksLikeListStart(text) && /^[•▪◦‣·*–—-]\s/.test(text.trim()))
+		|| (isOrderedListStart(text) && ratio < 1.1)) {
 		return 'list';
 	}
-	const ratio = bodySize > 0 ? fontSize / bodySize : 1;
 	if (lineCount <= 2 && ratio >= 1.35 && text.length < 250) {
 		return 'title';
 	}
 	if (lineCount <= 2 && text.length < 160
 		&& (ratio >= 1.1
-			|| /^(\d+\.?)+\s+\S/.test(text)
+			|| isSectionNumberHeading(text)
 			|| /^(abstract|introduction|methods?|results|discussion|conclusions?|references|摘要|引言|方法|结果|讨论|结论)\s*$/i.test(text))) {
 		return 'heading';
 	}
@@ -317,7 +326,10 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// Materialise, then repair anything still split mid-sentence.
 	const bands = detectColumns(lines.map(l => l.rect), pageWidth);
 	const draft = paragraphs.map((group) => {
-		const text = group.map(lineText).join(' ').replace(/\s+/g, ' ').trim();
+		// joinLines de-hyphenates line-broken words (ional/est/sory residue) and
+		// joins CJK without spaces, instead of the naive space-join that left the
+		// broken-word fragments in the source text.
+		const text = joinLines(group.map(lineText));
 		let rect = group[0]!.rect;
 		for (const l of group) {
 			rect = union(rect, l.rect);

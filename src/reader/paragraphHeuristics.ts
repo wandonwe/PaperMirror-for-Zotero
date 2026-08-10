@@ -263,6 +263,27 @@ export function looksLikeListStart(text: string): boolean {
 	return /^(\[\d{1,3}\]|[•▪◦‣·*–—-]\s|\(?\d{1,2}[.)]\s|[（(]\d{1,2}[）)]|[ivxIVX]{1,4}[.)]\s)/.test(text.trim());
 }
 
+/**
+ * A single-level ordered-list marker — "1." "2)" "10." "(3)" — but NOT a
+ * multi-level section number like "1.1" or "4.6.1". This keeps a short numbered
+ * list at the foot of a page from being classified as a big heading.
+ */
+export function isOrderedListStart(text: string): boolean {
+	const t = text.trim();
+	if (/^\d+(\.\d+)+/.test(t)) {
+		return false; // 1.1 / 4.6.1 → section number, not a list item
+	}
+	return /^[（(]?\d{1,3}[.)）]\s+\S/.test(t);
+}
+
+/**
+ * A multi-level section number that introduces a heading: "1.1 Methods",
+ * "4.6.1 Results". Single "1." is a list item, handled above.
+ */
+export function isSectionNumberHeading(text: string): boolean {
+	return /^\d+(\.\d+)+\s+\S/.test(text.trim());
+}
+
 export interface MergeableParagraph {
 	text: string;
 	/** Column index; only same-column neighbours may merge. -1 = full width. */
@@ -336,6 +357,19 @@ export function planMerges<T extends MergeableParagraph>(paragraphs: T[]): numbe
 }
 
 /** Join two text fragments the way the script requires (no space inside CJK). */
+/**
+ * Line-ending hyphens that mark an interrupted word: ASCII hyphen-minus
+ * (U+002D), soft hyphen (U+00AD), hyphen (U+2010), non-breaking hyphen
+ * (U+2011). A word broken across a line with any of these should rejoin.
+ */
+export const LINE_HYPHENS = '-­‐‑';
+const ENDS_LATIN_HYPHEN = new RegExp(`[A-Za-z][${LINE_HYPHENS}]$`);
+
+/** True when `a` ends in a Latin letter + line hyphen and `b` starts Latin. */
+export function isHyphenBreak(a: string, b: string): boolean {
+	return ENDS_LATIN_HYPHEN.test(a.replace(/\s+$/, '')) && /^[A-Za-z]/.test(b.replace(/^\s+/, ''));
+}
+
 export function joinFragments(a: string, b: string): string {
 	if (!a) {
 		return b;
@@ -345,13 +379,20 @@ export function joinFragments(a: string, b: string): string {
 	}
 	const left = a.replace(/\s+$/, '');
 	const right = b.replace(/^\s+/, '');
-	// De-hyphenate an interrupted Latin word: "exam-" + "ple" -> "example"
-	if (/[a-z]-$/.test(left) && /^[a-z]/.test(right)) {
+	// De-hyphenate an interrupted Latin word: "exam-" + "ple" -> "example".
+	// Only when a letter sits on BOTH sides of the hyphen, so ranges ("3-5"),
+	// compounds kept intact and trailing dashes are left alone.
+	if (isHyphenBreak(left, right)) {
 		return left.slice(0, -1) + right;
 	}
 	const cjkJoin = /[　-〿㐀-䶿一-鿿＀-￯]$/.test(left)
 		&& /^[　-〿㐀-䶿一-鿿＀-￯]/.test(right);
 	return cjkJoin ? left + right : `${left} ${right}`;
+}
+
+/** Join a paragraph's lines in reading order, de-hyphenating word breaks. */
+export function joinLines(lines: string[]): string {
+	return lines.reduce((acc, line) => joinFragments(acc, line), '').replace(/\s+/g, ' ').trim();
 }
 
 /**

@@ -147,6 +147,38 @@ export function segmentHash(sourceText: string, sourceLang: string, targetLang: 
 	return fnv1a64(`${sourceText}\u0000${sourceLang}\u0000${targetLang}`);
 }
 
+/** Cap on residue re-translations per page — a safety valve against storms. */
+const RESIDUE_MAX_PER_PAGE = 8;
+/** A run of this many consecutive plain-English words is untranslated prose. */
+const RESIDUE_WORD_RUN = 6;
+
+/**
+ * 局部英文残留检测: does a (mostly-Chinese) translation still contain a run of
+ * plain untranslated English prose? Six+ CONSECUTIVE lowercase English words is
+ * essentially always a dropped clause — acronyms (ALLCAPS), drug/gene symbols
+ * and proper nouns (Title-case) are excluded by the lowercase-only rule, URLs
+ * and emails are stripped first, and a short Latin idiom ("in vitro", "et al")
+ * is below the run threshold. Deliberately strict: a false positive costs one
+ * wasted re-translation, so we only fire on a clear untranslated sentence.
+ */
+export function hasEnglishResidue(text: string): boolean {
+	const cleaned = text.replace(/https?:\/\/\S+|www\.\S+|\S+@\S+/gi, ' ');
+	let run = 0;
+	for (const tok of cleaned.split(/\s+/)) {
+		const w = tok.replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, '');
+		if (/^[a-z]{2,}$/.test(w)) {
+			run++;
+			if (run >= RESIDUE_WORD_RUN) {
+				return true;
+			}
+		}
+		else {
+			run = 0;
+		}
+	}
+	return false;
+}
+
 /** CJK ideograph ranges used for the target-language ratio. */
 const CJK_RE = /[㐀-鿿豈-﫿]/g;
 
@@ -575,6 +607,80 @@ export class TranslationManager {
 		}
 	}
 
+	/**
+	 * 局部英文残留补译: re-translate ONLY the blocks whose (accepted) translation
+	 * still contains an untranslated English clause. Single-block requests, capped
+	 * per page; a retry replaces the block ONLY if it clears the residue, so we
+	 * never churn a block into an equally-bad result. Patches state + results
+	 * (which then flow to the caches) and notifies once — the page is not
+	 * re-extracted or wholesale re-rendered.
+	 */
+	private async resolveEnglishResidue(
+		state: PageTranslationState,
+		blocks: SourceBlock[],
+		results: TranslatedBlock[],
+		source: string,
+		target: string,
+		signal: AbortSignal,
+		translateFn: (req: TranslationRequest, sig: AbortSignal) => Promise<TranslationResponse>
+	): Promise<void> {
+		if (!/^zh/i.test(target)) {
+			return; // the detector is English-into-Chinese specific
+		}
+		const suspects = blocks
+			.filter(b => hasEnglishResidue(state.translations.get(b.id) ?? ''))
+			.slice(0, RESIDUE_MAX_PER_PAGE);
+		if (!suspects.length) {
+			return;
+		}
+		logger.warn(MODULE, `Page ${state.pageIndex + 1}: ${suspects.length} block(s) with English residue → local re-translate`);
+		let fixed = 0;
+		for (const block of suspects) {
+			if (signal.aborted) {
+				throw new PaperMirrorError('CANCELLED', 'cancelled');
+			}
+			const { text, placeholders } = protectFormulas(block.sourceText);
+			try {
+				const resp = await translateFn({
+					pageIndex: state.pageIndex,
+					sourceLanguage: source,
+					targetLanguage: target,
+					documentTitle: this.deps.getDocumentTitle(),
+					previousContext: '',
+					blocks: [{ id: block.id, type: block.type, text }],
+					glossary: matchRules(this.deps.getGlossary(), [block.sourceText])
+				}, signal);
+				const hit = resp.translations.find(t => looksTranslated(block.sourceText, t.translatedText, target));
+				if (!hit) {
+					continue;
+				}
+				const restored = restoreFormulas(hit.translatedText, placeholders);
+				// Replace ONLY when the retry actually cleared the residue.
+				if (hasEnglishResidue(restored)) {
+					continue;
+				}
+				state.translations.set(block.id, restored);
+				const existing = results.find(r => r.id === block.id);
+				if (existing) {
+					existing.translatedText = restored;
+				}
+				else {
+					results.push({ id: block.id, translatedText: restored });
+				}
+				fixed++;
+			}
+			catch (e) {
+				if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
+					throw e;
+				}
+				logger.warn(MODULE, `residue re-translate failed for ${block.id}`, e);
+			}
+		}
+		if (fixed) {
+			this.notify(state);
+		}
+	}
+
 	private async translatePage(state: PageTranslationState, signal: AbortSignal, bypass: { bypassPageCache: boolean; bypassSegments: boolean }): Promise<void> {
 		const pageIndex = state.pageIndex;
 		// 真实性能指标 (per page): how many provider round-trips this page cost
@@ -857,6 +963,13 @@ export class TranslationManager {
 		if (!results.length && !segmentHits) {
 			throw new PaperMirrorError('BAD_RESPONSE', 'The translation service returned no usable translations.');
 		}
+
+		// 局部英文残留补译: a block that passed looksTranslated can still carry a
+		// run of untranslated English mid-paragraph. Re-translate ONLY those
+		// blocks (single-block requests, capped), patch their entries in place,
+		// and merge into `results` so the fix reaches the cache — the page is not
+		// re-extracted or re-rendered wholesale.
+		await this.resolveEnglishResidue(state, blocks, results, source, target, signal, countedTranslate);
 
 		state.status = 'done';
 		this.notify(state);

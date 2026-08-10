@@ -418,6 +418,55 @@ test('the first batch request includes charBudget for prose blocks', async () =>
 	manager.dispose();
 });
 
+test('hasEnglishResidue: fires on a 6+ word English run, not on idioms/acronyms', async () => {
+	const { hasEnglishResidue } = await import('../../src/translation/translationManager');
+	// A dropped English clause inside Chinese → residue.
+	assert.equal(hasEnglishResidue('本研究表明 the model improved feature visualization despite lower dose 显著'), true);
+	// Short Latin idiom + acronyms → no false positive.
+	assert.equal(hasEnglishResidue('在 in vitro 和 in vivo 实验中,PCCT 与 MRI 表现一致。'), false);
+	// Fully Chinese → no residue.
+	assert.equal(hasEnglishResidue('这是一个完整的中文译文段落,没有残留英文。'), false);
+	// A URL is not counted as prose.
+	assert.equal(hasEnglishResidue('详见 https://example.com/a/b/c/d/e/f 的补充材料。'), false);
+});
+
+test('局部英文残留: only the residual block is re-translated, and it is patched in place', async () => {
+	let batchCalls = 0;
+	let singleCalls = 0;
+	const { deps } = makeDeps({
+		extractPage: async (p) => [
+			{ id: `page-${p}-block-0`, pageIndex: p, order: 0, type: 'paragraph',
+				sourceText: 'A clean paragraph that translates fully into Chinese here.' },
+			{ id: `page-${p}-block-1`, pageIndex: p, order: 1, type: 'paragraph',
+				sourceText: 'A paragraph whose middle clause is dropped by the batch model.' }
+		],
+		readCache: async () => null,
+		translateRequest: async (request: TranslationRequest): Promise<TranslationResponse> => {
+			if (request.blocks.length > 1) {
+				batchCalls++;
+				return { translations: request.blocks.map((b) => ({
+					id: b.id,
+					// block-1 comes back mostly Chinese but with an English run left in.
+					translatedText: b.id.endsWith('block-1')
+						? '本段落 whose middle clause is dropped by the 模型,需要补译。'
+						: '这是一段完整的中文译文内容,足够长。'
+				})) };
+			}
+			singleCalls++;
+			return { translations: [{ id: request.blocks[0]!.id, translatedText: '本段落的中间从句已被补译为完整中文内容。' }] };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const state = manager.getPageState(0)!;
+	assert.equal(state.status, 'done');
+	assert.equal(singleCalls, 1, 'exactly the one residual block was re-translated');
+	const { hasEnglishResidue } = await import('../../src/translation/translationManager');
+	assert.equal(hasEnglishResidue(state.translations.get('page-0-block-1')!), false, 'residue cleared after local re-translate');
+	assert.ok(state.translations.get('page-0-block-0')!.includes('完整的中文'), 'the clean block was left untouched');
+	manager.dispose();
+});
+
 test('段落级缓存: hits skip requests entirely; misses translate and are stored', async () => {
 	const { segmentHash } = await import('../../src/translation/translationManager');
 	const store = new Map<string, string>();
