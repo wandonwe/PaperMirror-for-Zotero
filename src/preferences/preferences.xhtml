@@ -185,7 +185,7 @@
 		<hbox class="pm-line">
 			<label class="pm-title" value="高级参数(选填)"/>
 		</hbox>
-		<hbox class="pm-line" style="justify-content: space-between; margin-top: 4px;">
+		<hbox id="papermirror-reasoning-row" class="pm-line" style="justify-content: space-between; margin-top: 4px;">
 			<label value="推理强度" control="papermirror-reasoning"/>
 			<menulist id="papermirror-reasoning" native="true">
 				<menupopup>
@@ -195,6 +195,17 @@
 					<menuitem label="medium" value="medium"/>
 					<menuitem label="high" value="high"/>
 					<menuitem label="xhigh" value="xhigh"/>
+				</menupopup>
+			</menulist>
+		</hbox>
+		<!-- Gemini 专用:深度思考开关(与 GPT 的推理档位不同) -->
+		<hbox id="papermirror-thinking-row" class="pm-line" style="justify-content: space-between; margin-top: 4px; display: none;">
+			<label value="深度思考" control="papermirror-thinking"/>
+			<menulist id="papermirror-thinking" native="true">
+				<menupopup>
+					<menuitem label="默认设置" value=""/>
+					<menuitem label="禁用思考" value="disabled"/>
+					<menuitem label="自动思考" value="auto"/>
 				</menupopup>
 			</menulist>
 		</hbox>

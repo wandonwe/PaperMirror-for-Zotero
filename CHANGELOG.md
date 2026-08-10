@@ -15,6 +15,17 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.14] — 2026-08-10
+
+### Changed
+
+- **Gemini 改用独立的「深度思考」开关(与 GPT 的推理档位不同).** Gemini 的思考控制是
+  开关语义而非强度阶梯,现在按 Bob 的设计单独显示:默认设置 / **禁用思考** / **自动思考**。
+  映射到 Google 官方接口:禁用思考 → `reasoning_effort: "none"`;自动思考 → 动态思考预算
+  (`extra_body.google.thinking_config.thinking_budget: -1`);默认设置不下发。翻译建议
+  「禁用思考」(更快更省)。GPT 系(OpenAI/OpenRouter)保持 minimal…xhigh 档位不变;
+  旧存的 minimal 在 Gemini 下自动显示为「禁用思考」。
+
 ## [0.9.13] — 2026-08-10
 
 ### Fixed

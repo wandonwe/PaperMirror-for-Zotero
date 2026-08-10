@@ -40,6 +40,20 @@ test('openaiChatExtras: max tokens key differs for the official OpenAI endpoint'
 	assert.deepEqual(openaiChatExtras(base({ maxOutputTokens: 0 }), 'openai'), {});
 });
 
+test('gemini 深度思考: disabled→reasoning_effort none, auto→dynamic thinking budget', () => {
+	assert.deepEqual(
+		openaiChatExtras(base({ reasoning: 'disabled' }), 'gemini'),
+		{ temperature: 0, reasoning_effort: 'none' }
+	);
+	assert.deepEqual(
+		openaiChatExtras(base({ reasoning: 'auto' }), 'gemini'),
+		{ temperature: 0, extra_body: { google: { thinking_config: { thinking_budget: -1 } } } }
+	);
+	// disabled/auto are Gemini-only vocabulary — OpenAI/OpenRouter never emit them.
+	assert.deepEqual(openaiChatExtras(base({ reasoning: 'disabled' }), 'openai'), {});
+	assert.deepEqual(openaiChatExtras(base({ reasoning: 'auto' }), 'openrouter'), {});
+});
+
 test('reasoning_effort mapping: official levels; gemini minimal→none, xhigh→high', () => {
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'minimal' }), 'openai'), { reasoning_effort: 'minimal' });
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'xhigh' }), 'openai'), { reasoning_effort: 'xhigh' });

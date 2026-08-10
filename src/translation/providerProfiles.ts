@@ -65,7 +65,8 @@ export function parseProviderProfiles(raw: string | undefined | null): ProviderP
 			if (typeof v.apiPath === 'string') {
 				profile.apiPath = v.apiPath;
 			}
-			if (v.reasoning === 'minimal' || v.reasoning === 'low' || v.reasoning === 'medium' || v.reasoning === 'high' || v.reasoning === 'xhigh') {
+			if (v.reasoning === 'minimal' || v.reasoning === 'low' || v.reasoning === 'medium' || v.reasoning === 'high' || v.reasoning === 'xhigh'
+				|| v.reasoning === 'disabled' || v.reasoning === 'auto') {
 				profile.reasoning = v.reasoning;
 			}
 			if (typeof v.maxOutputTokens === 'number' && Number.isFinite(v.maxOutputTokens) && v.maxOutputTokens > 0) {

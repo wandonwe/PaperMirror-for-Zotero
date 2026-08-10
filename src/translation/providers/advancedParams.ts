@@ -14,7 +14,12 @@
 
 import type { ProviderSettings } from '../../types/models';
 
-export type ReasoningLevel = '' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+/**
+ * 'minimal'…'xhigh' are OpenAI-style effort levels; 'disabled'/'auto' are the
+ * Gemini-style 深度思考 switch (禁用思考 / 自动思考) — Gemini's control is a
+ * toggle, not an effort ladder, so it gets its own values and its own UI.
+ */
+export type ReasoningLevel = '' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'disabled' | 'auto';
 
 /** OpenAI-compatible providers whose chat endpoint accepts `reasoning_effort`.
  *  Values follow OpenAI's official levels (minimal/low/medium/high/xhigh —
@@ -31,7 +36,8 @@ const DEFAULT_TEMP_PROVIDERS = new Set([
 ]);
 
 export function normalizeReasoning(v: string | undefined): ReasoningLevel {
-	return v === 'minimal' || v === 'low' || v === 'medium' || v === 'high' || v === 'xhigh' ? v : '';
+	return v === 'minimal' || v === 'low' || v === 'medium' || v === 'high' || v === 'xhigh'
+		|| v === 'disabled' || v === 'auto' ? v : '';
 }
 
 /**
@@ -55,10 +61,21 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
 	const eff = normalizeReasoning(settings.reasoning);
 	if (eff && REASONING_EFFORT_PROVIDERS.has(providerId)) {
 		if (providerId === 'gemini') {
-			// Google's OpenAI-compat levels: none/low/medium/high.
-			out.reasoning_effort = eff === 'minimal' ? 'none' : eff === 'xhigh' ? 'high' : eff;
+			// Gemini 深度思考 (Bob-style): 禁用思考 → reasoning_effort "none";
+			// 自动思考 → dynamic thinking budget (-1) via Google's extra_body;
+			// legacy effort levels still map (minimal→none, xhigh→high).
+			if (eff === 'disabled' || eff === 'minimal') {
+				out.reasoning_effort = 'none';
+			}
+			else if (eff === 'auto') {
+				out.extra_body = { google: { thinking_config: { thinking_budget: -1 } } };
+			}
+			else {
+				out.reasoning_effort = eff === 'xhigh' ? 'high' : eff;
+			}
 		}
-		else {
+		else if (eff !== 'disabled' && eff !== 'auto') {
+			// OpenAI/OpenRouter take the official effort ladder only.
 			out.reasoning_effort = eff;
 		}
 	}

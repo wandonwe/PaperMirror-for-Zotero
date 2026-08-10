@@ -404,7 +404,10 @@ interface PaperMirrorPublicAPI {
 		const apiKeyInput = byId<HTMLInputElement>('papermirror-apikey');
 		// Advanced params (opt-in, per-provider).
 		const advancedSection = byId<HTMLElement>('papermirror-advanced-section');
+		const reasoningRow = byId<HTMLElement>('papermirror-reasoning-row');
 		const reasoningSelect = byId<HTMLElement & { value: string }>('papermirror-reasoning');
+		const thinkingRow = byId<HTMLElement>('papermirror-thinking-row');
+		const thinkingSelect = byId<HTMLElement & { value: string }>('papermirror-thinking');
 		const reasoningNote = byId<HTMLElement>('papermirror-reasoning-note');
 		const apiPathInput = byId<HTMLInputElement>('papermirror-apipath');
 		const maxTokensSelect = byId<HTMLElement & { value: string }>('papermirror-maxtokens');
@@ -583,14 +586,32 @@ interface PaperMirrorPublicAPI {
 				return;
 			}
 			const profile = currentProfile();
-			if (reasoningSelect) {
+			{
 				const supported = supportsReasoningControl(id);
-				reasoningSelect.value = profile.reasoning ?? '';
-				(reasoningSelect as unknown as HTMLElement & { disabled?: boolean }).disabled = !supported;
-				if (reasoningNote) {
-					reasoningNote.textContent = supported
-						? '控制模型的推理深度,仅部分模型支持。翻译建议 minimal(更快更省);默认设置即用服务商默认。'
-						: '该服务商暂不支持推理强度调节(留默认设置即可)。';
+				const isGemini = id === 'gemini';
+				// Gemini gets its own 深度思考 switch; GPT-style providers get the
+				// effort ladder. Only one row is visible at a time.
+				if (reasoningRow) {
+					reasoningRow.style.display = isGemini ? 'none' : '';
+				}
+				if (thinkingRow) {
+					thinkingRow.style.display = isGemini ? '' : 'none';
+				}
+				if (isGemini && thinkingSelect) {
+					const r = profile.reasoning ?? '';
+					thinkingSelect.value = r === 'disabled' || r === 'minimal' ? 'disabled' : r === 'auto' ? 'auto' : '';
+					if (reasoningNote) {
+						reasoningNote.textContent = '仅部分模型支持通过此设置控制深度思考能力的启用状态,主要用于同时支持思考模式和非思考模式的模型。翻译建议「禁用思考」(更快更省)。';
+					}
+				}
+				else if (reasoningSelect) {
+					reasoningSelect.value = profile.reasoning === 'disabled' || profile.reasoning === 'auto' ? '' : (profile.reasoning ?? '');
+					(reasoningSelect as unknown as HTMLElement & { disabled?: boolean }).disabled = !supported;
+					if (reasoningNote) {
+						reasoningNote.textContent = supported
+							? '控制模型的推理深度,仅部分模型支持。翻译建议 minimal(更快更省);默认设置即用服务商默认。'
+							: '该服务商暂不支持推理强度调节(留默认设置即可)。';
+					}
 				}
 			}
 			if (apiPathInput) {
@@ -620,6 +641,12 @@ interface PaperMirrorPublicAPI {
 		reasoningSelect?.addEventListener('command', () => {
 			patchProfile({ reasoning: (reasoningSelect.value || undefined) as ProviderProfile['reasoning'] });
 		});
+		thinkingSelect?.addEventListener('command', () => {
+			patchProfile({ reasoning: (thinkingSelect.value || undefined) as ProviderProfile['reasoning'] });
+		});
+		/** The active reasoning/thinking value for the current provider's UI. */
+		const currentReasoning = (): string =>
+			currentProviderId() === 'gemini' ? (thinkingSelect?.value ?? '') : (reasoningSelect?.value ?? '');
 		apiPathInput?.addEventListener('change', () => {
 			patchProfile({ apiPath: (apiPathInput.value ?? '').trim() });
 			updateBaseUrlNotes();
@@ -758,7 +785,7 @@ interface PaperMirrorPublicAPI {
 						apiBaseURL: (baseUrlInput?.value ?? '').trim(),
 						model: selectedModel(),
 						apiPath: (apiPathInput?.value ?? '').trim() || undefined,
-						reasoning: reasoningSelect?.value || undefined,
+						reasoning: currentReasoning() || undefined,
 						maxOutputTokens: Number.isFinite(maxTok) && maxTok > 0 ? maxTok : undefined,
 						temperature: tempRaw !== '' && Number.isFinite(tempNum) ? tempNum : undefined
 					});
