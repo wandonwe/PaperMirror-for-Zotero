@@ -21,7 +21,7 @@ import type {
 } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
-import { protectFormulas, restoreFormulas } from '../reader/formulaGuard';
+import { protectFormulas, restoreFormulas, stripProtectable, verifyPlaceholders } from '../reader/formulaGuard';
 import { matchRules } from './glossary';
 import { RequestScheduler } from './requestScheduler';
 import { planChunks, trailingContext, type PlannedChunk } from './segmenter';
@@ -92,14 +92,20 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 	if (!/^zh/i.test(targetLang)) {
 		return true;
 	}
-	const proseWords = (source.match(/[A-Za-z]{2,}/g) ?? []).length;
+	// PROSE-ONLY scoring (审核项: 统计密集行被误拒): citations, p-values, CIs and
+	// formulas are byte-identical in source and translation BY DESIGN — counting
+	// them as "untranslated Latin" rejected perfect translations of stats-dense
+	// lines back to English. Both sides are stripped to their prose before any
+	// ratio is computed; works whether the caller passes masked or raw text.
+	const proseSource = stripProtectable(source);
+	const proseWords = (proseSource.match(/[A-Za-z]{2,}/g) ?? []).length;
 	if (proseWords < PROSE_WORD_GATE) {
 		return true; // label / acronym / numeric cell — may legitimately be CJK-free
 	}
 	// A PROSE source must come back predominantly Chinese. This rejects not
 	// only echoed English (ratio 0) but a HALF-translated / mixed response,
 	// which the old "contains any CJK" test accepted.
-	return targetLanguageRatio(t) >= MIN_TARGET_RATIO;
+	return targetLanguageRatio(stripProtectable(t)) >= MIN_TARGET_RATIO;
 }
 
 /**
@@ -748,7 +754,8 @@ export class TranslationManager {
 					blocks: [{ id: block.id, type: block.type, text }],
 					glossary: matchRules(this.deps.getGlossary(), [block.sourceText])
 				}, signal);
-				const hit = resp.translations.find(t => looksTranslated(block.sourceText, t.translatedText, target));
+				const hit = resp.translations.find(t => looksTranslated(block.sourceText, t.translatedText, target)
+					&& verifyPlaceholders(t.translatedText, placeholders).ok);
 				if (!hit) {
 					continue;
 				}
@@ -908,11 +915,23 @@ export class TranslationManager {
 			return;
 		}
 
-		// Protect formulas per block
+		// Protect formulas / citations / statistics per block
 		const protectedBlocks = toTranslate.map((block) => {
 			const { text, placeholders } = protectFormulas(block.sourceText);
 			return { block, text, placeholders };
 		});
+		// 占位符清单校验 (参照 retain-pdf): a model response that LOST a protected
+		// token (or invented one) is treated as invalid — it flows into the same
+		// retry/salvage chain as a missing id, instead of silently restoring into
+		// a paragraph with the formula/citation gone.
+		const placeholdersById = new Map(protectedBlocks.map(p => [p.block.id, p.placeholders]));
+		const acceptResponse = (id: string, text: string): boolean => {
+			if (!accept(id, text)) {
+				return false;
+			}
+			const ph = placeholdersById.get(id);
+			return !ph?.length || verifyPlaceholders(text, ph).ok;
+		};
 
 		// Plan requests: semantic modules are SOFT boundaries (context tags), the
 		// character budget is the real request boundary — a page with many short
@@ -968,7 +987,7 @@ export class TranslationManager {
 				logger.warn(MODULE, `Chunk request failed on page ${pageIndex}; continuing`, e);
 			}
 			for (const t of response.translations) {
-				if (accept(t.id, t.translatedText)) {
+				if (acceptResponse(t.id, t.translatedText)) {
 					received.set(t.id, t.translatedText);
 				}
 			}
@@ -987,7 +1006,7 @@ export class TranslationManager {
 				try {
 					response = await countedTranslate(retryRequest, signal);
 					for (const t of response.translations) {
-						if (accept(t.id, t.translatedText)) {
+						if (acceptResponse(t.id, t.translatedText)) {
 							received.set(t.id, t.translatedText);
 						}
 					}
@@ -1042,7 +1061,7 @@ export class TranslationManager {
 							})
 						}, signal);
 						for (const t of resp.translations) {
-							if (accept(t.id, t.translatedText)) {
+							if (acceptResponse(t.id, t.translatedText)) {
 								received.set(t.id, t.translatedText);
 							}
 						}
@@ -1083,9 +1102,11 @@ export class TranslationManager {
 						);
 						// One block in → whatever comes back IS its translation,
 						// even if the model rewrote the id — but only if it is
-						// actually translated, not the English echoed back.
+						// actually translated, not the English echoed back, and no
+						// protected token was lost or invented.
 						const first = single.translations.find(t =>
-							looksTranslated(block.sourceText, t.translatedText, target));
+							looksTranslated(block.sourceText, t.translatedText, target)
+							&& verifyPlaceholders(t.translatedText, pb.placeholders).ok);
 						if (first) {
 							received.set(block.id, first.translatedText);
 						}

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TranslationManager, type PageTranslationState, type TranslationDeps } from '../../src/translation/translationManager';
+import { TranslationManager, looksTranslated, type PageTranslationState, type TranslationDeps } from '../../src/translation/translationManager';
 import type { SourceBlock, TranslationRequest, TranslationResponse } from '../../src/types/models';
 
 function makeBlocks(pageIndex: number, n: number): SourceBlock[] {
@@ -740,4 +740,19 @@ test('cancelled pages persist already-translated segments (增量持久化)', as
 	assert.ok(written.length >= 1, 'the completed chunk was persisted despite the cancel');
 	assert.equal(written[0]!.translatedText, '第一批译文成功保留');
 	manager.dispose();
+});
+
+// ---------------------------------------------------------------------------
+// 0.9.24 批次1: 统计密集行不再被"疑似未翻译"误拒;丢占位符的译文被拒收
+// ---------------------------------------------------------------------------
+
+test('stats-dense perfect translation passes looksTranslated (斑马纹误拒修复)', () => {
+	const source = 'The hazard ratio for mortality was 0.82 (95% CI: 0.71–0.94, p = 0.003) among the n = 342 patients enrolled [12].';
+	const translated = '在纳入的 n = 342 例患者中,死亡率的风险比为 0.82(95% CI: 0.71–0.94, p = 0.003)[12]。';
+	assert.equal(looksTranslated(source, translated, 'zh-CN'), true);
+});
+
+test('echoed English still fails looksTranslated after prose-only scoring', () => {
+	const source = 'The hazard ratio for mortality was significantly lower in the treatment group over time.';
+	assert.equal(looksTranslated(source, source, 'zh-CN'), false);
 });
