@@ -599,7 +599,15 @@ export class ReaderSession {
 				throw new PaperMirrorError('HTTP_INSECURE', 'Local-only mode is enabled; configure a localhost endpoint.', { retryable: false });
 			}
 		}
-		return provider.translate(request, settings, { signal });
+		// Scale the request timeout with the PAYLOAD: a fixed 60 s was fine for a
+		// one-block salvage but structurally too short for an 8000-char batch on a
+		// slow/thinking model (whose honest generation time is 70–200 s) — the old
+		// behavior was timeout → retry → same timeout → page dies "stuck". Rule:
+		// base + 12 ms per source char, capped at 120 s (the manager's idle
+		// watchdog is 150 s, so a full-length request can never trip it).
+		const payloadChars = request.blocks.reduce((n, b) => n + b.text.length, 0);
+		const scaled = Math.min(120000, Math.max(settings.timeoutMs, 20000 + payloadChars * 12));
+		return provider.translate(request, { ...settings, timeoutMs: scaled }, { signal });
 	}
 
 	private async cacheKey(pageIndex: number, texts: string[]): Promise<CacheKeyParts | null> {

@@ -45,7 +45,13 @@ function advancedBody(settings: ProviderSettings, defaultMax: number): Record<st
 		: defaultMax;
 	const out: Record<string, unknown> = { max_tokens: maxTokens };
 	if (settings.reasoning === 'high' || settings.reasoning === 'xhigh') {
-		out.thinking = { type: 'enabled', budget_tokens: Math.max(1024, Math.min(4096, Math.floor(maxTokens / 2))) };
+		// The thinking budget is ADDED ON TOP of the output allowance — carving
+		// it out of max_tokens starved big batches (8000-char chunks need
+		// ~4000–6000 output tokens; thoughts ate half and the JSON truncated,
+		// which surfaces as a non-retryable BAD_RESPONSE losing the whole chunk).
+		const budget = 2048;
+		out.thinking = { type: 'enabled', budget_tokens: budget };
+		out.max_tokens = maxTokens + budget;
 	}
 	else {
 		// 温度默认 0 — deterministic output suits translation (thinking mode
@@ -105,7 +111,10 @@ export const anthropicProvider: TranslationProvider = {
 			headers: headers(settings),
 			body: {
 				model: settings.model || DEFAULT_MODEL,
-				...advancedBody(settings, 8192),
+				// 16384 (was 8192): an 8000-char source batch translates to
+				// ~4000–6000 CJK output tokens plus JSON/id overhead — 8192 was
+				// borderline and truncated JSON kills the whole chunk.
+				...advancedBody(settings, 16384),
 				system: buildSystemPrompt(request, settings.customPrompt),
 				messages: [{ role: 'user', content: buildUserPayload(request) }]
 			},

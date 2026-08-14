@@ -663,3 +663,30 @@ test('优先翻译当前页: the current page translates before any neighbour is
 	assert.ok(order.indexOf(3) < order.indexOf(4), 'current page precedes its neighbours');
 	manager.dispose();
 });
+
+test('chunks of one page run concurrently (2-way), and every block still lands', async () => {
+	// Two big blocks (5000 chars each) → planChunks(8000 budget) → 2 chunks.
+	let active = 0;
+	let maxActive = 0;
+	const { deps } = makeDeps({
+		extractPage: async (pageIndex) => [0, 1].map(i => ({
+			id: `page-${pageIndex}-block-${i}`,
+			pageIndex, order: i, type: 'paragraph' as const,
+			sourceText: 'x'.repeat(5000)
+		})),
+		translateRequest: async (request) => {
+			active++;
+			maxActive = Math.max(maxActive, active);
+			await new Promise(r => setTimeout(r, 15));
+			active--;
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '译文内容:' + b.id })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const state = manager.getPageState(0)!;
+	assert.equal(state.status, 'done');
+	assert.equal(state.translations.size, 2, 'both chunks translated');
+	assert.equal(maxActive, 2, 'the two chunks were in flight simultaneously');
+	manager.dispose();
+});

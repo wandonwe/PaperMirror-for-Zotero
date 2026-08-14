@@ -24,7 +24,7 @@ import * as logger from '../utils/logger';
 import { protectFormulas, restoreFormulas } from '../reader/formulaGuard';
 import { matchRules } from './glossary';
 import { RequestScheduler } from './requestScheduler';
-import { planChunks, trailingContext } from './segmenter';
+import { planChunks, trailingContext, type PlannedChunk } from './segmenter';
 import { buildLayoutModules } from '../reader/layoutModules';
 import { fnv1a64 } from '../cache/cacheSchema';
 
@@ -206,11 +206,19 @@ function targetLanguageRatio(text: string): number {
  * pages with several chunks are fine at 60 s per request; five minutes means
  * something is stuck, not slow.
  */
-const PAGE_WATCHDOG_MS = 120000;
+/** IDLE watchdog: the page dies only when NO request completes for this long —
+ *  a big multi-chunk page that keeps making progress is never killed (the old
+ *  TOTAL-time watchdog killed pages whose every request succeeded). Must be ≥
+ *  the max single-request timeout (readerSession scales it up to 120 s). */
+const PAGE_IDLE_MS = 150000;
 /** Per-request transient-error retries (network/timeout/rate-limit), replacing
  *  the old whole-page scheduler retry. Small and local so one blip doesn't fail
  *  a chunk, without ever re-running extraction. */
 const REQUEST_RETRIES = 2;
+/** Chunks of ONE page dispatched concurrently. Audit-verified: nothing in a
+ *  chunk's request depends on a previous chunk's RESPONSE (context comes from
+ *  SOURCE text), so limited parallelism is safe and roughly halves page time. */
+const CHUNK_CONCURRENCY = 2;
 
 export interface PageTranslationState {
 	pageIndex: number;
@@ -575,28 +583,46 @@ export class TranslationManager {
 
 		try {
 			await this.scheduler.enqueue(`page-${pageIndex}`, priority, async (signal) => {
-				// Watchdog: NOTHING may keep a page in 「正在翻译」 forever. Every
-				// stage below has its own timeout, but any future hang (a new
-				// API, a platform quirk) still surfaces as a visible, retryable
-				// error instead of an eternal spinner. The timer is cleared as
-				// soon as the page settles, win or lose.
-				let watchdog: ReturnType<typeof setTimeout> | null = null;
+				// IDLE watchdog with a REAL abort. The old Promise.race watchdog had
+				// two structural bugs: (a) it measured TOTAL page time, so a big page
+				// whose every request succeeded could still be killed; (b) it only
+				// rejected the race — translatePage kept running as a zombie, issuing
+				// requests past the freed scheduler slot, immune to 取消, and later
+				// flipping the errored page back to done. Now: a LOCAL controller is
+				// aborted either by the parent signal or when NO request completes
+				// for PAGE_IDLE_MS — progress (each finished attempt / extraction)
+				// re-arms the clock, so long pages live as long as they keep moving,
+				// and a genuine hang dies quickly AND STOPS FOR REAL.
+				const local = new AbortController();
+				const onParentAbort = (): void => local.abort();
+				signal.addEventListener('abort', onParentAbort, { once: true } as AddEventListenerOptions);
+				let lastBeat = Date.now();
+				let idleFired = false;
+				const heartbeat = (): void => { lastBeat = Date.now(); };
+				const idleTimer = setInterval(() => {
+					if (Date.now() - lastBeat > PAGE_IDLE_MS) {
+						idleFired = true;
+						local.abort();
+					}
+				}, 5000);
 				try {
-					await Promise.race([
-						this.translatePage(state, signal, { bypassPageCache: options?.bypassCache ?? false, bypassSegments: options?.bypassSegments ?? false }),
-						new Promise<never>((_, reject) => {
-							watchdog = setTimeout(() => reject(new PaperMirrorError(
-								'TIMEOUT',
-								`Page ${pageIndex + 1} did not finish within ${PAGE_WATCHDOG_MS / 1000} s. Use 重新翻译 to retry.`,
-								{ retryable: true }
-							)), PAGE_WATCHDOG_MS);
-						})
-					]);
+					await this.translatePage(state, local.signal, { bypassPageCache: options?.bypassCache ?? false, bypassSegments: options?.bypassSegments ?? false }, heartbeat);
+				}
+				catch (e) {
+					// An idle-abort must surface as TIMEOUT, not CANCELLED (which
+					// would silently reset the page as if the user navigated away).
+					if (idleFired && !signal.aborted && e instanceof PaperMirrorError && e.code === 'CANCELLED') {
+						throw new PaperMirrorError(
+							'TIMEOUT',
+							`Page ${pageIndex + 1} made no progress for ${PAGE_IDLE_MS / 1000} s. Use 重新翻译 to retry.`,
+							{ retryable: true }
+						);
+					}
+					throw e;
 				}
 				finally {
-					if (watchdog !== null) {
-						clearTimeout(watchdog);
-					}
+					clearInterval(idleTimer);
+					signal.removeEventListener('abort', onParentAbort);
 				}
 			}, {
 				foreground: options?.foreground ?? false,
@@ -639,7 +665,8 @@ export class TranslationManager {
 		source: string,
 		target: string,
 		signal: AbortSignal,
-		translateFn: (req: TranslationRequest, sig: AbortSignal) => Promise<TranslationResponse>
+		translateFn: (req: TranslationRequest, sig: AbortSignal) => Promise<TranslationResponse>,
+		canSpend?: () => boolean
 	): Promise<void> {
 		if (!/^zh/i.test(target)) {
 			return; // the detector is English-into-Chinese specific
@@ -655,6 +682,13 @@ export class TranslationManager {
 		for (const block of suspects) {
 			if (signal.aborted) {
 				throw new PaperMirrorError('CANCELLED', 'cancelled');
+			}
+			// Budget check INSIDE the loop: residue repair shares the page's request
+			// cap and stops the moment it is exhausted (it used to be able to append
+			// up to 8 uncounted serial round-trips after a page-cap hit).
+			if (canSpend && !canSpend()) {
+				logger.warn(MODULE, `Page ${state.pageIndex + 1}: request cap reached — stopping residue repair (${fixed} fixed)`);
+				break;
 			}
 			const { text, placeholders } = protectFormulas(block.sourceText);
 			try {
@@ -698,29 +732,34 @@ export class TranslationManager {
 		}
 	}
 
-	private async translatePage(state: PageTranslationState, signal: AbortSignal, bypass: { bypassPageCache: boolean; bypassSegments: boolean }): Promise<void> {
+	private async translatePage(state: PageTranslationState, signal: AbortSignal, bypass: { bypassPageCache: boolean; bypassSegments: boolean }, heartbeat?: () => void): Promise<void> {
 		const pageIndex = state.pageIndex;
+		const beat = heartbeat ?? ((): void => { /* no idle watchdog (tests) */ });
 		// 真实性能指标 (per page): how many provider round-trips this page cost
 		// and how many were salvage. High salvage counts point at fragment-heavy
 		// grouping or an id-dropping provider — the log tells which.
 		const metrics = { requestCount: 0, salvageCount: 0, startedAt: Date.now() };
 		const countedTranslate = async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
 			metrics.requestCount++;
-			// Request-level retry (network/timeout/rate-limit only): the page task
-			// no longer re-runs on failure, so a transient blip is handled HERE
-			// instead of re-extracting the whole page.
+			// Request-level retry (network/rate-limit; TIMEOUT retried ONCE — a
+			// request that already burned its full timeout usually times out again,
+			// and back-to-back full timeouts were the old "stuck for minutes" path).
 			let lastError: unknown;
 			for (let attempt = 0; attempt <= REQUEST_RETRIES; attempt++) {
 				if (sig.aborted) {
 					throw new PaperMirrorError('CANCELLED', 'cancelled');
 				}
 				try {
-					return await this.deps.translateRequest(request, sig);
+					const response = await this.deps.translateRequest(request, sig);
+					beat(); // progress: a request finished → re-arm the idle watchdog
+					return response;
 				}
 				catch (e) {
+					beat(); // a settled (failed) attempt is progress too
 					lastError = e;
 					const err = e instanceof PaperMirrorError ? e : new PaperMirrorError('UNKNOWN', String(e));
-					if (err.code === 'CANCELLED' || !err.retryable || attempt === REQUEST_RETRIES) {
+					const timeoutSpent = err.code === 'TIMEOUT' && attempt >= 1;
+					if (err.code === 'CANCELLED' || !err.retryable || timeoutSpent || attempt === REQUEST_RETRIES) {
 						throw err;
 					}
 					await this.delay(Math.min(2000, 400 * (attempt + 1)));
@@ -731,6 +770,7 @@ export class TranslationManager {
 
 		// 1. Extract
 		const blocks = await this.deps.extractPage(pageIndex);
+		beat();
 		if (signal.aborted) {
 			throw new PaperMirrorError('CANCELLED', 'cancelled');
 		}
@@ -818,11 +858,15 @@ export class TranslationManager {
 		// hit, salvage stops and the remaining blocks are left for 「刷新本页」.
 		const pageRequestCap = chunks.length * 2 + 2;
 		const canSpend = (): boolean => metrics.requestCount < pageRequestCap;
-		let previous: SourceBlock[] = [];
 		const results: TranslatedBlock[] = [];
 		let untranslatedCount = 0;
 
-		for (const plan of chunks) {
+		// Context is derived from SOURCE text only (audit-verified: nothing in a
+		// request reads a prior chunk's RESPONSE), so it is precomputable and the
+		// chunks can safely run concurrently.
+		const contexts = chunks.map((_, i) => (i > 0 ? trailingContext(chunks[i - 1]!.blocks) : ''));
+
+		const runChunk = async (plan: PlannedChunk, chunkIndex: number): Promise<void> => {
 			const chunk = plan.blocks;
 			if (signal.aborted) {
 				throw new PaperMirrorError('CANCELLED', 'cancelled');
@@ -832,7 +876,7 @@ export class TranslationManager {
 				sourceLanguage: source,
 				targetLanguage: target,
 				documentTitle: this.deps.getDocumentTitle(),
-				previousContext: this.deps.useContext() ? trailingContext(previous) : '',
+				previousContext: this.deps.useContext() ? contexts[chunkIndex]! : '',
 				moduleContext: this.deps.useContext() ? (plan.moduleContext || undefined) : undefined,
 				blocks: chunk.map((b) => {
 					const pb = protectedBlocks.find(p => p.block.id === b.id)!;
@@ -1026,7 +1070,29 @@ export class TranslationManager {
 				state.translations.set(block.id, restored);
 			}
 			this.notify(state); // progressive rendering per chunk
-			previous = chunk;
+		};
+
+		// Limited intra-page parallelism: a small worker pool pulls chunks in
+		// order (当前页最多同时 CHUNK_CONCURRENCY 个批次). Mutations are append-only
+		// per block id and the request cap is shared, so the guarantees match the
+		// old serial loop at roughly half the wall-clock on multi-chunk pages.
+		{
+			let nextChunk = 0;
+			const workers = Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, async () => {
+				for (;;) {
+					const i = nextChunk++;
+					if (i >= chunks.length) {
+						return;
+					}
+					await runChunk(chunks[i]!, i);
+				}
+			});
+			const settled = await Promise.allSettled(workers);
+			for (const r of settled) {
+				if (r.status === 'rejected') {
+					throw r.reason;
+				}
+			}
 		}
 
 		if (!results.length && !segmentHits) {
@@ -1039,7 +1105,7 @@ export class TranslationManager {
 		// and merge into `results` so the fix reaches the cache — the page is not
 		// re-extracted or re-rendered wholesale.
 		if (canSpend()) {
-			await this.resolveEnglishResidue(state, blocks, results, source, target, signal, countedTranslate);
+			await this.resolveEnglishResidue(state, blocks, results, source, target, signal, countedTranslate, canSpend);
 		}
 
 		state.status = 'done';
