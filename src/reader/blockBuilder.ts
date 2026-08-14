@@ -6,7 +6,7 @@
 
 import type { BlockType, BoundingBox, PdfChar, SourceBlock } from '../types/models';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
-import { isMetadataBlock } from './metaFilter';
+import { isMetadataBlock, isPublisherBoilerplateLine } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -449,6 +449,11 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 	if (obstacles.length) {
 		lines = lines.filter(l => !insideObstacle(l.rect as Rect, obstacles));
 	}
+	// Publisher boilerplate lines ("This copy is for personal use only…",
+	// reprint/download notices) are dropped BY CONTENT before column detection:
+	// on page 1 they sit mid-page across the gutter, where the position-based
+	// furniture filter can't see them, and one such line bridges the columns.
+	lines = lines.filter(l => !isPublisherBoilerplateLine(textForRange(chars, l.start, l.end)));
 	let paragraphs = buildParagraphs(chars, lines, pageWidth, pageHeight, obstacles);
 	paragraphs = paragraphs.filter(p => !isHeaderOrFooter(p, pageHeight));
 	paragraphs = orderParagraphs(paragraphs, pageWidth);

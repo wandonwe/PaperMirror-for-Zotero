@@ -225,3 +225,38 @@ test('text-layer path stamps column on emitted blocks', () => {
 	assert.ok(result.blocks.every(b => typeof b.column === 'number'), 'every block carries a column');
 	assert.ok(cols.has(0) && cols.has(1), 'both columns are represented');
 });
+
+// ---- page-1 boilerplate: content-based removal, position-independent --------
+
+import { isPublisherBoilerplateLine } from '../../src/reader/metaFilter';
+
+test('isPublisherBoilerplateLine matches reprint/download notices, not prose', () => {
+	assert.equal(isPublisherBoilerplateLine('This copy is for personal use only. To order copies, contact reprints@rsna.org'), true);
+	assert.equal(isPublisherBoilerplateLine('Downloaded from ajronline.org by 1.2.3.4 on 08/10/26'), true);
+	assert.equal(isPublisherBoilerplateLine('© RSNA 2024'), true);
+	assert.equal(isPublisherBoilerplateLine('The operational efficiency of CT, combined with its spatial resolution.'), false);
+	// a long prose paragraph QUOTING the phrase survives (length cap)
+	assert.equal(isPublisherBoilerplateLine('x'.repeat(150) + ' this copy is for personal use only ' + 'y'.repeat(60)), false);
+});
+
+test('a MID-PAGE centered reprint notice does not bridge the columns (page-1 case)', () => {
+	// Page 1: the notice sits near the abstract, far from the bottom furniture
+	// band — position filters miss it; content filter must remove it.
+	const items: SpanItem[] = [];
+	const mk = (x1: number, x2: number, top: number, text: string): SpanItem => ({
+		text, rect: [x1, top - SIZE, x2, top], fontSize: SIZE
+	});
+	for (let i = 0; i < 8; i++) {
+		items.push(mk(LEFT_X, LEFT_RIGHT, 600 - i * LEADING, `left body line ${i} continues to the margin.`));
+		items.push(mk(RIGHT_X, RIGHT_RIGHT, 600 - i * LEADING, `right body line ${i} continues to the margin.`));
+	}
+	// centered notice at mid page height (y≈640), spanning the gutter
+	items.push(mk(150, 470, 640, 'This copy is for personal use only. To order copies, contact reprints@rsna.org'));
+	const result = buildBlocksFromSpans(items, { pageIndex: 0, pageWidth: PAGE_W, pageHeight: PAGE_H, includeReferences: false });
+	assert.ok(
+		result.blocks.every(b => !/personal use only/i.test(b.sourceText)),
+		'the notice never becomes a block'
+	);
+	const cols = new Set(result.blocks.map(b => b.column));
+	assert.ok(cols.has(0) && cols.has(1), 'two columns survive the mid-page notice');
+});

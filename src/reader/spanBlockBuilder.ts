@@ -24,7 +24,7 @@
 
 import type { BlockType, SourceBlock } from '../types/models';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
-import { isMetadataBlock, isRunningHeadOrFoot } from './metaFilter';
+import { isMetadataBlock, isPublisherBoilerplateLine, isRunningHeadOrFoot } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -169,19 +169,25 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 		flush();
 	}
 
+	// Publisher boilerplate ("This copy is for personal use only…") is dropped
+	// BY CONTENT here, BEFORE the ordering pass runs its own column detection —
+	// on page 1 the notice sits mid-page across the gutter where the
+	// position-based furniture filter can't see it.
+	const kept = lines.filter(l => !isPublisherBoilerplateLine(lineText(l)));
+
 	// Reading order: full-width lines first (title/abstract), then column by
 	// column, each top to bottom.
-	const bands = detectColumns(lines.map(l => l.rect), pageWidth, pageHeight);
+	const bands = detectColumns(kept.map(l => l.rect), pageWidth, pageHeight);
 	const columnFor = new Map<SpanLine, number>();
-	for (const line of lines) {
+	for (const line of kept) {
 		columnFor.set(line, columnOf(line.rect, bands, pageWidth));
 	}
-	lines.sort((a, b) => {
+	kept.sort((a, b) => {
 		const ca = columnFor.get(a)!;
 		const cb = columnFor.get(b)!;
 		return ca !== cb ? ca - cb : (b.rect[3] - a.rect[3]) || (a.rect[0] - b.rect[0]);
 	});
-	return lines;
+	return kept;
 }
 
 /** Join the runs of a line into text, inserting spaces where there are gaps. */

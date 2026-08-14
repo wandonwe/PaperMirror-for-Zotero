@@ -15,6 +15,18 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.20] — 2026-08-10
+
+### Fixed(双栏识别第三批:按内容剔除出版商样板文字)
+
+- **首页居中的 reprint 声明不再毁掉整页.** "This copy is for personal use only. To order
+  copies, contact reprints@rsna.org" 在第 1 页常出现在**页面中部**(摘要附近)——不在上下 6%
+  家具区内,0.9.18 的位置过滤看不到它,它照旧横跨栏间距把双栏桥接成单栏。位置不可靠,改用
+  **内容识别**:reprint/personal use/Downloaded from/© 年份/all rights reserved 这类出版商
+  样板行,**无论出现在页面何处**,都在进入栏检测之前整行剔除(两条提取路径一致),它们也
+  不再被翻译。行长上限 180 字符——正文中"引用"这类句子的长段落不受影响。
+- 新增 2 组以第 1 页真实形态为原型的回归测试(页中部居中声明不桥接双栏、样板行不成块)。
+
 ## [0.9.19] — 2026-08-10
 
 ### Fixed(双栏识别第二批:边框硬屏障)

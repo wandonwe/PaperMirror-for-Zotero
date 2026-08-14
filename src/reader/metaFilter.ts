@@ -16,6 +16,39 @@
 
 export type Rect = [number, number, number, number];
 
+/**
+ * Publisher watermark/boilerplate LINE — dropped from extraction entirely,
+ * BEFORE column detection, wherever it sits on the page.
+ *
+ * Position-based furniture filters (bottom/top 6%) miss these on PAGE 1, where
+ * "This copy is for personal use only. To order copies, contact
+ * reprints@rsna.org" often sits mid-page near the abstract — a centered line
+ * across the gutter that bridges the two columns into one band and shreds the
+ * whole page. Content is the reliable signal: these phrases never occur in
+ * body prose. Short-line cap so a real paragraph QUOTING such text survives.
+ */
+const RE_BOILERPLATE_LINE = new RegExp(
+	[
+		'this copy is for personal use',
+		'for personal use only',
+		'to order (?:printed )?copies',
+		'reprints?@',
+		'contact reprints',
+		'downloaded (?:from|by)',
+		'all rights reserved',
+		'©\\s*(?:[A-Za-z]+\\s*)?(?:19|20)\\d\\d'
+	].join('|'),
+	'i'
+);
+
+export function isPublisherBoilerplateLine(text: string): boolean {
+	const t = text.trim();
+	if (!t || t.length > 180) {
+		return false;
+	}
+	return RE_BOILERPLATE_LINE.test(t);
+}
+
 /** Text along a page edge rotated 90° — the download watermark shape. */
 export function isVerticalSliver(rect: Rect): boolean {
 	const width = rect[2] - rect[0];
