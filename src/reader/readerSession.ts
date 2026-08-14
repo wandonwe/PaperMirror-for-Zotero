@@ -237,6 +237,7 @@ export class ReaderSession {
 			onDismiss: () => this.dismissTopTask(), // 胶囊 × = 关闭当前通知
 			onCollapsedChange: (c) => this.setCapsuleCollapsed(c), // 折叠状态由会话统一管理
 			onSaveNote: () => void this.saveSelectionToNote(),
+			onShowDiagnostics: () => this.copyDiagnostics(),
 			onOpenSettings: () => this.openSettings(),
 			onToggleViewKind: kind => setPref('paneView', kind),
 			onPickLanguages: (source, target) => this.applyLanguagePick(source, target),
@@ -1093,6 +1094,24 @@ export class ReaderSession {
 							);
 						}
 					});
+					// 右键 = 重译此段 (单段 replay, 参照 retain-pdf item replay):
+					// one foreground request for exactly this block, keep-origin
+					// and 止损 cleared so the retry is real.
+					node.addEventListener('contextmenu', (event) => {
+						event.preventDefault();
+						event.stopPropagation();
+						focusBlock();
+						const id = node.getAttribute('data-pm-block');
+						if (!id || !this.manager) {
+							return;
+						}
+						node.classList.add('pm-retranslating');
+						this.flashNotice('正在重译此段…');
+						void this.manager.retranslateBlock(pageIndex, id).then((ok) => {
+							node.classList.remove('pm-retranslating');
+							this.flashNotice(ok ? '此段已重译' : '重译未成功(响应无效或被拒),可再试或换服务商');
+						});
+					});
 				}
 				return 'translated';
 			}
@@ -1750,6 +1769,30 @@ export class ReaderSession {
 		}
 		catch (e) {
 			logger.warn(MODULE, 'Clipboard copy failed', e);
+		}
+	}
+
+	/**
+	 * 诊断导出: sanitized per-page diagnostics (statuses, request/retry/429
+	 * counts, keep-origin reasons — NO text, NO keys) → clipboard as JSON.
+	 */
+	private copyDiagnostics(): void {
+		if (!this.manager) {
+			return;
+		}
+		try {
+			const payload = {
+				plugin: 'PaperMirror',
+				generatedAt: new Date().toISOString(),
+				...(this.manager.exportDiagnostics() as Record<string, unknown>)
+			};
+			Components.classes['@mozilla.org/widget/clipboardhelper;1']
+				.getService(Components.interfaces.nsIClipboardHelper)
+				.copyString(JSON.stringify(payload, null, 2));
+			this.flashNotice('诊断已复制到剪贴板(脱敏,不含正文与密钥)');
+		}
+		catch (e) {
+			logger.warn(MODULE, 'diagnostics copy failed', e);
 		}
 	}
 

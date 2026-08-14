@@ -15,6 +15,22 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.29] — 2026-08-14
+
+### Added(参照 retain-pdf 批次6:段级诊断 + 单段重译 + 诊断导出)
+
+- **右键"重译此段".** 左右对照页的任意译文段右键即单独重译:一个前台单块请求,
+  清除该段的 keep-origin 标记与止损记忆,成功后就地替换并写入缓存;进行中段落
+  呼吸闪烁,完成后胶囊提示。不再需要为一段错译强制重译整页。
+- **页级诊断采集.** 每页记录真实请求数、补救数、429 限流数、超时数、段缓存命中、
+  耗时(`state.diagnostics`);段级状态(已译 / unrecovered / repeated-failure)
+  可查。
+- **一键脱敏诊断导出.** 面板菜单栏新增"诊断"按钮:整文档逐页诊断 JSON 复制到
+  剪贴板——只含状态、计数与原因,**不含任何正文、译文、密钥、URL**。以后排查问题
+  贴 JSON 即可,不用截图倒推。
+- 新增 2 组回归测试(429 计数与导出脱敏、单段重译清除 keep-origin)。
+  全套 512 项通过。
+
 ## [0.9.28] — 2026-08-14
 
 ### Added(参照 retain-pdf 批次5:页面基准字号 + 用户倍率)

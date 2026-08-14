@@ -876,3 +876,67 @@ test('term pairs learned on one page are injected as suggested rules on the next
 		`page-2 request must carry the remembered pair, got ${JSON.stringify(later)}`);
 	manager.dispose();
 });
+
+// ---------------------------------------------------------------------------
+// 0.9.29 批次6: 段级诊断 + 单段重译 + 脱敏导出
+// ---------------------------------------------------------------------------
+
+test('page diagnostics record requests and 429s; export carries no text (批次6)', async () => {
+	let first = true;
+	const { deps } = makeDeps({
+		translateRequest: async (req) => {
+			if (first) {
+				first = false;
+				const err = new (await import('../../src/types/models')).PaperMirrorError('RATE_LIMITED', '429');
+				throw err;
+			}
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const state = manager.getPageState(0)!;
+	assert.equal(state.status, 'done');
+	assert.ok(state.diagnostics, 'diagnostics must be recorded');
+	assert.ok(state.diagnostics!.rateLimited >= 1, '429 must be counted');
+	assert.ok(state.diagnostics!.requests >= 1);
+	const exported = JSON.stringify(manager.exportDiagnostics());
+	assert.ok(!exported.includes('Source paragraph'), 'export must not contain source text');
+	assert.ok(!exported.includes('中文译文'), 'export must not contain translations');
+	assert.ok(exported.includes('"state":"translated"'));
+	manager.dispose();
+});
+
+test('retranslateBlock replaces one segment and clears keep-origin (单段重译)', async () => {
+	let mode: 'echo' | 'good' = 'echo';
+	const blocks: SourceBlock[] = [
+		{
+			id: 'fine', pageIndex: 0, order: 0, type: 'paragraph',
+			sourceText: 'A perfectly ordinary paragraph that translates fine on the first attempt.'
+		},
+		{
+			id: 'seg', pageIndex: 0, order: 1, type: 'paragraph',
+			sourceText: 'A paragraph the provider first echoes back and later translates properly.'
+		}
+	];
+	const { deps } = makeDeps({
+		extractPage: async () => blocks,
+		readCache: async () => null,
+		translateRequest: async (req) => ({
+			translations: req.blocks.map(b => ({
+				id: b.id,
+				translatedText: b.id === 'seg' && mode === 'echo' ? b.text : '服务商给出了完整的中文译文段落。'
+			}))
+		})
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	assert.equal(manager.getPageState(0)!.keepOrigin?.get('seg'), 'unrecovered');
+	mode = 'good';
+	const ok = await manager.retranslateBlock(0, 'seg');
+	assert.equal(ok, true);
+	const state = manager.getPageState(0)!;
+	assert.ok(state.translations.get('seg')?.includes('中文译文'));
+	assert.equal(state.keepOrigin?.has('seg'), false);
+	manager.dispose();
+});

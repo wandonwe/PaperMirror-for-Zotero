@@ -237,6 +237,12 @@ export interface PageTranslationState {
 	error?: PaperMirrorError;
 	fromCache?: boolean;
 	/**
+	 * 页级诊断 (参照 retain-pdf translation_diagnostics): what this page's run
+	 * actually cost. Feeds the 诊断导出 and the pane summary — screenshots stop
+	 * being the only debugging channel.
+	 */
+	diagnostics?: PageDiagnostics;
+	/**
 	 * keep-origin 标记 (参照 retain-pdf dead-letter): block id → reason for
 	 * blocks deliberately left in the original language — either the repair
 	 * chain exhausted its budget ('unrecovered') or the segment failed twice
@@ -244,6 +250,16 @@ export interface PageTranslationState {
 	 * ('repeated-failure'). 强制重译 clears the memory and tries again.
 	 */
 	keepOrigin?: Map<string, string>;
+}
+
+export interface PageDiagnostics {
+	requests: number;
+	salvage: number;
+	rateLimited: number;
+	timeouts: number;
+	segmentHits: number;
+	durationMs: number;
+	fromCache: boolean;
 }
 
 export interface TranslationDeps {
@@ -542,6 +558,92 @@ export class TranslationManager {
 	}
 
 	/**
+	 * 单段重译 (右键"重译此段"): one block, one request, foreground priority.
+	 * Clears the block's keep-origin mark and 止损 memory so the retry is real,
+	 * updates state + caches, notifies once. Returns whether a valid
+	 * translation landed.
+	 */
+	async retranslateBlock(pageIndex: number, blockId: string): Promise<boolean> {
+		const state = this.pages.get(pageIndex);
+		const block = state?.blocks.find(b => b.id === blockId);
+		if (this.disposed || !state || !block) {
+			return false;
+		}
+		const { source, target } = this.deps.getLanguages(block.sourceText);
+		const { text, placeholders } = protectFormulas(block.sourceText);
+		this.failedSegments.delete(segmentHash(block.sourceText, source, target));
+		try {
+			return await this.scheduler.enqueue(`page-${pageIndex}-seg-${blockId}`, PRIORITY.CURRENT_RETRANSLATE, async (signal) => {
+				const resp = await this.deps.translateRequest({
+					pageIndex,
+					sourceLanguage: source,
+					targetLanguage: target,
+					documentTitle: this.deps.getDocumentTitle(),
+					previousContext: '',
+					blocks: [{ id: block.id, type: block.type, text }],
+					glossary: this.glossaryFor([block.sourceText])
+				}, signal);
+				const hit = resp.translations.find(t =>
+					looksTranslated(block.sourceText, t.translatedText, target)
+					&& verifyPlaceholders(t.translatedText, placeholders).ok);
+				if (!hit) {
+					return false;
+				}
+				const restored = restoreFormulas(hit.translatedText, placeholders);
+				state.translations.set(blockId, restored);
+				state.keepOrigin?.delete(blockId);
+				this.docMemory.learn(extractTermPairs(block.sourceText, restored));
+				this.notify(state);
+				if (this.deps.writeSegments) {
+					await this.deps.writeSegments(pageIndex, [{
+						hash: segmentHash(block.sourceText, source, target),
+						translatedText: restored
+					}]).catch(() => { /* best effort */ });
+				}
+				if (state.blocks.every(b => state.translations.has(b.id))) {
+					await this.deps.writeCache(pageIndex, state.blocks, state.blocks
+						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })))
+						.catch(() => { /* best effort */ });
+				}
+				return true;
+			}, { foreground: true, lane: this.laneFor(pageIndex), maxRetries: 0 });
+		}
+		catch (e) {
+			if (!(e instanceof PaperMirrorError && e.code === 'CANCELLED')) {
+				logger.warn(MODULE, `retranslateBlock failed for ${blockId}`, e);
+			}
+			return false;
+		}
+	}
+
+	/**
+	 * 诊断导出 (脱敏): per-page run metrics and per-block STATUS ONLY — no
+	 * source text, no translations, no keys, no URLs. Safe to paste into an
+	 * issue or a chat as-is.
+	 */
+	exportDiagnostics(): unknown {
+		return {
+			pages: [...this.pages.values()]
+				.sort((a, b) => a.pageIndex - b.pageIndex)
+				.map(s => ({
+					page: s.pageIndex + 1,
+					status: s.status,
+					error: s.error?.code ?? null,
+					metrics: s.diagnostics ?? null,
+					blocks: s.blocks.map(b => ({
+						id: b.id,
+						type: b.type,
+						chars: b.sourceText.length,
+						state: s.translations.has(b.id)
+							? 'translated'
+							: (s.keepOrigin?.get(b.id) ?? 'untranslated')
+					}))
+				})),
+			docMemoryTerms: this.docMemory.size()
+		};
+	}
+
+	/**
 	 * Cancel a page's in-flight translation + compress work (the capsule 取消).
 	 * Whatever has already landed stays; the page is not marked done, so a
 	 * revisit re-runs it.
@@ -827,7 +929,7 @@ export class TranslationManager {
 		// 真实性能指标 (per page): how many provider round-trips this page cost
 		// and how many were salvage. High salvage counts point at fragment-heavy
 		// grouping or an id-dropping provider — the log tells which.
-		const metrics = { requestCount: 0, salvageCount: 0, startedAt: Date.now() };
+		const metrics = { requestCount: 0, salvageCount: 0, rateLimited: 0, timeouts: 0, startedAt: Date.now() };
 		const lane = this.laneFor(pageIndex);
 		const countedTranslate = async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
 			metrics.requestCount++;
@@ -852,9 +954,11 @@ export class TranslationManager {
 					// Feed the REAL 429/timeout to the lane throttling — internal
 					// retries used to swallow them and the adaptive caps went blind.
 					if (err.code === 'RATE_LIMITED') {
+						metrics.rateLimited++;
 						this.scheduler.laneFeedback(lane, 'rate');
 					}
 					else if (err.code === 'TIMEOUT') {
+						metrics.timeouts++;
 						this.scheduler.laneFeedback(lane, 'timeout');
 					}
 					const timeoutSpent = err.code === 'TIMEOUT' && attempt >= 1;
@@ -897,6 +1001,10 @@ export class TranslationManager {
 				}
 				state.status = 'done';
 				state.fromCache = true;
+				state.diagnostics = {
+					requests: 0, salvage: 0, rateLimited: 0, timeouts: 0,
+					segmentHits: 0, durationMs: Date.now() - metrics.startedAt, fromCache: true
+				};
 				this.notify(state);
 				return;
 			}
@@ -952,6 +1060,10 @@ export class TranslationManager {
 		});
 		if (!toTranslate.length) {
 			state.status = 'done';
+			state.diagnostics = {
+				requests: 0, salvage: 0, rateLimited: 0, timeouts: 0,
+				segmentHits, durationMs: Date.now() - metrics.startedAt, fromCache: false
+			};
 			this.notify(state);
 			logger.info(MODULE, `Page ${pageIndex + 1}: fully served from the segment cache (${segmentHits} segment(s), 0 requests)`);
 			if (pageIndex === this.currentPage) {
@@ -1346,6 +1458,15 @@ export class TranslationManager {
 		untranslatedCount = toTranslate.filter(b => !state.translations.has(b.id)).length;
 
 		state.status = 'done';
+		state.diagnostics = {
+			requests: metrics.requestCount,
+			salvage: metrics.salvageCount,
+			rateLimited: metrics.rateLimited,
+			timeouts: metrics.timeouts,
+			segmentHits,
+			durationMs: Date.now() - metrics.startedAt,
+			fromCache: false
+		};
 		this.notify(state);
 		// 指标: groupCount(翻译单元) / chunkCount(请求批次) / requestCount(总请求) /
 		// salvageCount(逐块补救) / segmentHits(段落缓存命中).

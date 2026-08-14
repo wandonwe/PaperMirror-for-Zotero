@@ -127,6 +127,8 @@ export interface PaneCallbacks {
 	/** 状态胶囊折叠/展开 — the session owns the shared collapsed state. */
 	onCollapsedChange(collapsed: boolean): void;
 	onSaveNote(): void;
+	/** 菜单栏「诊断」— copy the sanitized per-page diagnostics JSON. */
+	onShowDiagnostics(): void;
 	onToggleViewKind(kind: 'page' | 'article'): void;
 	/** 菜单栏直接切换 — no round-trip through the settings pane. */
 	onPickLanguages(source: string, target: string): void;
@@ -648,6 +650,7 @@ export class TranslationPane {
 			this.syncSwitch,
 			this.textButton('pm-bar-action', `✦ ${this.strings.explain}`, this.strings.explainTip, () => this.callbacks.onExplainSelection()),
 			this.textButton('pm-bar-action', this.strings.saveNote, this.strings.saveNote, () => this.callbacks.onSaveNote()),
+			this.textButton('pm-bar-action', '诊断', '复制本文档的脱敏翻译诊断(不含正文与密钥)', () => this.callbacks.onShowDiagnostics()),
 			this.el('span', 'pm-bar-sep'),
 			this.makeSideButton(),
 			this.iconButton(ICON_PATHS.settings, this.strings.settings, () => this.callbacks.onOpenSettings()),

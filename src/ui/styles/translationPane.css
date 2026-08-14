@@ -785,6 +785,16 @@
 	border-radius: 2px;
 }
 
+/* 重译此段: the block pulses while its single-segment request is in flight. */
+.pm-retranslating {
+	animation: pm-retranslating 1.1s ease-in-out infinite;
+}
+
+@keyframes pm-retranslating {
+	0%, 100% { opacity: 1; }
+	50% { opacity: .45; }
+}
+
 /* 查看保留原文: a brief highlight on segments kept in the source language. */
 .pm-kept-flash {
 	animation: pm-kept-flash 2s ease;
