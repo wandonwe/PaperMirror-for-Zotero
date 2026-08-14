@@ -756,3 +756,26 @@ test('echoed English still fails looksTranslated after prose-only scoring', () =
 	const source = 'The hazard ratio for mortality was significantly lower in the treatment group over time.';
 	assert.equal(looksTranslated(source, source, 'zh-CN'), false);
 });
+
+test('formula-dense block travels alone in a slow-lane request (三分道)', async () => {
+	const requests: TranslationRequest[] = [];
+	const blocks: SourceBlock[] = [
+		{ id: 'n1', pageIndex: 0, order: 0, type: 'paragraph', sourceText: 'Plain prose paragraph one for the fast lane batch.' },
+		{ id: 'n2', pageIndex: 0, order: 1, type: 'paragraph', sourceText: 'Plain prose paragraph two for the fast lane batch.' },
+		{ id: 'risky', pageIndex: 0, order: 2, type: 'paragraph', sourceText: 'Equations $a=1$ then $b=2$ then $c=3$ then $d=4$ then $e=5$ appear densely here in one block.' }
+	];
+	const { deps } = makeDeps({
+		extractPage: async () => blocks,
+		translateRequest: async (req) => {
+			requests.push(req);
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是一个完整的中文译文段落示例。' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 10);
+	assert.equal(manager.getPageState(0)!.status, 'done');
+	const risky = requests.filter(r => r.blocks.some(b => b.id === 'risky'));
+	assert.ok(risky.length >= 1);
+	assert.equal(risky[0]!.blocks.length, 1, 'risky block must be isolated in its own request');
+	manager.dispose();
+});

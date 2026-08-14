@@ -15,6 +15,18 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.25] — 2026-08-14
+
+### Changed(参照 retain-pdf 批次2:三分道调度)
+
+- **高风险块隔离进单块慢道.** 表格、超长段(>2400 字符)、公式密集段(≥5 个保护
+  token)不再混入 24 块的大批次:一个难块的 id 漂移或截断曾让整批重试,现在它单独
+  成请求、排在快批之后——快批先回来把页面的大部分先画出来,难块慢慢来。
+- **慢道不参与位置上下文.** 慢道块脱离阅读序,既不接收也不提供前后文——孤立难块
+  不需要邻居的尾巴,错误的邻居比没有更糟。
+- 新增 3 组回归测试(风险块隔离、无 riskOf 行为不变、公式密集块单独成请求)。
+  全套 497 项通过。
+
 ## [0.9.24] — 2026-08-14
 
 ### Added(参照 retain-pdf 批次1:占位符保护体系)

@@ -936,7 +936,15 @@ export class TranslationManager {
 		// Plan requests: semantic modules are SOFT boundaries (context tags), the
 		// character budget is the real request boundary — a page with many short
 		// subheadings packs into 1–2 high-fill requests, not 4–8 half-empty ones.
-		const chunks = planChunks(toTranslate, buildLayoutModules(toTranslate));
+		// 三分道: tables, very long paragraphs and formula-dense blocks are
+		// isolated into single-block 'slow' chunks appended after the fast
+		// batches — one hard block can no longer sink a whole batch (id drift,
+		// truncation) or delay the fast batches that paint most of the page.
+		const riskOf = (b: SourceBlock): boolean =>
+			b.type === 'table'
+			|| b.sourceText.length > 2400
+			|| (placeholdersById.get(b.id)?.length ?? 0) >= 5;
+		const chunks = planChunks(toTranslate, buildLayoutModules(toTranslate), { riskOf });
 		// Hard ceiling on requests for this page so a misbehaving engine can never
 		// turn one page into a request storm: 2× the planned chunks, plus 2. Once
 		// hit, salvage stops and the remaining blocks are left for 「刷新本页」.
@@ -947,8 +955,15 @@ export class TranslationManager {
 
 		// Context is derived from SOURCE text only (audit-verified: nothing in a
 		// request reads a prior chunk's RESPONSE), so it is precomputable and the
-		// chunks can safely run concurrently.
-		const contexts = chunks.map((_, i) => (i > 0 ? trailingContext(chunks[i - 1]!.blocks) : ''));
+		// chunks can safely run concurrently. Slow chunks sit OUT of reading
+		// order at the tail, so they neither receive positional context nor
+		// provide it — an isolated hard block doesn't need its neighbour's tail,
+		// and a wrong neighbour is worse than none.
+		const contexts = chunks.map((c, i) => (
+			c.lane === 'fast' && i > 0 && chunks[i - 1]!.lane === 'fast'
+				? trailingContext(chunks[i - 1]!.blocks)
+				: ''
+		));
 
 		const runChunk = async (plan: PlannedChunk, chunkIndex: number): Promise<void> => {
 			const chunk = plan.blocks;

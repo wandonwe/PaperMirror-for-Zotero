@@ -123,18 +123,59 @@ export interface PlannedChunk {
 	blocks: SourceBlock[];
 	/** Section heading for understanding only; '' when none applies. */
 	moduleContext: string;
+	/**
+	 * 三分道 (参照 retain-pdf batched_fast / single_slow): 'fast' chunks are
+	 * densely packed low-risk batches and run first; 'slow' chunks isolate one
+	 * high-risk block each (tables, very long paragraphs, formula-dense text)
+	 * so a hard block can neither sink a 24-block batch through id drift or
+	 * truncation, nor delay the fast batches that paint most of the page.
+	 */
+	lane: 'fast' | 'slow';
 }
 
 export function planChunks(
 	blocks: SourceBlock[],
 	modules: LayoutModule[],
-	opts?: { charBudget?: number; maxBlocks?: number; targetFill?: number }
+	opts?: {
+		charBudget?: number;
+		maxBlocks?: number;
+		targetFill?: number;
+		/** Marks a block as high-risk → isolated into its own 'slow' chunk. */
+		riskOf?: (block: SourceBlock) => boolean;
+	}
 ): PlannedChunk[] {
 	const charBudget = opts?.charBudget ?? DEFAULT_CHUNK_BUDGET;
 	const maxBlocks = opts?.maxBlocks ?? MAX_BLOCKS_PER_REQUEST;
 	const targetFill = opts?.targetFill ?? DEFAULT_TARGET_FILL;
 	if (!blocks.length) {
 		return [];
+	}
+	// Risk split first: risky blocks leave the packing stream entirely and come
+	// back at the END as single-block slow chunks, in reading order.
+	const riskOf = opts?.riskOf;
+	const slowBlocks = riskOf ? blocks.filter(b => riskOf(b)) : [];
+	if (slowBlocks.length) {
+		const slowIds = new Set(slowBlocks.map(b => b.id));
+		const fast = planChunks(blocks.filter(b => !slowIds.has(b.id)), modules,
+			{ charBudget, maxBlocks, targetFill });
+		const byId = new Map(blocks.map(b => [b.id, b]));
+		const headingOf = new Map<string, string>();
+		for (const mod of modules) {
+			if (mod.anchorType === 'heading') {
+				const heading = byId.get(mod.anchorId)?.sourceText ?? '';
+				for (const id of mod.memberIds) {
+					headingOf.set(id, heading);
+				}
+			}
+		}
+		return [
+			...fast,
+			...slowBlocks.map(b => ({
+				blocks: [b],
+				moduleContext: headingOf.get(b.id) ?? '',
+				lane: 'slow' as const
+			}))
+		];
 	}
 
 	const byId = new Map(blocks.map(b => [b.id, b]));
@@ -172,7 +213,7 @@ export function planChunks(
 	let size = 0;
 	const flush = (): void => {
 		if (cur.length) {
-			chunks.push({ blocks: cur, moduleContext: contextFor(cur) });
+			chunks.push({ blocks: cur, moduleContext: contextFor(cur), lane: 'fast' });
 			cur = [];
 			size = 0;
 		}

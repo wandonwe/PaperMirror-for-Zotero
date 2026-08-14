@@ -142,3 +142,35 @@ test('planChunks respects the character budget', () => {
 test('planChunks of empty input is empty', () => {
 	assert.deepEqual(planChunks([], []), []);
 });
+
+// ---------------------------------------------------------------------------
+// 0.9.25 批次2: 三分道 —— 高风险块隔离为单块慢道,快批保持既有打包
+// ---------------------------------------------------------------------------
+
+function para(id: string, text: string): SourceBlock {
+	return { id, pageIndex: 0, order: 0, type: 'paragraph', sourceText: text };
+}
+
+test('risky blocks are isolated into single-block slow chunks at the tail', () => {
+	const blocks = [
+		para('b0', 'Normal paragraph one about methods and results.'),
+		para('b1', 'x'.repeat(3000)), // very long → slow
+		para('b2', 'Normal paragraph two continues the discussion.'),
+		para('b3', 'Normal paragraph three closes the section.')
+	];
+	const chunks = planChunks(blocks, [], { riskOf: b => b.sourceText.length > 2400 });
+	const fast = chunks.filter(c => c.lane === 'fast');
+	const slow = chunks.filter(c => c.lane === 'slow');
+	assert.equal(slow.length, 1);
+	assert.equal(slow[0]!.blocks.length, 1);
+	assert.equal(slow[0]!.blocks[0]!.id, 'b1');
+	// fast chunks contain the remaining blocks, in order, and come FIRST
+	assert.deepEqual(fast.flatMap(c => c.blocks.map(b => b.id)), ['b0', 'b2', 'b3']);
+	assert.equal(chunks[chunks.length - 1]!.lane, 'slow');
+});
+
+test('without riskOf every chunk is a fast chunk (behaviour unchanged)', () => {
+	const blocks = [para('a', 'one'), para('b', 'two')];
+	const chunks = planChunks(blocks, []);
+	assert.ok(chunks.every(c => c.lane === 'fast'));
+});
