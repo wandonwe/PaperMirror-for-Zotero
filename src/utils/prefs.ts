@@ -32,6 +32,7 @@ export type PrefKey
 	| 'articleFontSize'
 	| 'fontSizeFactor'
 	| 'lineHeightFactor'
+	| 'noTranslateList'
 	| 'overlayEnabled'
 	| 'overlayDisplayMode'
 	| 'overlayFitMode'

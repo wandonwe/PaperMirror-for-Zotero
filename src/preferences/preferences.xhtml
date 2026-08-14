@@ -267,6 +267,13 @@
 		<html:div class="pm-field">
 			<html:div><html:textarea id="papermirror-custom-prompt" preference="extensions.zotero.bilingualReader.customPrompt" rows="3"></html:textarea></html:div>
 		</html:div>
+		<hbox class="pm-line" style="margin-top: 9px;">
+			<label class="pm-title" value="不译词列表(每行一个)" control="papermirror-no-translate"/>
+		</hbox>
+		<html:div class="pm-desc">这些词/短语在发送给翻译服务前会被占位符掩蔽、译后原样还原——比在提示词里"请不要翻译"可靠得多。适合产品名、算法名、专有缩写等必须逐字保留的内容。</html:div>
+		<html:div class="pm-field">
+			<html:div><html:textarea id="papermirror-no-translate" preference="extensions.zotero.bilingualReader.noTranslateList" rows="3" placeholder="RetainNet&#10;LoRA&#10;Swin Transformer"></html:textarea></html:div>
+		</html:div>
 	</vbox>
 
 	<!-- ======================= 性能与并行 ======================= -->

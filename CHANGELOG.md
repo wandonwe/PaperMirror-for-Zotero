@@ -15,6 +15,20 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.30] — 2026-08-14
+
+### Added(参照 retain-pdf 批次7:跨页续接 + context_bleed + 不译词列表)
+
+- **跨页段落续接.** 上一页末段以逗号/未完句结尾、或本页开头像续接(小写/标点开头)
+  时,上一页尾部原文(≤600 字符)注入为本页第一批的理解上下文——只注入上下文,
+  不跨页合并块,逐页覆盖与整页一次提交的契约不变。译文衔接不再生硬。
+- **context_bleed 校验.** 注入了上下文的批次,其**首块**译文若长得离谱(CJK 字数
+  超过原文单词数×2.4,含下限),判定为"上下文被翻进当前块",拒收并经无上下文的
+  补救链重新获取。
+- **不译词列表.** 设置页新增多行输入:产品名、算法名等必须逐字保留的词,发送前
+  经占位符掩蔽、译后原样还原——比 prompt 恳求可靠。每行一个,# 开头为注释。
+- 新增 3 组回归测试(bleed 判定、跨页尾巴注入、不译词掩蔽往返)。全套 515 项通过。
+
 ## [0.9.29] — 2026-08-14
 
 ### Added(参照 retain-pdf 批次6:段级诊断 + 单段重译 + 诊断导出)

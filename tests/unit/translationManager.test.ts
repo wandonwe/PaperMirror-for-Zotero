@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TranslationManager, looksTranslated, type PageTranslationState, type TranslationDeps } from '../../src/translation/translationManager';
+import { TranslationManager, looksContextBleed, looksTranslated, type PageTranslationState, type TranslationDeps } from '../../src/translation/translationManager';
 import type { GlossaryRule, SourceBlock, TranslationRequest, TranslationResponse } from '../../src/types/models';
 
 function makeBlocks(pageIndex: number, n: number): SourceBlock[] {
@@ -938,5 +938,65 @@ test('retranslateBlock replaces one segment and clears keep-origin (单段重译
 	const state = manager.getPageState(0)!;
 	assert.ok(state.translations.get('seg')?.includes('中文译文'));
 	assert.equal(state.keepOrigin?.has('seg'), false);
+	manager.dispose();
+});
+
+// ---------------------------------------------------------------------------
+// 0.9.30 批次7: 跨页续接上下文 + context_bleed 校验 + 不译词列表
+// ---------------------------------------------------------------------------
+
+test('looksContextBleed flags an impossibly long first-block translation', () => {
+	const source = 'This continuation sentence carries roughly a dozen ordinary English words in total here.';
+	const normal = '这句续接的译文长度完全正常,大约二三十个汉字。';
+	const bloated = '上一页的尾巴内容也被整段翻译了进来,'.repeat(12) + '然后才是本段的译文。';
+	assert.equal(looksContextBleed(source, normal, true), false);
+	assert.equal(looksContextBleed(source, bloated, true), true);
+	assert.equal(looksContextBleed(source, bloated, false), false, 'no context → no bleed check');
+});
+
+test('an unfinished previous-page tail is injected as chunk-0 context (跨页续接)', async () => {
+	const contexts: string[] = [];
+	const pageBlocks = (p: number): SourceBlock[] => [{
+		id: `p${p}b0`, pageIndex: p, order: 0, type: 'paragraph',
+		sourceText: p === 0
+			? 'The measurement protocol was applied to every cohort, and the resulting values were' // ends mid-sentence
+			: 'subsequently normalized against the baseline scans acquired before contrast injection.'
+	}];
+	const { deps } = makeDeps({
+		extractPage: async p => pageBlocks(p),
+		readCache: async () => null,
+		translateRequest: async (req) => {
+			contexts.push(req.previousContext);
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容示例。' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 10);
+	await manager.ensurePage(1, 10);
+	assert.ok(contexts.some(c => c.includes('resulting values were')),
+		`page-2 chunk 0 must carry the page-1 tail, got ${JSON.stringify(contexts)}`);
+	manager.dispose();
+});
+
+test('no-translate literals are masked in requests and restored in results (不译词)', async () => {
+	const sent: string[] = [];
+	const blocks: SourceBlock[] = [{
+		id: 'b', pageIndex: 0, order: 0, type: 'paragraph',
+		sourceText: 'The RetainNet framework consistently outperforms every baseline model in our experiments.'
+	}];
+	const { deps } = makeDeps({
+		extractPage: async () => blocks,
+		readCache: async () => null,
+		getNoTranslate: () => ['RetainNet'],
+		translateRequest: async (req) => {
+			sent.push(req.blocks.map(b => b.text).join('\n'));
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: b.text.replace(/The .* framework consistently outperforms every baseline model in our experiments\./, '该⟦PM0⟧框架在我们的实验中始终优于所有基线模型。') })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 10);
+	const state = manager.getPageState(0)!;
+	assert.ok(sent.every(t => !t.includes('RetainNet')), 'literal must be masked in every request');
+	assert.ok(state.translations.get('b')?.includes('RetainNet'), 'literal restored in the stored translation');
 	manager.dispose();
 });

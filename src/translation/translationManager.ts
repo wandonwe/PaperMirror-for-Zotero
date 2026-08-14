@@ -110,6 +110,25 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 }
 
 /**
+ * context_bleed 校验 (参照 retain-pdf blocking issue): a translation that is
+ * FAR longer than its source can support usually swallowed the injected
+ * context (previous page tail / section heading) into the output. EN→ZH runs
+ * ~1.1–1.6 hanzi per source word; 2.4× with a floor is safely above any
+ * legitimate translation. Only meaningful when context was injected.
+ */
+export function looksContextBleed(source: string, translated: string, hadContext: boolean): boolean {
+	if (!hadContext) {
+		return false;
+	}
+	const words = (stripProtectable(source).match(/[A-Za-z]{2,}/g) ?? []).length;
+	if (words < 8) {
+		return false;
+	}
+	const cjk = (translated.match(CJK_RE) ?? []).length;
+	return cjk > Math.max(80, words * 2.4);
+}
+
+/**
  * 翻译前估算排版容量: the character budget a block's ORIGINAL rectangles can
  * hold in the target script, sent with the FIRST request so most paragraphs fit
  * on the first try — instead of translate → measure-fail → compress → re-measure
@@ -289,6 +308,8 @@ export interface TranslationDeps {
 	getLanguages(sampleText: string): { source: string; target: string };
 	getDocumentTitle(): string;
 	getGlossary(): GlossaryRule[];
+	/** 不译词列表 — masked via placeholders before every request. */
+	getNoTranslate?(): string[];
 	useContext(): boolean;
 	pageCount(): number;
 }
@@ -333,6 +354,16 @@ export class TranslationManager {
 	/** matched 注入: user glossary + document memory, hits only. */
 	private glossaryFor(texts: string[]): GlossaryRule[] {
 		return matchRules(mergeGlossaries(this.deps.getGlossary(), this.docMemory.rules()), texts);
+	}
+
+	/** 不译词字面量 for the placeholder mask. */
+	private noTranslate(): string[] {
+		try {
+			return this.deps.getNoTranslate?.() ?? [];
+		}
+		catch {
+			return [];
+		}
 	}
 	/** Injected (tests) or real timer delay, for request-level retry backoff. */
 	private delay: (ms: number) => Promise<void>;
@@ -471,7 +502,7 @@ export class TranslationManager {
 		try {
 			await this.scheduler.enqueue(`page-${pageIndex}-compress`, PRIORITY.CURRENT_COMPRESS, async (signal) => {
 				const protectedBlocks = blocks.map((block) => {
-					const { text, placeholders } = protectFormulas(block.sourceText);
+					const { text, placeholders } = protectFormulas(block.sourceText, this.noTranslate());
 					return { block, text, placeholders };
 				});
 				const request: TranslationRequest = {
@@ -570,7 +601,7 @@ export class TranslationManager {
 			return false;
 		}
 		const { source, target } = this.deps.getLanguages(block.sourceText);
-		const { text, placeholders } = protectFormulas(block.sourceText);
+		const { text, placeholders } = protectFormulas(block.sourceText, this.noTranslate());
 		this.failedSegments.delete(segmentHash(block.sourceText, source, target));
 		try {
 			return await this.scheduler.enqueue(`page-${pageIndex}-seg-${blockId}`, PRIORITY.CURRENT_RETRANSLATE, async (signal) => {
@@ -880,7 +911,7 @@ export class TranslationManager {
 				logger.warn(MODULE, `Page ${state.pageIndex + 1}: request cap reached — stopping residue repair (${fixed} fixed)`);
 				break;
 			}
-			const { text, placeholders } = protectFormulas(block.sourceText);
+			const { text, placeholders } = protectFormulas(block.sourceText, this.noTranslate());
 			try {
 				const resp = await translateFn({
 					pageIndex: state.pageIndex,
@@ -1075,9 +1106,10 @@ export class TranslationManager {
 			return;
 		}
 
-		// Protect formulas / citations / statistics per block
+		// Protect formulas / citations / statistics per block (+ 不译词列表)
+		const noTranslate = this.noTranslate();
 		const protectedBlocks = toTranslate.map((block) => {
-			const { text, placeholders } = protectFormulas(block.sourceText);
+			const { text, placeholders } = protectFormulas(block.sourceText, noTranslate);
 			return { block, text, placeholders };
 		});
 		// 占位符清单校验 (参照 retain-pdf): a model response that LOST a protected
@@ -1124,6 +1156,25 @@ export class TranslationManager {
 				? trailingContext(chunks[i - 1]!.blocks)
 				: ''
 		));
+		// 跨页续接 (参照 retain-pdf continuation_hint, 受控消费): when the previous
+		// page's last body paragraph ends mid-sentence, or this page opens like a
+		// continuation, the tail is injected as chunk-0 context — SOURCE text
+		// only, no cross-page block merging, so the per-page overlay contract and
+		// the one-shot commit stay intact.
+		if (this.deps.useContext() && contexts.length && !contexts[0] && chunks[0]!.lane === 'fast' && pageIndex > 0) {
+			const prev = this.pages.get(pageIndex - 1);
+			const lastBody = [...(prev?.blocks ?? [])].reverse()
+				.find(b => (b.type === 'paragraph' || b.type === 'list') && !b.isReference);
+			const first = chunks[0]!.blocks[0];
+			if (lastBody && first) {
+				const tail = lastBody.sourceText.trim();
+				const unfinished = !/[.!?。!?]["'”’)\]]*$/.test(tail);
+				const continuing = /^[a-z,;)\]]/.test(first.sourceText.trim());
+				if (unfinished || continuing) {
+					contexts[0] = tail.length <= 600 ? tail : tail.slice(-600);
+				}
+			}
+		}
 
 		const runChunk = async (plan: PlannedChunk, chunkIndex: number): Promise<void> => {
 			const chunk = plan.blocks;
@@ -1147,6 +1198,14 @@ export class TranslationManager {
 			};
 
 			const received = new Map<string, string>();
+			// context_bleed: with context injected, the FIRST block of the chunk is
+			// the one the model tends to merge the context INTO — an over-long
+			// first-block translation is rejected and re-earned context-free by
+			// the salvage chain.
+			const hadContext = !!(request.previousContext || request.moduleContext);
+			const acceptChunk = (id: string, text: string): boolean =>
+				acceptResponse(id, text)
+				&& !(id === chunk[0]!.id && looksContextBleed(sourceById.get(id) ?? '', text, hadContext));
 			let response: TranslationResponse = { translations: [] };
 			try {
 				response = await countedTranslate(request, signal);
@@ -1162,7 +1221,7 @@ export class TranslationManager {
 				logger.warn(MODULE, `Chunk request failed on page ${pageIndex}; continuing`, e);
 			}
 			for (const t of response.translations) {
-				if (acceptResponse(t.id, t.translatedText)) {
+				if (acceptChunk(t.id, t.translatedText)) {
 					received.set(t.id, t.translatedText);
 				}
 			}
@@ -1181,7 +1240,7 @@ export class TranslationManager {
 				try {
 					response = await countedTranslate(retryRequest, signal);
 					for (const t of response.translations) {
-						if (acceptResponse(t.id, t.translatedText)) {
+						if (acceptChunk(t.id, t.translatedText)) {
 							received.set(t.id, t.translatedText);
 						}
 					}

@@ -389,6 +389,10 @@ export class ReaderSession {
 					return item?.getDisplayTitle?.() ?? '';
 				},
 				getGlossary: () => this.loadGlossary(),
+				getNoTranslate: () => String(getPref<string>('noTranslateList', '') ?? '')
+					.split(/\r?\n/)
+					.map(l => l.trim())
+					.filter(l => l.length >= 2 && !l.startsWith('#')),
 				useContext: () => getPref<boolean>('useContext', true),
 				pageCount: () => adapter.getPageCount(this.reader),
 				// Each page's provider LANE — lets the scheduler cap providers
