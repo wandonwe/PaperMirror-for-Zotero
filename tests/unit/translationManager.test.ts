@@ -690,3 +690,54 @@ test('chunks of one page run concurrently (2-way), and every block still lands',
 	assert.equal(maxActive, 2, 'the two chunks were in flight simultaneously');
 	manager.dispose();
 });
+
+test('extraction runs outside provider slots with its own concurrency cap of 2', async () => {
+	let active = 0;
+	let maxActive = 0;
+	const { deps } = makeDeps({
+		extractPage: async (pageIndex) => {
+			active++;
+			maxActive = Math.max(maxActive, active);
+			await new Promise(r => setTimeout(r, 12));
+			active--;
+			return makeBlocks(pageIndex, 1);
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, maxConcurrent: 8, delayFn: () => Promise.resolve() });
+	await Promise.all([0, 1, 2, 3, 4].map(p => manager.ensurePage(p, 10)));
+	assert.ok(maxActive <= 2, `at most 2 concurrent extractions, saw ${maxActive}`);
+	for (const p of [0, 1, 2, 3, 4]) {
+		assert.equal(manager.getPageState(p)!.status, 'done', `page ${p} completed`);
+	}
+	manager.dispose();
+});
+
+test('cancelled pages persist already-translated segments (增量持久化)', async () => {
+	const written: { hash: string; translatedText: string }[] = [];
+	const { deps } = makeDeps({
+		extractPage: async (pageIndex) => [0, 1].map(i => ({
+			id: `page-${pageIndex}-block-${i}`,
+			pageIndex, order: i, type: 'paragraph' as const,
+			sourceText: 'x'.repeat(5000) // two chunks → chunk 1 completes, chunk 2 cancels
+		})),
+		writeSegments: async (_p, entries) => { written.push(...entries); },
+		translateRequest: (() => {
+			let calls = 0;
+			return async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
+				calls++;
+				if (calls === 1) {
+					return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '第一批译文成功保留' })) };
+				}
+				// Second chunk: the user cancels mid-flight.
+				const { PaperMirrorError } = await import('../../src/types/models');
+				void sig;
+				throw new PaperMirrorError('CANCELLED', 'user cancelled');
+			};
+		})()
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	assert.ok(written.length >= 1, 'the completed chunk was persisted despite the cancel');
+	assert.equal(written[0]!.translatedText, '第一批译文成功保留');
+	manager.dispose();
+});

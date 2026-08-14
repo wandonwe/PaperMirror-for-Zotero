@@ -15,7 +15,7 @@ const base: OverlayProgress = {
 
 test('translating: COMBINED ring fraction (translate is the first half), cancel action', () => {
 	const s = capsuleStateFor({ ...base, phase: 'translating', segTranslated: 18, segPlaced: 0 });
-	assert.equal(s.main, '正在处理 第 3 / 12 页');
+	assert.equal(s.main, '正在翻译 第 3 / 12 页');
 	assert.equal(s.sub, '翻译 18/20 段 · 排版 0/20 段');
 	// Combined: (18 + 0) / (20 * 2) = 0.45 — translation caps near 50%, so the
 	// ring never resets to 0% when placement begins.
@@ -24,10 +24,10 @@ test('translating: COMBINED ring fraction (translate is the first half), cancel 
 	assert.equal(s.action?.kind, 'cancel');
 });
 
-test('translating before segment count known → indeterminate, 识别段落', () => {
+test('translating before segment count known → indeterminate, 正在读取', () => {
 	const s = capsuleStateFor({ ...base, phase: 'translating', segTotal: 0, segTranslated: 0 });
 	assert.equal(s.indeterminate, true);
-	assert.equal(s.sub, '正在识别段落');
+	assert.equal(s.sub, '正在读取页面文字');
 });
 
 test('laying-out: COMBINED ring never drops below the translation level', () => {

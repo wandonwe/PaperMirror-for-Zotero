@@ -285,6 +285,9 @@ export class TranslationManager {
 	private unstableFired = new Set<number>();
 	/** Injected (tests) or real timer delay, for request-level retry backoff. */
 	private delay: (ms: number) => Promise<void>;
+	/** Extraction semaphore: at most 2 concurrent PDF extractions, current page first. */
+	private extractActive = 0;
+	private extractWaiters: { pageIndex: number; resolve: () => void }[] = [];
 
 	constructor(deps: TranslationDeps, events: ManagerEvents, options?: { maxConcurrent?: number; reservedForeground?: number; prefetch?: boolean; delayFn?: (ms: number) => Promise<void> }) {
 		this.deps = deps;
@@ -549,6 +552,35 @@ export class TranslationManager {
 		return pages.filter(p => p >= 0 && (count <= 0 || p < count));
 	}
 
+	/**
+	 * Run `fn` inside the extraction semaphore: at most 2 PDF extractions at a
+	 * time (they contend on the same PDF.js worker anyway), the CURRENT page
+	 * jumping the queue. Never a provider-lane slot — a page waiting on
+	 * getPageData holds no translation capacity.
+	 */
+	private async withExtractionSlot<T>(pageIndex: number, fn: () => Promise<T>): Promise<T> {
+		if (this.extractActive >= 2) {
+			await new Promise<void>((resolve) => {
+				this.extractWaiters.push({ pageIndex, resolve });
+			});
+		}
+		this.extractActive++;
+		try {
+			return await fn();
+		}
+		finally {
+			this.extractActive--;
+			if (this.extractWaiters.length) {
+				let idx = this.extractWaiters.findIndex(w => w.pageIndex === this.currentPage);
+				if (idx < 0) {
+					idx = 0;
+				}
+				const next = this.extractWaiters.splice(idx, 1)[0]!;
+				next.resolve();
+			}
+		}
+	}
+
 	private notify(state: PageTranslationState): void {
 		if (!this.disposed) {
 			try {
@@ -582,6 +614,21 @@ export class TranslationManager {
 		this.notify(state);
 
 		try {
+			// PDF extraction runs OUTSIDE the provider lane (audit: a slow
+			// getPageData used to occupy a provider slot for up to ~58s without a
+			// single network request in flight). A small local semaphore (2,
+			// current page first) bounds concurrent extractions instead.
+			const blocks = await this.withExtractionSlot(pageIndex, () => this.deps.extractPage(pageIndex));
+			if (this.disposed || this.pages.get(pageIndex) !== state) {
+				return; // superseded while extracting
+			}
+			state.blocks = blocks;
+			if (!blocks.length) {
+				state.status = 'done';
+				this.notify(state);
+				return;
+			}
+
 			await this.scheduler.enqueue(`page-${pageIndex}`, priority, async (signal) => {
 				// IDLE watchdog with a REAL abort. The old Promise.race watchdog had
 				// two structural bugs: (a) it measured TOTAL page time, so a big page
@@ -606,7 +653,7 @@ export class TranslationManager {
 					}
 				}, 5000);
 				try {
-					await this.translatePage(state, local.signal, { bypassPageCache: options?.bypassCache ?? false, bypassSegments: options?.bypassSegments ?? false }, heartbeat);
+					await this.translatePage(state, local.signal, { bypassPageCache: options?.bypassCache ?? false, bypassSegments: options?.bypassSegments ?? false }, heartbeat, blocks);
 				}
 				catch (e) {
 					// An idle-abort must surface as TIMEOUT, not CANCELLED (which
@@ -732,13 +779,14 @@ export class TranslationManager {
 		}
 	}
 
-	private async translatePage(state: PageTranslationState, signal: AbortSignal, bypass: { bypassPageCache: boolean; bypassSegments: boolean }, heartbeat?: () => void): Promise<void> {
+	private async translatePage(state: PageTranslationState, signal: AbortSignal, bypass: { bypassPageCache: boolean; bypassSegments: boolean }, heartbeat?: () => void, preBlocks?: SourceBlock[]): Promise<void> {
 		const pageIndex = state.pageIndex;
 		const beat = heartbeat ?? ((): void => { /* no idle watchdog (tests) */ });
 		// 真实性能指标 (per page): how many provider round-trips this page cost
 		// and how many were salvage. High salvage counts point at fragment-heavy
 		// grouping or an id-dropping provider — the log tells which.
 		const metrics = { requestCount: 0, salvageCount: 0, startedAt: Date.now() };
+		const lane = this.laneFor(pageIndex);
 		const countedTranslate = async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
 			metrics.requestCount++;
 			// Request-level retry (network/rate-limit; TIMEOUT retried ONCE — a
@@ -752,24 +800,41 @@ export class TranslationManager {
 				try {
 					const response = await this.deps.translateRequest(request, sig);
 					beat(); // progress: a request finished → re-arm the idle watchdog
+					this.scheduler.laneFeedback(lane, 'success');
 					return response;
 				}
 				catch (e) {
 					beat(); // a settled (failed) attempt is progress too
 					lastError = e;
 					const err = e instanceof PaperMirrorError ? e : new PaperMirrorError('UNKNOWN', String(e));
+					// Feed the REAL 429/timeout to the lane throttling — internal
+					// retries used to swallow them and the adaptive caps went blind.
+					if (err.code === 'RATE_LIMITED') {
+						this.scheduler.laneFeedback(lane, 'rate');
+					}
+					else if (err.code === 'TIMEOUT') {
+						this.scheduler.laneFeedback(lane, 'timeout');
+					}
 					const timeoutSpent = err.code === 'TIMEOUT' && attempt >= 1;
 					if (err.code === 'CANCELLED' || !err.retryable || timeoutSpent || attempt === REQUEST_RETRIES) {
 						throw err;
 					}
-					await this.delay(Math.min(2000, 400 * (attempt + 1)));
+					// Honest backoff: honour the server's Retry-After for a 429;
+					// otherwise a real pause (≥1.5s), not the blind 400ms that
+					// re-provoked the limit we just hit.
+					const retryAfter = (err as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs;
+					const wait = err.code === 'RATE_LIMITED'
+						? Math.max(retryAfter ?? 2500, 1500)
+						: Math.min(2000, 400 * (attempt + 1));
+					await this.delay(wait);
 				}
 			}
 			throw lastError instanceof Error ? lastError : new PaperMirrorError('UNKNOWN', String(lastError));
 		};
 
-		// 1. Extract
-		const blocks = await this.deps.extractPage(pageIndex);
+		// 1. Extract — normally already done OUTSIDE the provider lane by
+		// ensurePage (preBlocks); the inline path remains for direct callers.
+		const blocks = preBlocks ?? await this.deps.extractPage(pageIndex);
 		beat();
 		if (signal.aborted) {
 			throw new PaperMirrorError('CANCELLED', 'cancelled');
@@ -1072,6 +1137,20 @@ export class TranslationManager {
 			this.notify(state); // progressive rendering per chunk
 		};
 
+		// 增量持久化: whatever this page has ALREADY translated survives a
+		// cancel/idle-timeout — the old behavior threw everything away, so page
+		// flipping kept re-buying the same translations (audit item).
+		const persistPartial = (): void => {
+			if (!this.deps.writeSegments || !results.length) {
+				return;
+			}
+			void this.deps.writeSegments(pageIndex, results.map(r => ({
+				hash: segmentHash(sourceById.get(r.id) ?? '', source, target),
+				translatedText: r.translatedText
+			}))).catch(() => { /* best-effort */ });
+		};
+
+		try {
 		// Limited intra-page parallelism: a small worker pool pulls chunks in
 		// order (当前页最多同时 CHUNK_CONCURRENCY 个批次). Mutations are append-only
 		// per block id and the request cap is shared, so the guarantees match the
@@ -1106,6 +1185,11 @@ export class TranslationManager {
 		// re-extracted or re-rendered wholesale.
 		if (canSpend()) {
 			await this.resolveEnglishResidue(state, blocks, results, source, target, signal, countedTranslate, canSpend);
+		}
+		}
+		catch (e) {
+			persistPartial();
+			throw e;
 		}
 
 		state.status = 'done';

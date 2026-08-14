@@ -74,6 +74,15 @@ export function canMerge(a: SourceBlock, b: SourceBlock, obstacles: Rect[] = [])
 	if (!isBodyBlock(a) || !isBodyBlock(b)) {
 		return false;
 	}
+	// The COLUMN STAMP is authoritative when both sides carry one (audit: three
+	// inconsistent geometric "same column" tests coexisted while the computed
+	// block.column was ignored — one bad union rect then poisoned every later
+	// geometric test on the page). Stamps don't mutate when regions grow, so
+	// this check stays correct after any number of merges.
+	if (typeof a.column === 'number' && typeof b.column === 'number'
+		&& a.column >= 0 && b.column >= 0 && a.column !== b.column) {
+		return false;
+	}
 	const ra = unionRect(a.lineRectsPdf as Rect[]);
 	const rb = unionRect(b.lineRectsPdf as Rect[]);
 	if (!sameColumn(ra, rb)) {
@@ -192,6 +201,12 @@ export function isShard(block: SourceBlock): boolean {
  */
 export function canAbsorb(host: SourceBlock, shard: SourceBlock, obstacles: Rect[] = []): boolean {
 	if (!isBodyBlock(host) || !host.lineRectsPdf?.length || !shard.lineRectsPdf?.length) {
+		return false;
+	}
+	// Column stamps are authoritative here too — the 40% overlap test failed
+	// open across the gutter once a host's union rect had grown full-width.
+	if (typeof host.column === 'number' && typeof shard.column === 'number'
+		&& host.column >= 0 && shard.column >= 0 && host.column !== shard.column) {
 		return false;
 	}
 	const rh = unionRect(host.lineRectsPdf as Rect[]);

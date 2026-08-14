@@ -90,6 +90,22 @@ export class RequestScheduler {
 		return this.laneCapCur.get(lane) ?? Infinity;
 	}
 
+	/**
+	 * External lane feedback. Page jobs run with maxRetries:0 and handle their
+	 * request-level retries INTERNALLY, so the adaptive throttling in execute()
+	 * never sees the real 429/timeout — the manager reports them here instead
+	 * (the audit's "429 被快速重试吞掉、自适应限流失明" fix).
+	 */
+	laneFeedback(lane: string, kind: 'rate' | 'timeout' | 'success'): void {
+		if (kind === 'success') {
+			this.rewardLane(lane);
+		}
+		else {
+			this.penalizeLane(lane, kind);
+		}
+		this.pump();
+	}
+
 	isScheduled(key: string): boolean {
 		return this.active.has(key) || this.queue.some(job => job.key === key);
 	}

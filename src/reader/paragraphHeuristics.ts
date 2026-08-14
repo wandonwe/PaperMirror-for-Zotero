@@ -133,8 +133,11 @@ export function detectGutters(rows: Rect[][], pageWidth: number): number[] {
 		counted++;
 		const covered = new Array<boolean>(cells).fill(false);
 		for (const r of row) {
-			const from = Math.max(0, Math.floor(r[0] / STEP));
-			const to = Math.min(cells - 1, Math.ceil(r[2] / STEP));
+			// ROUND, not floor/ceil: the old marking over-covered ~2pt on each
+			// side of every glyph run, so gutters narrower than ~12pt could never
+			// win a cell and were undetectable (audit P0).
+			const from = Math.max(0, Math.round(r[0] / STEP));
+			const to = Math.min(cells - 1, Math.round(r[2] / STEP) - 1);
 			for (let k = from; k <= to; k++) {
 				covered[k] = true;
 			}
@@ -162,8 +165,10 @@ export function detectGutters(rows: Rect[][], pageWidth: number): number[] {
 		else if (!isGap && runStart >= 0) {
 			const startX = runStart * STEP;
 			const endX = k * STEP;
-			// A real gutter is a sustained channel, not a word space.
-			if (endX - startX >= 8 && startX > width * 0.12 && endX < width * 0.88) {
+			// A real gutter is a sustained channel, not a word space. 6pt (was 8):
+			// with exact coverage marking a tight 12–14pt gutter now shows as a
+			// ~6–10pt uncovered run and must still count.
+			if (endX - startX >= 6 && startX > width * 0.12 && endX < width * 0.88) {
 				gutters.push((startX + endX) / 2);
 			}
 			runStart = -1;

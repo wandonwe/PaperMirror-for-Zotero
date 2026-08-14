@@ -279,13 +279,16 @@ export function capsuleStateFor(m: OverlayProgress): CapsuleState {
 				? { phase: m.phase, glyph: 'check', fraction: 1, main: '本页翻译已完成' }
 				: { phase: m.phase, glyph: 'refresh', fraction: null, main: '点击圆环翻译本页' };
 		case 'translating':
+			// True stage text (audit: "不能从开始到结束都显示正在翻译"):
+			// no blocks yet = the PDF is still being READ; with blocks = 翻译中,
+			// counts live in the sub line.
 			return {
 				phase: m.phase,
 				glyph: 'ring',
 				indeterminate: m.segTotal <= 0,
 				fraction: combined,
-				main: `正在处理 ${pagePos}`,
-				sub: m.segTotal > 0 ? counts : '正在识别段落',
+				main: m.segTotal > 0 ? `正在翻译 ${pagePos}` : `正在读取 ${pagePos}`,
+				sub: m.segTotal > 0 ? counts : '正在读取页面文字',
 				// ■ (stop), not a pause glyph — the backend cancels and restarts,
 				// there is no pause/resume.
 				action: { kind: 'cancel', label: '■', title: '停止任务' }
@@ -294,6 +297,10 @@ export function capsuleStateFor(m: OverlayProgress): CapsuleState {
 			return {
 				phase: m.phase,
 				glyph: 'ring',
+				// Placement/compress has no incremental counter yet: animate the
+				// ring instead of freezing it at 50% until the one-shot commit
+				// (the audit's "进度环 50% 封顶读数冻结" item).
+				indeterminate: m.segPlaced <= 0,
 				fraction: combined,
 				main: `正在适配 ${pagePos} 排版`,
 				sub: counts,

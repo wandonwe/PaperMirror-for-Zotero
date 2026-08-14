@@ -58,6 +58,25 @@ interface RawResponse {
 	/** URL after redirects — a mainland bing.com 302s to cn.bing.com, and the
 	 *  session scraped there is only valid against that same host. */
 	finalURL?: string;
+	/** Parsed Retry-After header (429/503), in ms — for honest backoff. */
+	retryAfterMs?: number;
+}
+
+/** Parse a Retry-After header value (delta-seconds or HTTP-date) to ms. */
+function parseRetryAfter(value: string | null | undefined): number | undefined {
+	if (!value) {
+		return undefined;
+	}
+	const secs = Number(value);
+	if (Number.isFinite(secs) && secs >= 0) {
+		return Math.min(120000, Math.round(secs * 1000));
+	}
+	const date = Date.parse(value);
+	if (Number.isFinite(date)) {
+		const ms = date - Date.now();
+		return ms > 0 ? Math.min(120000, ms) : undefined;
+	}
+	return undefined;
 }
 
 function zoteroHTTP(): ZoteroHTTPAPI | null {
@@ -117,12 +136,21 @@ async function send(
 					}
 				}
 			});
+			let retryAfterMs: number | undefined;
+			try {
+				const header = (response as { getResponseHeader?: (n: string) => string | null }).getResponseHeader?.('Retry-After');
+				retryAfterMs = parseRetryAfter(header);
+			}
+			catch {
+				// header access can throw across compartments — best-effort
+			}
 			return {
 				status: response.status,
 				text: typeof response.responseText === 'string' ? response.responseText : String(response.response ?? ''),
 				finalURL: typeof (response as { responseURL?: string }).responseURL === 'string'
 					? (response as { responseURL?: string }).responseURL
 					: undefined,
+				retryAfterMs,
 				elapsedMs: Date.now() - started
 			};
 		}
@@ -178,7 +206,12 @@ async function send(
 			}
 		}
 		xhr.timeout = timeoutMs;
-		xhr.onload = () => finish(() => resolve({ status: xhr.status, text: xhr.responseText ?? '', elapsedMs: Date.now() - started }));
+		xhr.onload = () => finish(() => resolve({
+			status: xhr.status,
+			text: xhr.responseText ?? '',
+			retryAfterMs: parseRetryAfter(xhr.getResponseHeader?.('Retry-After')),
+			elapsedMs: Date.now() - started
+		}));
 		xhr.onerror = () => finish(() => reject(new PaperMirrorError('NETWORK', 'Network error while contacting the translation service.', { retryable: true })));
 		xhr.ontimeout = () => finish(() => reject(new PaperMirrorError('TIMEOUT', `The request timed out after ${timeoutMs} ms.`, { retryable: true })));
 		xhr.onabort = () => finish(() => reject(new PaperMirrorError('CANCELLED', 'Translation was cancelled.', { retryable: false })));
@@ -198,7 +231,7 @@ export async function requestJSON(url: string, options: HttpJSONOptions): Promis
 		? options.rawBody
 		: options.body !== undefined ? JSON.stringify(options.body) : null;
 
-	const { status, text, elapsedMs } = await send(
+	const { status, text, elapsedMs, retryAfterMs } = await send(
 		options.method ?? 'POST',
 		url,
 		options.headers,
@@ -207,7 +240,13 @@ export async function requestJSON(url: string, options: HttpJSONOptions): Promis
 		options.signal
 	);
 	if (status < 200 || status >= 300) {
-		throw mapHTTPError(status, text);
+		const error = mapHTTPError(status, text);
+		// Honest backoff: surface the server's Retry-After so the scheduler and
+		// the request-level retry wait what the SERVER asked, not a blind 400ms.
+		if (retryAfterMs !== undefined) {
+			(error as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs = retryAfterMs;
+		}
+		throw error;
 	}
 	try {
 		return { status, json: JSON.parse(text), elapsedMs };

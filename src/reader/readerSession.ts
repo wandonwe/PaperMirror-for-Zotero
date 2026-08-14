@@ -923,6 +923,14 @@ export class ReaderSession {
 				// pane to the new page's TOP here is what made the right side jump
 				// to the page start mid-scroll; page-change only updates the label
 				// and translation priority now.
+				// A translation task pinned to the page we just LEFT must not keep
+				// the capsule frozen on that page's state ("正在适配排版 50%" forever
+				// — the audit's stale laying-out item). Drop it; the new page's own
+				// updates repopulate the capsule within one notify.
+				const stale = this.tasks.get('translation');
+				if (stale && stale.currentPage !== page + 1) {
+					this.setTask('translation', null);
+				}
 				// If nothing is actively running, the resting ring must retarget
 				// the new page (✓ vs ↻) instead of showing the old page's state.
 				if (!this.tasks.size) {
