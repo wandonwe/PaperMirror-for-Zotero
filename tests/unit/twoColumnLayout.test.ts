@@ -164,3 +164,64 @@ test('a single unbroken sentence still falls back to a safe character split', ()
 	assert.ok(text.replace(/\s+/g, ' ').includes(parts[0]!));
 	assert.ok(text.replace(/\s+/g, ' ').includes(parts[1]!));
 });
+
+// ---- RSNA-page regression: centered footer must not bridge the columns ------
+
+import { detectColumns } from '../../src/reader/paragraphHeuristics';
+
+test('a centered page-bottom footer does not bridge the two columns', () => {
+	// Real failure (RSNA reprint): "This copy is for personal use only…" is a
+	// ~50%-width centered line at the very bottom — narrower than the 62%
+	// full-width cutoff, sitting ACROSS the gutter. Fed into the projection it
+	// chained left+footer+right into ONE band and the page read single-column.
+	const rects: [number, number, number, number][] = [];
+	for (let i = 0; i < 20; i++) {
+		rects.push([54, 700 - i * 12, 292, 710 - i * 12]);   // left column
+		rects.push([320, 700 - i * 12, 558, 710 - i * 12]);  // right column
+	}
+	rects.push([160, 20, 470, 30]); // centered footer inside the bottom 6% band
+	const bands = detectColumns(rects, 612, 792);
+	assert.equal(bands.length, 2, 'footer excluded → two columns survive');
+});
+
+test('a bare page number does not bridge the columns even mid-page-height', () => {
+	const rects: [number, number, number, number][] = [];
+	for (let i = 0; i < 10; i++) {
+		rects.push([54, 700 - i * 12, 292, 710 - i * 12]);
+		rects.push([320, 700 - i * 12, 558, 710 - i * 12]);
+	}
+	rects.push([300, 400, 312, 410]); // 12pt-wide scrap in the gutter (page num / eq num)
+	const bands = detectColumns(rects, 612, 792);
+	assert.equal(bands.length, 2, 'tiny rects are excluded from the projection');
+});
+
+test('band.left is the MEDIAN member left — one outdented bullet does not shift it', () => {
+	const rects: [number, number, number, number][] = [];
+	for (let i = 0; i < 9; i++) {
+		rects.push([54, 700 - i * 12, 292, 710 - i * 12]);
+	}
+	rects.push([42, 580, 292, 590]); // one hanging-indent/bullet line, 12pt outdented
+	const bands = detectColumns(rects, 612, 792);
+	assert.equal(bands.length, 1);
+	assert.equal(bands[0]!.left, 54, 'median left, not the outlier minimum');
+});
+
+test('sliver-only pages report NO columns instead of promoting the slivers', () => {
+	const bands = detectColumns([[301, 400, 311, 410], [300, 300, 313, 310], [299, 200, 315, 210]], 612, 792);
+	assert.equal(bands.length, 0);
+});
+
+test('text-layer path stamps column on emitted blocks', () => {
+	const items: SpanItem[] = [];
+	const mk = (x1: number, x2: number, top: number, text: string): SpanItem => ({
+		text, rect: [x1, top - SIZE, x2, top], fontSize: SIZE
+	});
+	for (let i = 0; i < 6; i++) {
+		items.push(mk(LEFT_X, LEFT_RIGHT, 700 - i * LEADING, `left line ${i} runs to the margin of col.`));
+		items.push(mk(RIGHT_X, RIGHT_RIGHT, 700 - i * LEADING, `right line ${i} runs to the margin too.`));
+	}
+	const result = buildBlocksFromSpans(items, { pageIndex: 0, pageWidth: PAGE_W, pageHeight: PAGE_H, includeReferences: false });
+	const cols = new Set(result.blocks.map(b => b.column));
+	assert.ok(result.blocks.every(b => typeof b.column === 'number'), 'every block carries a column');
+	assert.ok(cols.has(0) && cols.has(1), 'both columns are represented');
+});

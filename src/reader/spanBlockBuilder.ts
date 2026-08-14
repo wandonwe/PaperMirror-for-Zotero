@@ -64,7 +64,11 @@ const REFERENCES_HEADINGS = /^(references|bibliography|literature\s+cited|参考
  * word space (an inter-word space never exceeds ~1em, even when justified).
  */
 function columnGapThreshold(fontSize: number): number {
-	return Math.max(fontSize * 2.5, 18);
+	// 1.6em (was 2.5em): standard journal gutters are 18-24pt while 10pt text
+	// made the old threshold 25pt — left/right columns sharing a baseline were
+	// concatenated. A justified inter-word space stays under ~1.3em, so 1.6em
+	// still never splits inside a sentence.
+	return Math.max(fontSize * 1.6, 12);
 }
 
 function union(a: Rect, b: Rect): Rect {
@@ -133,7 +137,7 @@ function groupIntoRows(items: SpanItem[]): SpanItem[][] {
  * `pageWidth` lets the gutter vote work; without it a conservative gap
  * threshold is used instead.
  */
-export function groupIntoLines(items: SpanItem[], pageWidth = 612): SpanLine[] {
+export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 0): SpanLine[] {
 	const rows = groupIntoRows(items);
 	if (!rows.length) {
 		return [];
@@ -166,7 +170,7 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612): SpanLine[] {
 
 	// Reading order: full-width lines first (title/abstract), then column by
 	// column, each top to bottom.
-	const bands = detectColumns(lines.map(l => l.rect), pageWidth);
+	const bands = detectColumns(lines.map(l => l.rect), pageWidth, pageHeight);
 	const columnFor = new Map<SpanLine, number>();
 	for (const line of lines) {
 		columnFor.set(line, columnOf(line.rect, bands, pageWidth));
@@ -205,11 +209,11 @@ export function lineText(line: SpanLine): string {
  * refuses to end a paragraph after a line that ran to its column's right
  * margin — that line wrapped, so the sentence continues on the next one.
  */
-export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612): SpanLine[][] {
+export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeight = 0): SpanLine[][] {
 	if (!lines.length) {
 		return [];
 	}
-	const bands = detectColumns(lines.map(l => l.rect), pageWidth);
+	const bands = detectColumns(lines.map(l => l.rect), pageWidth, pageHeight);
 	const columns = lines.map(l => columnOf(l.rect, bands, pageWidth));
 	let textLeft = Infinity;
 	let textRight = -Infinity;
@@ -317,14 +321,14 @@ export interface SpanBuildResult {
 
 export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOptions): SpanBuildResult {
 	const pageWidth = options.pageWidth && options.pageWidth > 0 ? options.pageWidth : 612;
-	const lines = groupIntoLines(items, pageWidth);
-	const paragraphs = groupIntoParagraphs(lines, pageWidth);
+	const lines = groupIntoLines(items, pageWidth, options.pageHeight);
+	const paragraphs = groupIntoParagraphs(lines, pageWidth, options.pageHeight);
 
 	const sizes = lines.map(l => l.fontSize).filter(s => s > 0).sort((a, b) => a - b);
 	const bodySize = sizes.length ? sizes[Math.floor(sizes.length / 2)]! : 0;
 
 	// Materialise, then repair anything still split mid-sentence.
-	const bands = detectColumns(lines.map(l => l.rect), pageWidth);
+	const bands = detectColumns(lines.map(l => l.rect), pageWidth, options.pageHeight);
 	const draft = paragraphs.map((group) => {
 		// joinLines de-hyphenates line-broken words (ional/est/sory residue) and
 		// joins CJK without spaces, instead of the naive space-join that left the
@@ -410,6 +414,11 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	}
 
 	let referencesStarted = !!options.referencesAlreadyStarted;
+	// Column stamp (was MISSING on this path): without it every text-layer
+	// block defaulted to column 0 downstream, so semantic modules ran straight
+	// through the gutter and the same PDF extracted differently depending on
+	// which extraction path won.
+	const columnBands = detectColumns(merged.map(p => p.rect), pageWidth, options.pageHeight);
 	const blocks: SourceBlock[] = [];
 	let order = 0;
 	for (const p of merged) {
@@ -443,6 +452,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			},
 			lineRectsPdf: p.group.map(l => [...l.rect] as Rect),
 			fontSize: p.fontSize,
+			column: columnOf(p.rect, columnBands, pageWidth),
 			isReference: referencesStarted
 		});
 		order++;

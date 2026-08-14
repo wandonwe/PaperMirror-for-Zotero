@@ -171,11 +171,11 @@ export function textForRange(chars: PdfChar[], start: number, end: number): stri
  * column's right margin — such a line wrapped, so the sentence continues.
  * A final merge pass rejoins anything that still came out split mid-sentence.
  */
-export function buildParagraphs(chars: PdfChar[], lines: Line[], pageWidth = 612): Paragraph[] {
+export function buildParagraphs(chars: PdfChar[], lines: Line[], pageWidth = 612, pageHeight = 0): Paragraph[] {
 	if (!lines.length) {
 		return [];
 	}
-	const bands = detectColumns(lines.map(l => l.rect as Rect), pageWidth);
+	const bands = detectColumns(lines.map(l => l.rect as Rect), pageWidth, pageHeight);
 	const columns = lines.map(l => columnOf(l.rect as Rect, bands, pageWidth));
 	const marginOf = (index: number): { left: number; right: number } => {
 		const column = columns[index]!;
@@ -414,14 +414,14 @@ function toBoundingBox(rect: [number, number, number, number], pageHeight: numbe
 export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResult {
 	const { pageIndex, pageHeight, pageWidth } = options;
 	const lines = buildLines(chars);
-	let paragraphs = buildParagraphs(chars, lines, pageWidth);
+	let paragraphs = buildParagraphs(chars, lines, pageWidth, pageHeight);
 	paragraphs = paragraphs.filter(p => !isHeaderOrFooter(p, pageHeight));
 	paragraphs = orderParagraphs(paragraphs, pageWidth);
 
 	const bodySize = options.bodyFontSize || medianFontSize(paragraphs);
 
 	// Column band per final paragraph, so semantic modules never cross columns.
-	const columnBands = detectColumns(paragraphs.map(p => p.rect as Rect), pageWidth);
+	const columnBands = detectColumns(paragraphs.map(p => p.rect as Rect), pageWidth, pageHeight);
 
 	let referencesStarted = !!options.referencesAlreadyStarted;
 	const blocks: SourceBlock[] = [];

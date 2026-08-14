@@ -38,31 +38,63 @@ const FULL_WIDTH_RATIO = 0.62;
  * the projection — otherwise a single spanning title bridges the gutter and
  * the whole page looks like one column.
  */
-export function detectColumns(rects: Rect[], pageWidth: number): ColumnBand[] {
+export function detectColumns(rects: Rect[], pageWidth: number, pageHeight = 0): ColumnBand[] {
 	const width = pageWidth > 0 ? pageWidth : 612;
 	const gutter = Math.max(11, width * 0.018);
 	const valid = rects.filter(r => Number.isFinite(r[0]) && Number.isFinite(r[2]) && r[2] > r[0]);
+	// PAGE FURNITURE must not vote: a centered footer ("This copy is for
+	// personal use only…"), running head or page number sits ACROSS the gutter
+	// and, fed into the greedy chain below, bridges the two columns into one
+	// band — after which the whole page reads as single-column and the real
+	// right column gets shredded line-by-line by the indent rule. Exclude
+	// (a) rects in the top/bottom 6% bands (when the page height is known) and
+	// (b) tiny rects (page numbers, drop caps, equation numbers) < 5% width.
+	const furnitureBand = pageHeight > 0 ? pageHeight * 0.06 : 0;
+	const usable = valid.filter((r) => {
+		if (r[2] - r[0] < width * 0.05) {
+			return false;
+		}
+		if (furnitureBand && (r[1] > pageHeight - furnitureBand || r[3] < furnitureBand)) {
+			return false;
+		}
+		return true;
+	});
 	// Spanning lines (titles, abstracts) bridge the gutter, so they are left
 	// out of the projection. If EVERY line spans, the page is single-column
 	// and the spanning lines are all we have to measure.
-	const candidates = valid.filter(r => r[2] - r[0] < width * FULL_WIDTH_RATIO);
-	const narrow = (candidates.length ? candidates : valid).sort((a, b) => a[0] - b[0]);
+	const pool = usable.length ? usable : valid;
+	const candidates = pool.filter(r => r[2] - r[0] < width * FULL_WIDTH_RATIO);
+	const narrow = (candidates.length ? candidates : pool).sort((a, b) => a[0] - b[0]);
 	if (!narrow.length) {
 		return [];
 	}
 	const bands: ColumnBand[] = [];
+	const memberLefts: number[][] = [];
 	for (const r of narrow) {
 		const last = bands[bands.length - 1];
 		if (last && r[0] <= last.right + gutter) {
 			last.right = Math.max(last.right, r[2]);
+			memberLefts[memberLefts.length - 1]!.push(r[0]);
 		}
 		else {
 			bands.push({ left: r[0], right: r[2] });
+			memberLefts.push([r[0]]);
 		}
 	}
+	// Robust left edge: the MEDIAN of member lefts, not the minimum. One
+	// outdented bullet / hanging-indent reference lowered the min by ~1em,
+	// after which every ordinary line in the column tested as "indented" and
+	// the paragraph broke after every single line (逐行断段 root cause #2).
+	for (let i = 0; i < bands.length; i++) {
+		const lefts = memberLefts[i]!.slice().sort((a, b) => a - b);
+		bands[i]!.left = lefts[Math.floor(lefts.length / 2)]!;
+	}
 	// Ignore slivers (equation numbers, margin notes) — they are not columns.
+	// When NOTHING significant remains, report NO columns (single full-width
+	// flow) instead of promoting the slivers: a page-number band as "the
+	// column" made every line read as wrapped/indented.
 	const significant = bands.filter(b => b.right - b.left >= width * 0.12);
-	return significant.length ? significant : bands;
+	return significant;
 }
 
 /**
