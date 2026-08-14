@@ -22,7 +22,8 @@ import type {
 import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
 import { protectFormulas, restoreFormulas, stripProtectable, verifyPlaceholders } from '../reader/formulaGuard';
-import { matchRules } from './glossary';
+import { matchRules, mergeGlossaries } from './glossary';
+import { DocumentMemory, extractTermPairs } from './docMemory';
 import { RequestScheduler } from './requestScheduler';
 import { planChunks, trailingContext, type PlannedChunk } from './segmenter';
 import { buildLayoutModules } from '../reader/layoutModules';
@@ -306,6 +307,17 @@ export class TranslationManager {
 	 * revisit. 强制重译 clears the map.
 	 */
 	private failedSegments = new Map<string, number>();
+	/**
+	 * 文档术语记忆: abbreviation → 中文术语 pairs the accepted translations
+	 * themselves established, re-injected as SUGGESTED rules on later requests
+	 * so page 12 renders a term the way page 2 did. User glossary outranks it.
+	 */
+	private docMemory = new DocumentMemory();
+
+	/** matched 注入: user glossary + document memory, hits only. */
+	private glossaryFor(texts: string[]): GlossaryRule[] {
+		return matchRules(mergeGlossaries(this.deps.getGlossary(), this.docMemory.rules()), texts);
+	}
 	/** Injected (tests) or real timer delay, for request-level retry backoff. */
 	private delay: (ms: number) => Promise<void>;
 	/** Extraction semaphore: at most 2 concurrent PDF extractions, current page first. */
@@ -458,7 +470,7 @@ export class TranslationManager {
 						text: pb.text,
 						charBudget: wanted.get(pb.block.id)
 					})),
-					glossary: matchRules(this.deps.getGlossary(), blocks.map(b => b.sourceText))
+					glossary: this.glossaryFor(blocks.map(b => b.sourceText))
 				};
 				const response = await this.deps.translateRequest(request, signal);
 				for (const t of response.translations) {
@@ -549,6 +561,8 @@ export class TranslationManager {
 		this.scheduler.cancelAll();
 		this.pages.clear();
 		this.unstableFired.clear();
+		// Language/provider switch: remembered pairs are in the wrong language.
+		this.docMemory.clear();
 	}
 
 	cancelAll(): void {
@@ -773,7 +787,7 @@ export class TranslationManager {
 					documentTitle: this.deps.getDocumentTitle(),
 					previousContext: '',
 					blocks: [{ id: block.id, type: block.type, text }],
-					glossary: matchRules(this.deps.getGlossary(), [block.sourceText])
+					glossary: this.glossaryFor([block.sourceText])
 				}, signal);
 				const hit = resp.translations.find(t => looksTranslated(block.sourceText, t.translatedText, target)
 					&& verifyPlaceholders(t.translatedText, placeholders).ok);
@@ -894,7 +908,7 @@ export class TranslationManager {
 
 		const sampleText = blocks.map(b => b.sourceText).join('\n').slice(0, 4000);
 		const { source, target } = this.deps.getLanguages(sampleText);
-		const glossary = matchRules(this.deps.getGlossary(), blocks.map(b => b.sourceText));
+		const glossary = this.glossaryFor(blocks.map(b => b.sourceText));
 		const sourceById = new Map(blocks.map(b => [b.id, b.sourceText]));
 		// Accept a response only if it is actually translated (not echoed English).
 		const accept = (id: string, text: string): boolean =>
@@ -1203,6 +1217,8 @@ export class TranslationManager {
 				const restored = restoreFormulas(raw, pb.placeholders);
 				results.push({ id: block.id, translatedText: restored });
 				state.translations.set(block.id, restored);
+				// 术语记忆: harvest 「中文术语(ABBR)」 pairs this page established.
+				this.docMemory.learn(extractTermPairs(block.sourceText, restored));
 			}
 			this.notify(state); // progressive rendering per chunk
 		};
@@ -1281,7 +1297,7 @@ export class TranslationManager {
 						documentTitle: this.deps.getDocumentTitle(),
 						previousContext: '',
 						blocks: [{ id: block.id, type: block.type, text: pb.text }],
-						glossary: matchRules(this.deps.getGlossary(), [block.sourceText]),
+						glossary: this.glossaryFor([block.sourceText]),
 						plain: true
 					}, signal);
 					const hit = resp.translations.find(t =>

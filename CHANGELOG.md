@@ -15,6 +15,19 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.27] — 2026-08-14
+
+### Added(参照 retain-pdf 批次4:文档术语记忆)
+
+- **同一术语全文一致.** 新增文档级术语记忆:译文中出现标准首现形式「中文术语(ABBR)」
+  且缩写确实存在于原文时(防幻觉交叉校验),该词对被记住;后续页面凡命中此缩写的请求
+  自动注入为**参考性**术语规则——第 12 页的 CEUS 从此和第 2 页译得一样。
+- 首现优先(论文自己的首次展开是权威),统计缩写(CI/OR/HR/SD 等)与单大写字母
+  排除,上限 200 条防膨胀;换语言/换服务商时清空。**用户词汇表始终优先**于记忆
+  (matched 合并注入,不整表塞 prompt)。
+- 新增 6 组回归测试(抽取、防幻觉、停用词、首现优先、容量上限、跨页注入)。
+  全套 508 项通过。
+
 ## [0.9.26] — 2026-08-14
 
 ### Added(参照 retain-pdf 批次3:拒收段修复链路)

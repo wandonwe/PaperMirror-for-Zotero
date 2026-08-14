@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { TranslationManager, looksTranslated, type PageTranslationState, type TranslationDeps } from '../../src/translation/translationManager';
-import type { SourceBlock, TranslationRequest, TranslationResponse } from '../../src/types/models';
+import type { GlossaryRule, SourceBlock, TranslationRequest, TranslationResponse } from '../../src/types/models';
 
 function makeBlocks(pageIndex: number, n: number): SourceBlock[] {
 	return Array.from({ length: n }, (_, i) => ({
@@ -842,5 +842,37 @@ test('a segment that failed two runs is keep-origin skipped on the third (止损
 	assert.equal(requestsForStuck, afterTwo, 'third run must not spend requests on the dead segment');
 	const state = manager.getPageState(0)!;
 	assert.equal(state.keepOrigin?.get('stuck'), 'repeated-failure');
+	manager.dispose();
+});
+
+test('term pairs learned on one page are injected as suggested rules on the next (文档记忆)', async () => {
+	const seenGlossaries: (GlossaryRule[] | undefined)[] = [];
+	const pageBlocks = (p: number): SourceBlock[] => [{
+		id: `p${p}b0`, pageIndex: p, order: 0, type: 'paragraph',
+		sourceText: p === 0
+			? 'Contrast-enhanced ultrasound (CEUS) improves detection of hepatic lesions in cirrhotic patients today.'
+			: 'Follow-up imaging with CEUS confirmed the lesion characteristics in most patients over time.'
+	}];
+	const { deps } = makeDeps({
+		extractPage: async p => pageBlocks(p),
+		readCache: async () => null,
+		translateRequest: async (req) => {
+			seenGlossaries.push(req.glossary);
+			return {
+				translations: req.blocks.map(b => ({
+					id: b.id,
+					translatedText: b.id === 'p0b0'
+						? '对比增强超声(CEUS)提高了肝硬化患者肝脏病灶的检出率。'
+						: '随访 CEUS 影像证实了大多数患者的病灶特征。'
+				}))
+			};
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 10);
+	await manager.ensurePage(1, 10);
+	const later = seenGlossaries.slice(1).flat().filter(Boolean) as GlossaryRule[];
+	assert.ok(later.some(r => r.source === 'CEUS' && r.target === '对比增强超声' && r.mode === 'suggested'),
+		`page-2 request must carry the remembered pair, got ${JSON.stringify(later)}`);
 	manager.dispose();
 });
