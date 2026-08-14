@@ -70,6 +70,8 @@ export class TextExtractor {
 	private referencesStartedByPage = new Map<number, boolean>();
 	private fullText: adapter.FullTextInfo | null = null;
 	private bodyFontSize = 0;
+	/** 边框硬屏障: per-page figure rects (operator list), cached; [] = none. */
+	private imageRects = new Map<number, [number, number, number, number][]>();
 	/**
 	 * PageData captured by prime() for the page open at startup, reused ONCE by
 	 * the first extractPage() of that page. Without this, opening the reader
@@ -138,7 +140,28 @@ export class TextExtractor {
 		);
 	}
 
+	/** Figure rects for a page (best-effort, cached; never throws). */
+	private async obstaclesFor(pageIndex: number): Promise<[number, number, number, number][]> {
+		const cached = this.imageRects.get(pageIndex);
+		if (cached) {
+			return cached;
+		}
+		let rects: [number, number, number, number][] = [];
+		try {
+			const got = await withTimeout(adapter.getImageRectsPdf(this.reader, pageIndex), 2500, 'getImageRectsPdf');
+			rects = got ?? [];
+		}
+		catch {
+			// best-effort: no obstacles = old behavior
+		}
+		this.imageRects.set(pageIndex, rects);
+		return rects;
+	}
+
 	async extractPage(pageIndex: number): Promise<SourceBlock[]> {
+		// 边框硬屏障: real figure boundaries participate in extraction — in-figure
+		// labels stay out of the flow, and nothing merges across a figure.
+		const obstacles = await this.obstaclesFor(pageIndex);
 		// --- path 1: the fork's char stream (best structure) -----------------
 		try {
 			const { pageData, pageWidth, pageHeight } = await this.getPageData(pageIndex);
@@ -149,10 +172,11 @@ export class TextExtractor {
 					pageHeight,
 					bodyFontSize: this.bodyFontSize || undefined,
 					includeReferences: this.includeReferences,
-					referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex)
+					referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
+					imageRectsPdf: obstacles
 				});
 				const sourceBlockCount = result.blocks.length;
-				result.blocks = coalesceRegions(result.blocks);
+				result.blocks = coalesceRegions(result.blocks, obstacles);
 				this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
 				if (result.blocks.length) {
 					this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
@@ -169,7 +193,7 @@ export class TextExtractor {
 		}
 
 		// --- path 2: the rendered text layer (what the user can select) ------
-		const spanBlocks = await this.extractFromTextLayer(pageIndex);
+		const spanBlocks = await this.extractFromTextLayer(pageIndex, obstacles);
 		if (spanBlocks && spanBlocks.length) {
 			return spanBlocks;
 		}
@@ -194,7 +218,7 @@ export class TextExtractor {
 	}
 
 	/** Build blocks from the rendered PDF.js text layer, if there is one. */
-	private async extractFromTextLayer(pageIndex: number): Promise<SourceBlock[] | null> {
+	private async extractFromTextLayer(pageIndex: number, obstacles: [number, number, number, number][] = []): Promise<SourceBlock[] | null> {
 		try {
 			if (!adapter.hasRenderedTextLayer(this.reader, pageIndex)) {
 				await adapter.waitForTextLayer(this.reader, pageIndex);
@@ -208,12 +232,13 @@ export class TextExtractor {
 				pageHeight: page.pageHeight,
 				pageWidth: page.pageWidth,
 				includeReferences: this.includeReferences,
-				referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex)
+				referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
+				imageRectsPdf: obstacles
 			});
 			// Rebuild semantic regions from whatever fragments extraction
 			// produced: whole regions translate as whole sentences.
 			const sourceBlockCount = result.blocks.length;
-			result.blocks = coalesceRegions(result.blocks);
+			result.blocks = coalesceRegions(result.blocks, obstacles);
 			this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
 			this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
 			logger.info(MODULE, `Page ${pageIndex + 1}: extracted ${result.blocks.length} block(s) from the text layer`);

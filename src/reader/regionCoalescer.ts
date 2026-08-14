@@ -20,6 +20,7 @@
  */
 
 import type { SourceBlock } from '../types/models';
+import { obstacleBetween } from './figureBarriers';
 
 type Rect = [number, number, number, number];
 
@@ -69,13 +70,17 @@ function endsHyphenated(text: string): boolean {
 	return /[A-Za-z]-$/.test(text.trim());
 }
 
-export function canMerge(a: SourceBlock, b: SourceBlock): boolean {
+export function canMerge(a: SourceBlock, b: SourceBlock, obstacles: Rect[] = []): boolean {
 	if (!isBodyBlock(a) || !isBodyBlock(b)) {
 		return false;
 	}
 	const ra = unionRect(a.lineRectsPdf as Rect[]);
 	const rb = unionRect(b.lineRectsPdf as Rect[]);
 	if (!sameColumn(ra, rb)) {
+		return false;
+	}
+	// 边框硬屏障: a figure between the two regions separates them for good.
+	if (obstacleBetween(ra, rb, obstacles)) {
 		return false;
 	}
 	// b must sit BELOW a (PDF y grows upward): a's bottom edge above b's top.
@@ -185,12 +190,15 @@ export function isShard(block: SourceBlock): boolean {
  * neighbour even when the font drifted (superscripts) or the gap is odd —
  * geometry only has to say "same column, adjacent-ish".
  */
-export function canAbsorb(host: SourceBlock, shard: SourceBlock): boolean {
+export function canAbsorb(host: SourceBlock, shard: SourceBlock, obstacles: Rect[] = []): boolean {
 	if (!isBodyBlock(host) || !host.lineRectsPdf?.length || !shard.lineRectsPdf?.length) {
 		return false;
 	}
 	const rh = unionRect(host.lineRectsPdf as Rect[]);
 	const rs = unionRect(shard.lineRectsPdf as Rect[]);
+	if (obstacleBetween(rh, rs, obstacles)) {
+		return false;
+	}
 	// Same column at a relaxed 40%, or the shard sits inside the host's span.
 	const overlap = Math.min(rh[2], rs[2]) - Math.max(rh[0], rs[0]);
 	const narrower = Math.min(rh[2] - rh[0], rs[2] - rs[0]);
@@ -217,11 +225,11 @@ export function canAbsorb(host: SourceBlock, shard: SourceBlock): boolean {
  * anything that should never have been its own block is absorbed into the
  * nearest adjacent body region (previous first, next as fallback).
  */
-export function coalesceRegions(blocks: SourceBlock[]): SourceBlock[] {
+export function coalesceRegions(blocks: SourceBlock[], obstacles: Rect[] = []): SourceBlock[] {
 	const out: SourceBlock[] = [];
 	for (const block of blocks) {
 		const last = out[out.length - 1];
-		if (last && canMerge(last, block)) {
+		if (last && canMerge(last, block, obstacles)) {
 			out[out.length - 1] = mergeTwo(last, block);
 		}
 		else {
@@ -237,11 +245,11 @@ export function coalesceRegions(blocks: SourceBlock[]): SourceBlock[] {
 		}
 		const prev = out[i - 1];
 		const next = out[i + 1];
-		if (prev && canAbsorb(prev, shard)) {
+		if (prev && canAbsorb(prev, shard, obstacles)) {
 			out[i - 1] = mergeTwo(prev, shard);
 			out.splice(i, 1);
 		}
-		else if (next && canAbsorb(next, shard)) {
+		else if (next && canAbsorb(next, shard, obstacles)) {
 			out[i + 1] = mergeTwo(shard, next);
 			out.splice(i, 1);
 		}

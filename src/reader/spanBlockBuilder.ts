@@ -23,6 +23,7 @@
  */
 
 import type { BlockType, SourceBlock } from '../types/models';
+import { insideObstacle, obstacleBetween } from './figureBarriers';
 import { isMetadataBlock, isRunningHeadOrFoot } from './metaFilter';
 import {
 	columnOf,
@@ -209,7 +210,7 @@ export function lineText(line: SpanLine): string {
  * refuses to end a paragraph after a line that ran to its column's right
  * margin — that line wrapped, so the sentence continues on the next one.
  */
-export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeight = 0): SpanLine[][] {
+export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeight = 0, obstacles: Rect[] = []): SpanLine[][] {
 	if (!lines.length) {
 		return [];
 	}
@@ -244,6 +245,11 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 		const next = lines[i + 1];
 		if (!next) {
 			break;
+		}
+		// 边框硬屏障: a figure between two lines separates layout regions.
+		if (obstacleBetween(line.rect, next.rect, obstacles)) {
+			flush();
+			continue;
 		}
 		const size = line.fontSize > 0 ? line.fontSize : 10;
 		const margins = marginOf(i);
@@ -309,6 +315,8 @@ function classify(text: string, fontSize: number, bodySize: number, lineCount: n
 export interface SpanBuildOptions {
 	pageIndex: number;
 	pageHeight: number;
+	/** 边框硬屏障: figure rects — in-figure labels dropped, no merges across. */
+	imageRectsPdf?: Rect[];
 	pageWidth?: number;
 	includeReferences?: boolean;
 	referencesAlreadyStarted?: boolean;
@@ -321,8 +329,12 @@ export interface SpanBuildResult {
 
 export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOptions): SpanBuildResult {
 	const pageWidth = options.pageWidth && options.pageWidth > 0 ? options.pageWidth : 612;
-	const lines = groupIntoLines(items, pageWidth, options.pageHeight);
-	const paragraphs = groupIntoParagraphs(lines, pageWidth, options.pageHeight);
+	const obstacles = options.imageRectsPdf ?? [];
+	const filteredItems = obstacles.length
+		? items.filter(i => !insideObstacle(i.rect, obstacles))
+		: items;
+	const lines = groupIntoLines(filteredItems, pageWidth, options.pageHeight);
+	const paragraphs = groupIntoParagraphs(lines, pageWidth, options.pageHeight, obstacles);
 
 	const sizes = lines.map(l => l.fontSize).filter(s => s > 0).sort((a, b) => a - b);
 	const bodySize = sizes.length ? sizes[Math.floor(sizes.length / 2)]! : 0;

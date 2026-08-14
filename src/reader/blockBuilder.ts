@@ -5,6 +5,7 @@
  */
 
 import type { BlockType, BoundingBox, PdfChar, SourceBlock } from '../types/models';
+import { insideObstacle, obstacleBetween } from './figureBarriers';
 import { isMetadataBlock } from './metaFilter';
 import {
 	columnOf,
@@ -36,6 +37,12 @@ export interface BuildOptions {
 	includeReferences?: boolean;
 	/** Whether a references heading was already seen on an earlier page. */
 	referencesAlreadyStarted?: boolean;
+	/**
+	 * 边框硬屏障: real figure rectangles (operator list, PDF coords). Lines
+	 * inside them are diagram labels (kept original, never translated); lines
+	 * separated by them never merge into one paragraph.
+	 */
+	imageRectsPdf?: [number, number, number, number][];
 }
 
 export interface BuildResult {
@@ -171,7 +178,7 @@ export function textForRange(chars: PdfChar[], start: number, end: number): stri
  * column's right margin — such a line wrapped, so the sentence continues.
  * A final merge pass rejoins anything that still came out split mid-sentence.
  */
-export function buildParagraphs(chars: PdfChar[], lines: Line[], pageWidth = 612, pageHeight = 0): Paragraph[] {
+export function buildParagraphs(chars: PdfChar[], lines: Line[], pageWidth = 612, pageHeight = 0, obstacles: [number, number, number, number][] = []): Paragraph[] {
 	if (!lines.length) {
 		return [];
 	}
@@ -231,6 +238,12 @@ export function buildParagraphs(chars: PdfChar[], lines: Line[], pageWidth = 612
 			break;
 		}
 		const explicitBreak = !!chars[line.end]?.paragraphBreakAfter;
+		// 边框硬屏障: a figure between two lines separates layout regions —
+		// force the break no matter what the spacing/font signals say.
+		if (obstacleBetween(line.rect as Rect, next.rect as Rect, obstacles)) {
+			flush();
+			continue;
+		}
 		const margins = marginOf(i);
 		const size = line.fontSize > 0 ? line.fontSize : 10;
 		const styleBreak = shouldBreak({
@@ -255,7 +268,7 @@ export function buildParagraphs(chars: PdfChar[], lines: Line[], pageWidth = 612
 	flush();
 
 	// Repair pass: rejoin fragments that ended mid-sentence on the next line.
-	const groups = planMerges(raw.map((p, i) => ({
+	const merged = planMerges(raw.map((p, i) => ({
 		text: p.text,
 		column: rawColumns[i],
 		type: 'paragraph',
@@ -263,6 +276,21 @@ export function buildParagraphs(chars: PdfChar[], lines: Line[], pageWidth = 612
 		rect: p.rect as Rect,
 		gapAfter: raw[i + 1] ? p.rect[1] - raw[i + 1]!.rect[3] : undefined
 	})));
+	// 边框硬屏障 also vetoes the repair pass: never rejoin across a figure.
+	const groups: number[][] = [];
+	for (const g of merged) {
+		let cur: number[] = [g[0]!];
+		for (let k = 1; k < g.length; k++) {
+			if (obstacleBetween(raw[g[k - 1]!]!.rect as Rect, raw[g[k]!]!.rect as Rect, obstacles)) {
+				groups.push(cur);
+				cur = [g[k]!];
+			}
+			else {
+				cur.push(g[k]!);
+			}
+		}
+		groups.push(cur);
+	}
 	if (groups.length === raw.length) {
 		return raw;
 	}
@@ -413,8 +441,15 @@ function toBoundingBox(rect: [number, number, number, number], pageHeight: numbe
  */
 export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResult {
 	const { pageIndex, pageHeight, pageWidth } = options;
-	const lines = buildLines(chars);
-	let paragraphs = buildParagraphs(chars, lines, pageWidth, pageHeight);
+	const obstacles = options.imageRectsPdf ?? [];
+	let lines = buildLines(chars);
+	// 边框硬屏障 rule 1: lines INSIDE a figure are diagram labels ("X-rays",
+	// "Low keV") — they stay on the original page and never enter the
+	// translation flow, where they used to fuse with captions and body text.
+	if (obstacles.length) {
+		lines = lines.filter(l => !insideObstacle(l.rect as Rect, obstacles));
+	}
+	let paragraphs = buildParagraphs(chars, lines, pageWidth, pageHeight, obstacles);
 	paragraphs = paragraphs.filter(p => !isHeaderOrFooter(p, pageHeight));
 	paragraphs = orderParagraphs(paragraphs, pageWidth);
 

@@ -15,6 +15,20 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.19] — 2026-08-10
+
+### Fixed(双栏识别第二批:边框硬屏障)
+
+- **图框成为提取阶段的一等公民.** 操作符列表得到的真实图片矩形此前只用于渲染,提取器
+  看不见它们——图内文字("X-rays"、"Low keV" 等图注标签)混入正文流,相邻两图的题注隔着
+  图框互相融合,一个坏合并的联合矩形随后吞掉半页(用户实拍 Radiology 三栏图文页确认)。
+  现在图框在提取全程生效,三条硬规则:
+  1. **框内文字不进翻译流**(≥60% 落在图内的行判为图表标签,保留原样);
+  2. **隔框的行永不合并成段**(段落构建与修复合并均被图框强制断开);
+  3. **区域合并器见框即停**(canMerge/canAbsorb 对被图框分隔的区域直接拒绝)。
+- 图框获取为 best-effort(2.5s 超时、按页缓存),拿不到时行为与旧版完全一致。
+- 新增 figureBarriers 纯函数模块与 4 组回归测试(以该真实页面几何为原型)。
+
 ## [0.9.18] — 2026-08-10
 
 ### Fixed(双栏识别第一批,由真实 RSNA 页面验证驱动)
