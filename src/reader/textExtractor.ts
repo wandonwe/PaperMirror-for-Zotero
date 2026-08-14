@@ -23,6 +23,7 @@ import * as logger from '../utils/logger';
 import { buildBlocks, buildBlocksFromPlainText, medianFontSize } from './blockBuilder';
 import { buildBlocksFromSpans } from './spanBlockBuilder';
 import { coalesceRegions } from './regionCoalescer';
+import { orderBlocksForReading } from './readingOrder';
 import * as adapter from './zoteroReaderAdapter';
 import type { ReaderLike } from './zoteroReaderAdapter';
 
@@ -176,7 +177,10 @@ export class TextExtractor {
 					imageRectsPdf: obstacles
 				});
 				const sourceBlockCount = result.blocks.length;
-				result.blocks = coalesceRegions(result.blocks, obstacles);
+				// Canonical reading order BEFORE coalescing: row-wise streams
+				// interleave the columns, and the coalescer only merges adjacent
+				// blocks — without this, one-line shreds never rejoin.
+				result.blocks = coalesceRegions(orderBlocksForReading(result.blocks), obstacles);
 				this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
 				if (result.blocks.length) {
 					this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
@@ -238,7 +242,7 @@ export class TextExtractor {
 			// Rebuild semantic regions from whatever fragments extraction
 			// produced: whole regions translate as whole sentences.
 			const sourceBlockCount = result.blocks.length;
-			result.blocks = coalesceRegions(result.blocks, obstacles);
+			result.blocks = coalesceRegions(orderBlocksForReading(result.blocks), obstacles);
 			this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
 			this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
 			logger.info(MODULE, `Page ${pageIndex + 1}: extracted ${result.blocks.length} block(s) from the text layer`);

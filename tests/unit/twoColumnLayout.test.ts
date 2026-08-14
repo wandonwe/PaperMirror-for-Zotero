@@ -260,3 +260,91 @@ test('a MID-PAGE centered reprint notice does not bridge the columns (page-1 cas
 	const cols = new Set(result.blocks.map(b => b.column));
 	assert.ok(cols.has(0) && cols.has(1), 'two columns survive the mid-page notice');
 });
+
+// ---- zebra-page regressions: interleaved stream order + bogus break flags ---
+
+import { orderBlocksForReading } from '../../src/reader/readingOrder';
+import { buildLines, buildParagraphs } from '../../src/reader/blockBuilder';
+import type { PdfChar } from '../../src/types/models';
+import { coalesceRegions } from '../../src/reader/regionCoalescer';
+import type { SourceBlock } from '../../src/types/models';
+
+function colBlock(id: string, column: number, top: number, text: string): SourceBlock {
+	const x1 = column === 0 ? LEFT_X : RIGHT_X;
+	const x2 = column === 0 ? LEFT_RIGHT : RIGHT_RIGHT;
+	return {
+		id, pageIndex: 0, order: 0, type: 'paragraph', sourceText: text,
+		boundingBox: { x: x1, y: top, width: x2 - x1, height: 11 },
+		lineRectsPdf: [[x1, PAGE_H - top - 11, x2, PAGE_H - top]],
+		fontSize: 10, column
+	};
+}
+
+test('row-wise interleaved columns are re-ordered L-column-first, then R', () => {
+	// Stream order L1 R1 L2 R2 L3 R3 — the zebra-page shape.
+	const blocks = [
+		colBlock('L1', 0, 100, 'left one continues and'),
+		colBlock('R1', 1, 100, 'right one continues and'),
+		colBlock('L2', 0, 113, 'left two continues and'),
+		colBlock('R2', 1, 113, 'right two continues and'),
+		colBlock('L3', 0, 126, 'left three ends here.'),
+		colBlock('R3', 1, 126, 'right three ends here.')
+	];
+	const ordered = orderBlocksForReading(blocks);
+	assert.deepEqual(ordered.map(b => b.id), ['L1', 'L2', 'L3', 'R1', 'R2', 'R3']);
+});
+
+test('after re-ordering, the coalescer rejoins the one-line shreds per column', () => {
+	const blocks = [
+		colBlock('L1', 0, 100, 'in predicting POPF. In view of the imbalance between the'),
+		colBlock('R1', 1, 100, 'pancreatoduodenectomy patients underwent the open'),
+		colBlock('L2', 0, 113, 'patients with and without POPF, we further used the'),
+		colBlock('R2', 1, 113, 'procedure with pancreaticojejunostomy performed by'),
+		colBlock('L3', 0, 126, 'F score to compare performance across both models.'),
+		colBlock('R3', 1, 126, 'duct-to-mucosa anastomosis in every included case.')
+	];
+	const regions = coalesceRegions(orderBlocksForReading(blocks));
+	assert.equal(regions.length, 2, 'one region per column, not six one-line shreds');
+	assert.ok(regions[0]!.sourceText.includes('POPF, we further used'), 'left column rejoined in order');
+	assert.ok(regions[1]!.sourceText.includes('anastomosis in every'), 'right column rejoined in order');
+});
+
+test('a mid-page full-width block separates bands and keeps its position', () => {
+	const wide: SourceBlock = {
+		id: 'W', pageIndex: 0, order: 0, type: 'caption', sourceText: 'Table 1: spanning caption',
+		boundingBox: { x: LEFT_X, y: 120, width: RIGHT_RIGHT - LEFT_X, height: 12 },
+		fontSize: 10, column: -1
+	};
+	const blocks = [
+		colBlock('L1', 0, 100, 'above left'), colBlock('R1', 1, 100, 'above right'),
+		wide,
+		colBlock('L2', 0, 140, 'below left'), colBlock('R2', 1, 140, 'below right')
+	];
+	const ordered = orderBlocksForReading(blocks);
+	assert.deepEqual(ordered.map(b => b.id), ['L1', 'R1', 'W', 'L2', 'R2']);
+});
+
+test('bogus per-line paragraphBreakAfter flags are ignored (geometry wins)', () => {
+	// Every line carries the break flag — a real PDF pathology. The wrapped-line
+	// geometry must override it so the paragraph survives as ONE block.
+	const mkChar = (text: string, y: number, last: boolean): PdfChar[] =>
+		[...text].map((c, i) => ({
+			c, rect: [54 + i * 5.5, y, 54 + i * 5.5 + 5.5, y + 10] as [number, number, number, number],
+			fontSize: 10, fontName: 'Body',
+			lineBreakAfter: false,
+			paragraphBreakAfter: i === text.length - 1 // EVERY line flagged
+		} as PdfChar));
+	const lines = [
+		'The quick brown fox jumps over the lazy dog and',
+		'continues running through the field toward the barn',
+		'until it finally reaches the shaded resting place.',
+		'Another line follows to reach the eight line minimum',
+		'needed for the sanity check to consider the page and',
+		'the flags statistically meaningless rather than real',
+		'paragraph boundaries that a normal document carries',
+		'somewhere in the middle of the extracted text flow.'
+	];
+	const cs = lines.flatMap((t, i) => mkChar(t, 700 - i * 12, i === lines.length - 1));
+	const paras = buildParagraphs(cs, buildLines(cs), 612, 792);
+	assert.equal(paras.length, 1, 'flags on every line are distrusted; geometry keeps one paragraph');
+});

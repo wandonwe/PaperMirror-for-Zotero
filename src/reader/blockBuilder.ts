@@ -200,6 +200,14 @@ export function buildParagraphs(chars: PdfChar[], lines: Line[], pageWidth = 612
 		return { left: Number.isFinite(left) ? left : 0, right: Number.isFinite(right) ? right : pageWidth };
 	};
 
+	// Break-flag sanity: some PDFs set paragraphBreakAfter on (nearly) EVERY
+	// line — trusted as authoritative, that shreds each paragraph into
+	// one-line blocks which then translate line-by-line (the EN/ZH zebra
+	// pages). When >80% of lines carry the flag it carries no information:
+	// ignore it and let geometry decide.
+	const flagged = lines.filter(l => !!chars[l.end]?.paragraphBreakAfter).length;
+	const distrustExplicit = lines.length >= 8 && flagged / lines.length > 0.8;
+
 	const raw: Paragraph[] = [];
 	const rawColumns: number[] = [];
 	let group: Line[] = [];
@@ -237,7 +245,7 @@ export function buildParagraphs(chars: PdfChar[], lines: Line[], pageWidth = 612
 		if (!next) {
 			break;
 		}
-		const explicitBreak = !!chars[line.end]?.paragraphBreakAfter;
+		const explicitBreak = !distrustExplicit && !!chars[line.end]?.paragraphBreakAfter;
 		// 边框硬屏障: a figure between two lines separates layout regions —
 		// force the break no matter what the spacing/font signals say.
 		if (obstacleBetween(line.rect as Rect, next.rect as Rect, obstacles)) {
