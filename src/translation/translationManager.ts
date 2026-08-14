@@ -21,7 +21,13 @@ import type {
 } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
-import { protectFormulas, restoreFormulas, stripProtectable, verifyPlaceholders } from '../reader/formulaGuard';
+import { isFormulaDenseRisk, protectFormulas, restoreFormulas, stripProtectable, verifyPlaceholders } from '../reader/formulaGuard';
+import {
+	hasMixedCopiedResidue,
+	isTruncatedTranslation,
+	longEnglishResidueSpans,
+	looksLikeAuthorNameList
+} from './residueRules';
 import { matchRules, mergeGlossaries } from './glossary';
 import { DocumentMemory, extractTermPairs } from './docMemory';
 import { RequestScheduler } from './requestScheduler';
@@ -103,10 +109,32 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 	if (proseWords < PROSE_WORD_GATE) {
 		return true; // label / acronym / numeric cell — may legitimately be CJK-free
 	}
+	// 作者名单豁免 (retain-pdf): a byline legitimately stays Latin — rejecting
+	// it buys a doomed retry on every page-1.
+	if (looksLikeAuthorNameList(proseSource)) {
+		return true;
+	}
+	const proseT = stripProtectable(t);
+	// 截断硬判据 (retain-pdf quality.py): a long source answered with <15% of
+	// its length is a tail/half output — the ratio test alone scores a short
+	// all-Chinese fragment as "translated" and stored the loss silently.
+	if (isTruncatedTranslation(proseSource, proseT)) {
+		return false;
+	}
 	// A PROSE source must come back predominantly Chinese. This rejects not
 	// only echoed English (ratio 0) but a HALF-translated / mixed response,
 	// which the old "contains any CJK" test accepted.
-	return targetLanguageRatio(stripProtectable(t)) >= MIN_TARGET_RATIO;
+	if (targetLanguageRatio(proseT) < MIN_TARGET_RATIO) {
+		return false;
+	}
+	// 混合残留硬判据 (retain-pdf): the ratio passes on a LONG paragraph whose
+	// tail is still a copied English span — Chinese-dominant overall, one
+	// clause silently untranslated. A ≥12-word span that is surface-identical
+	// (or ≥0.82 similar) to the source is copied, not translated.
+	if (hasMixedCopiedResidue(source, t)) {
+		return false;
+	}
+	return true;
 }
 
 /**
@@ -205,7 +233,12 @@ export function hasEnglishResidue(text: string): boolean {
 			run = 0;
 		}
 	}
-	return false;
+	// 跨度规则 (retain-pdf _has_long_english_residue_span): a ≥10-word Latin
+	// prose span — Title-Case words count too, which the lowercase run above
+	// deliberately skips — that is NOT data-dense (NMR lines, numeric strings
+	// stay exempt) is a dropped clause. Catches "The Results Showed That..."
+	// style residue the run rule missed.
+	return longEnglishResidueSpans(stripProtectable(cleaned), 10).length > 0;
 }
 
 /** CJK ideograph ranges used for the target-language ratio. */
@@ -1132,10 +1165,16 @@ export class TranslationManager {
 		// isolated into single-block 'slow' chunks appended after the fast
 		// batches — one hard block can no longer sink a whole batch (id drift,
 		// truncation) or delay the fast batches that paint most of the page.
-		const riskOf = (b: SourceBlock): boolean =>
-			b.type === 'table'
-			|| b.sourceText.length > 2400
-			|| (placeholdersById.get(b.id)?.length ?? 0) >= 5;
+		const maskedById = new Map(protectedBlocks.map(p => [p.block.id, p.text]));
+		const riskOf = (b: SourceBlock): boolean => {
+			const ph = placeholdersById.get(b.id)?.length ?? 0;
+			return b.type === 'table'
+				|| b.sourceText.length > 2400
+				|| ph >= 5
+				// 评分路由 (retain-pdf segment_risk): 定义句 + 公式密集 + 占位符
+				// 前置的组合比单纯计数更早识别高风险块。
+				|| isFormulaDenseRisk(maskedById.get(b.id) ?? b.sourceText, ph);
+		};
 		const chunks = planChunks(toTranslate, buildLayoutModules(toTranslate), { riskOf });
 		// Hard ceiling on requests for this page so a misbehaving engine can never
 		// turn one page into a request storm: 2× the planned chunks, plus 2. Once

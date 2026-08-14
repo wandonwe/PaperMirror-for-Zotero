@@ -81,6 +81,20 @@ export function parsePlainResponse(raw: string, id: string): ValidatedResponse {
 	if (!text) {
 		throw new PaperMirrorError('BAD_RESPONSE', 'The plain-mode translation came back empty.');
 	}
+	// 协议壳残留 (移植自 retain-pdf protocol_shell.py): the model answered with
+	// the JSON envelope anyway, or with a "please provide the text" prompt —
+	// storing either as a "translation" is worse than failing.
+	if (text.startsWith('{') && (text.includes('"translations"') || text.includes('"translatedText"'))) {
+		const parsed = validateResponse(text, [id]);
+		if (parsed.translations.length) {
+			return parsed;
+		}
+		throw new PaperMirrorError('BAD_RESPONSE', 'Plain-mode output was a JSON shell without a translation.');
+	}
+	if (text.length <= 48
+		&& /^(?:请\s*(?:提供|输入|给出|粘贴|发送)|(?:please\s+)?(?:provide|send|enter|paste)\s)/i.test(text)) {
+		throw new PaperMirrorError('BAD_RESPONSE', 'Plain-mode output asked for the source instead of translating.');
+	}
 	return { translations: [{ id, translatedText: text }], missingIds: [], extraIds: [] };
 }
 

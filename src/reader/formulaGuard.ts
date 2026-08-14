@@ -137,6 +137,61 @@ export function stripProtectable(text: string): string {
 	return protectFormulas(text).text.replace(TOKEN_RE, ' ');
 }
 
+/**
+ * 公式密集风险评分 — 移植自 retain-pdf `segment_risk.py::formula_risk_score`
+ * 的可移植部分. 高分的块正是模型最容易在批处理里搞砸的块(定义句、公式
+ * 密集、占位符前置),它们应当走单块慢道。触发短语、阈值与加分值照搬原实现;
+ * 依赖其内部分段计划的项目跳过。
+ */
+const FORMULA_RISK_TRIGGER_PHRASES = [
+	'abbreviated as', 'defined as', 'denoted as', 'is defined as', 'can be defined as',
+	'where ', 'represented by', 'expressed as', 'written as', 'calculated as',
+	'corresponds to', 'refers to', 'stands for'
+];
+
+export function formulaRiskScore(maskedText: string, placeholderCount: number): number {
+	const prose = stripProtectable(maskedText).replace(/\s+/g, ' ').trim();
+	const lowered = prose.toLowerCase();
+	const density = placeholderCount / Math.max(1, maskedText.length);
+	let score = 0;
+	if (FORMULA_RISK_TRIGGER_PHRASES.some(p => lowered.includes(p))) {
+		score += 3;
+	}
+	if (placeholderCount >= 4) {
+		score += 2;
+	}
+	if (placeholderCount >= 8) {
+		score += 2;
+	}
+	if (prose.length >= 180) {
+		score += 1;
+	}
+	if (density >= 0.015) {
+		score += 1;
+	}
+	if (density >= 0.03) {
+		score += 1;
+	}
+	// 占位符前置/中置各 +1 (原实现: skeleton 首尾位置判断的简化——token 出现
+	// 在文本前 15% 或不在结尾,说明公式嵌在句子里而不是收尾)。
+	const firstToken = maskedText.search(/⟦PM\d+⟧/);
+	if (firstToken >= 0) {
+		if (firstToken <= maskedText.length * 0.15) {
+			score += 1;
+		}
+		const lastToken = maskedText.lastIndexOf('⟦PM');
+		if (lastToken >= 0 && lastToken < maskedText.length - 24) {
+			score += 1;
+		}
+	}
+	return score;
+}
+
+/** 慢道判据 (segment_risk.py): 占位符 ≥4 且风险分 ≥6. */
+export function isFormulaDenseRisk(maskedText: string, placeholderCount: number): boolean {
+	return placeholderCount >= 4 && formulaRiskScore(maskedText, placeholderCount) >= 6;
+}
+
 export interface PlaceholderReport {
 	ok: boolean;
 	/** Tokens the translation lost entirely (neither ⟦PMn⟧ nor bare PMn). */

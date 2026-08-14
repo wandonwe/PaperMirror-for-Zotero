@@ -15,6 +15,34 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.31] — 2026-08-15
+
+### Changed(retain-pdf 源码级核心算法移植)
+
+深读 retain-pdf 源码(`llm/validation/english_residue.py`、`quality.py`、
+`segment_risk.py`、`protocol_shell.py`),把其在真实失败样本上磨出来的判定规则
+逐条移植进对应模块:
+
+- **copy-dominance 判据.** "未翻译/混合残留"的硬判据改为表面相似度:归一化
+  英文表面(小写、去标点)与原文相似度 ≥0.82 才算"抄的"——标点大小写变化藏
+  不住回声,而真翻译永远不会相似。新增 `residueRules.ts` 纯模块。
+- **混合残留硬拒.** 长段落整体中文占比达标、但结尾仍拖着一句 ≥12 词且与原文
+  copy-similar 的英文——比例检查看不见它,现在拒收进补救链。
+- **截断硬拒.** 原文 ≥200 字符而译文不足其 15%(EN→ZH 正常 0.3–0.5)必是
+  半截/尾巴输出,原先比例检查会把一小段全中文的残缺译文当"已翻译"存下。
+- **两项误拒豁免.** 数据密集片段(数字 ≥ max(6, 字母×0.35),NMR 谱线/数值串)
+  永不算残留;作者署名行(≥3 段、每段 2–5 个人名词)合法保留拉丁文。
+- **残留检测跨度规则.** 除既有的 6 连小写词规则外,新增 ≥30 字符、≥10 词、
+  像散文且非数据密集的拉丁跨度判定——Title-Case 残留句(原规则刻意跳过大写词)
+  现在也能触发补译。
+- **公式密集评分路由.** 慢道判据从"占位符 ≥5"升级为 retain-pdf 的风险评分:
+  定义句触发短语(defined as / denoted as / where …)+3、占位符 ≥4/≥8 各 +2、
+  散文 ≥180 字符 +1、密度阈值 +1/+1、占位符前置/中置 +1/+1;占位符 ≥4 且
+  总分 ≥6 即入慢道——比单纯计数更早识别高风险块。
+- **协议壳检测.** 纯文本兜底若返回 JSON 信封则从中恢复译文,若返回"请提供
+  原文"类提示语则按失败处理——两者都不再可能被当成译文存储。
+- 新增 12 组移植对照测试。全套 527 项通过。
+
 ## [0.9.30] — 2026-08-14
 
 ### Added(参照 retain-pdf 批次7:跨页续接 + context_bleed + 不译词列表)

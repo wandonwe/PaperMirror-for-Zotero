@@ -59,3 +59,12 @@ test('parsePlainResponse strips fences, labels and quotes', () => {
 test('parsePlainResponse throws on empty output', () => {
 	assert.throws(() => parsePlainResponse('   ', 'b1'));
 });
+
+test('plain-mode protocol shell is recovered as JSON or rejected (协议壳)', () => {
+	// Model answered with the JSON envelope anyway → recover the translation.
+	const shell = '{"translations":[{"id":"b1","translatedText":"这是译文。"}]}';
+	assert.equal(parsePlainResponse(shell, 'b1').translations[0]!.translatedText, '这是译文。');
+	// A "please provide the text" prompt is never a translation.
+	assert.throws(() => parsePlainResponse('请提供待翻译的原文。', 'b1'));
+	assert.throws(() => parsePlainResponse('Please provide the text to translate.', 'b1'));
+});

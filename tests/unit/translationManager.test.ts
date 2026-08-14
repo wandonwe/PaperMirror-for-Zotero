@@ -1000,3 +1000,26 @@ test('no-translate literals are masked in requests and restored in results (不�
 	assert.ok(state.translations.get('b')?.includes('RetainNet'), 'literal restored in the stored translation');
 	manager.dispose();
 });
+
+// ---------------------------------------------------------------------------
+// 0.9.31 核心算法对齐 (retain-pdf 源码移植): 截断/混合残留/作者名单 in looksTranslated
+// ---------------------------------------------------------------------------
+
+test('looksTranslated: truncated stub rejected, author byline accepted (源码对齐)', () => {
+	const longSource = 'The measurement protocol was applied to every cohort in the study and the resulting attenuation values were subsequently normalized against baseline scans acquired before contrast injection. '.repeat(2);
+	assert.equal(looksTranslated(longSource, '协议已应用。', 'zh-CN'), false, 'a stub answer for a long source is a truncation');
+	const byline = 'John A. Smith, Maria García, Wei Zhang, and Pierre Dubois';
+	assert.equal(looksTranslated(byline, byline, 'zh-CN'), true, 'author list legitimately stays Latin');
+});
+
+test('looksTranslated: Chinese-dominant output with a copied tail clause is rejected', () => {
+	const source = 'Contrast enhancement increases proportionally with iodine concentration in every patient cohort. For a given tube voltage the proportionality of contrast enhancement to iodine concentration remains nearly constant across scanner generations and vendors, which simplifies protocol design considerably in clinical practice.';
+	const half = '对比增强在每个患者队列中都随碘浓度成比例增加,这是稳定的物理规律,临床上极为有用,协议设计因此大为简化,各代设备之间基本一致,厂商差异也很小,总体表现稳定可靠。 For a given tube voltage the proportionality of contrast enhancement to iodine concentration remains nearly constant across scanner generations and vendors.';
+	assert.equal(looksTranslated(source, half, 'zh-CN'), false);
+});
+
+test('hasEnglishResidue: Title-Case residue span caught, NMR line exempt (跨度规则)', async () => {
+	const { hasEnglishResidue } = await import('../../src/translation/translationManager');
+	assert.equal(hasEnglishResidue('该方法优于基线。 The Proposed Method Consistently Outperforms Existing Baselines On Every Benchmark Considered Here. 其余正常。'), true);
+	assert.equal(hasEnglishResidue('产物表征 1H NMR (400 MHz, CDCl3) 7.42 (d, J = 8.2 Hz, 2H), 7.21 (t, 1H), 3.85 (s, 3H) 与文献一致。'), false);
+});
