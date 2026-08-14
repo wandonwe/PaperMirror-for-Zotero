@@ -779,3 +779,68 @@ test('formula-dense block travels alone in a slow-lane request (三分道)', asy
 	assert.equal(risky[0]!.blocks.length, 1, 'risky block must be isolated in its own request');
 	manager.dispose();
 });
+
+test('plain-mode recovery rescues a block the JSON chain kept rejecting (批次3)', async () => {
+	const plainSeen: TranslationRequest[] = [];
+	const blocks: SourceBlock[] = [
+		{ id: 'ok', pageIndex: 0, order: 0, type: 'paragraph', sourceText: 'This paragraph translates fine on the very first attempt today.' },
+		{ id: 'stuck', pageIndex: 0, order: 1, type: 'paragraph', sourceText: 'This stubborn paragraph keeps coming back as an English echo every time.' }
+	];
+	const { deps } = makeDeps({
+		extractPage: async () => blocks,
+		translateRequest: async (req) => {
+			if (req.plain) {
+				plainSeen.push(req);
+				return { translations: [{ id: req.blocks[0]!.id, translatedText: '顽固段落终于翻译成功了,这就是完整的中文译文。' }] };
+			}
+			return {
+				translations: req.blocks.map(b => ({
+					id: b.id,
+					// JSON 链对 stuck 永远回声英文 → looksTranslated 拒收
+					translatedText: b.id === 'stuck' ? b.text : '正常段落的完整中文译文内容。'
+				}))
+			};
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 10);
+	const state = manager.getPageState(0)!;
+	assert.equal(state.status, 'done');
+	assert.ok(plainSeen.length >= 1, 'plain-mode rescue must have been attempted');
+	assert.ok(state.translations.get('stuck')?.includes('顽固段落'), 'plain rescue result stored');
+	assert.equal(state.keepOrigin?.size ?? 0, 0);
+	manager.dispose();
+});
+
+test('a segment that failed two runs is keep-origin skipped on the third (止损)', async () => {
+	let requestsForStuck = 0;
+	const blocks: SourceBlock[] = [
+		{ id: 'good', pageIndex: 0, order: 0, type: 'paragraph', sourceText: 'A perfectly normal paragraph that always translates without any drama.' },
+		{ id: 'stuck', pageIndex: 0, order: 1, type: 'paragraph', sourceText: 'A cursed paragraph that the provider refuses to ever translate properly.' }
+	];
+	const { deps } = makeDeps({
+		extractPage: async () => blocks,
+		readCache: async () => null, // never serve the page cache
+		translateRequest: async (req) => {
+			if (req.blocks.some(b => b.id === 'stuck')) {
+				requestsForStuck++;
+			}
+			return {
+				translations: req.blocks.map(b => ({
+					id: b.id,
+					translatedText: b.id === 'stuck' ? b.text : '好段落的完整中文译文内容示例。'
+				}))
+			};
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 10);
+	await manager.retranslatePage(0, 'normal');
+	const afterTwo = requestsForStuck;
+	assert.ok(afterTwo > 0);
+	await manager.retranslatePage(0, 'normal');
+	assert.equal(requestsForStuck, afterTwo, 'third run must not spend requests on the dead segment');
+	const state = manager.getPageState(0)!;
+	assert.equal(state.keepOrigin?.get('stuck'), 'repeated-failure');
+	manager.dispose();
+});

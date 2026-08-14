@@ -14,3 +14,16 @@ test('charBudget blocks add layout-budget rules; absent budgets add none', async
 	assert.ok(prompt.includes('Layout budgets'));
 	assert.ok(prompt.includes('never by dropping facts'));
 });
+
+test('plain mode prompt asks for bare text and payload is the block text', async () => {
+	const { buildSystemPrompt, buildUserPayload } = await import('../../src/translation/promptBuilder');
+	const request = {
+		sourceLanguage: 'en', targetLanguage: 'zh-CN', documentTitle: 'T',
+		previousContext: '', plain: true,
+		blocks: [{ id: 'x', type: 'paragraph', text: 'Hello world' }]
+	} as unknown as import('../../src/types/models').TranslationRequest;
+	const sys = buildSystemPrompt(request);
+	assert.ok(/ONLY the translation/i.test(sys));
+	assert.ok(!/JSON object of this exact shape/.test(sys));
+	assert.equal(buildUserPayload(request), 'Hello world');
+});

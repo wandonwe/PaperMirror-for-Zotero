@@ -7,7 +7,7 @@
 import type { ProviderSettings, TranslationRequest, TranslationResponse, ValidationResult } from '../../types/models';
 import { PaperMirrorError } from '../../types/models';
 import { buildSystemPrompt, buildUserPayload } from '../promptBuilder';
-import { validateResponse } from '../responseValidator';
+import { parsePlainResponse, validateResponse } from '../responseValidator';
 import { requestJSON } from './httpClient';
 import type { TranslateOptions, TranslationProvider } from './types';
 import { openaiChatURL, resolveChatURL } from './urls';
@@ -107,8 +107,9 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 						{ role: 'system', content: buildSystemPrompt(request, settings.customPrompt) },
 						{ role: 'user', content: buildUserPayload(request) }
 					],
-					// Ask compliant servers for strict JSON; harmless elsewhere
-					response_format: { type: 'json_object' },
+					// Ask compliant servers for strict JSON; harmless elsewhere.
+					// Plain-mode (兜底重译) answers are bare text — no JSON coercion.
+					...(request.plain ? {} : { response_format: { type: 'json_object' } }),
 					// Opt-in advanced params (reasoning_effort / temperature / max tokens)
 					...openaiChatExtras(settings, config.id)
 				},
@@ -117,7 +118,9 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 				allowInsecureHTTP: config.allowInsecureHTTP?.(settings) ?? false
 			});
 			const text = extractText(json);
-			const { translations } = validateResponse(text, request.blocks.map(b => b.id));
+			const { translations } = request.plain
+				? parsePlainResponse(text, request.blocks[0]!.id)
+				: validateResponse(text, request.blocks.map(b => b.id));
 			return { translations };
 		},
 

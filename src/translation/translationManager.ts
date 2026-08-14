@@ -156,6 +156,8 @@ export function segmentHash(sourceText: string, sourceLang: string, targetLang: 
 
 /** Cap on residue re-translations per page — a safety valve against storms. */
 const RESIDUE_MAX_PER_PAGE = 8;
+/** 纯文本兜底: how many rejected blocks get a plain-mode rescue per page. */
+const FINAL_RECOVERY_MAX = 4;
 /** A run of this many consecutive plain-English words is untranslated prose. */
 const RESIDUE_WORD_RUN = 6;
 
@@ -233,6 +235,14 @@ export interface PageTranslationState {
 	translations: Map<string, string>;
 	error?: PaperMirrorError;
 	fromCache?: boolean;
+	/**
+	 * keep-origin 标记 (参照 retain-pdf dead-letter): block id → reason for
+	 * blocks deliberately left in the original language — either the repair
+	 * chain exhausted its budget ('unrecovered') or the segment failed twice
+	 * before and is skipped to stop re-buying doomed requests
+	 * ('repeated-failure'). 强制重译 clears the memory and tries again.
+	 */
+	keepOrigin?: Map<string, string>;
 }
 
 export interface TranslationDeps {
@@ -289,6 +299,13 @@ export class TranslationManager {
 	private prefetchBackward = 1;
 	/** Pages whose provider has already been reported unstable (fire once). */
 	private unstableFired = new Set<number>();
+	/**
+	 * 止损记忆 (参照 retain-pdf english_residue_repeated): segment hash → how
+	 * many whole-page runs left it untranslated. At ≥2 the segment is skipped
+	 * (keep-origin) instead of re-buying the same doomed requests on every
+	 * revisit. 强制重译 clears the map.
+	 */
+	private failedSegments = new Map<string, number>();
 	/** Injected (tests) or real timer delay, for request-level retry backoff. */
 	private delay: (ms: number) => Promise<void>;
 	/** Extraction semaphore: at most 2 concurrent PDF extractions, current page first. */
@@ -500,6 +517,10 @@ export class TranslationManager {
 	async retranslatePage(pageIndex: number, mode: 'normal' | 'force' = 'normal'): Promise<void> {
 		this.pages.delete(pageIndex);
 		this.unstableFired.delete(pageIndex); // a fresh run may report anew
+		if (mode === 'force') {
+			// 强制重译 gives every keep-origin segment a fresh chance.
+			this.failedSegments.clear();
+		}
 		this.scheduler.cancel(`page-${pageIndex}`);
 		await this.ensurePage(pageIndex, PRIORITY.CURRENT_RETRANSLATE, {
 			bypassCache: true,
@@ -901,7 +922,20 @@ export class TranslationManager {
 				}
 			}
 		}
-		const toTranslate = blocks.filter(b => !state.translations.has(b.id));
+		// keep-origin 止损: segments that already failed two whole runs are left
+		// in the original language instead of burning the same requests again.
+		const keepOrigin = new Map<string, string>();
+		state.keepOrigin = keepOrigin;
+		const toTranslate = blocks.filter((b) => {
+			if (state.translations.has(b.id)) {
+				return false;
+			}
+			if ((this.failedSegments.get(segHash(b)) ?? 0) >= 2) {
+				keepOrigin.set(b.id, 'repeated-failure');
+				return false;
+			}
+			return true;
+		});
 		if (!toTranslate.length) {
 			state.status = 'done';
 			this.notify(state);
@@ -1222,11 +1256,78 @@ export class TranslationManager {
 		if (canSpend()) {
 			await this.resolveEnglishResidue(state, blocks, results, source, target, signal, countedTranslate, canSpend);
 		}
+
+		// 纯文本兜底 (修复链路最后一环, 参照 retain-pdf final recovery): blocks the
+		// whole JSON chain rejected get ONE more shot each in plain mode — the
+		// answer is the bare translation, so id drift and JSON mangling cannot
+		// fail it. Budgeted (≤4/page, shares the page request cap).
+		{
+			const unrecovered = toTranslate.filter(b => !state.translations.has(b.id));
+			let attempts = 0;
+			for (const block of unrecovered) {
+				if (attempts >= FINAL_RECOVERY_MAX || !canSpend()) {
+					break;
+				}
+				if (signal.aborted) {
+					throw new PaperMirrorError('CANCELLED', 'cancelled');
+				}
+				attempts++;
+				const pb = protectedBlocks.find(p => p.block.id === block.id)!;
+				try {
+					const resp = await countedTranslate({
+						pageIndex,
+						sourceLanguage: source,
+						targetLanguage: target,
+						documentTitle: this.deps.getDocumentTitle(),
+						previousContext: '',
+						blocks: [{ id: block.id, type: block.type, text: pb.text }],
+						glossary: matchRules(this.deps.getGlossary(), [block.sourceText]),
+						plain: true
+					}, signal);
+					const hit = resp.translations.find(t =>
+						looksTranslated(block.sourceText, t.translatedText, target)
+						&& verifyPlaceholders(t.translatedText, pb.placeholders).ok);
+					if (hit) {
+						const restored = restoreFormulas(hit.translatedText, pb.placeholders);
+						state.translations.set(block.id, restored);
+						results.push({ id: block.id, translatedText: restored });
+						logger.info(MODULE, `Page ${pageIndex + 1}: plain-mode recovery rescued ${block.id}`);
+					}
+				}
+				catch (e) {
+					if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
+						throw e;
+					}
+					logger.warn(MODULE, `plain-mode recovery failed for ${block.id}`, e);
+				}
+			}
+			if (unrecovered.some(b => state.translations.has(b.id))) {
+				this.notify(state);
+			}
+		}
 		}
 		catch (e) {
 			persistPartial();
 			throw e;
 		}
+
+		// keep-origin 记账: whatever is STILL untranslated after the whole chain
+		// increments its segment's failure count; at ≥2 future runs skip it.
+		for (const block of toTranslate) {
+			if (!state.translations.has(block.id)) {
+				const h = segHash(block);
+				this.failedSegments.set(h, (this.failedSegments.get(h) ?? 0) + 1);
+				keepOrigin.set(block.id, 'unrecovered');
+			}
+		}
+		if (this.failedSegments.size > 500) {
+			// Bounded memory: drop the oldest half (Map preserves insertion order).
+			const keys = [...this.failedSegments.keys()].slice(0, 250);
+			for (const k of keys) {
+				this.failedSegments.delete(k);
+			}
+		}
+		untranslatedCount = toTranslate.filter(b => !state.translations.has(b.id)).length;
 
 		state.status = 'done';
 		this.notify(state);

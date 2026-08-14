@@ -15,6 +15,23 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.26] — 2026-08-14
+
+### Added(参照 retain-pdf 批次3:拒收段修复链路)
+
+- **纯文本兜底重译.** 被 JSON 链反复拒收(回声、半翻、丢 id)的段落,在整页收尾时
+  获得最后一次**纯文本模式**请求:系统提示只要求"只输出译文本身",响应整体即译文,
+  JSON 包裹和 id 漂移不可能再让它失败。每页预算 4 段,计入页请求上限。原则同
+  retain-pdf:「该翻的段不允许以空译文结束」。
+- **keep-origin 止损.** 连续两轮整页运行仍失败的段落记入止损记忆,后续访问直接标记
+  keep-origin 跳过——不再每次翻页都为注定失败的段落重复烧请求。**强制重译**清空
+  止损记忆,给所有段落重新机会。段级状态记入 `state.keepOrigin`(原因:
+  unrecovered / repeated-failure),为批次6的诊断面板铺路。
+- 纯文本模式下不再强制 JSON 输出(response_format / responseMimeType 按模式切换),
+  三家 LLM 适配器 + Gemini 原生接口统一接入。
+- 新增 5 组回归测试(纯文本解析、纯文本 prompt、兜底拯救、止损跳过、空响应抛错)。
+  全套 502 项通过。
+
 ## [0.9.25] — 2026-08-14
 
 ### Changed(参照 retain-pdf 批次2:三分道调度)

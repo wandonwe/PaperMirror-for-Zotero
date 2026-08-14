@@ -100,6 +100,12 @@ export interface TranslationRequest {
 		charBudget?: number;
 	}[];
 	glossary?: GlossaryRule[];
+	/**
+	 * 纯文本兜底模式 (参照 retain-pdf plain_text_retry): single-block request
+	 * whose answer is the bare translation, no JSON envelope. Used as the LAST
+	 * step of the repair chain — JSON/id mishandling cannot fail it.
+	 */
+	plain?: boolean;
 }
 
 export interface TranslationResponse {

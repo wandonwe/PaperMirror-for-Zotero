@@ -24,6 +24,23 @@ export function languageDisplayName(code: string): string {
 
 export function buildSystemPrompt(request: TranslationRequest, customPrompt?: string): string {
 	const target = languageDisplayName(request.targetLanguage);
+	if (request.plain) {
+		// 纯文本兜底 (修复链路最后一环): the block failed the JSON path repeatedly —
+		// strip every structural demand so nothing but translation can go wrong.
+		const lines = [
+			`Translate the academic text the user sends into ${target}.`,
+			'Output ONLY the translation itself — no explanations, no quotes, no JSON, no markdown.',
+			'Never alter numbers, statistics, citation markers, URLs, or math.',
+			'Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation unchanged.'
+		];
+		if (request.glossary?.length) {
+			lines.push('Terminology: ' + request.glossary.map(r => `"${r.source}" → "${r.target}"`).join('; ') + '.');
+		}
+		if (customPrompt && customPrompt.trim()) {
+			lines.push(customPrompt.trim());
+		}
+		return lines.join('\n');
+	}
 	const lines: string[] = [
 		`You are a professional academic translator. Translate scholarly text into ${target}.`,
 		'',
@@ -66,6 +83,9 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 }
 
 export function buildUserPayload(request: TranslationRequest): string {
+	if (request.plain) {
+		return request.blocks[0]?.text ?? '';
+	}
 	return JSON.stringify({
 		sourceLanguage: request.sourceLanguage,
 		targetLanguage: request.targetLanguage,

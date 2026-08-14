@@ -17,7 +17,7 @@
 import type { ProviderSettings, TranslationRequest, TranslationResponse, ValidationResult } from '../../types/models';
 import { PaperMirrorError } from '../../types/models';
 import { buildSystemPrompt, buildUserPayload } from '../promptBuilder';
-import { validateResponse } from '../responseValidator';
+import { parsePlainResponse, validateResponse } from '../responseValidator';
 import { requestJSON } from './httpClient';
 import type { TranslateOptions, TranslationProvider } from './types';
 
@@ -124,13 +124,15 @@ export const geminiNativeProvider: TranslationProvider = {
 			body: {
 				system_instruction: { parts: [{ text: buildSystemPrompt(request, settings.customPrompt) }] },
 				contents: [{ role: 'user', parts: [{ text: buildUserPayload(request) }] }],
-				generationConfig: geminiGenerationConfig(settings, { json: true })
+				generationConfig: geminiGenerationConfig(settings, { json: !request.plain })
 			},
 			timeoutMs: settings.timeoutMs,
 			signal: options.signal
 		});
 		const text = extractText(json);
-		const { translations } = validateResponse(text, request.blocks.map(b => b.id));
+		const { translations } = request.plain
+			? parsePlainResponse(text, request.blocks[0]!.id)
+			: validateResponse(text, request.blocks.map(b => b.id));
 		return { translations };
 	},
 

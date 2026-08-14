@@ -5,7 +5,7 @@
 import type { ProviderSettings, TranslationRequest, TranslationResponse, ValidationResult } from '../../types/models';
 import { PaperMirrorError } from '../../types/models';
 import { buildSystemPrompt, buildUserPayload } from '../promptBuilder';
-import { validateResponse } from '../responseValidator';
+import { parsePlainResponse, validateResponse } from '../responseValidator';
 import { requestJSON } from './httpClient';
 import type { TranslateOptions, TranslationProvider } from './types';
 import { anthropicMessagesURL } from './urls';
@@ -122,7 +122,9 @@ export const anthropicProvider: TranslationProvider = {
 			signal: options.signal
 		});
 		const text = extractText(json);
-		const { translations } = validateResponse(text, request.blocks.map(b => b.id));
+		const { translations } = request.plain
+			? parsePlainResponse(text, request.blocks[0]!.id)
+			: validateResponse(text, request.blocks.map(b => b.id));
 		return { translations };
 	},
 

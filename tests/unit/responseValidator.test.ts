@@ -42,3 +42,20 @@ test('validateResponse throws on non-JSON', () => {
 test('validateResponse throws when translations missing', () => {
 	assert.throws(() => validateResponse('{"foo":1}', ['a']), (e: unknown) => e instanceof PaperMirrorError && e.code === 'BAD_RESPONSE');
 });
+
+// ---------------------------------------------------------------------------
+// 0.9.26 批次3: 纯文本兜底解析
+// ---------------------------------------------------------------------------
+
+import { parsePlainResponse } from '../../src/translation/responseValidator';
+
+test('parsePlainResponse strips fences, labels and quotes', () => {
+	assert.equal(parsePlainResponse('```\n这是译文。\n```', 'b1').translations[0]!.translatedText, '这是译文。');
+	assert.equal(parsePlainResponse('译文:这是译文。', 'b1').translations[0]!.translatedText, '这是译文。');
+	assert.equal(parsePlainResponse('"这是译文。"', 'b1').translations[0]!.translatedText, '这是译文。');
+	assert.equal(parsePlainResponse('这是译文。', 'b1').translations[0]!.id, 'b1');
+});
+
+test('parsePlainResponse throws on empty output', () => {
+	assert.throws(() => parsePlainResponse('   ', 'b1'));
+});

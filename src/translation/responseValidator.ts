@@ -62,6 +62,28 @@ export function extractJSON(raw: string): unknown {
 	throw new PaperMirrorError('BAD_RESPONSE', 'The translation service returned truncated JSON.');
 }
 
+/**
+ * 纯文本兜底解析: the whole response IS the translation. Strips code fences,
+ * surrounding quotes and a leading "Translation:"-style label if the model
+ * added one despite instructions. Empty output throws BAD_RESPONSE so the
+ * caller's repair chain sees a normal failure.
+ */
+export function parsePlainResponse(raw: string, id: string): ValidatedResponse {
+	let text = raw.trim();
+	const fence = text.match(/^```(?:\w+)?\s*([\s\S]*?)```$/);
+	if (fence?.[1]) {
+		text = fence[1].trim();
+	}
+	text = text.replace(/^(?:translation|译文|翻译)\s*[:：]\s*/i, '').trim();
+	if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith('“') && text.endsWith('”'))) {
+		text = text.slice(1, -1).trim();
+	}
+	if (!text) {
+		throw new PaperMirrorError('BAD_RESPONSE', 'The plain-mode translation came back empty.');
+	}
+	return { translations: [{ id, translatedText: text }], missingIds: [], extraIds: [] };
+}
+
 export interface ValidatedResponse {
 	translations: TranslatedBlock[];
 	missingIds: string[];
