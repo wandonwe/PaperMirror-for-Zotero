@@ -56,6 +56,8 @@ import {
 import * as adapter from './zoteroReaderAdapter';
 import type { ReaderLike } from './zoteroReaderAdapter';
 import { StatusCapsule, CAPSULE_CSS, capsuleStateFor, type OverlayProgress, type OverlayPhase } from '../ui/statusCapsule';
+import { parseFactor } from '../ui/pageLayout';
+import { getPref } from '../utils/prefs';
 
 // Re-exported so existing importers (readerSession, tests) keep their paths.
 export { capsuleStateFor };
@@ -685,7 +687,12 @@ export class PdfOverlay {
 	 * 覆盖翻译 unreadable in the first place.
 	 */
 	private fitFontSize(box: HTMLElement, span: HTMLElement, boxHeight: number, lineCount: number): number {
-		const { min, max } = fontSizeBounds(boxHeight, lineCount, MIN_READABLE_PX);
+		const bounds = fontSizeBounds(boxHeight, lineCount, MIN_READABLE_PX);
+		const { min } = bounds;
+		// 用户字号倍率: in the overlay the box is fixed, so the factor can only
+		// LOWER the target (a smaller, airier setting); >1 is capped by the fit.
+		const factor = parseFactor(getPref('fontSizeFactor', '1'));
+		const max = Math.max(min, Math.min(bounds.max, bounds.max * factor));
 		const apply = (size: number, rung: number): void => {
 			const step = TYPE_LADDER[Math.min(rung, TYPE_LADDER.length - 1)]!;
 			span.style.fontSize = `${size}px`;

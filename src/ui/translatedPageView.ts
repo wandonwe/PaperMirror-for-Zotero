@@ -27,7 +27,8 @@ import type { ReaderLike } from '../reader/zoteroReaderAdapter';
 import { isMetadataBlock } from '../reader/metaFilter';
 import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
-import { translatedFontSize } from './pageLayout';
+import { getPref } from '../utils/prefs';
+import { bodyAnchorPt, parseFactor, translatedFontSize } from './pageLayout';
 import {
 	assignColumns,
 	findLayoutProblems,
@@ -301,6 +302,15 @@ export function buildTranslatedPage(
 	// ---- 2. what gets replaced ----------------------------------------------
 	const translatable = input.blocks.filter(isTranslatable);
 	const bodyPt = medianOf(translatable.map(b => b.fontSize ?? 0).filter(s => s > 0));
+	// 页面基准字号 (role_min): every body block unifies to the page's robust
+	// minimum body size so adjacent paragraphs render at ONE size; headings and
+	// captions keep their own. 用户倍率 scales everything on top.
+	const anchorPt = bodyAnchorPt(translatable
+		.filter(b => b.type === 'paragraph' || b.type === 'list')
+		.map(b => b.fontSize ?? 0));
+	const fontFactor = parseFactor(getPref('fontSizeFactor', '1'));
+	const lineFactor = parseFactor(getPref('lineHeightFactor', '1'), 0.9, 1.4);
+	page.style.setProperty('--pm-line-scale', String(lineFactor));
 
 	// Blocks too small to re-typeset are left alone entirely — no mask, no
 	// text. These are figure-internal labels ("A", axis numbers, legend
@@ -413,7 +423,10 @@ export function buildTranslatedPage(
 		// Height is NOT set: the block takes what the Chinese needs, and the
 		// flow pass moves whatever is below it. That is the whole difference
 		// between a re-flowed page and text crammed back into English boxes.
-		const startSize = translatedFontSize(block.fontSize ?? 0, pxPerPoint, bodyPt);
+		const rolePt = (block.type === 'paragraph' || block.type === 'list') && anchorPt > 0
+			? anchorPt
+			: (block.fontSize ?? 0);
+		const startSize = Math.max(5, translatedFontSize(rolePt, pxPerPoint, bodyPt) * fontFactor);
 		node.style.fontSize = `${startSize}px`;
 		const bg = blockPaper.get(block.id);
 		if (bg) {

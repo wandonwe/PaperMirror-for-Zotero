@@ -323,6 +323,30 @@
 		<checkbox id="papermirror-dim-original" label="原文淡化(覆盖模式下译文遮罩半透明,原文隐约可见)" native="true"/>
 		<checkbox id="papermirror-translate-captions" preference="extensions.zotero.bilingualReader.translateCaptions" label="翻译图表标题" native="true"/>
 		<checkbox id="papermirror-translate-references" preference="extensions.zotero.bilingualReader.translateReferences" label="翻译参考文献部分" native="true"/>
+		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 4px;">
+			<label value="译文字号倍率" control="papermirror-font-factor"/>
+			<menulist id="papermirror-font-factor" preference="extensions.zotero.bilingualReader.fontSizeFactor" native="true">
+				<menupopup>
+					<menuitem label="0.8×" value="0.8"/>
+					<menuitem label="0.9×" value="0.9"/>
+					<menuitem label="1×(默认)" value="1"/>
+					<menuitem label="1.1×" value="1.1"/>
+					<menuitem label="1.2×" value="1.2"/>
+					<menuitem label="1.3×" value="1.3"/>
+				</menupopup>
+			</menulist>
+			<label value="行距倍率" control="papermirror-line-factor" style="margin-left: 12px;"/>
+			<menulist id="papermirror-line-factor" preference="extensions.zotero.bilingualReader.lineHeightFactor" native="true">
+				<menupopup>
+					<menuitem label="0.9×" value="0.9"/>
+					<menuitem label="1×(默认)" value="1"/>
+					<menuitem label="1.1×" value="1.1"/>
+					<menuitem label="1.2×" value="1.2"/>
+					<menuitem label="1.3×" value="1.3"/>
+				</menupopup>
+			</menulist>
+		</hbox>
+		<html:div class="pm-desc">译文偏大/偏挤时用这两个倍率整体微调;左右对照页完全生效,覆盖模式受原文框大小限制、只对缩小方向生效。同页正文段会统一到页面基准字号,不再大小发花。</html:div>
 	</vbox>
 
 	<!-- ======================= 术语表 ======================= -->

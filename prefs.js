@@ -31,6 +31,8 @@ pref('extensions.zotero.bilingualReader.syncScroll', true);
 // 整页对照下: 开启后掀开遮罩,直接看到原页文字
 pref('extensions.zotero.bilingualReader.showOriginal', false);
 pref('extensions.zotero.bilingualReader.articleFontSize', 16);
+pref('extensions.zotero.bilingualReader.fontSizeFactor', '1');
+pref('extensions.zotero.bilingualReader.lineHeightFactor', '1');
 pref('extensions.zotero.bilingualReader.overlayEnabled', false);
 // 工具栏三态切换器的最后状态: original | overlay | split
 // 默认 split(左右对照): 左边原版 PDF, 右边版面级重排的整页译文。

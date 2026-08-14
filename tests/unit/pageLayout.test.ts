@@ -162,3 +162,24 @@ test('estimateCjkCapacity scales with the rectangle and never returns absurd bud
 	assert.ok(estimateCjkCapacity(240, 240, 12) > cap, 'taller box → bigger budget');
 	assert.equal(estimateCjkCapacity(0, 100, 12), 8, 'degenerate boxes floor at 8');
 });
+
+// ---------------------------------------------------------------------------
+// 0.9.28 批次5: 页面基准字号 (role_min) + 用户倍率
+// ---------------------------------------------------------------------------
+
+import { bodyAnchorPt, parseFactor } from '../../src/ui/pageLayout';
+
+test('bodyAnchorPt is the robust minimum inside the median band', () => {
+	// 6pt stray superscript fragment and 14pt lead-in must NOT drag the anchor
+	assert.equal(bodyAnchorPt([10, 10, 9.5, 10, 6, 14, 10]), 9.5);
+	assert.equal(bodyAnchorPt([]), 0);
+	assert.equal(bodyAnchorPt([12]), 12);
+});
+
+test('parseFactor clamps and defaults', () => {
+	assert.equal(parseFactor('1.1'), 1.1);
+	assert.equal(parseFactor('9'), 1.4);
+	assert.equal(parseFactor('abc'), 1);
+	assert.equal(parseFactor(undefined), 1);
+	assert.equal(parseFactor('0.5'), 0.7);
+});

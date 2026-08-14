@@ -95,6 +95,32 @@ export function translatedFontSize(sourcePt: number, pxPerPoint: number, bodyPt 
 }
 
 /**
+ * 页面基准字号 (参照 retain-pdf role_min / font-scaling 参考文): the size EVERY
+ * body block on the page is unified to, so adjacent paragraphs never render at
+ * visibly different sizes ("发花"). Robust minimum: the smallest size inside a
+ * band around the median — a stray 6pt superscript-styled fragment or a
+ * misclassified 14pt lead-in cannot drag the whole page.
+ */
+export function bodyAnchorPt(sizes: number[]): number {
+	const usable = sizes.filter(s => Number.isFinite(s) && s > 0).sort((a, b) => a - b);
+	if (!usable.length) {
+		return 0;
+	}
+	const median = usable[Math.floor(usable.length / 2)]!;
+	const band = usable.filter(s => s >= median * 0.8 && s <= median * 1.25);
+	return band.length ? band[0]! : median;
+}
+
+/** Parse a user factor pref ('1', '1.1') with a safety clamp. */
+export function parseFactor(raw: unknown, min = 0.7, max = 1.4): number {
+	const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+	if (!Number.isFinite(n) || n <= 0) {
+		return 1;
+	}
+	return Math.max(min, Math.min(max, n));
+}
+
+/**
  * Assign blocks to columns from their horizontal position, using the column
  * bands already detected during extraction. A block wider than most is
  * full-width and gets its own lane so it can push (and be pushed by)

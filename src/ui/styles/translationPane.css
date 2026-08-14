@@ -757,7 +757,7 @@
 	/* A UI sans face stays even at small sizes; a serif turns to mush. */
 	font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
 		"Noto Sans CJK SC", "Source Han Sans SC", "Segoe UI", system-ui, sans-serif;
-	line-height: 1.5;
+	line-height: calc(1.5 * var(--pm-line-scale, 1));
 	text-align: justify;
 	text-justify: inter-ideograph;
 	word-break: normal;
@@ -768,11 +768,11 @@
 
 .pm-repage-block[data-pm-strong="true"] {
 	font-weight: 600;
-	line-height: 1.36;
+	line-height: calc(1.36 * var(--pm-line-scale, 1));
 }
 
 .pm-repage-block[data-pm-type="caption"] {
-	line-height: 1.4;
+	line-height: calc(1.4 * var(--pm-line-scale, 1));
 }
 
 .pm-repage-block:hover {

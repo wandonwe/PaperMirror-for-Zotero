@@ -15,6 +15,19 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [0.9.28] — 2026-08-14
+
+### Added(参照 retain-pdf 批次5:页面基准字号 + 用户倍率)
+
+- **同页正文统一到页面基准字号(role_min).** 左右对照的重排页里,正文段不再各用
+  各的提取字号——按页取"中位数带内的稳健最小值"为锚点,所有正文段统一到锚点,
+  相邻段落大小不再发花;标题、图注保持自己的字号。零星的 6pt 上标碎片或 14pt
+  首行样式拖不动锚点。
+- **译文字号/行距用户倍率.** 设置页"阅读界面"新增两个倍率下拉(0.8×–1.3×):译文
+  偏大/偏挤时整体微调。左右对照页完全生效;覆盖模式受原文框约束,倍率只在缩小方向
+  生效(放大由适配器按框裁定)。行距经 CSS 变量作用于正文/标题/图注三档。
+- 新增 2 组回归测试(稳健最小值锚点、倍率解析与钳制)。全套 510 项通过。
+
 ## [0.9.27] — 2026-08-14
 
 ### Added(参照 retain-pdf 批次4:文档术语记忆)

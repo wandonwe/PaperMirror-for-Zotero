@@ -130,7 +130,9 @@ interface PaperMirrorPublicAPI {
 			['papermirror-source-lang', 'sourceLanguage', 'auto'],
 			['papermirror-target-lang', 'targetLanguage', 'auto'],
 			['papermirror-provider', 'provider', 'bing-free'],
-			['papermirror-default-mode', 'viewMode', 'split']
+			['papermirror-default-mode', 'viewMode', 'split'],
+			['papermirror-font-factor', 'fontSizeFactor', '1'],
+			['papermirror-line-factor', 'lineHeightFactor', '1']
 		] as const) {
 			const list = byId<HTMLElement & { value: string }>(id);
 			if (list && !list.value) {

@@ -30,6 +30,8 @@ export type PrefKey
 	| 'pdfServiceURL'
 	| 'pdfExportMode'
 	| 'articleFontSize'
+	| 'fontSizeFactor'
+	| 'lineHeightFactor'
 	| 'overlayEnabled'
 	| 'overlayDisplayMode'
 	| 'overlayFitMode'
