@@ -167,7 +167,7 @@ test('a single unbroken sentence still falls back to a safe character split', ()
 
 // ---- RSNA-page regression: centered footer must not bridge the columns ------
 
-import { detectColumns } from '../../src/reader/paragraphHeuristics';
+import { detectColumns, type Rect } from '../../src/reader/paragraphHeuristics';
 
 test('a centered page-bottom footer does not bridge the two columns', () => {
 	// Real failure (RSNA reprint): "This copy is for personal use only…" is a
@@ -347,4 +347,98 @@ test('bogus per-line paragraphBreakAfter flags are ignored (geometry wins)', () 
 	const cs = lines.flatMap((t, i) => mkChar(t, 700 - i * 12, i === lines.length - 1));
 	const paras = buildParagraphs(cs, buildLines(cs), 612, 792);
 	assert.equal(paras.length, 1, 'flags on every line are distrusted; geometry keeps one paragraph');
+});
+
+// ---------------------------------------------------------------------------
+// 三栏首页 (Radiology State-of-the-Art 第 33 页形态): 三栏栏距比双栏窄, 一行
+// 连字符悬垂几 pt 进栏距, 贪心链式列检测就把左中两栏"焊"成一条带 —— 列标注
+// 塌掉, 规范阅读序失效, 左中两栏退化成逐行小块 (半翻半英), 而第三栏完好.
+// ---------------------------------------------------------------------------
+
+const COL_A: [number, number] = [70, 225];
+const COL_B: [number, number] = [240, 395];
+const COL_C: [number, number] = [410, 565];
+
+function threeColumnPage(): SpanItem[] {
+	const colTexts: Record<string, string[]> = {
+		A: [
+			'Since its advent, there have been',
+			'continuing advances in computed',
+			'tomographic technology that have',
+			'provided us with many new chances',
+			'to improve the image quality and',
+			'our clinical practice every day.'
+		],
+		B: [
+			'New technology, however, has now',
+			'introduced new challenges in our',
+			'practice and we must decide how',
+			'best to standardize protocols and',
+			'manage radiation dose while also',
+			'keeping large image data sets.'
+		],
+		C: [
+			'Iodine in a target organ or blood',
+			'plasma causes greater absorption',
+			'and scattering of x-ray radiation',
+			'which results in an increase in',
+			'attenuation and greater contrast',
+			'enhancement on the final image.'
+		]
+	};
+	const cols: Record<string, [number, number]> = { A: COL_A, B: COL_B, C: COL_C };
+	const items: SpanItem[] = [];
+	for (const key of ['A', 'B', 'C'] as const) {
+		const [x, right] = cols[key]!;
+		let y = 600;
+		colTexts[key]!.forEach((text, i) => {
+			// The welding rect: line 3 of column A hyphen-overhangs 11pt into the
+			// 15pt gutter, leaving a 4pt gap to column B — under the 11pt chain
+			// threshold, so the greedy pass fuses A and B.
+			const r = key === 'A' && i === 2 ? 236 : right;
+			items.push({ text, rect: [x, y - 10, r, y], fontSize: 10 });
+			y -= 12;
+		});
+	}
+	return items;
+}
+
+test('one hyphen-overhang rect cannot weld two columns into one band (三栏反焊接)', () => {
+	const rects = threeColumnPage().map(i => i.rect);
+	const bands = detectColumns(rects, PAGE_W, PAGE_H);
+	assert.equal(bands.length, 3, `expected 3 bands, got ${JSON.stringify(bands)}`);
+	// The protruding edge must not stretch band A across the gutter.
+	assert.ok(bands[0]!.right < COL_B[0], `band A reaches into column B: ${JSON.stringify(bands[0])}`);
+	assert.ok(bands[1]!.left >= COL_B[0] - 1 && bands[1]!.right <= COL_B[1] + 1);
+});
+
+test('three-column page with a welding rect still yields one paragraph per column', () => {
+	const { blocks } = buildBlocksFromSpans(threeColumnPage(), {
+		pageIndex: 0,
+		pageHeight: PAGE_H,
+		pageWidth: PAGE_W
+	});
+	const paragraphs = blocks.filter(b => b.type === 'paragraph');
+	assert.equal(paragraphs.length, 3, paragraphs.map(p => p.sourceText).join(' || '));
+	assert.ok(paragraphs[0]!.sourceText.startsWith('Since its advent'));
+	assert.ok(paragraphs[0]!.sourceText.includes('every day.'));
+	assert.ok(paragraphs[1]!.sourceText.startsWith('New technology'));
+	assert.ok(paragraphs[2]!.sourceText.startsWith('Iodine in a target'));
+	assert.deepEqual(paragraphs.map(p => p.column), [0, 1, 2]);
+});
+
+test('ordinary single- and two-column bands are NOT split by the coverage vote', () => {
+	// A ragged-right references column: hanging indents + short final lines.
+	// The interior low-coverage zones touch the band edges, so no split.
+	const refs: Rect[] = [];
+	let y = 600;
+	for (let i = 0; i < 12; i++) {
+		const first = i % 3 === 0;
+		refs.push([first ? 54 : 66, y - 10, i % 3 === 2 ? 180 : 292, y]);
+		y -= 12;
+	}
+	assert.equal(detectColumns(refs, PAGE_W, PAGE_H).length, 1);
+	// The IEEE two-column body page keeps exactly two bands.
+	const twoCol = bodyPage().map(i => i.rect);
+	assert.equal(detectColumns(twoCol, PAGE_W, PAGE_H).length, 2);
 });

@@ -158,8 +158,13 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 			const previous = current[current.length - 1];
 			if (previous) {
 				const gap = item.rect[0] - previous.rect[2];
-				const crossesGutter = gutters.some(g => previous.rect[2] <= g && item.rect[0] >= g);
 				const size = previous.fontSize || (previous.rect[3] - previous.rect[1]) || 10;
+				// Slack on the LEFT of the voted gutter: a hyphenated line overhangs
+				// a few points into the gutter, and requiring the line to end
+				// strictly before the gutter centre let that single line bridge the
+				// two columns into one scrambled line (三栏页连字符悬垂焊行).
+				const slack = Math.min(6, size * 0.6);
+				const crossesGutter = gutters.some(g => previous.rect[2] <= g + slack && item.rect[0] >= g);
 				if (crossesGutter || gap > columnGapThreshold(size)) {
 					flush();
 				}
@@ -436,7 +441,11 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// block defaulted to column 0 downstream, so semantic modules ran straight
 	// through the gutter and the same PDF extracted differently depending on
 	// which extraction path won.
-	const columnBands = detectColumns(merged.map(p => p.rect), pageWidth, options.pageHeight);
+	// LINE rects, not merged paragraph rects: a page yields only a handful of
+	// paragraphs — too few for the anti-weld coverage vote — and one paragraph
+	// whose union rect overhangs the gutter re-welds two columns at the stamping
+	// step even after line-level detection got them right (三栏首页回归).
+	const columnBands = detectColumns(lines.map(l => l.rect), pageWidth, options.pageHeight);
 	const blocks: SourceBlock[] = [];
 	let order = 0;
 	for (const p of merged) {

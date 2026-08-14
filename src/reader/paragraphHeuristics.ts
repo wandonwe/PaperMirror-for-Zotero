@@ -68,17 +68,49 @@ export function detectColumns(rects: Rect[], pageWidth: number, pageHeight = 0):
 	if (!narrow.length) {
 		return [];
 	}
-	const bands: ColumnBand[] = [];
-	const memberLefts: number[][] = [];
+	const chained: ColumnBand[] = [];
+	const chainMembers: Rect[][] = [];
 	for (const r of narrow) {
-		const last = bands[bands.length - 1];
+		const last = chained[chained.length - 1];
 		if (last && r[0] <= last.right + gutter) {
 			last.right = Math.max(last.right, r[2]);
-			memberLefts[memberLefts.length - 1]!.push(r[0]);
+			chainMembers[chainMembers.length - 1]!.push(r);
 		}
 		else {
-			bands.push({ left: r[0], right: r[2] });
-			memberLefts.push([r[0]]);
+			chained.push({ left: r[0], right: r[2] });
+			chainMembers.push([r]);
+		}
+	}
+	// 反焊接 (三栏首页斑马纹 root cause): the greedy chain above lets ONE rect
+	// weld two real columns into a single band — a hyphen overhang spilling a
+	// few points into the gutter, or a three-column gutter that is simply
+	// narrower than the chain threshold, and columns 1+2 fuse. Fused bands
+	// collapse the column stamps, the canonical reading order bails (or
+	// interleaves the two columns by baseline), the coalescer can never rejoin
+	// same-column neighbours, and the pair of columns degrades to line-level
+	// shreds — half translated, half rejected. One bad rect must not outvote
+	// every clean line, so each band gets a coverage vote (the detectGutters
+	// idea, applied to band members): a sustained channel that ≥90% of members
+	// avoid is a gutter, and the band splits there.
+	const bands: ColumnBand[] = [];
+	const memberLefts: number[][] = [];
+	for (let i = 0; i < chained.length; i++) {
+		for (const seg of splitBandByCoverage(chainMembers[i]!)) {
+			let left = Infinity;
+			let right = -Infinity;
+			for (const r of seg.members) {
+				left = Math.min(left, r[0]);
+				right = Math.max(right, r[2]);
+			}
+			// Clamp to the channel edges: the welding rect stays a member of its
+			// own side, but its protruding edge must not stretch the band across
+			// the gutter (a band reaching into the neighbour column made columnOf
+			// tie-break wrong for every line in that column).
+			bands.push({
+				left: Math.max(left, seg.clampLeft),
+				right: Math.min(right, seg.clampRight)
+			});
+			memberLefts.push(seg.members.map(r => r[0]));
 		}
 	}
 	// Robust left edge: the MEDIAN of member lefts, not the minimum. One
@@ -87,7 +119,7 @@ export function detectColumns(rects: Rect[], pageWidth: number, pageHeight = 0):
 	// the paragraph broke after every single line (逐行断段 root cause #2).
 	for (let i = 0; i < bands.length; i++) {
 		const lefts = memberLefts[i]!.slice().sort((a, b) => a - b);
-		bands[i]!.left = lefts[Math.floor(lefts.length / 2)]!;
+		bands[i]!.left = Math.max(bands[i]!.left, lefts[Math.floor(lefts.length / 2)]!);
 	}
 	// Ignore slivers (equation numbers, margin notes) — they are not columns.
 	// When NOTHING significant remains, report NO columns (single full-width
@@ -95,6 +127,87 @@ export function detectColumns(rects: Rect[], pageWidth: number, pageHeight = 0):
 	// column" made every line read as wrapped/indented.
 	const significant = bands.filter(b => b.right - b.left >= width * 0.12);
 	return significant;
+}
+
+interface BandSegment {
+	members: Rect[];
+	/** Channel edges bounding this segment (±Infinity at the band's ends). */
+	clampLeft: number;
+	clampRight: number;
+}
+
+/**
+ * Split one chained band at internal whitespace channels its members agree on.
+ * Conservative on purpose: needs ≥6 members to vote, a ≥6pt interior channel
+ * that at most ~10% of members intrude into, and ≥3 members on every side —
+ * a ragged right edge, an indented first line or a couple of stray rects can
+ * never trigger it, so ordinary single-column bands pass through untouched.
+ */
+function splitBandByCoverage(members: Rect[]): BandSegment[] {
+	const whole: BandSegment[] = [{ members, clampLeft: -Infinity, clampRight: Infinity }];
+	if (members.length < 6) {
+		return whole;
+	}
+	const STEP = 2;
+	let left = Infinity;
+	let right = -Infinity;
+	for (const r of members) {
+		left = Math.min(left, r[0]);
+		right = Math.max(right, r[2]);
+	}
+	const cells = Math.ceil((right - left) / STEP);
+	if (!Number.isFinite(cells) || cells <= 2) {
+		return whole;
+	}
+	const cover = new Array<number>(cells).fill(0);
+	for (const r of members) {
+		const from = Math.max(0, Math.round((r[0] - left) / STEP));
+		const to = Math.min(cells - 1, Math.round((r[2] - left) / STEP) - 1);
+		for (let k = from; k <= to; k++) {
+			cover[k]!++;
+		}
+	}
+	const allow = Math.max(1, Math.floor(members.length * 0.1));
+	const channels: { start: number; end: number }[] = [];
+	let runStart = -1;
+	for (let k = 0; k <= cells; k++) {
+		const isGap = k < cells && cover[k]! <= allow;
+		if (isGap && runStart < 0) {
+			runStart = k;
+		}
+		else if (!isGap && runStart >= 0) {
+			const startX = left + runStart * STEP;
+			const endX = left + k * STEP;
+			// Interior only: a low-coverage run touching the band's own edge is
+			// a ragged margin (indented first lines, short final lines), not a
+			// gutter between two columns.
+			if (endX - startX >= 6 && startX > left + 1 && endX < right - 1) {
+				channels.push({ start: startX, end: endX });
+			}
+			runStart = -1;
+		}
+	}
+	if (!channels.length) {
+		return whole;
+	}
+	const segments: BandSegment[] = [];
+	for (let s = 0; s <= channels.length; s++) {
+		segments.push({
+			members: [],
+			clampLeft: s > 0 ? channels[s - 1]!.end : -Infinity,
+			clampRight: s < channels.length ? channels[s]!.start : Infinity
+		});
+	}
+	for (const r of members) {
+		const centre = (r[0] + r[2]) / 2;
+		let s = 0;
+		while (s < channels.length && centre > (channels[s]!.start + channels[s]!.end) / 2) {
+			s++;
+		}
+		segments[s]!.members.push(r);
+	}
+	// Every side needs real support, or the "channel" was noise.
+	return segments.every(seg => seg.members.length >= 3) ? segments : whole;
 }
 
 /**

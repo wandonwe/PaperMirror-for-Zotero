@@ -469,7 +469,10 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 	const bodySize = options.bodyFontSize || medianFontSize(paragraphs);
 
 	// Column band per final paragraph, so semantic modules never cross columns.
-	const columnBands = detectColumns(paragraphs.map(p => p.rect as Rect), pageWidth, pageHeight);
+	// Detected from LINE rects, not paragraph rects: paragraphs are too few for
+	// the anti-weld coverage vote, and one union rect overhanging the gutter
+	// would re-weld two columns at the stamping step (三栏首页回归).
+	const columnBands = detectColumns(lines.map(l => l.rect as Rect), pageWidth, pageHeight);
 
 	let referencesStarted = !!options.referencesAlreadyStarted;
 	const blocks: SourceBlock[] = [];
