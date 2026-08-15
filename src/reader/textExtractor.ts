@@ -27,6 +27,7 @@ import { orderBlocksForReading } from './readingOrder';
 import { structureTableCells } from './tableStructure';
 import * as adapter from './zoteroReaderAdapter';
 import type { ReaderLike } from './zoteroReaderAdapter';
+import { validatePageIR, type PageParser } from '../ir/documentIR';
 
 const MODULE = 'textExtractor';
 
@@ -66,7 +67,7 @@ export interface PathReport {
 	detail: string;
 }
 
-export class TextExtractor {
+export class TextExtractor implements PageParser {
 	private reader: ReaderLike;
 	private includeReferences: boolean;
 	private referencesStartedByPage = new Map<number, boolean>();
@@ -160,6 +161,28 @@ export class TextExtractor {
 		return rects;
 	}
 
+	/**
+	 * IR 不变量审计 — log-only(1.1.0 目标架构第 1 步)。违例绝不改变行为,
+	 * 只让"某个隐式不变量被搬丢了"这类回归在日志里立刻可见,而不是等到
+	 * 字段 bug。契约本身由 validatePageIR 的单测保证;这里是运行期烟雾探测。
+	 */
+	private auditIR(pageIndex: number, blocks: SourceBlock[]): void {
+		try {
+			const violations = validatePageIR({ pageIndex, blocks });
+			if (violations.length) {
+				logger.warn(
+					MODULE,
+					`Page ${pageIndex + 1} IR violations (${violations.length}): `
+					+ violations.slice(0, 5).map(v => `${v.invariant}[${v.blockId ?? '-'}] ${v.detail}`).join('; ')
+					+ (violations.length > 5 ? ' …' : '')
+				);
+			}
+		}
+		catch (e) {
+			logger.debug(MODULE, 'IR audit itself failed (ignored)', e);
+		}
+	}
+
 	async extractPage(pageIndex: number): Promise<SourceBlock[]> {
 		// 边框硬屏障: real figure boundaries participate in extraction — in-figure
 		// labels stay out of the flow, and nothing merges across a figure.
@@ -188,6 +211,7 @@ export class TextExtractor {
 				this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
 				if (result.blocks.length) {
 					this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
+					this.auditIR(pageIndex, result.blocks);
 					return result.blocks;
 				}
 			}
@@ -262,6 +286,7 @@ export class TextExtractor {
 			this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
 			this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
 			logger.info(MODULE, `Page ${pageIndex + 1}: extracted ${result.blocks.length} block(s) from the text layer`);
+			this.auditIR(pageIndex, result.blocks);
 			return result.blocks;
 		}
 		catch (e) {

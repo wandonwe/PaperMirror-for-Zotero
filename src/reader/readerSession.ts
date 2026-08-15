@@ -24,7 +24,7 @@ import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationRes
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
-import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, type UnfitBlock } from '../ui/strictPageReplacement';
+import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, auditStrictGeometry, type UnfitBlock } from '../ui/strictPageReplacement';
 import { translateFullPdf, bytesToBase64, type TranslateSubmission } from '../translation/pdfService';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
@@ -1177,6 +1177,11 @@ export class ReaderSession {
 		// (1): budgeted compress for the rest — at most one page-level request
 		// in flight, patched into the live page (no full re-render).
 		if (!plan.compress.length || this.compressPending.has(pageIndex) || !this.manager) {
+			// shrink-only 路径此前静默结束,页面的最终清点从未发生(1.1.0
+			// 顺手补上的诚实计数缺口)——几何复核与 tally 都挂在 reportPlacement。
+			if (!plan.compress.length && !this.compressPending.has(pageIndex)) {
+				this.reportPlacement(pageIndex, element);
+			}
 			return;
 		}
 		this.compressPending.add(pageIndex);
@@ -1213,6 +1218,22 @@ export class ReaderSession {
 	 * text was translated; some rectangles are mathematically too small for it.
 	 */
 	private reportPlacement(pageIndex: number, element: HTMLElement): void {
+		// 几何安全复核 (1.1.0 目标架构第 5 步): FINAL 状态下审计一次;违例的
+		// 块回退扩展/缩字重试,仍不适配则保留原文——处置结果反映进随后的
+		// stats/tally,所以必须先审计后取数。
+		try {
+			const audit = auditStrictGeometry(element);
+			if (audit && audit.violations > 0) {
+				logger.info(
+					MODULE,
+					`page ${pageIndex + 1} geometry audit: ${audit.violations} violation(s) → `
+					+ `${audit.adjusted} re-fit within original box, ${audit.reverted} kept original`
+				);
+			}
+		}
+		catch (e) {
+			logger.warn(MODULE, `geometry audit failed on page ${pageIndex + 1} (ignored)`, e);
+		}
 		const s = strictPageStats(element);
 		if (!s) {
 			return;

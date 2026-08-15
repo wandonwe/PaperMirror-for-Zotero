@@ -21,7 +21,8 @@ import type {
 } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
-import { isFormulaDenseRisk, protectFormulas, restoreFormulas, stripProtectable, verifyPlaceholders } from '../reader/formulaGuard';
+import { isFormulaDenseRisk, stripProtectable } from '../reader/formulaGuard';
+import { PlaceholderRegistry } from './placeholderRegistry';
 import {
 	hasMixedCopiedResidue,
 	isTruncatedTranslation,
@@ -577,8 +578,8 @@ export class TranslationManager {
 		try {
 			await this.scheduler.enqueue(`page-${pageIndex}-compress`, PRIORITY.CURRENT_COMPRESS, async (signal) => {
 				const protectedBlocks = blocks.map((block) => {
-					const { text, placeholders } = protectFormulas(block.sourceText, this.literalsFor(block));
-					return { block, text, placeholders };
+					const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block));
+					return { block, reg, text: reg.text };
 				});
 				const request: TranslationRequest = {
 					pageIndex,
@@ -600,7 +601,7 @@ export class TranslationManager {
 					if (!pb || !t.translatedText.trim()) {
 						continue;
 					}
-					const restored = restoreFormulas(t.translatedText, pb.placeholders);
+					const restored = pb.reg.restore(t.translatedText);
 					const previous = state.translations.get(t.id);
 					// Only accept a genuinely shorter retry; equal/longer output
 					// cannot help it fit and would burn the result for nothing.
@@ -692,7 +693,8 @@ export class TranslationManager {
 			return false;
 		}
 		const { source, target } = this.deps.getLanguages(block.sourceText);
-		const { text, placeholders } = protectFormulas(block.sourceText, this.literalsFor(block));
+		const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block));
+		const text = reg.text;
 		this.failedSegments.delete(segmentHash(block.sourceText, source, target));
 		try {
 			return await this.scheduler.enqueue(`page-${pageIndex}-seg-${blockId}`, PRIORITY.CURRENT_RETRANSLATE, async (signal) => {
@@ -707,11 +709,11 @@ export class TranslationManager {
 				}, signal);
 				const hit = resp.translations.find(t =>
 					looksTranslated(block.sourceText, t.translatedText, target)
-					&& verifyPlaceholders(t.translatedText, placeholders).ok);
+					&& reg.ok(t.translatedText));
 				if (!hit) {
 					return false;
 				}
-				const restored = restoreFormulas(hit.translatedText, placeholders);
+				const restored = reg.restore(hit.translatedText);
 				state.translations.set(blockId, restored);
 				state.keepOrigin?.delete(blockId);
 				this.docMemory.learn(extractTermPairs(block.sourceText, restored));
@@ -1140,7 +1142,8 @@ export class TranslationManager {
 				logger.warn(MODULE, `Page ${state.pageIndex + 1}: request cap reached — stopping residue repair (${fixed} fixed)`);
 				break;
 			}
-			const { text, placeholders } = protectFormulas(block.sourceText, this.literalsFor(block));
+			const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block));
+			const text = reg.text;
 			try {
 				const resp = await translateFn({
 					pageIndex: state.pageIndex,
@@ -1152,11 +1155,11 @@ export class TranslationManager {
 					glossary: this.glossaryFor([block.sourceText])
 				}, signal);
 				const hit = resp.translations.find(t => looksTranslated(block.sourceText, t.translatedText, target)
-					&& verifyPlaceholders(t.translatedText, placeholders).ok);
+					&& reg.ok(t.translatedText));
 				if (!hit) {
 					continue;
 				}
-				const restored = restoreFormulas(hit.translatedText, placeholders);
+				const restored = reg.restore(hit.translatedText);
 				// Replace ONLY when the retry actually cleared the residue.
 				if (hasEnglishResidue(restored)) {
 					continue;
@@ -1341,22 +1344,23 @@ export class TranslationManager {
 			return;
 		}
 
-		// Protect formulas / citations / statistics per block (+ 不译词列表)
+		// Protect formulas / citations / statistics per block (+ 不译词列表) —
+		// 占位符注册表 (1.1.0): 掩蔽/校验/还原共用同一实例,清单不可能串块。
 		const protectedBlocks = toTranslate.map((block) => {
-			const { text, placeholders } = protectFormulas(block.sourceText, this.literalsFor(block));
-			return { block, text, placeholders };
+			const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block));
+			return { block, reg, text: reg.text };
 		});
 		// 占位符清单校验 (参照 retain-pdf): a model response that LOST a protected
 		// token (or invented one) is treated as invalid — it flows into the same
 		// retry/salvage chain as a missing id, instead of silently restoring into
 		// a paragraph with the formula/citation gone.
-		const placeholdersById = new Map(protectedBlocks.map(p => [p.block.id, p.placeholders]));
+		const regById = new Map(protectedBlocks.map(p => [p.block.id, p.reg]));
 		const acceptResponse = (id: string, text: string): boolean => {
 			if (!accept(id, text)) {
 				return false;
 			}
-			const ph = placeholdersById.get(id);
-			return !ph?.length || verifyPlaceholders(text, ph).ok;
+			const reg = regById.get(id);
+			return !reg || reg.ok(text);
 		};
 
 		// Plan requests: semantic modules are SOFT boundaries (context tags), the
@@ -1368,7 +1372,7 @@ export class TranslationManager {
 		// truncation) or delay the fast batches that paint most of the page.
 		const maskedById = new Map(protectedBlocks.map(p => [p.block.id, p.text]));
 		const riskOf = (b: SourceBlock): boolean => {
-			const ph = placeholdersById.get(b.id)?.length ?? 0;
+			const ph = regById.get(b.id)?.count ?? 0;
 			return b.type === 'table'
 				|| b.sourceText.length > 2400
 				|| ph >= 5
@@ -1594,7 +1598,7 @@ export class TranslationManager {
 						// protected token was lost or invented.
 						const first = single.translations.find(t =>
 							looksTranslated(block.sourceText, t.translatedText, target)
-							&& verifyPlaceholders(t.translatedText, pb.placeholders).ok);
+							&& pb.reg.ok(t.translatedText));
 						if (first) {
 							received.set(block.id, first.translatedText);
 						}
@@ -1639,7 +1643,7 @@ export class TranslationManager {
 					continue;
 				}
 				const pb = protectedBlocks.find(p => p.block.id === block.id)!;
-				const restored = restoreFormulas(raw, pb.placeholders);
+				const restored = pb.reg.restore(raw);
 				results.push({ id: block.id, translatedText: restored });
 				state.translations.set(block.id, restored);
 				// 术语记忆: harvest 「中文术语(ABBR)」 pairs this page established.
@@ -1727,9 +1731,9 @@ export class TranslationManager {
 					}, signal);
 					const hit = resp.translations.find(t =>
 						looksTranslated(block.sourceText, t.translatedText, target)
-						&& verifyPlaceholders(t.translatedText, pb.placeholders).ok);
+						&& pb.reg.ok(t.translatedText));
 					if (hit) {
-						const restored = restoreFormulas(hit.translatedText, pb.placeholders);
+						const restored = pb.reg.restore(hit.translatedText);
 						state.translations.set(block.id, restored);
 						results.push({ id: block.id, translatedText: restored });
 						logger.info(MODULE, `Page ${pageIndex + 1}: plain-mode recovery rescued ${block.id}`);

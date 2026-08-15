@@ -31,6 +31,7 @@ import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
 import { detectTableRegions } from '../reader/tableGuard';
 import { buildTableModel, type CellMember } from '../reader/tableStructure';
+import { auditPlacedBoxes, type AuditBox } from './layoutSafety';
 import {
 	inkFor,
 	localPaper,
@@ -496,6 +497,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		id: string;
 		node: HTMLElement;
 		box: PixelBox;
+		/** 构建时的原始盒(几何安全复核的"新增侵入"基准;扩展只改 box)。 */
+		originalBox: PixelBox;
 		fontPx: number;
 		/** The block's own original line spacing, as a line-height ratio. */
 		minLineHeight: number;
@@ -556,7 +559,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			naturalRatio = gaps[Math.floor(gaps.length / 2)]! / fontPx;
 		}
 		const minLineHeight = Math.max(LINE_HEIGHT_FLOOR, Math.min(1.42, naturalRatio || 1.2));
-		const item: StrictItem = { id: block.id, node, box, fontPx, minLineHeight, committed: false, abandoned: false };
+		const item: StrictItem = { id: block.id, node, box, originalBox: { ...box }, fontPx, minLineHeight, committed: false, abandoned: false };
 		items.push(item);
 		byId.set(block.id, item);
 	}
@@ -736,6 +739,68 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		}
 	};
 
+	// ---- 几何安全复核 (1.1.0 目标架构第 5 步): 排版后的整页审计 -------------
+	// 保护性不变量(集成清单,1.0.2 教训):
+	//  - 只动 committed 且未 abandoned 的块(未提交块不可见,无几何足迹);
+	//  - mask 按原始行矩形绘制,盒回退不需要重绘;un-commit 与 pmRevert 同动作
+	//    (clearMask + 隐藏 + data-pm-unfit),原文完整重现;
+	//  - 页高/画布永不改;每轮只收缩不增长 → 幂等收敛;上限 4 轮防病态;
+	//  - 只在 FINAL 状态由 reportPlacement 调用,provisional pass 永不触发。
+	// 处置顺序与 pmShrinkFit 相反:回退扩展(违例几乎都来自扩展)→ 原盒缩字梯
+	// → 仍不适配才放弃(保留原文,诚实计数)。
+	(page as HTMLElement & { pmGeometryAudit?: () => { violations: number; adjusted: number; reverted: number } }).pmGeometryAudit = (): { violations: number; adjusted: number; reverted: number } => {
+		const pageW = canvas.width / BITMAP_SCALE;
+		const pageH = canvas.height / BITMAP_SCALE;
+		const preserved = geometric
+			.filter(b => !byId.has(b.id))
+			.map(b => ({ id: b.id, box: pxOf.get(b.id)! }))
+			.filter(p => !!p.box);
+		let firstCount = 0;
+		let adjusted = 0;
+		let reverted = 0;
+		for (let round = 0; round < 4; round++) {
+			const placed: AuditBox[] = items
+				.filter(i => i.committed && !i.abandoned)
+				.map(i => ({ id: i.id, box: i.box, originalBox: i.originalBox }));
+			const violations = auditPlacedBoxes(placed, { images: imageBoxes, preserved }, pageW, pageH);
+			if (!violations.length) {
+				break;
+			}
+			if (round === 0) {
+				firstCount = violations.length;
+			}
+			const item = byId.get(violations[0]!.id);
+			if (!item) {
+				break;
+			}
+			applyBox(item, item.originalBox.width, item.originalBox.height);
+			let fits = ladderFits(item);
+			if (!fits) {
+				for (const factor of SHRINK_STEPS) {
+					const px = Math.max(SHRINK_FLOOR_PX, item.fontPx * factor);
+					item.node.style.fontSize = `${px.toFixed(2)}px`;
+					fits = ladderFits(item);
+					if (fits || px <= SHRINK_FLOOR_PX) {
+						break;
+					}
+				}
+			}
+			if (fits) {
+				adjusted++;
+			}
+			else {
+				clearMask(item.id);
+				item.committed = false;
+				item.abandoned = true;
+				item.node.style.visibility = 'hidden';
+				item.node.setAttribute('data-pm-unfit', 'true');
+				item.node.style.fontSize = `${item.fontPx.toFixed(2)}px`;
+				reverted++;
+			}
+		}
+		return { violations: firstCount, adjusted, reverted };
+	};
+
 	// ---- live placement stats (#6): never a silent English block -----------
 	(page as HTMLElement & { pmStats?: () => StrictPageStats }).pmStats = (): StrictPageStats => {
 		let committed = 0;
@@ -772,6 +837,22 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 }
 
 /** Read a strict page's live placement stats, or null if not a strict page. */
+export interface GeometryAuditResult {
+	violations: number;
+	adjusted: number;
+	reverted: number;
+}
+
+/**
+ * 排版后的几何安全复核(纯审计在 layoutSafety.ts;处置在页内钩子)。由
+ * reportPlacement 在页面达到 FINAL 状态后调用一次;返回 null 表示该元素
+ * 不是 strict 页。
+ */
+export function auditStrictGeometry(element: HTMLElement): GeometryAuditResult | null {
+	const fn = (element as HTMLElement & { pmGeometryAudit?: () => GeometryAuditResult }).pmGeometryAudit;
+	return fn ? fn() : null;
+}
+
 export function strictPageStats(element: HTMLElement): StrictPageStats | null {
 	const fn = (element as HTMLElement & { pmStats?: () => StrictPageStats }).pmStats;
 	return fn ? fn() : null;

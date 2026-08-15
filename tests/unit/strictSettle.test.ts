@@ -187,3 +187,14 @@ test('expansion respects the 90% page-width / caps and never goes negative', () 
 	const tight = computeExpansionAllowance(box, [{ left: 500, top: 741, width: 80, height: 20 }], 612, 792, 12);
 	assert.equal(tight.down, 0, 'blocker 1px below → clamp to 0, not negative');
 });
+
+// ---------------------------------------------------------------------------
+
+test('auditStrictGeometry: null on a non-strict element, passthrough on the hook (1.1.0)', async () => {
+	const { auditStrictGeometry } = await import('../../src/ui/strictPageReplacement');
+	assert.equal(auditStrictGeometry({} as unknown as HTMLElement), null);
+	const el = {
+		pmGeometryAudit: () => ({ violations: 2, adjusted: 1, reverted: 1 })
+	} as unknown as HTMLElement;
+	assert.deepEqual(auditStrictGeometry(el), { violations: 2, adjusted: 1, reverted: 1 });
+});

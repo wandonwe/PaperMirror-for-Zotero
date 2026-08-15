@@ -7,6 +7,50 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-08-15
+
+IR 里程碑(目标架构第 1、3、5 步 + 第 6 步的接口部分;方案审核第四节)。
+绞杀式渐进:类型形式化与单一边界收敛,无架构迁移;568 测试全绿。
+
+### Added — Document IR 显式化(第 1 步)
+
+- `src/ir/documentIR.ts`:`PageParser` 解析器接口(fast = TextExtractor,
+  为将来 deep 路径预留插槽——安全基线:仅 127.0.0.1、opt-in、超时回落)、
+  `PageIR` 显式页形状、`validatePageIR` 不变量契约(id 唯一、pageIndex 一致、
+  readingIndex 稠密、tableRow/tableCol 成对、preserve 无占位符、memberIds
+  非空、盒尺寸为正——每条都对应一次真实修过的回归)。
+- TextExtractor `implements PageParser`;两条提取路径出口挂 log-only IR
+  审计:违例不改行为,只让"隐式不变量被搬丢"类回归在日志立即可见。
+- 契约测试:真实提取流水线(buildBlocks→order→表格→聚合→order)输出
+  满足全部不变量。
+
+### Added — 几何安全验证阶段(第 5 步,流水线末端唯一新增阶段)
+
+- `src/ui/layoutSafety.ts`(纯函数):排版后整页复核——翻译块互相压盖、
+  压图形、压 preserve 区域、越页。关键设计:**只报"新增"侵入**(现在的
+  侵入面积 − 原始盒侵入面积 > 容差),原始 PDF 自带的紧贴/交叠不误报;
+  违例按面积降序。
+- `buildStrictPage` 新增 `pmGeometryAudit` 钩子:处置顺序与 pmShrinkFit
+  相反——回退扩展 → 原盒缩字梯 → 仍不适配才保留原文(un-commit 与
+  pmRevert 同动作,mask 清除、原文完整重现);幂等收敛,上限 4 轮。
+- `reportPlacement` 在 FINAL 状态先审计后取数;shrink-only 路径此前静默
+  结束、从不清点的缺口顺手补上(诚实计数 #6)。
+
+### Changed — 占位符注册表(第 3 步)
+
+- `src/translation/placeholderRegistry.ts`:protect/verify/restore 收敛为
+  请求级单一边界对象,占位符清单从签发到还原绑定同一实例——"串块拿错
+  清单"这类错误从此在类型上不可表达;translationManager 的 4 个 protect
+  点与 7 个校验/还原点全部收敛,不再直接调 formulaGuard 的散装函数。
+- 注册表记录校验通过/拒绝计数与最近报告(仅 token 名,不含文本——日志
+  卫生基线),供后续诊断汇总。
+
+### Tests
+
+- 新增 14 个(共 568):IR 不变量逐条触发 + 流水线契约、几何审计六场景
+  (新增侵入规则、归责扩展较多方、噪声容差、排序)、注册表往返/状态/
+  变体委托。
+
 ## [1.0.6] — 2026-08-15
 
 首个按"目标架构八步"重排序执行的批次(方案审核第四节的 1.0.6 项)。
