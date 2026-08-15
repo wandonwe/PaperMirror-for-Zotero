@@ -288,6 +288,7 @@ export function structureTableCells(blocks: SourceBlock[], pageIndex: number, em
 				fontSize: sizes.length ? sizes[Math.floor(sizes.length / 2)] : undefined,
 				column: pageColumn,
 				tableCol: cell.col,
+				tableRow: cell.row,
 				...((): { formulaRuns?: string[] } => {
 					const runs = [...new Set(originals.flatMap(b => b.formulaRuns ?? []))];
 					return runs.length ? { formulaRuns: runs } : {};

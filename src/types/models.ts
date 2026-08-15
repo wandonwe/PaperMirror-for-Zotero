@@ -65,6 +65,14 @@ export interface SourceBlock {
 	 * column — that stays in `column` (audit: writing the table col into
 	 * `column` scrambled the page reading order). */
 	tableCol?: number;
+	/** Table-internal row index for structured table cells (0 = header row).
+	 * 与 tableCol 配对的显式字段;此前行号只活在 id 的 `r<row>` 里。 */
+	tableRow?: number;
+	/** Canonical reading-order index (0-based) stamped by
+	 * orderBlocksForReading — the explicit IR field for page sequence.
+	 * `order` mirrors it after ordering, but `order` also carries stream
+	 * provenance earlier in the pipeline; consumers should read this. */
+	readingIndex?: number;
 	/**
 	 * 字形级公式字面量 (移植自 pdf2zh vflag / BabelDOC formular_helper,见
 	 * reader/glyphFormula.ts): char 提取路径按数学字体/码位/角标证据标出的

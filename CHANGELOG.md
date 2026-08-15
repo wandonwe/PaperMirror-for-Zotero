@@ -7,6 +7,34 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.6] — 2026-08-15
+
+首个按"目标架构八步"重排序执行的批次(方案审核第四节的 1.0.6 项)。
+
+### Added(参照 BabelDOC `il_translator.py`,AGPL-3.0,见 THIRD-PARTY-NOTICES)
+
+- 占位符碰撞规避:原文自带 ⟦PMn⟧ 字样时,签发序号自动跳到其最大号之后,
+  且该字样本身作为易碎字面量掩蔽保护——杜绝原文与签发 token 串号导致的
+  无声公式错换与清单校验误判(`protectFormulas`)。
+- 幻觉占位符变体归一:译文中的 【PM1】、[PM1]、[[PM1]]、⟦ PM1 ⟧、大小写
+  混写与全角数字变体,在清单校验与还原前归一为规范 token。规则保守:仅限
+  已签发号、正规形缺席时、每号一次;其余留给残留规则
+  (`normalizePlaceholderVariants`,自动生效于 `verifyPlaceholders` 与
+  `restoreFormulas` 全部 7 个调用路径)。
+
+### Added(IR 字段显式化,目标架构第 2 步收尾)
+
+- 表格单元格导出 `tableRow`(0 = 表头行)——此前行号只存在于单元格 id 的
+  `r<row>` 里,无法编程消费;与 `tableCol` 配对。
+- `orderBlocksForReading` 在所有返回路径写入显式 `readingIndex`(含无栏
+  几何的退化路径,此时流顺序即阅读顺序)。
+
+### Tests
+
+- 新增 5 个测试(共 554):碰撞规避往返、变体归一(含全角/大小写/空格)、
+  归一保守性(未签发号不动、重复变体不复制公式)、tableRow 与 id 一致性、
+  readingIndex 全路径打点。
+
 ## [1.0.5] — 2026-08-15
 
 ### Added(参照 BabelDOC / MinerU 批次2)

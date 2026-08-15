@@ -27,18 +27,25 @@ function bottomOf(b: SourceBlock): number {
 	return b.boundingBox ? b.boundingBox.y + b.boundingBox.height : 0;
 }
 
+/** Stamp the explicit reading-order index; used by every return path so the
+ * field is always present (stream order IS the reading order when the page has
+ * no usable column geometry). */
+function stampReadingIndex(blocks: SourceBlock[]): SourceBlock[] {
+	return blocks.map((b, i) => (b.readingIndex === i ? b : { ...b, readingIndex: i }));
+}
+
 export function orderBlocksForReading(blocks: SourceBlock[]): SourceBlock[] {
 	if (blocks.length < 4) {
-		return blocks;
+		return stampReadingIndex(blocks);
 	}
 	// Geometry and column stamps must be present on every block, and there must
 	// actually be ≥2 columns — otherwise stream order is the best we have.
 	if (blocks.some(b => !b.boundingBox || typeof b.column !== 'number')) {
-		return blocks;
+		return stampReadingIndex(blocks);
 	}
 	const columnIds = new Set(blocks.filter(b => (b.column ?? 0) >= 0).map(b => b.column));
 	if (columnIds.size < 2) {
-		return blocks;
+		return stampReadingIndex(blocks);
 	}
 
 	const wides = blocks.filter(b => b.column === -1).sort((a, b) => topOf(a) - topOf(b));
@@ -80,5 +87,5 @@ export function orderBlocksForReading(blocks: SourceBlock[]): SourceBlock[] {
 	}
 
 	// Renumber `order` to the canonical sequence (ids stay stable).
-	return out.map((b, i) => ({ ...b, order: i }));
+	return out.map((b, i) => ({ ...b, order: i, readingIndex: i }));
 }

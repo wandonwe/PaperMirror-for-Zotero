@@ -104,3 +104,43 @@ test('bare-token fallback respects digit boundaries (PM1 vs PM10)', () => {
 	assert.ok(restored.includes('$f_{10}=10$'), `PM10 restored correctly: ${restored}`);
 	assert.ok(!restored.includes('$f_{1}=1$0'), 'PM10 must not be torn into original1+"0"');
 });
+
+// ---------------------------------------------------------------------------
+// 1.0.6 — 碰撞规避与幻觉变体归一 (参照 BabelDOC il_translator.py)
+
+test('collision avoidance: source already containing ⟦PMn⟧ never gets a colliding token (1.0.6)', () => {
+	const input = '如上节 ⟦PM1⟧ 所示,我们建模 $E = mc^2$ 于此。';
+	const { text, placeholders } = protectFormulas(input);
+	// The pre-existing literal is masked, and issued numbering starts ABOVE it.
+	assert.ok(!text.includes('⟦PM1⟧'), `pre-existing token masked: ${text}`);
+	assert.ok(placeholders.every(p => p.token !== '⟦PM1⟧'), 'never issue a colliding token');
+	assert.ok(placeholders.some(p => p.original === '⟦PM1⟧'), 'pre-existing token protected as literal');
+	// Round-trip: both the literal ⟦PM1⟧ and the formula come back verbatim.
+	const restored = restoreFormulas(text, placeholders);
+	assert.equal(restored, input);
+	// Inventory check passes on a faithful translation (no phantom "unexpected").
+	assert.equal(verifyPlaceholders(text, placeholders).ok, true);
+});
+
+test('hallucinated variants (【】, [], spaces, case, 全角数字) are normalized then verified/restored (1.0.6)', () => {
+	const source = '$a=1$ then $b=2$ then $c=3$';
+	const { placeholders } = protectFormulas(source);
+	assert.equal(placeholders.length, 3); // ⟦PM0⟧ ⟦PM1⟧ ⟦PM2⟧
+	const translated = '首先 【PM0】 其次 [pm 1] 最后 ⟦PM２⟧';
+	const report = verifyPlaceholders(translated, placeholders);
+	assert.equal(report.ok, true, JSON.stringify(report));
+	const restored = restoreFormulas(translated, placeholders);
+	assert.ok(restored.includes('$a=1$') && restored.includes('$b=2$') && restored.includes('$c=3$'), restored);
+	assert.ok(!/PM\s*[0-9０-９]/.test(restored), `no residual variants: ${restored}`);
+});
+
+test('variant normalization is conservative: unissued numbers and duplicates left for residue rules (1.0.6)', () => {
+	const { placeholders } = protectFormulas('$a=1$');
+	// Unissued number → untouched (real hallucination, residue rules own it).
+	const unissued = restoreFormulas('译文 ⟦PM0⟧ 与 【PM7】', placeholders);
+	assert.ok(unissued.includes('【PM7】'), unissued);
+	// Canonical already present → variant NOT normalized (would duplicate the formula).
+	const dup = restoreFormulas('译文 ⟦PM0⟧ 与 [PM0]', placeholders);
+	assert.equal((dup.match(/\$a=1\$/g) ?? []).length, 1, dup);
+	assert.ok(dup.includes('[PM0]'), 'duplicate variant left as visible residue');
+});

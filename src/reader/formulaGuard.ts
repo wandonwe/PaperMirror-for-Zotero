@@ -81,12 +81,41 @@ export interface ProtectResult {
 export function protectFormulas(text: string, extraLiterals: string[] = []): ProtectResult {
 	const placeholders: PlaceholderEntry[] = [];
 	let out = text;
+	// 碰撞规避 (参照 BabelDOC il_translator.py::create_formula_placeholder:
+	// 生成占位符前扫描原文,命中则跳号重试)。原文自带 ⟦PMn⟧ 字样时:签发序号
+	// 从最大已有号之后开始,且把这些字样本身当易碎字面量掩蔽——否则同号 token
+	// 会与原文串号(restore 把原文字样误换成公式),清单校验也会把它判成幻觉。
 	let index = 0;
+	const preexisting = [...new Set(text.match(TOKEN_RE) ?? [])];
+	for (const t of preexisting) {
+		const n = Number(t.slice(PLACEHOLDER_PREFIX.length, t.length - PLACEHOLDER_SUFFIX.length));
+		if (Number.isFinite(n) && n >= index) {
+			index = n + 1;
+		}
+	}
 	const mask = (match: string): string => {
 		const token = makePlaceholder(index++);
 		placeholders.push({ token, original: match });
 		return token;
 	};
+	/** Mask every occurrence of a verbatim literal (indexOf, no regex escaping). */
+	const maskLiteral = (source: string, literal: string): string => {
+		let next = '';
+		let rest = source;
+		for (;;) {
+			const at = rest.indexOf(literal);
+			if (at < 0) {
+				next += rest;
+				break;
+			}
+			next += rest.slice(0, at) + mask(literal);
+			rest = rest.slice(at + literal.length);
+		}
+		return next;
+	};
+	for (const literal of preexisting) {
+		out = maskLiteral(out, literal);
+	}
 	for (const pattern of DELIMITED_PATTERNS) {
 		out = out.replace(pattern, mask);
 	}
@@ -98,18 +127,7 @@ export function protectFormulas(text: string, extraLiterals: string[] = []): Pro
 		if (t.length < 2) {
 			continue;
 		}
-		let next = '';
-		let rest = out;
-		for (;;) {
-			const at = rest.indexOf(t);
-			if (at < 0) {
-				next += rest;
-				break;
-			}
-			next += rest.slice(0, at) + mask(t);
-			rest = rest.slice(at + t.length);
-		}
-		out = next;
+		out = maskLiteral(out, t);
 	}
 	for (const pattern of CITATION_STAT_PATTERNS) {
 		out = out.replace(pattern, mask);
@@ -126,6 +144,37 @@ export function protectFormulas(text: string, extraLiterals: string[] = []): Pro
 }
 
 const TOKEN_RE = /⟦PM\d+⟧/g;
+
+/**
+ * 幻觉占位符变体归一 (参照 BabelDOC il_translator.py 的预编译幻觉占位符正则
+ * 思路)。模型偶发把 ⟦PM1⟧ 写成 【PM1】、[PM1]、[[PM1]]、⟦ PM1 ⟧、全角数字
+ * 或大小写混写——这些变体清单校验数不到(判丢失→白白重试),restore 换不掉
+ * (残留进译文)。归一规则刻意保守:
+ *  - 仅当该号在已签发清单内才改写(未签发的变体留给残留规则,那才是真幻觉);
+ *  - 仅当正规形不在文本中才改写(避免归一出重复 token → 公式被复制);
+ *  - 每号只归一第一处(同号多余出现同样留给残留规则)。
+ */
+const VARIANT_RE = /(?:⟦|\[\[|\[|【)\s*[PpＰ]\s*[MmＭ]\s*([0-9０-９]{1,4})\s*(?:⟧|\]\]|\]|】)/g;
+
+function toAsciiDigits(s: string): string {
+	return s.replace(/[０-９]/g, d => String('０１２３４５６７８９'.indexOf(d)));
+}
+
+export function normalizePlaceholderVariants(text: string, placeholders: PlaceholderEntry[]): string {
+	if (!placeholders.length || !/[PpＰ]/.test(text)) {
+		return text;
+	}
+	const issued = new Set(placeholders.map(p => p.token));
+	const done = new Set<string>();
+	return text.replace(VARIANT_RE, (whole, digits: string) => {
+		const canonical = makePlaceholder(Number(toAsciiDigits(digits)));
+		if (whole === canonical || !issued.has(canonical) || text.includes(canonical) || done.has(canonical)) {
+			return whole;
+		}
+		done.add(canonical);
+		return canonical;
+	});
+}
 
 /**
  * Prose-only view of a text: protectable runs (math, citations, statistics)
@@ -209,6 +258,7 @@ export interface PlaceholderReport {
  * already handles that form).
  */
 export function verifyPlaceholders(text: string, placeholders: PlaceholderEntry[]): PlaceholderReport {
+	text = normalizePlaceholderVariants(text, placeholders);
 	const missing = placeholders
 		.filter((p) => {
 			if (text.includes(p.token)) {
@@ -227,7 +277,7 @@ export function verifyPlaceholders(text: string, placeholders: PlaceholderEntry[
 }
 
 export function restoreFormulas(text: string, placeholders: PlaceholderEntry[]): string {
-	let out = text;
+	let out = normalizePlaceholderVariants(text, placeholders);
 	for (const { token, original } of placeholders) {
 		out = out.split(token).join(original);
 		// Models sometimes drop the brackets; try a bare-number fallback token.

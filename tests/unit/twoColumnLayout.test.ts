@@ -442,3 +442,23 @@ test('ordinary single- and two-column bands are NOT split by the coverage vote',
 	const twoCol = bodyPage().map(i => i.rect);
 	assert.equal(detectColumns(twoCol, PAGE_W, PAGE_H).length, 2);
 });
+
+test('orderBlocksForReading stamps readingIndex on every path (1.0.6)', () => {
+	// Column page: canonical order gets 0..n-1 and mirrors `order`.
+	const blocks: SourceBlock[] = [
+		{ id: 'r0', pageIndex: 0, order: 0, type: 'paragraph', column: 1, sourceText: 'right top', boundingBox: { x: 320, y: 80, width: 220, height: 40 } },
+		{ id: 'l0', pageIndex: 0, order: 1, type: 'paragraph', column: 0, sourceText: 'left top', boundingBox: { x: 40, y: 80, width: 220, height: 40 } },
+		{ id: 'r1', pageIndex: 0, order: 2, type: 'paragraph', column: 1, sourceText: 'right bottom', boundingBox: { x: 320, y: 140, width: 220, height: 40 } },
+		{ id: 'l1', pageIndex: 0, order: 3, type: 'paragraph', column: 0, sourceText: 'left bottom', boundingBox: { x: 40, y: 140, width: 220, height: 40 } }
+	];
+	const ordered = orderBlocksForReading(blocks);
+	assert.deepEqual(ordered.map(b => b.readingIndex), [0, 1, 2, 3]);
+	assert.deepEqual(ordered.map(b => b.id), ['l0', 'l1', 'r0', 'r1']);
+	assert.ok(ordered.every((b, i) => b.order === i && b.readingIndex === i));
+	// Degenerate path (no geometry): stream order IS the reading order, still stamped.
+	const plain = orderBlocksForReading([
+		{ id: 'a', pageIndex: 0, order: 0, type: 'paragraph', sourceText: 'a' },
+		{ id: 'b', pageIndex: 0, order: 1, type: 'paragraph', sourceText: 'b' }
+	]);
+	assert.deepEqual(plain.map(b => b.readingIndex), [0, 1]);
+});

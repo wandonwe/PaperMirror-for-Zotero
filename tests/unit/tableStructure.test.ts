@@ -128,3 +128,21 @@ test('cells inherit the PAGE column; the table column lives in tableCol (审核 
 	assert.ok(cells.every(c => c.column === 0), JSON.stringify(cells.map(c => c.column)));
 	assert.ok(cells.some(c => typeof c.tableCol === 'number' && c.tableCol > 0), 'table-internal column preserved in tableCol');
 });
+
+test('cells export tableRow alongside tableCol (1.0.6 — row was only in the id before)', () => {
+	const raw: SourceBlock[] = [];
+	for (let row = 0; row < 3; row++) {
+		raw.push({ id: `l-${row}`, pageIndex: 0, order: raw.length, type: 'paragraph', column: 0, sourceText: row === 0 ? 'Outcome' : `Endpoint ${row}`, boundingBox: { x: 40, y: 100 + row * 18, width: 150, height: 12 } });
+		raw.push({ id: `v-${row}`, pageIndex: 0, order: raw.length, type: 'paragraph', column: 0, sourceText: `${10 + row} ± 2`, boundingBox: { x: 200, y: 100 + row * 18, width: 60, height: 12 } });
+	}
+	const cells = structureTableCells(raw, 0, 10).filter(b => b.id.startsWith('page-0-table-'));
+	assert.ok(cells.length >= 4);
+	assert.ok(cells.every(c => typeof c.tableRow === 'number' && c.tableRow! >= 0), 'every cell carries tableRow');
+	assert.ok(cells.some(c => c.tableRow! > 0), 'non-header rows numbered');
+	// Field agrees with the id it used to hide in: page-0-table-<t>-r<row>-c<col>.
+	for (const c of cells) {
+		const m = /-r(\d+)-c(\d+)$/.exec(c.id)!;
+		assert.equal(c.tableRow, Number(m[1]));
+		assert.equal(c.tableCol, Number(m[2]));
+	}
+});
