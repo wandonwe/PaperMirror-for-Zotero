@@ -7,6 +7,14 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.5] — 2026-08-15
+
+### Added
+
+- 回归语料收编 Aquino 2023 (Radiology) 第 1、2 页——本轮全部字段修复
+  (圆括号引用掩蔽、首字下沉扩张截断、三栏混排)的真实载体,附基线快照
+  (p1: 9 块 / p2: 14 块),IR 契约全过。
+
 ## [1.1.4] — 2026-08-15
 
 首个真实诊断样本(Radiology 论文第 1 页)定位出的三处修复。
