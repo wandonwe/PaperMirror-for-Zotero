@@ -1,0 +1,1198 @@
+{
+"source": "chen2023",
+"page": 1,
+"pageWidth": 594,
+"pageHeight": 783,
+"items": [
+{
+"text": "ORIGINAL RESEARCH",
+"rect": [
+434.1492970784505,
+763.5381933848063,
+504.9479007720947,
+772.5312468210855
+],
+"fontSize": 8.993053436279183
+},
+{
+"text": "•",
+"rect": [
+506.579844156901,
+764.4409732818602,
+509.0277671813965,
+771.4374936421711
+],
+"fontSize": 6.99652036031091
+},
+{
+"text": "CARDIAC IMAGING",
+"rect": [
+515.2430216471355,
+763.5381933848063,
+579.7395547231039,
+772.5312468210855
+],
+"fontSize": 8.993053436279183
+},
+{
+"text": "This copy is for personal use only. To order copies, contact",
+"rect": [
+160.24305025736493,
+9.875019073486177,
+373.62847328186035,
+18.868072509765508
+],
+"fontSize": 8.99305343627933
+},
+{
+"text": "reprints@rsna.org",
+"rect": [
+375.7118225097656,
+9.875019073486177,
+441.1805788675944,
+18.868072509765508
+],
+"fontSize": 8.99305343627933
+},
+{
+"text": "A",
+"rect": [
+71.96180025736491,
+142.70486005147293,
+87.13541030883789,
+167.8958333333332
+],
+"fontSize": 25.190973281860266
+},
+{
+"text": "cute coronary syndrome remains one of the leading",
+"rect": [
+83.47222010294597,
+157.7395515441894,
+290.1215235392253,
+167.73955790201813
+],
+"fontSize": 10.000006357828738
+},
+{
+"text": "causes of morbidity and mortality globally despite ad-",
+"rect": [
+83.47222010294597,
+145.76038487752265,
+290.05208015441895,
+155.7603912353515
+],
+"fontSize": 10.000006357828852
+},
+{
+"text": "vances in primary and secondary preventive treatments",
+"rect": [
+71.96180025736491,
+133.71179072062165,
+290.0868097941081,
+143.71179707845047
+],
+"fontSize": 10.000006357828823
+},
+{
+"text": "(1). Histologic and intravascular imaging investigations",
+"rect": [
+71.96180025736491,
+121.74998092651362,
+290.06943702697754,
+131.74998728434232
+],
+"fontSize": 10.00000635782871
+},
+{
+"text": "have demonstrated that most cases of acute coronary",
+"rect": [
+71.96180025736491,
+109.78817113240545,
+290.06943702697754,
+119.78817749023429
+],
+"fontSize": 10.000006357828838
+},
+{
+"text": "syndrome are due to the rupture of large and lipid-rich",
+"rect": [
+71.96180025736491,
+97.80900446573882,
+290.1215235392253,
+107.80901082356755
+],
+"fontSize": 10.000006357828724
+},
+{
+"text": "atheromas (2). Thus, the early, accurate identification",
+"rect": [
+71.96180025736491,
+85.7604103088378,
+290.1215235392253,
+95.76041666666653
+],
+"fontSize": 10.000006357828724
+},
+{
+"text": "of these high-risk vulnerable plaques is of importance.",
+"rect": [
+71.96180025736491,
+73.79861640930162,
+290.1215235392253,
+83.7986068725585
+],
+"fontSize": 9.999990463256879
+},
+{
+"text": "Gray-scale intravascular US can provide a unique op-",
+"rect": [
+71.96180025736491,
+61.81944974263498,
+290.15625317891437,
+71.81944020589187
+],
+"fontSize": 9.999990463256886
+},
+{
+"text": "portunity to visualize vulnerable plaque features, in-",
+"rect": [
+71.96180025736491,
+49.857624053955,
+290.1041666666667,
+59.85763041178372
+],
+"fontSize": 10.000006357828717
+},
+{
+"text": "cluding attenuated plaque and echolucent plaque (3).",
+"rect": [
+71.96180025736491,
+37.809045791625934,
+290.1041666666667,
+47.80903625488269
+],
+"fontSize": 9.999990463256758
+},
+{
+"text": "These features have been reported to be associated with",
+"rect": [
+71.96180025736491,
+25.847220102945823,
+290.1215235392253,
+35.847226460774664
+],
+"fontSize": 10.000006357828841
+},
+{
+"text": "worse clinical outcomes (4,5). However, intravascular",
+"rect": [
+308.8541666666667,
+157.7395515441894,
+527.0486036936442,
+167.73955790201813
+],
+"fontSize": 10.000006357828738
+},
+{
+"text": "US is an invasive, expensive technique and is not widely",
+"rect": [
+308.8541666666667,
+145.76038487752265,
+526.9097169240315,
+155.7603912353515
+],
+"fontSize": 10.000006357828852
+},
+{
+"text": "available in most laboratories.",
+"rect": [
+308.8541666666667,
+133.71179072062165,
+425.7986068725586,
+143.71179707845047
+],
+"fontSize": 10.000006357828823
+},
+{
+"text": "Coronary CT angiography (CCTA) is now a first-line",
+"rect": [
+320.85069020589196,
+121.74998092651362,
+527.0659764607748,
+131.74998728434232
+],
+"fontSize": 10.00000635782871
+},
+{
+"text": "noninvasive imaging modality for diagnosing coronary ar-",
+"rect": [
+308.8541666666667,
+109.78817113240545,
+526.9791603088379,
+119.78817749023429
+],
+"fontSize": 10.000006357828838
+},
+{
+"text": "tery disease (CAD). Recently, qualitative plaque features",
+"rect": [
+308.8541666666667,
+97.80900446573882,
+526.9791603088379,
+107.80901082356755
+],
+"fontSize": 10.000006357828724
+},
+{
+"text": "and quantitative attenuation-based plaque metrics at CCTA",
+"rect": [
+308.8541666666667,
+85.7604103088378,
+526.9270896911621,
+95.76041666666653
+],
+"fontSize": 10.000006357828724
+},
+{
+"text": "have demonstrated prognostic value for acute coronary syn-",
+"rect": [
+308.8541666666667,
+73.79861640930162,
+527.013889948527,
+83.7986068725585
+],
+"fontSize": 9.999990463256879
+},
+{
+"text": "drome (6–8). However, these conventional anatomic CCTA",
+"rect": [
+308.8541666666667,
+61.81944974263498,
+526.9965330759684,
+71.81944020589187
+],
+"fontSize": 9.999990463256886
+},
+{
+"text": "parameters neglect the heterogeneity and spatial complexity",
+"rect": [
+308.8541666666667,
+49.857624053955,
+526.9444465637207,
+59.85763041178372
+],
+"fontSize": 10.000006357828717
+},
+{
+"text": "in plaques. Previous studies have shown that the anatomic",
+"rect": [
+308.8541666666667,
+37.809045791625934,
+526.9791603088379,
+47.80903625488269
+],
+"fontSize": 9.999990463256758
+},
+{
+"text": "plaque features at CCTA had only a modest correlation with",
+"rect": [
+308.8541666666667,
+25.847220102945823,
+526.9791603088379,
+35.847226460774664
+],
+"fontSize": 10.000006357828841
+},
+{
+"text": "Background:",
+"rect": [
+83.94096692403157,
+434.475699742635,
+115.45138359069824,
+442.47917302449537
+],
+"fontSize": 8.003473281860352
+},
+{
+"text": "A noninvasive coronary CT angiography (CCTA)–based radiomics technique may facilitate the identification of",
+"rect": [
+123.95833333333333,
+434.0416825612385,
+492.1354293823242,
+442.5486323038736
+],
+"fontSize": 8.506949742635129
+},
+{
+"text": "vulnerable plaques and patients at risk for future adverse events.",
+"rect": [
+83.94096692403157,
+424.5798505147297,
+293.17708015441895,
+433.08678436279286
+],
+"fontSize": 8.50693384806317
+},
+{
+"text": "Purpose:",
+"rect": [
+83.94096692403157,
+402.86111005147285,
+106.2326431274414,
+410.86458333333326
+],
+"fontSize": 8.003473281860408
+},
+{
+"text": "To assess whether a CCTA-based radiomic signature (RS) of vulnerable plaques defined with intravascular US was",
+"rect": [
+114.34027353922525,
+402.5138931274413,
+488.68055343627924,
+411.02082697550446
+],
+"fontSize": 8.50693384806317
+},
+{
+"text": "associated with increased risk for future major adverse cardiac events (MACE).",
+"rect": [
+83.94096692403157,
+392.98263359069813,
+341.5451367696126,
+401.48958333333326
+],
+"fontSize": 8.506949742635129
+},
+{
+"text": "Materials and Methods:",
+"rect": [
+83.94096692403157,
+371.3506933848062,
+144.70486640930176,
+379.3541666666666
+],
+"fontSize": 8.003473281860352
+},
+{
+"text": "In a retrospective study, an RS of vulnerable plaques was developed and validated using intravascular US as",
+"rect": [
+153.17708651224774,
+370.9166444142659,
+503.8541634877523,
+379.42359415690095
+],
+"fontSize": 8.506949742635072
+},
+{
+"text": "the reference standard. The RS development data set included patients first undergoing CCTA and then intravascular US within",
+"rect": [
+83.94096692403157,
+361.4548600514729,
+505.1909923553467,
+369.961809794108
+],
+"fontSize": 8.506949742635072
+},
+{
+"text": "3 months between June 2013 and December 2020 at one tertiary hospital. The development set was randomly assigned to training",
+"rect": [
+83.94096692403157,
+351.9062277475992,
+513.2812658945719,
+360.4131774902343
+],
+"fontSize": 8.506949742635129
+},
+{
+"text": "and validation sets at a 7:3 ratio. Diagnostic performance was assessed internally and externally from three tertiary hospitals using",
+"rect": [
+83.94096692403157,
+342.44444338480616,
+508.45484733581543,
+350.9513931274413
+],
+"fontSize": 8.506949742635129
+},
+{
+"text": "the area under the curve (AUC). The prognostic value of the RS for predicting MACE was evaluated in a prospective cohort with",
+"rect": [
+83.94096692403157,
+332.9826431274413,
+508.2117875417074,
+341.4895769755044
+],
+"fontSize": 8.506933848063113
+},
+{
+"text": "suspected coronary artery disease between April 2018 and March 2019. Multivariable Cox regression analysis was used to evaluate",
+"rect": [
+83.94096692403157,
+323.43402671813953,
+510.59028307596844,
+331.9409764607746
+],
+"fontSize": 8.506949742635072
+},
+{
+"text": "the RS and conventional anatomic plaque features (eg, segment involvement score) for predicting MACE.",
+"rect": [
+83.94096692403157,
+313.97222646077466,
+431.82291984558105,
+322.4791603088378
+],
+"fontSize": 8.506933848063113
+},
+{
+"text": "Results:",
+"rect": [
+83.94096692403157,
+292.32291348775215,
+103.95833651224771,
+300.32638676961255
+],
+"fontSize": 8.003473281860408
+},
+{
+"text": "The RS development data set included 419 lesions from 225 patients (mean age, 64 years ± 10 [SD]; 68 men), while the",
+"rect": [
+112.44791348775227,
+291.9062690734862,
+507.6909859975179,
+300.4132029215494
+],
+"fontSize": 8.50693384806317
+},
+{
+"text": "prognostic cohort included 1020 lesions from 708 patients (mean age, 62 years ± 11; 498 men). Sixteen radiomic features, includ-",
+"rect": [
+83.94096692403157,
+282.4444370269774,
+511.9791825612386,
+290.95138676961255
+],
+"fontSize": 8.506949742635129
+},
+{
+"text": "ing two shape features and 14 textural features, were selected to build the RS. The RS yielded a moderate to good AUC in the",
+"rect": [
+83.94096692403157,
+272.89585240681953,
+496.63195610046387,
+281.40278625488276
+],
+"fontSize": 8.506933848063227
+},
+{
+"text": "training, validation, internal, and external test sets (AUC = 0.81, 0.75, 0.80, and 0.77, respectively). A high RS (≥1.07) was inde-",
+"rect": [
+83.94096692403157,
+263.4340203603108,
+508.9062531789144,
+271.94097010294587
+],
+"fontSize": 8.506949742635072
+},
+{
+"text": "pendently associated with MACE over a median 3-year follow-up (hazard ratio, 2.01;",
+"rect": [
+83.94096692403157,
+253.8854357401529,
+364.13194338480633,
+262.392369588216
+],
+"fontSize": 8.506933848063113
+},
+{
+"text": "P",
+"rect": [
+365.3298695882161,
+253.8854357401529,
+370.06945610046387,
+262.392369588216
+],
+"fontSize": 8.506933848063113
+},
+{
+"text": "= .005).",
+"rect": [
+372.1527735392253,
+253.8854357401529,
+398.3333269755046,
+262.392369588216
+],
+"fontSize": 8.506933848063113
+},
+{
+"text": "Conclusion:",
+"rect": [
+83.94096692403157,
+232.25349553426096,
+112.5173568725586,
+240.25695292154938
+],
+"fontSize": 8.003457387288421
+},
+{
+"text": "A coronary CT angiography–derived radiomic signature of coronary plaque enabled the detection of vulnerable plaques",
+"rect": [
+120.98957697550456,
+231.81943066914863,
+513.819440205892,
+240.3263804117838
+],
+"fontSize": 8.506949742635157
+},
+{
+"text": "that were associated with increased risk for future adverse cardiac outcomes.",
+"rect": [
+83.94096692403157,
+222.35766220092762,
+332.2916666666667,
+230.8645960489908
+],
+"fontSize": 8.50693384806317
+},
+{
+"text": "© RSNA, 2023",
+"rect": [
+83.94096692403157,
+206.03818066914866,
+125.50347646077475,
+213.0347010294595
+],
+"fontSize": 6.9965203603108534
+},
+{
+"text": "Supplemental material is available for this article.",
+"rect": [
+83.94096692403157,
+189.28472963968898,
+207.7256997426351,
+196.28124999999986
+],
+"fontSize": 6.996520360310882
+},
+{
+"text": "A Coronary CT Angiography Radiomics Model to Identify",
+"rect": [
+71.96180025736491,
+718.2604230244953,
+518.3853944142659,
+738.260419845581
+],
+"fontSize": 19.9999968210858
+},
+{
+"text": "Vulnerable Plaque and Predict Cardiovascular Events",
+"rect": [
+71.96180025736491,
+696.2812499999999,
+480.78125317891437,
+716.2812468210856
+],
+"fontSize": 19.999996821085688
+},
+{
+"text": "Qian Chen, MD*",
+"rect": [
+71.96180025736491,
+668.2604230244954,
+136.3541603088379,
+678.2604134877521
+],
+"fontSize": 9.999990463256722
+},
+{
+"text": "•",
+"rect": [
+140.954860051473,
+668.2604230244954,
+144.46180661519367,
+678.2604134877521
+],
+"fontSize": 9.999990463256722
+},
+{
+"text": "Tao Pan, MBBS*",
+"rect": [
+149.02777671813965,
+668.2604230244954,
+211.6493066151937,
+678.2604134877521
+],
+"fontSize": 9.999990463256722
+},
+{
+"text": "•",
+"rect": [
+216.23263359069824,
+668.2604230244954,
+219.73958015441895,
+678.2604134877521
+],
+"fontSize": 9.999990463256722
+},
+{
+"text": "Yi Ning Wang, MD, PhD",
+"rect": [
+224.25347963968912,
+668.2604230244954,
+317.2916730244954,
+678.2604134877521
+],
+"fontSize": 9.999990463256722
+},
+{
+"text": "•",
+"rect": [
+321.9791730244954,
+668.2604230244954,
+325.48610369364417,
+678.2604134877521
+],
+"fontSize": 9.999990463256722
+},
+{
+"text": "U. Joseph Schoepf, MD",
+"rect": [
+330.4166793823242,
+668.2604230244954,
+413.2118225097656,
+678.2604134877521
+],
+"fontSize": 9.999990463256722
+},
+{
+"text": "•",
+"rect": [
+420.0173695882161,
+668.2604230244954,
+423.5243161519369,
+678.2604134877521
+],
+"fontSize": 9.999990463256722
+},
+{
+"text": "Samuel L. Bidwell, BS",
+"rect": [
+71.96180025736491,
+657.3055502573648,
+152.77778307596842,
+667.3055566151936
+],
+"fontSize": 10.000006357828852
+},
+{
+"text": "•",
+"rect": [
+157.4479103088379,
+657.3055502573648,
+160.9548568725586,
+667.3055566151936
+],
+"fontSize": 10.000006357828852
+},
+{
+"text": "Hongyan Qiao, MD",
+"rect": [
+165.88541666666666,
+657.3055502573648,
+239.98263676961264,
+667.3055566151936
+],
+"fontSize": 10.000006357828852
+},
+{
+"text": "•",
+"rect": [
+246.75347010294595,
+657.3055502573648,
+250.26041666666666,
+667.3055566151936
+],
+"fontSize": 10.000006357828852
+},
+{
+"text": "Yun Feng, MD",
+"rect": [
+254.77428436279297,
+657.3055502573648,
+308.6631774902344,
+667.3055566151936
+],
+"fontSize": 10.000006357828852
+},
+{
+"text": "•",
+"rect": [
+315.3992970784505,
+657.3055502573648,
+318.9062277475993,
+667.3055566151936
+],
+"fontSize": 10.000006357828852
+},
+{
+"text": "Cheng Xu, MD",
+"rect": [
+323.76734415690106,
+657.3055502573648,
+379.6180407206217,
+667.3055566151936
+],
+"fontSize": 10.000006357828852
+},
+{
+"text": "•",
+"rect": [
+386.3368034362793,
+657.3055502573648,
+389.84375,
+667.3055566151936
+],
+"fontSize": 10.000006357828852
+},
+{
+"text": "Hui Xu, MSc",
+"rect": [
+394.7222391764323,
+657.3055502573648,
+443.0382092793783,
+667.3055566151936
+],
+"fontSize": 10.000006357828852
+},
+{
+"text": "•",
+"rect": [
+449.7569402058919,
+657.3055502573648,
+453.2638867696126,
+667.3055566151936
+],
+"fontSize": 10.000006357828852
+},
+{
+"text": "Guanghui Xie, MBBS",
+"rect": [
+71.96180025736491,
+646.2812499999999,
+151.9618034362793,
+656.2812563578286
+],
+"fontSize": 10.000006357828738
+},
+{
+"text": "•",
+"rect": [
+158.81943702697754,
+646.2812499999999,
+162.32638359069824,
+656.2812563578286
+],
+"fontSize": 10.000006357828738
+},
+{
+"text": "Xiaofei Gao, MD",
+"rect": [
+167.1875,
+646.2812499999999,
+230.1041603088379,
+656.2812563578286
+],
+"fontSize": 10.000006357828738
+},
+{
+"text": "•",
+"rect": [
+236.84027989705405,
+646.2812499999999,
+240.34722646077475,
+656.2812563578286
+],
+"fontSize": 10.000006357828738
+},
+{
+"text": "Xin-Wei Tao, MSc",
+"rect": [
+245.20832697550455,
+646.2812499999999,
+311.4756902058919,
+656.2812563578286
+],
+"fontSize": 10.000006357828738
+},
+{
+"text": "•",
+"rect": [
+316.1111195882162,
+646.2812499999999,
+319.6180661519369,
+656.2812563578286
+],
+"fontSize": 10.000006357828738
+},
+{
+"text": "Mengjie Lu, PhD",
+"rect": [
+324.47916666666663,
+646.2812499999999,
+387.3437563578288,
+656.2812563578286
+],
+"fontSize": 10.000006357828738
+},
+{
+"text": "•",
+"rect": [
+391.97915395100915,
+646.2812499999999,
+395.48610051472986,
+656.2812563578286
+],
+"fontSize": 10.000006357828738
+},
+{
+"text": "Peng Peng Xu, MD",
+"rect": [
+400.3645896911621,
+646.2812499999999,
+469.6354230244954,
+656.2812563578286
+],
+"fontSize": 10.000006357828738
+},
+{
+"text": "•",
+"rect": [
+476.4236132303874,
+646.2812499999999,
+479.9305597941081,
+656.2812563578286
+],
+"fontSize": 10.000006357828738
+},
+{
+"text": "Jian Zhong, MBBS",
+"rect": [
+71.96180025736491,
+635.3263931274413,
+141.59722328186035,
+645.3263835906981
+],
+"fontSize": 9.999990463256836
+},
+{
+"text": "•",
+"rect": [
+146.28472328186035,
+635.3263931274413,
+149.79166984558105,
+645.3263835906981
+],
+"fontSize": 9.999990463256836
+},
+{
+"text": "Yongyue Wei, PhD",
+"rect": [
+154.3055534362793,
+635.3263931274413,
+221.8576431274414,
+645.3263835906981
+],
+"fontSize": 9.999990463256836
+},
+{
+"text": "•",
+"rect": [
+228.64583333333334,
+635.3263931274413,
+232.15277989705405,
+645.3263835906981
+],
+"fontSize": 9.999990463256836
+},
+{
+"text": "Xindao Yin, MD, PhD",
+"rect": [
+237.01388041178384,
+635.3263931274413,
+320.3819274902344,
+645.3263835906981
+],
+"fontSize": 9.999990463256836
+},
+{
+"text": "•",
+"rect": [
+327.2048632303874,
+635.3263931274413,
+330.7118097941081,
+645.3263835906981
+],
+"fontSize": 9.999990463256836
+},
+{
+"text": "Junjie Zhang, PhD**",
+"rect": [
+335.6423695882162,
+635.3263931274413,
+411.9791825612386,
+645.3263835906981
+],
+"fontSize": 9.999990463256836
+},
+{
+"text": "•",
+"rect": [
+418.7673568725586,
+635.3263931274413,
+422.2743034362793,
+645.3263835906981
+],
+"fontSize": 9.999990463256836
+},
+{
+"text": "Long Jiang Zhang, MD, PhD**",
+"rect": [
+72.01388676961264,
+624.3020769755044,
+185.90277036031085,
+634.3020833333333
+],
+"fontSize": 10.000006357828852
+},
+{
+"text": "From the Departments of Radiology (Q.C., H.X., G.X., X.Y.) and Cardiology (T.P., X.G., J. Zhang), Nanjing First Hospital, Nanjing Medical University, Nanjing, China;",
+"rect": [
+71.96180025736491,
+609.0763963063556,
+525.2951463063558,
+616.0729166666665
+],
+"fontSize": 6.99652036031091
+},
+{
+"text": "Department of Diagnostic Radiology, Jinling Hospital, Medical School of Nanjing University, 305 Zhongshan East Road, Xuanwu District, Nanjing 210002, China",
+"rect": [
+71.96180025736491,
+600.6215330759683,
+524.8610973358154,
+607.6180534362793
+],
+"fontSize": 6.996520360311024
+},
+{
+"text": "(Q.C., U.J.S., P.P.X., J. Zhong, L.J.Z.); Department of Radiology, Peking Union Medical College Hospital, Chinese Academy of Medical Sciences and Peking Union",
+"rect": [
+71.96180025736491,
+592.0972264607747,
+525.24307568868,
+599.0937468210856
+],
+"fontSize": 6.99652036031091
+},
+{
+"text": "Medical College, Beijing, China (Y.N.W., C.X.); Division of Cardiovascular Imaging, Department of Radiology and Radiological Science, Medical University of South",
+"rect": [
+71.96180025736491,
+583.6423632303873,
+524.9305566151937,
+590.6388835906981
+],
+"fontSize": 6.996520360310797
+},
+{
+"text": "Carolina, Charleston, SC (U.J.S., S.L.B.); Department of Medical Imaging, Affiliated Hospital of Jiangnan University, Wuxi, China (H.Q.); Department of Medical",
+"rect": [
+71.96180025736491,
+575.1180566151936,
+525.208330154419,
+582.1145769755044
+],
+"fontSize": 6.996520360310797
+},
+{
+"text": "Imaging, Medical Imaging Center, The Affiliated Huaian No.1 People’s Hospital of Nanjing Medical University, Huaian, China (Y.F.); Bayer Healthcare, Shanghai, China",
+"rect": [
+71.96180025736491,
+566.6631933848062,
+525.0868002573649,
+573.659729639689
+],
+"fontSize": 6.9965362548828125
+},
+{
+"text": "(X.W.T.); School of Public Health, Shanghai JiaoTong University School of Medicine, Shanghai, China (M.L.); and Department of Biostatistics, School of Public Health,",
+"rect": [
+71.96180025736491,
+558.1388867696126,
+524.9826590220133,
+565.1354230244953
+],
+"fontSize": 6.996536254882699
+},
+{
+"text": "China International Cooperation Center for Environment and Human Health, Nanjing Medical University, Nanjing, China (Y.W.). Received July 11, 2022; revision",
+"rect": [
+71.96180025736491,
+549.7013963063557,
+524.8958110809326,
+556.6979166666666
+],
+"fontSize": 6.99652036031091
+},
+{
+"text": "requested August 31; revision received October 26; accepted December 9.",
+"rect": [
+71.96180025736491,
+541.1597169240315,
+269.8958396911621,
+548.1562531789143
+],
+"fontSize": 6.9965362548828125
+},
+{
+"text": "Address correspondence to",
+"rect": [
+272.9340235392253,
+541.1597169240315,
+348.5590298970541,
+548.1562531789143
+],
+"fontSize": 6.9965362548828125
+},
+{
+"text": "L.J.Z. (email:",
+"rect": [
+350.8333206176758,
+541.1597169240315,
+387.04859415690106,
+548.1562531789143
+],
+"fontSize": 6.9965362548828125
+},
+{
+"text": "kevinzhlj@163.com",
+"rect": [
+388.9583269755046,
+541.1597169240315,
+440.1909669240316,
+548.1562531789143
+],
+"fontSize": 6.9965362548828125
+},
+{
+"text": ").",
+"rect": [
+440.5555725097656,
+541.1597169240315,
+444.5312658945719,
+548.1562531789143
+],
+"fontSize": 6.9965362548828125
+},
+{
+"text": "L.J.Z. supported by the Jiangsu Province Key Project of Comprehensive Prevention and Control of Chronic Diseases (grant BE2020699).",
+"rect": [
+71.96180025736491,
+528.6597169240315,
+441.23263359069824,
+535.6562531789143
+],
+"fontSize": 6.9965362548828125
+},
+{
+"text": "* Q.C. and T.P. contributed equally to this work.",
+"rect": [
+71.96180025736491,
+516.2118034362792,
+203.09027036031088,
+523.208339691162
+],
+"fontSize": 6.9965362548828125
+},
+{
+"text": "** J. Zhang and L.J.Zhang are co-senior authors.",
+"rect": [
+71.96180025736491,
+503.69443066914863,
+202.7256965637207,
+510.69095102945954
+],
+"fontSize": 6.99652036031091
+},
+{
+"text": "Conflicts of interest are listed at the end of this article.",
+"rect": [
+71.96180025736491,
+491.1770737965901,
+217.46527353922525,
+498.17359415690095
+],
+"fontSize": 6.9965203603108534
+},
+{
+"text": "See also the editorial by De Cecco and van Assen in this issue.",
+"rect": [
+71.96180025736491,
+478.74653307596833,
+237.84721692403156,
+485.7430534362792
+],
+"fontSize": 6.9965203603108534
+},
+{
+"text": "Radiology 2023; 307(2):e221693",
+"rect": [
+71.96180025736491,
+463.64236640930164,
+163.73263994852704,
+470.6388867696125
+],
+"fontSize": 6.9965203603108534
+},
+{
+"text": "•",
+"rect": [
+169.68749364217123,
+461.35067113240547,
+173.54167302449545,
+472.35763041178376
+],
+"fontSize": 11.006959279378293
+},
+{
+"text": "https://doi.org/10.1148/radiol.221693",
+"rect": [
+179.3055534362793,
+463.64236640930164,
+286.4409764607747,
+470.6388867696125
+],
+"fontSize": 6.9965203603108534
+},
+{
+"text": "•",
+"rect": [
+292.4652735392253,
+461.35067113240547,
+296.31943702697754,
+472.35763041178376
+],
+"fontSize": 11.006959279378293
+},
+{
+"text": "Content codes:",
+"rect": [
+302.0833333333333,
+463.64236640930164,
+343.50694020589196,
+470.6388867696125
+],
+"fontSize": 6.9965203603108534
+}
+]
+}

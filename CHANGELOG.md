@@ -7,6 +7,32 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.5] — 2026-08-15
+
+封面页(前置件密集的首页)两处分类错误,合起来曾让整栏正文保留英文
+(Chen 2023 radiomics 首页: 25 段中 18 段保留原文)。
+
+### Fixed
+
+- **正文行被批量误判为 heading**。页面正文字号取的是行字号的中位数;封面页
+  的 7pt 作者单位(17 行)+ 8.5pt 摘要(18 行)在行数上压过 10pt 正文
+  (28 行),中位数落在 8.5 —— 每行 10pt 正文 ratio=1.176 ≥ 1.1 全部进了
+  heading 分支,逐行按 heading 翻译后大面积 unrecovered,译文页整栏英文。
+  改为行字号的众数(0.5pt 桶、平票取大),该页正确解出 10。另给 heading 的
+  纯 ratio 分支加防线:以小写开头(句中续写)或以连字符/逗号结尾(断词/
+  断句)的行是散文续写,不判 heading —— title 分支不受此限
+  (真标题的折行片段恰恰会以连字符结尾 "… Photon-"、以小写开头 "counting CT")。
+- **首字下沉字符加冕整行,造出栏中假标题**。焊入首字下沉的行只有两个 span
+  ("A" 25pt + 正文 10pt),按 span 计票平票、平票取大(本为防下标设计)把
+  25pt 选成整行字号 → 该行 ratio 2.5 变成栏中假 title(Chen "Acauses…"、
+  hakime "Chas been assessed…"、horst "Ttial and contrast…" 同病)。行字号改按
+  字符数加权计票:1 个 25pt 字符 vs 50 个 10pt 字符不再是平票。假 title 消失
+  后这些行还能与后续行正常并段。
+  快照影响(均为修复而非回归,已审阅重生成): chen2023-p1(新增基线)、
+  hakime2007-p2 / horst2024-p1(假 title 消失)、nejm-defuse3-p7(一个句中
+  "heading" 转正文并使续写正常并段;表格单元完全不变)。其余 8 个语料
+  字节不变。
+
 ## [1.2.4] — 2026-08-15
 
 单点修复:密排双栏正文的栏底几行在译文侧显示为英文原文。

@@ -88,9 +88,30 @@ function rectOf(items: SpanItem[]): Rect {
 }
 
 function sizeOf(items: SpanItem[]): number {
-	const sizes = items.map(i => i.fontSize ?? (i.rect[3] - i.rect[1])).filter(s => s > 0);
-	// Dominant, not max: one superscript must not inflate the whole line.
-	return dominantFontSize(sizes) || (sizes.length ? sizes[0]! : 10);
+	// Dominant by CHARACTER COUNT, not by span count: one superscript must not
+	// inflate the whole line, and neither must a drop cap. A drop-cap line has
+	// exactly two spans — "A" (25pt) + "cute coronary …" (10pt) — and a
+	// span-count vote TIES, where the ties-go-larger rule (meant for
+	// subscripts) crowned the drop cap: the welded line became a fake 25pt
+	// mid-column "title". One char of 25pt vs fifty chars of 10pt is not a tie.
+	const counts = new Map<number, number>();
+	for (const i of items) {
+		const s = i.fontSize ?? (i.rect[3] - i.rect[1]);
+		if (!(Number.isFinite(s) && s > 0)) {
+			continue;
+		}
+		const bucket = Math.round(s * 2) / 2;
+		counts.set(bucket, (counts.get(bucket) ?? 0) + Math.max(1, i.text.trim().length));
+	}
+	let best = 0;
+	let bestCount = -1;
+	for (const [bucket, count] of counts) {
+		if (count > bestCount || (count === bestCount && bucket > best)) {
+			best = bucket;
+			bestCount = count;
+		}
+	}
+	return best || 10;
 }
 
 /** Step 1: items sharing a baseline band, left to right. No x constraint. */
@@ -333,8 +354,16 @@ function classify(text: string, fontSize: number, bodySize: number, lineCount: n
 	if (lineCount <= 4 && ratio >= 1.35 && text.length < 250) {
 		return 'title';
 	}
+	// The ratio arm below must not promote prose: a body line that merely runs
+	// slightly larger than the page's front matter would qualify. A run that
+	// BEGINS mid-sentence (lowercase) or ENDS mid-sentence (explicit
+	// hyphenation, or a trailing comma) is a prose continuation, never a
+	// heading. NOT applied to the title arm above: a real wrapped title splits
+	// into fragments that can end with a hyphen ("… Pediatric Photon-") or
+	// begin lowercase ("counting CT").
+	const proseContinuation = /^[a-z]/.test(text.trim()) || /[-,]$/.test(text.trim());
 	if (lineCount <= 2 && text.length < 160
-		&& (ratio >= 1.1
+		&& ((ratio >= 1.1 && !proseContinuation)
 			|| isSectionNumberHeading(text)
 			|| /^(abstract|introduction|methods?|results|discussion|conclusions?|references|摘要|引言|方法|结果|讨论|结论)\s*$/i.test(text))) {
 		return 'heading';
@@ -403,8 +432,12 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		: items;
 	const lines = groupIntoLines(filteredItems, pageWidth, options.pageHeight);
 
-	const sizes = lines.map(l => l.fontSize).filter(s => s > 0).sort((a, b) => a - b);
-	const bodySize = sizes.length ? sizes[Math.floor(sizes.length / 2)]! : 0;
+	// 页面正文字号 = 行字号的众数,不是中位数 (1.2.5)。封面页的前置件
+	// (7pt 作者单位 17 行 + 8.5pt 摘要 18 行) 在行数上压过 10pt 正文 (28 行),
+	// 中位数落在 8.5 —— 于是每一行 10pt 正文 ratio=1.176 ≥ 1.1 全部被判成
+	// heading,逐行走 heading 通道后大面积 unrecovered,译文页整栏保留英文。
+	// 众数(0.5pt 桶、平票取大)正确取到 10。
+	const bodySize = dominantFontSize(lines.map(l => l.fontSize));
 
 	// 表格行先摘出去 (1.2.0): 数值表的行/列本是网格,但 groupIntoParagraphs 是给
 	// 散文设计的 —— 它把标签列跨行黏成一堵墙、把数字列纵向并块,等 structureTableCells

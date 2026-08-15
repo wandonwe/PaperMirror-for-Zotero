@@ -603,27 +603,9 @@
 		"text": "Imaging Outcomes"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 69,
 		"text": "tion of the primary arterial occlusive l"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 70,
-		"text": "Imaging outcomes are summarized in Table"
-	},
-	{
-		"type": "heading",
-		"column": 0,
-		"readingIndex": 71,
-		"text": "in the endovascular-therapy group and 33"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 72,
-		"text": "of more than 90% of the initial perfusio"
 	}
 ]

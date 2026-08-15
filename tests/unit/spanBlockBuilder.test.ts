@@ -161,6 +161,48 @@ test('a title that wraps to three lines is still a title, not body', () => {
 	assert.equal(blocks[1]!.type, 'paragraph');
 });
 
+test('front-matter-heavy cover page: 10pt body lines are NOT headings (Chen 2023)', () => {
+	// bodySize is the MODE of line sizes, not the median. On a cover page the
+	// 7pt affiliations + 8.5pt abstract outnumber the 10pt body lines, so the
+	// median landed on 8.5 and every 10pt body line got ratio 1.176 ≥ 1.1 →
+	// 'heading'. Per-line heading translation then failed en masse and the
+	// translated page kept whole columns in English.
+	const affil = lines(Array.from({ length: 9 }, (_, i) =>
+		`Department of Radiology (Q.C., H.X.) and Cardiology, Hospital ${i}, City, Country;`
+	), 50, 740, 7, 8.5, 460);
+	const abstract = lines(Array.from({ length: 9 }, (_, i) =>
+		`abstract line ${i} with a good number of words to look like the real block here`
+	), 50, 640, 8.5, 10, 460);
+	const body = lines(Array.from({ length: 10 }, (_, i) =>
+		`Coronary CT angiography is now a first-line modality, body line ${i} here.`
+	), 50, 500, 10, 12, 220);
+	const { blocks } = buildBlocksFromSpans([...affil, ...abstract, ...body], {
+		pageIndex: 0,
+		pageHeight: PAGE_HEIGHT
+	});
+	for (const b of blocks) {
+		assert.notEqual(b.type, 'heading', `body-size lines must not be headings: ${b.sourceText.slice(0, 40)}`);
+	}
+});
+
+test('a drop cap does not crown its line: char-weighted size, no fake mid-column title', () => {
+	// The welded drop-cap line has exactly TWO spans — "A" (25pt) + the body
+	// text (10pt) — and a span-count vote ties, where ties-go-larger crowned
+	// the drop cap: the line became a fake 25pt 'title' mid-column. One char
+	// of 25pt vs fifty chars of 10pt is not a tie.
+	const dropCap = span('A', 50, 476, 15, 25);
+	const bodyTexts = Array.from({ length: 8 }, (_, i) => `cute coronary syndrome remains one of the leading, line ${i}`);
+	const body = lines(bodyTexts, 65, 500, 10, 12, 220);
+	const { blocks } = buildBlocksFromSpans([dropCap, ...body], {
+		pageIndex: 0,
+		pageHeight: PAGE_HEIGHT
+	});
+	for (const b of blocks) {
+		assert.notEqual(b.type, 'title', `drop-cap weld must not be a title: ${b.sourceText.slice(0, 40)}`);
+		assert.notEqual(b.type, 'heading', `drop-cap weld must not be a heading: ${b.sourceText.slice(0, 40)}`);
+	}
+});
+
 test('figure and table captions are classified, not treated as body text', () => {
 	const fig = lines(['Figure 2: overall architecture.'], 50, 700, 9);
 	const tab = lines(['Table 1: results on WMT14.'], 50, 660, 9);

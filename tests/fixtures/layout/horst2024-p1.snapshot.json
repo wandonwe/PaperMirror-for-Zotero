@@ -24,21 +24,15 @@
 		"text": "Performing CT in children comes with uni"
 	},
 	{
-		"type": "title",
+		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 4,
 		"text": "Ttial and contrast resolution, has made "
 	},
 	{
 		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 5,
-		"text": "he operational efficiency of CT, combine"
-	},
-	{
-		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 6,
+		"readingIndex": 5,
 		"text": "In contrast, PCD CT uses semiconductors "
 	}
 ]
