@@ -7,6 +7,23 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.6] — 2026-08-15
+
+单点修复:推理模型拒收 temperature 导致「深度解析」/翻译请求 HTTP 400 中断。
+
+### Fixed
+
+- **temperature 的自愈,与 1.1.11 的 reasoning_effort 完全同构**。为翻译求
+  确定性,DEFAULT_TEMP_PROVIDERS 默认发 temperature: 0;但推理模型
+  (gpt-5.x / o 系列,以及各家「OpenAI 兼容」端点背后路由到的推理模型)只接受
+  默认温度,直接回 HTTP 400「Unsupported value: 'temperature' does not
+  support 0 with this model. Only the default (1) value is supported.」——
+  「深度解析」当场中断,翻译走同一条 openaiChatExtras 同样会中招。现在识别该
+  400 后剥掉 temperature 重试一次,并按 (provider, model) 记住,后续请求直接
+  不发。postChat 的自愈泛化为逐参数:temperature 与 reasoning_effort 各最多
+  重试一次,可在同一请求序列中先后触发;其余错误照旧抛出。新增 3 个单测
+  (剥参重试 / 记忆生效 / 双雷区先后自愈)。
+
 ## [1.2.5] — 2026-08-15
 
 封面页(前置件密集的首页)两处分类错误,合起来曾让整栏正文保留英文

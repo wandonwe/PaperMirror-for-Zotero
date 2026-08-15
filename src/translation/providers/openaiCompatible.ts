@@ -15,7 +15,10 @@ import {
 	openaiChatExtras,
 	isReasoningEffortRejection,
 	markReasoningEffortUnsupported,
-	reasoningEffortUnsupported
+	reasoningEffortUnsupported,
+	isTemperatureRejection,
+	markTemperatureUnsupported,
+	temperatureUnsupported
 } from './advancedParams';
 
 export interface OpenAICompatibleConfig {
@@ -62,13 +65,15 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 
 	/**
 	 * POST a chat request built from `baseBody` + the opt-in advanced extras
-	 * (reasoning_effort / temperature / max tokens), with reasoning_effort
-	 * self-healing (1.1.11): non-reasoning models on openai/openrouter (and many
-	 * OpenAI-compatible servers) 400 on reasoning_effort. When they do, strip
-	 * that one param and retry once, and remember the model rejects it so the
-	 * next request omits it up front. Every other error propagates unchanged;
-	 * a profile that never set reasoning produces no reasoning_effort at all, so
-	 * this path is inert for it.
+	 * (reasoning_effort / temperature / max tokens), with per-param
+	 * self-healing: non-reasoning models on openai/openrouter (and many
+	 * OpenAI-compatible servers) 400 on reasoning_effort (1.1.11), and
+	 * reasoning models 400 on a non-default temperature (1.2.6 — "Unsupported
+	 * value: 'temperature' does not support 0 with this model"). When the
+	 * server names one of these params, strip that one param, retry, and
+	 * remember the model rejects it so the next request omits it up front.
+	 * At most one retry per param; every other error propagates unchanged. A
+	 * profile that emits neither param makes this path fully inert.
 	 */
 	const postChat = async (
 		baseBody: Record<string, unknown>,
@@ -77,32 +82,46 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 	): Promise<unknown> => {
 		const url = chatURL(settings, config.defaultBaseURL, config.noV1Suffix);
 		const model = settings.model || config.defaultModel;
-		const bodyWith = (dropReasoning: boolean): Record<string, unknown> => {
+		const drop = {
+			reasoning: reasoningEffortUnsupported(config.id, model),
+			temperature: temperatureUnsupported(config.id, model)
+		};
+		const bodyNow = (): Record<string, unknown> => {
 			const extras = openaiChatExtras(settings, config.id);
-			if (dropReasoning) {
+			if (drop.reasoning) {
 				delete extras.reasoning_effort;
+			}
+			if (drop.temperature) {
+				delete extras.temperature;
 			}
 			return { ...baseBody, ...extras };
 		};
-		const known = reasoningEffortUnsupported(config.id, model);
-		const post = (dropReasoning: boolean): Promise<{ json: unknown }> => requestJSON(url, {
+		const post = (): Promise<{ json: unknown }> => requestJSON(url, {
 			headers: headers(settings),
-			body: bodyWith(dropReasoning),
+			body: bodyNow(),
 			timeoutMs: settings.timeoutMs,
 			signal: options.signal,
 			allowInsecureHTTP: config.allowInsecureHTTP?.(settings) ?? false
 		});
-		try {
-			return (await post(known)).json;
-		}
-		catch (e) {
-			// Retry-once only if reasoning_effort was actually in this request
-			// (i.e. we hadn't already learned to drop it) and the server named it.
-			if (!known && isReasoningEffortRejection(e)) {
-				markReasoningEffortUnsupported(config.id, model);
-				return (await post(true)).json;
+		for (;;) {
+			try {
+				return (await post()).json;
 			}
-			throw e;
+			catch (e) {
+				// Retry only if the named param was actually in THIS request
+				// (i.e. we hadn't already learned to drop it).
+				if (!drop.reasoning && isReasoningEffortRejection(e)) {
+					drop.reasoning = true;
+					markReasoningEffortUnsupported(config.id, model);
+					continue;
+				}
+				if (!drop.temperature && isTemperatureRejection(e)) {
+					drop.temperature = true;
+					markTemperatureUnsupported(config.id, model);
+					continue;
+				}
+				throw e;
+			}
 		}
 	};
 

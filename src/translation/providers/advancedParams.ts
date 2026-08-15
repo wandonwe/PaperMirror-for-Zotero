@@ -109,3 +109,32 @@ export function reasoningEffortUnsupported(providerId: string, model: string): b
 export function markReasoningEffortUnsupported(providerId: string, model: string): void {
 	reasoningEffortUnsupportedModels.add(modelKey(providerId, model));
 }
+
+/**
+ * temperature 的同款自愈 (1.2.6, 与 1.1.11 的 reasoning_effort 完全同构):
+ *
+ * DEFAULT_TEMP_PROVIDERS 会默认发 temperature: 0(翻译求确定性),显式设置的
+ * 温度也走同一字段。但推理模型(gpt-5.x / o 系列,以及各家「OpenAI 兼容」
+ * 端点背后路由到的推理模型)只接受默认温度,直接回 HTTP 400「Unsupported
+ * value: 'temperature' does not support 0 with this model. Only the default
+ * (1) value is supported.」——用户在「深度解析」上撞见的正是它(翻译走同一条
+ * openaiChatExtras,同样会中招)。识别后剥掉 temperature 重试一次,并按
+ * (provider, model) 记住,后续请求直接不发,避免每次先 400 再重试。
+ */
+export function isTemperatureRejection(e: unknown): boolean {
+	return e instanceof PaperMirrorError
+		&& e.httpStatus === 400
+		&& /temperature/i.test(e.message ?? '');
+}
+
+const temperatureUnsupportedModels = new Set<string>();
+
+/** Has this (provider, model) already 400'd on temperature this session? */
+export function temperatureUnsupported(providerId: string, model: string): boolean {
+	return temperatureUnsupportedModels.has(modelKey(providerId, model));
+}
+
+/** Remember that this (provider, model) rejects a non-default temperature. */
+export function markTemperatureUnsupported(providerId: string, model: string): void {
+	temperatureUnsupportedModels.add(modelKey(providerId, model));
+}

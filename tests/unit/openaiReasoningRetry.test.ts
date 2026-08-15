@@ -106,3 +106,65 @@ test('非 reasoning_effort 的 400 (模型名错) 照旧抛出, 不吞不重试'
 	}
 	finally { http.teardown(); }
 });
+
+// ---- temperature 的同款自愈 (1.2.6) ------------------------------------------
+// 推理模型只接受默认温度: "Unsupported value: 'temperature' does not support 0
+// with this model. Only the default (1) value is supported."(用户在深度解析上
+// 撞见的原文)。剥掉 temperature 重试一次并记住模型。
+
+const TEMP_REJECT = '{"error":{"message":"Unsupported value: \'temperature\' does not support 0 with this model. Only the default (1) value is supported.","type":"invalid_request_error","param":"temperature"}}';
+
+test('complete (深度解析): 400 on temperature → strip + retry → success', async () => {
+	const http = installHTTP((body) => body.temperature !== undefined
+		? { status: 400, text: TEMP_REJECT }
+		: { status: 200, text: OK_TEXT });
+	try {
+		// deepseek is in DEFAULT_TEMP_PROVIDERS → temperature 0 by default.
+		const p = createOpenAICompatibleProvider({ id: 'deepseek', displayName: 'DeepSeek', defaultBaseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-chat' });
+		const out = await p.complete!('explain this', settings({ providerId: 'deepseek', reasoning: undefined, model: 'deepseek-reasoner-temp-test' }), {});
+		assert.equal(out, '深度解析内容');
+		assert.equal(http.bodies.length, 2, '一次被拒 + 一次重试');
+		assert.equal(http.bodies[0].temperature, 0, '首发带了默认 temperature 0');
+		assert.equal(http.bodies[1].temperature, undefined, '重试剥掉了 temperature');
+	}
+	finally { http.teardown(); }
+});
+
+test('temperature 记忆生效: 同模型后续请求直接不带 temperature', async () => {
+	const http = installHTTP((body) => body.temperature !== undefined
+		? { status: 400, text: TEMP_REJECT }
+		: { status: 200, text: OK_TEXT });
+	try {
+		const p = createOpenAICompatibleProvider({ id: 'deepseek', displayName: 'DeepSeek', defaultBaseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-chat' });
+		const out = await p.complete!('again', settings({ providerId: 'deepseek', reasoning: undefined, model: 'deepseek-reasoner-temp-test' }), {});
+		assert.equal(out, '深度解析内容');
+		assert.equal(http.bodies.length, 1, '记忆命中 → 只发一次');
+		assert.equal(http.bodies[0].temperature, undefined);
+	}
+	finally { http.teardown(); }
+});
+
+test('双雷区: 先 400 temperature 再 400 reasoning_effort, 各剥一次后成功', async () => {
+	const http = installHTTP((body) => {
+		if (body.temperature !== undefined) {
+			return { status: 400, text: TEMP_REJECT };
+		}
+		if (body.reasoning_effort !== undefined) {
+			return { status: 400, text: REJECT };
+		}
+		return { status: 200, text: OK_TEXT };
+	});
+	try {
+		// openai-compatible is in DEFAULT_TEMP_PROVIDERS AND we set reasoning —
+		// but openai-compatible is NOT a reasoning-effort provider, so use
+		// openrouter? openrouter is NOT in DEFAULT_TEMP_PROVIDERS. Force both
+		// params via an explicit temperature on openrouter + reasoning.
+		const p = createOpenAICompatibleProvider({ id: 'openrouter', displayName: 'OpenRouter', defaultBaseURL: 'https://openrouter.ai/api', defaultModel: 'auto' });
+		const out = await p.complete!('x', settings({ providerId: 'openrouter', temperature: 0, reasoning: 'minimal', model: 'or-double-400-test' }), {});
+		assert.equal(out, '深度解析内容');
+		assert.equal(http.bodies.length, 3, '两次 400 + 一次成功');
+		assert.equal(http.bodies[2].temperature, undefined);
+		assert.equal(http.bodies[2].reasoning_effort, undefined);
+	}
+	finally { http.teardown(); }
+});
