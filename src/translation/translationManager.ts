@@ -1628,6 +1628,12 @@ export class TranslationManager {
 						if (first) {
 							received.set(block.id, first.translatedText);
 						}
+						else if (single.translations.length) {
+							state.rejectReasons?.set(block.id, 'salvage-validator');
+						}
+						else if (single.translations.length) {
+							state.rejectReasons?.set(block.id, 'salvage-validator');
+						}
 					}
 					catch (e) {
 						if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
@@ -1763,6 +1769,12 @@ export class TranslationManager {
 						state.translations.set(block.id, restored);
 						results.push({ id: block.id, translatedText: restored });
 						logger.info(MODULE, `Page ${pageIndex + 1}: plain-mode recovery rescued ${block.id}`);
+					}
+					else if (resp.translations.length) {
+						state.rejectReasons?.set(block.id, 'plain-validator');
+					}
+					else if (resp.translations.length) {
+						state.rejectReasons?.set(block.id, 'plain-validator');
 					}
 				}
 				catch (e) {

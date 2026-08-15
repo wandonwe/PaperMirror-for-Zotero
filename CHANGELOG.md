@@ -7,6 +7,23 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.4] — 2026-08-15
+
+首个真实诊断样本(Radiology 论文第 1 页)定位出的三处修复。
+
+### Fixed
+
+- 圆括号数字引用 (1) (2–4) (1,5–7) 纳入占位符掩蔽——Radiology 式引言段
+  此前因译文保留全部引用被"疑似未翻译"验收反复拒绝 → 整段 unrecovered。
+  仅纯数字+分隔符,(Smith et al., 2020) 不受影响。
+- 排版扩展的遮挡判据从"起点在我边缘之外"改为"延伸超过我的边缘":与本块
+  已有轻微重叠的邻居(首字下沉行矩形常态)此前不算遮挡物,扩张会确定性
+  穿过它压住下方段落(诊断 detail: overlap:region-7→region-8, 46266px²,
+  由 1.1.0 几何复核兜住);现在已重叠邻居把扩张截为 0。
+- 拒绝原因埋点补齐打捞与 plain 兜底路径(salvage-validator /
+  plain-validator)——1.1.3 只覆盖了批量路径,unrecovered 块的
+  lastReject 曾缺失。
+
 ## [1.1.3] — 2026-08-15
 
 字段定位版:针对首个真实诊断样本(第 1 页 2 段 unrecovered + 1 段几何撤销)

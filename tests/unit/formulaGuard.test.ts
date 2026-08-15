@@ -144,3 +144,19 @@ test('variant normalization is conservative: unissued numbers and duplicates lef
 	assert.equal((dup.match(/\$a=1\$/g) ?? []).length, 1, dup);
 	assert.ok(dup.includes('[PM0]'), 'duplicate variant left as visible residue');
 });
+
+
+test('round-bracket numeric citations masked; overlapping neighbours block expansion (1.1.4)', async () => {
+	const src = 'Outcomes occur in cardiomyopathies (2–4) and heart failure (1,5–7). See Smith et al. here.';
+	const { text, placeholders } = protectFormulas(src);
+	assert.ok(!/\(\d/.test(text), text);
+	assert.ok(text.includes('Smith et al.'));
+	assert.equal(restoreFormulas(text, placeholders), src);
+	const { computeExpansionAllowance } = await import('../../src/ui/strictPageReplacement');
+	// 邻居与本块已有 4px 重叠(drop cap 常态)→ 向下扩张必须为 0,不得穿过。
+	const grow = computeExpansionAllowance(
+		{ left: 50, top: 100, width: 200, height: 20 },
+		[{ left: 50, top: 116, width: 200, height: 300 }],
+		600, 800, 40);
+	assert.equal(grow.down, 0, JSON.stringify(grow));
+});

@@ -1003,12 +1003,16 @@ export function computeExpansionAllowance(
 	let right = Math.max(0, pageW * 0.9 - (box.left + box.width));
 	let down = Math.max(0, pageH * 0.95 - (box.top + box.height));
 	for (const other of blockers) {
+		// 1.1.4 字段修复 (首字下沉页 overlap:region-7→region-8): 判据从"起点在
+		// 我边缘之外"改为"延伸超过我的边缘"——与我已有轻微重叠的邻居(drop cap
+		// 行矩形常态)此前不算遮挡物,扩张会径直穿过它;现在一律按其近边截断,
+		// 已重叠者截为 0。
 		const vOverlap = Math.min(box.top + box.height, other.top + other.height) - Math.max(box.top, other.top);
-		if (vOverlap > 2 && other.left >= box.left + box.width - 1) {
+		if (vOverlap > 2 && other.left + other.width > box.left + box.width - 1) {
 			right = Math.min(right, other.left - (box.left + box.width) - 3);
 		}
 		const hOverlap = Math.min(box.left + box.width, other.left + other.width) - Math.max(box.left, other.left);
-		if (hOverlap > 2 && other.top >= box.top + box.height - 1) {
+		if (hOverlap > 2 && other.top + other.height > box.top + box.height - 1) {
 			down = Math.min(down, other.top - (box.top + box.height) - 3);
 		}
 	}
