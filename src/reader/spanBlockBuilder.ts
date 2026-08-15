@@ -322,7 +322,15 @@ function classify(text: string, fontSize: number, bodySize: number, lineCount: n
 		|| (isOrderedListStart(text) && ratio < 1.1)) {
 		return 'list';
 	}
-	if (lineCount <= 2 && ratio >= 1.35 && text.length < 250) {
+	// A title is a large, short block — but it WRAPS. "Virtual Noncalcium
+	// Dual-Energy CT: Detection of Lumbar Disk Herniation in Comparison with
+	// Standard Gray-Scale CT" is 3 lines at 2× body; the old `lineCount <= 2`
+	// gate dropped it to `paragraph`, so the strict page rendered it at body
+	// anchor size, un-bold — the translated title looked missing. The strong
+	// ratio (≥1.35) + short length (<250) still pin it to a real title; only
+	// the wrap tolerance widens (a large multi-line BODY block would exceed
+	// 250 chars long before 4 lines).
+	if (lineCount <= 4 && ratio >= 1.35 && text.length < 250) {
 		return 'title';
 	}
 	if (lineCount <= 2 && text.length < 160

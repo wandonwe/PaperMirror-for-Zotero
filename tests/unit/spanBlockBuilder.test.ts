@@ -140,6 +140,27 @@ test('a large short line is classified as a title, a numbered one as a heading',
 	assert.equal(blocks[2]!.type, 'paragraph');
 });
 
+test('a title that wraps to three lines is still a title, not body', () => {
+	// Regression: a 2×-body title spanning 3 lines was classed 'paragraph', so
+	// the strict page rendered it at body size, un-bold — it read as missing.
+	const title = lines([
+		'Virtual Noncalcium Dual-Energy CT: Detection of',
+		'Lumbar Disk Herniation in Comparison with Standard',
+		'Gray-Scale CT'
+	], 50, 740, 20, 22, 460);
+	// Body must dominate so the page's body size resolves to 10 (as on a real
+	// first page); a few lines would skew the ratio and mask the regression.
+	const bodyTexts = Array.from({ length: 10 }, (_, i) => `body line ${i} with several words here to look real`);
+	const body = lines(bodyTexts, 50, 560, 10, 12, 460);
+	const { blocks } = buildBlocksFromSpans([...title, ...body], {
+		pageIndex: 0,
+		pageHeight: PAGE_HEIGHT
+	});
+	assert.equal(blocks[0]!.type, 'title');
+	assert.equal(blocks[0]!.lineRectsPdf?.length, 3);
+	assert.equal(blocks[1]!.type, 'paragraph');
+});
+
 test('figure and table captions are classified, not treated as body text', () => {
 	const fig = lines(['Figure 2: overall architecture.'], 50, 700, 9);
 	const tab = lines(['Table 1: results on WMT14.'], 50, 660, 9);

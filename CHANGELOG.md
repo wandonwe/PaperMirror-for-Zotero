@@ -7,6 +7,22 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.3] — 2026-08-15
+
+单点修复:多行标题在译文侧"消失"。
+
+### Fixed
+
+- **换行到 3 行以上的论文标题被当成正文**,译文侧标题几乎看不见。
+  分类器把 `title` 限定在 `lineCount <= 2`,而像 *"Virtual Noncalcium
+  Dual-Energy CT: Detection of Lumbar Disk Herniation in Comparison with
+  Standard Gray-Scale CT"* 这类标题会折到 3 行 —— 于是落回 `paragraph`。
+  严格排版对段落用的是全页正文基准字号(≈正文大小)且不加粗,20pt 的大标题
+  就被渲染成顶部一行很小的、不加粗的正文,肉眼看像"标题没了"。放宽标题的
+  换行容忍到 `lineCount <= 4`,同时保留 `ratio ≥ 1.35`(明显大于正文)与
+  `length < 250`(短)两道强约束 —— 多行的**正文**块远在 4 行之前就超过 250 字,
+  因此不会被误判为标题。新增回归用例 + Booz 2019 首页语料基线快照。
+
 ## [1.2.2] — 2026-08-15
 
 发布前整体审核(外部审阅)定位的问题,全部处理或明确缓交。本版无新功能,
