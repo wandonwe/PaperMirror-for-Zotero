@@ -34,6 +34,9 @@ function isBodyBlock(block: SourceBlock): boolean {
 		&& !!block.lineRectsPdf?.length;
 }
 
+/** A caption fragment must not be the START of a different figure/table. */
+const FIGURE_LABEL_RE = /^(figure|fig\.?|table|图|表|圖)\s*\d+/i;
+
 function unionRect(rects: Rect[]): Rect {
 	let x1 = Infinity;
 	let y1 = Infinity;
@@ -243,6 +246,84 @@ export function canAbsorb(host: SourceBlock, shard: SourceBlock, obstacles: Rect
 }
 
 /**
+ * 图注行碎片归位 (1.1.8) — 判据全部是几何与版式的,不看内容。
+ *
+ * 成因(Horst 2024 语料实测): `groupIntoParagraphs` 把「相对本栏左边距的
+ * 缩进」当作硬断段信号 (paragraphHeuristics.shouldBreak)。期刊图注整体内缩
+ * 排版 —— 第 4 页图 4 题注从 x=81 起排、第 5 页图 6 题注从 x=162 起排,而
+ * 页面左边距是 x=48 —— 于是题注的每一行都被判成「新段落的首行」,首行之后
+ * 全部断开。断开之后的碎片不以 "Figure N" 开头,classify 归成 paragraph,而
+ * isBodyBlock 又规定 caption 永不参与合并 —— 同一条题注就此变成
+ * 1 个 caption + 若干 paragraph,各自送翻译、各自排版、各自撑开,在图下方
+ * 互相压印。第 5 页图 6 的题注被切成 4 块 (125/258/382/126 字符,
+ * y 304.9–372.9),正是用户看到的那片压印。
+ *
+ * 几何审计看不见它: 拆出来的行盒本来就互相重叠,「只报新增侵入」的规则
+ * (layoutSafety) 因此豁免了整片区域。所以修复必须落在这里 —— 从源头把一条
+ * 题注还原成一块 —— 而不是放宽审计。
+ *
+ * 不要求碎片在阅读序里紧邻: 第 5 页的正文块 (block-5) 就插在图注碎片
+ * 之间,所以这里对整页扫描,每轮取「紧贴在 host 下方」的那一块。
+ */
+export function canMergeCaption(host: SourceBlock, next: SourceBlock, obstacles: Rect[] = []): boolean {
+	// 只有 caption 能当宿主;只有 paragraph/list 会是题注尾巴的误分类形态。
+	if (host.type !== 'caption') {
+		return false;
+	}
+	if (next.type !== 'paragraph' && next.type !== 'list') {
+		return false;
+	}
+	if (!host.lineRectsPdf?.length || !next.lineRectsPdf?.length) {
+		return false;
+	}
+	// "Figure 7:" 是下一张图的题注,不是这张的续行。
+	if (FIGURE_LABEL_RE.test(next.sourceText.trim())) {
+		return false;
+	}
+	// 列戳同样是权威的(与 canMerge 一致): 只在两侧都有真列号时才否决。
+	if (typeof host.column === 'number' && typeof next.column === 'number'
+		&& host.column >= 0 && next.column >= 0 && host.column !== next.column) {
+		return false;
+	}
+	const rh = unionRect(host.lineRectsPdf as Rect[]);
+	const rn = unionRect(next.lineRectsPdf as Rect[]);
+	if (obstacleBetween(rh, rn, obstacles)) {
+		return false;
+	}
+	const em = Math.max(host.fontSize ?? 8, 6);
+	// 续行必须落在题注自己的横向跨度之内(容 1em 的排版抖动) —— 题注内缩
+	// 排版,正文栏起点在它左边,这一条就挡住了图下方的正文。
+	if (rn[0] < rh[0] - em || rn[2] > rh[2] + em) {
+		return false;
+	}
+	// 用较窄的一方做分母: 题注的最后一行天然比首行短(第 4 页图 5 的尾行只有
+	// 145pt 宽,而题注满宽 498pt —— 按较宽方算会误判成"不同列")。
+	const overlap = Math.min(rh[2], rn[2]) - Math.max(rh[0], rn[0]);
+	const narrower = Math.min(rh[2] - rh[0], rn[2] - rn[0]);
+	if (!(narrower > 0) || overlap / narrower < 0.6) {
+		return false;
+	}
+	// 必须紧接在下方 (PDF y 向上): 行距量级,不是段间距。
+	const gap = rh[1] - rn[3];
+	if (gap < -em * 1.2 || gap > em * 1.9) {
+		return false;
+	}
+	// 字号必须一致 —— 期刊正文 10pt、图注 8pt,差 20%,这一条是挡住"图注吞掉
+	// 下方正文"的主力。
+	const fh = host.fontSize ?? 0;
+	const fn = next.fontSize ?? 0;
+	if (fh > 0 && fn > 0 && Math.abs(fh - fn) > Math.max(fh, fn) * 0.16) {
+		return false;
+	}
+	// 字号恰好相同的版式里的最后一道闸: 题注已经写完一个句子时,候选必须
+	// 自己是句中开头(小写/左括号),否则它多半是图下方另起的正文段。
+	if (endsSentence(host.sourceText) && !/^[a-z([]/.test(next.sourceText.trim())) {
+		return false;
+	}
+	return (host.sourceText.length + next.sourceText.length) <= MAX_REGION_CHARS;
+}
+
+/**
  * Coalesce a page's blocks into regions. Order is preserved; only
  * consecutive-in-reading-order body blocks merge, so a heading between two
  * paragraphs always splits them. Shards then get a second, looser pass:
@@ -258,6 +339,43 @@ export function coalesceRegions(blocks: SourceBlock[], obstacles: Rect[] = []): 
 		}
 		else {
 			out.push({ ...block });
+		}
+	}
+	// 图注归位。必须跑在 shard 吸收之前 —— 题注的碎片又短又常以小写开头
+	// (第 4 页 "was 0.59 mGy and effective dose was 0.46 mSv."、第 5 页
+	// "counting detector scans (Flash + ultrahigh resolution…"), isShard 会
+	// 把它们判成碎片、canAbsorb(不看字号)再把它们塞进图下方的正文段落里:
+	// 题注文字污染正文,正文块的盒子还被拉到题注行上。先归位,shard 那一遍
+	// 就看不到它们了。
+	for (let i = 0; i < out.length; i++) {
+		if (out[i]!.type !== 'caption') {
+			continue;
+		}
+		for (;;) {
+			// 每轮取「最靠上的合格候选」= 紧贴在 host 当前底边下方的那一块,
+			// 这样多行题注按版面顺序一行一行长回去。
+			let best = -1;
+			let bestTop = -Infinity;
+			for (let j = 0; j < out.length; j++) {
+				if (j === i || !canMergeCaption(out[i]!, out[j]!, obstacles)) {
+					continue;
+				}
+				const top = unionRect(out[j]!.lineRectsPdf as Rect[])[3];
+				if (top > bestTop) {
+					bestTop = top;
+					best = j;
+				}
+			}
+			if (best < 0) {
+				break;
+			}
+			// 候选一定在 host 下方 (canMergeCaption 的 gap 判据), 所以
+			// host+候选 的文本顺序总是对的, 与数组下标先后无关。
+			out[i] = mergeTwo(out[i]!, out[best]!);
+			out.splice(best, 1);
+			if (best < i) {
+				i--;
+			}
 		}
 	}
 	// Shard absorption. Backward into the previous region reads naturally

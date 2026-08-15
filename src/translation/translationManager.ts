@@ -122,6 +122,15 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 	if (isTruncatedTranslation(proseSource, proseT)) {
 		return false;
 	}
+	// 小样本验收 (1.1.8, Horst 2024 第 1 页 region-2/region-4 连拒): 比率是一个
+	// 比例估计,分母越小噪声越大。一条 56–58 字符的标题/署名里保留 4–5 个专名
+	// 与缩写是忠实翻译的常态,却足以把比率压到 0.45 以下 —— 同样的噪声在
+	// 800/1783 字符的正文段落里根本不存在(同页那三段全部一次通过)。短源文
+	// 因此换一把小样本安全的尺子;正文段落一律走下面原来的比率阈值,验收
+	// 强度一个字都没动。
+	if (proseSource.length <= SHORT_SOURCE_PROSE_CHARS) {
+		return shortSourceTranslated(proseSource, proseT) && !hasMixedCopiedResidue(source, t);
+	}
 	// A PROSE source must come back predominantly Chinese. This rejects not
 	// only echoed English (ratio 0) but a HALF-translated / mixed response,
 	// which the old "contains any CJK" test accepted.
@@ -249,6 +258,54 @@ const CJK_RE = /[㐀-鿿豈-﫿]/g;
 const PROSE_WORD_GATE = 6;
 /** Below this CJK ratio on a prose source, the response was not really translated. */
 const MIN_TARGET_RATIO = 0.45;
+
+/**
+ * 短源文分界 (1.1.8): 散文部分不超过这么多字符的块 —— 标题、小标题、署名行、
+ * 图注标签 —— 走小样本安全的验收。真正的正文段落差着一个数量级(Horst 2024
+ * 第 1 页的三段正文分别是 839 / 1783 / 1761 字符),永远走原来的比率阈值。
+ */
+const SHORT_SOURCE_PROSE_CHARS = 80;
+
+/**
+ * 「还没翻译的拉丁词」计数: 只算以小写字母开头的普通词。全大写缩写
+ * (CT, PCD, MRI, MD, PhD) 与 Title-Case 专名 (Siemens, Naeotom, Siegel,
+ * Ramirez-Giraldo) 在忠实译文里本来就该原样保留 —— 把它们算成「未翻译的
+ * 拉丁词」正是短标题被反复拒收的直接原因。
+ *
+ * 注意首词效应: 句首的普通词也是 Title-Case, 所以这个计数在长段落上会偏低。
+ * 它因此只用于 SHORT_SOURCE_PROSE_CHARS 以内的短块, 长段落仍用
+ * targetLanguageRatio 的全量拉丁词计数。
+ */
+export function untranslatedLatinWords(text: string): number {
+	return (text.match(/[A-Za-z][A-Za-z'-]+/g) ?? []).filter(w => /^[a-z]/.test(w)).length;
+}
+
+/**
+ * 短源文的验收。两条,都比原来的比率判定更贴合小样本:
+ *
+ *  1. 专名直接放行: 源文里一个可译的普通词都没有(整块是人名、机构名、
+ *     缩写、学位后缀 —— "Marilyn J. Siegel, MD • Juan Carlos Ramirez-Giraldo,
+ *     PhD •" 就是这样的一行),那么原样返回就是正确答案,拒收只会白烧请求。
+ *     这是 looksLikeAuthorNameList 的推广: 那条规则要求 ≥3 个人名分段,
+ *     署名被拆到第二行只剩 2 个名字时就失效了。
+ *  2. 否则仍看中文占比,但分母只数「还没翻译的普通词」。
+ *
+ * 关键不变量: 分子(中文字数)与原来一致,分母只会变小或不变,所以对短块
+ * 而言这只可能把「拒」变成「收」,不可能反过来 —— 不存在新的误收路径。
+ * 纯回声依然被拒: 回声里的普通词原封不动地留着,中文字数为 0,比率就是 0。
+ */
+function shortSourceTranslated(proseSource: string, proseTranslation: string): boolean {
+	if (untranslatedLatinWords(proseSource) === 0) {
+		return true;
+	}
+	const cjk = (proseTranslation.match(CJK_RE) ?? []).length;
+	const residual = untranslatedLatinWords(proseTranslation);
+	const denom = cjk + residual;
+	if (denom === 0) {
+		return false;
+	}
+	return cjk / denom >= MIN_TARGET_RATIO;
+}
 
 /**
  * Fraction of a Chinese translation that is actually Chinese: CJK characters
@@ -1377,6 +1434,15 @@ export class TranslationManager {
 		// 完整性;placeholder = 清单校验),进诊断导出。
 		state.rejectReasons = state.rejectReasons ?? new Map();
 		const acceptResponse = (id: string, text: string): boolean => {
+			// 'empty' 与 'validator' 分开 (1.1.8): 引擎带着 id 回了一个空串,
+			// 和「回了英文回声被验收拒掉」是两种完全不同的故障 —— 前者要换
+			// 请求形态(纯文本兜底),后者要换措辞。混成一个原因码时,诊断里
+			// 一个 11 字符的块显示 lastReject: "validator" 会把人引向阈值,
+			// 而阈值那条路对它根本不成立(散文词数不足 6,压根走不到比率判定)。
+			if (!text.trim()) {
+				state.rejectReasons!.set(id, 'empty');
+				return false;
+			}
 			if (!accept(id, text)) {
 				state.rejectReasons!.set(id, 'validator');
 				return false;
@@ -1412,6 +1478,16 @@ export class TranslationManager {
 		// hit, salvage stops and the remaining blocks are left for 「刷新本页」.
 		const pageRequestCap = chunks.length * 2 + 2;
 		const canSpend = (): boolean => metrics.requestCount < pageRequestCap;
+		/**
+		 * 兜底预算 (1.1.8, Horst 2024 第 1 页实证): pageRequestCap 由 chunk 数
+		 * 推导,单 chunk 的页面只有 4 次 —— 批次(1) + 缺 id 重试(1) + 两次
+		 * 单块打捞(2) 就正好用尽,该页 metrics 记的就是 requests:4 / salvage:2。
+		 * 于是纯文本兜底 —— 修复链里唯一不受 id 漂移与 JSON 损坏影响的一环 ——
+		 * 永远轮不到,三个块直接落进 unrecovered。给它单独留一份不与打捞共享的
+		 * 预算。上限是硬的: 整页最多多花 FINAL_RECOVERY_MAX 次请求,且该路径
+		 * 自身还有 attempts >= FINAL_RECOVERY_MAX 的计数闸,两道闸都在。
+		 */
+		const canSpendFinal = (): boolean => metrics.requestCount < pageRequestCap + FINAL_RECOVERY_MAX;
 		const results: TranslatedBlock[] = [];
 		let untranslatedCount = 0;
 
@@ -1631,8 +1707,12 @@ export class TranslationManager {
 						else if (single.translations.length) {
 							state.rejectReasons?.set(block.id, 'salvage-validator');
 						}
-						else if (single.translations.length) {
-							state.rejectReasons?.set(block.id, 'salvage-validator');
+						else {
+							// 死分支修复 (1.1.8): 这里原本是与上面条件完全相同的
+							// 第二个 else if,永不可达 —— 于是「打捞请求回了个空
+							// 数组」这一支从不落原因码,块的 lastReject 停在批次
+							// 阶段的旧值上,诊断读起来就像打捞从没跑过。
+							state.rejectReasons?.set(block.id, 'salvage-empty');
 						}
 					}
 					catch (e) {
@@ -1742,7 +1822,7 @@ export class TranslationManager {
 			const unrecovered = toTranslate.filter(b => !state.translations.has(b.id));
 			let attempts = 0;
 			for (const block of unrecovered) {
-				if (attempts >= FINAL_RECOVERY_MAX || !canSpend()) {
+				if (attempts >= FINAL_RECOVERY_MAX || !canSpendFinal()) {
 					break;
 				}
 				if (signal.aborted) {
@@ -1773,8 +1853,9 @@ export class TranslationManager {
 					else if (resp.translations.length) {
 						state.rejectReasons?.set(block.id, 'plain-validator');
 					}
-					else if (resp.translations.length) {
-						state.rejectReasons?.set(block.id, 'plain-validator');
+					else {
+						// 同一处死分支 (1.1.8): 见上面 salvage 的说明。
+						state.rejectReasons?.set(block.id, 'plain-empty');
 					}
 				}
 				catch (e) {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canMerge, coalesceRegions, separatorBetween } from '../../src/reader/regionCoalescer';
+import { canMerge, canMergeCaption, coalesceRegions, separatorBetween } from '../../src/reader/regionCoalescer';
 import type { SourceBlock } from '../../src/types/models';
 
 /** A body block occupying one or more stacked lines in a column. */
@@ -185,4 +185,105 @@ test('a colon at a fragment boundary does not become a paragraph break', () => {
 	const a = block('a', 'the modifications include the following:', { topY: 700 });
 	const b = block('b', 'sharper kernels and thinner sections.', { topY: 660 });
 	assert.equal(separatorBetween(a, b), ' ', 'colon means the clause continues — a space, never \\n\\n');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1.1.8 图注行碎片归位 (Horst 2024 第 4/5 页图注压印的真实几何)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Horst 2024 第 5 页图 6 题注的真实几何: 内缩到 x=162, 8pt, 行距 ~10pt。 */
+function captionLine(id: string, text: string, top: number, right = 541, type: SourceBlock['type'] = 'paragraph'): SourceBlock {
+	return {
+		id, pageIndex: 0, order: 0, type,
+		sourceText: text,
+		lineRectsPdf: [[161.9, top - 8, right, top]],
+		fontSize: 8,
+		column: -1,
+		isReference: false
+	};
+}
+
+test('caption 聚合: 被缩进硬断段切开的图注行碎片重新并成一块', () => {
+	// 第 5 页图 6 的四块 (125 / 258 / 382 / 126 字符, y 304.9–372.9)。
+	const blocks = [
+		captionLine('c0', 'Figure 6: Images in a 7-year-old male child (same patient as in Figure 5) with shortness of breath. Noncontrast chest photon-', 372.9, 534, 'caption'),
+		captionLine('c1', 'counting detector scans (Flash + ultrahigh resolution, 120 x 0.2, 120 kV; automatic exposure control image quality index [vendor', 362.9),
+		captionLine('c2', 'term: Care keV IQ] level 29; pitch, 3.2) with reconstruction performed at 0.2 mm in (A) Bl60 kernel and QIR1, (B) Br60 kernel and', 352.9),
+		captionLine('c3', 'CT dose index was 0.59 mGy and effective dose was 0.46 mSv. QIR is quantum iterative reconstruction from Siemens Healthineers.', 342.9)
+	];
+	const out = coalesceRegions(blocks, []);
+	const captions = out.filter(b => b.type === 'caption');
+	assert.equal(captions.length, 1, '一条图注必须是一块 —— 这正是压印的来源');
+	assert.equal(out.length, 1, '没有碎片被剩下');
+	const merged = captions[0]!;
+	assert.ok(merged.sourceText.startsWith('Figure 6:'), '首块仍是宿主');
+	assert.ok(merged.sourceText.includes('counting detector scans'), '第二行归位');
+	assert.ok(merged.sourceText.includes('quantum iterative reconstruction'), '末行归位');
+	assert.equal(merged.lineRectsPdf?.length, 4, '四行行盒全部保留 (排版按行盒走)');
+	assert.deepEqual(merged.memberIds, ['c0', 'c1', 'c2', 'c3'], '来源可追溯');
+});
+
+test('caption 聚合: 碎片在阅读序里不相邻也要归位 (正文块插在中间)', () => {
+	// 第 5 页的实况: 左栏正文 block-5 排在图注碎片之间。
+	const body: SourceBlock = {
+		id: 'body', pageIndex: 0, order: 0, type: 'paragraph',
+		sourceText: '70 or 90 kV because the increased contrast of reduced tube potentials is realized with low-energy VMIs.',
+		lineRectsPdf: [[48, 194, 288, 324]], fontSize: 10, column: 0, isReference: false
+	};
+	const out = coalesceRegions([
+		captionLine('c0', 'Figure 6: Images in a 7-year-old male child with shortness of breath. Noncontrast chest photon-', 372.9, 534, 'caption'),
+		captionLine('c1', 'counting detector scans (Flash + ultrahigh resolution, 120 x 0.2, 120 kV; automatic exposure control index [vendor', 362.9),
+		body,
+		captionLine('c2', 'term: Care keV IQ] level 29; pitch, 3.2) with reconstruction performed at 0.2 mm in (A) Bl60 kernel and QIR1.', 352.9)
+	], []);
+	const caption = out.find(b => b.type === 'caption')!;
+	assert.ok(caption.sourceText.includes('counting detector scans'));
+	assert.ok(caption.sourceText.includes('Care keV IQ'), '隔着正文块的碎片同样归位');
+	const bodyOut = out.find(b => b.id.endsWith('region-1') || b.sourceText.startsWith('70 or 90 kV'))!;
+	assert.ok(!bodyOut.sourceText.includes('counting detector scans'),
+		'正文段落不得再被图注碎片污染 (旧行为: isShard + canAbsorb 把它吞进正文)');
+});
+
+test('caption 聚合不吞正文: 字号不同的下方正文段落必须留在外面', () => {
+	// 期刊正文 10pt vs 图注 8pt —— 差 20%, 超过 16% 的闸。
+	const caption = captionLine('cap', 'Figure 5: Images in a 7-year-old male child with shortness of breath who underwent noncontrast CT.', 187, 546, 'caption');
+	const bodyBelow: SourceBlock = {
+		id: 'body', pageIndex: 0, order: 0, type: 'paragraph',
+		sourceText: 'from free-breathing examinations in young children, equivalent to modern dual-source EID CT examinations.',
+		lineRectsPdf: [[161.9, 169, 546, 177]], fontSize: 10, column: -1, isReference: false
+	};
+	assert.equal(canMergeCaption(caption, bodyBelow), false, '字号跳变 = 版式边界');
+	assert.equal(coalesceRegions([caption, bodyBelow], []).length, 2);
+});
+
+test('caption 聚合不吞正文: 横向跨出图注范围的块必须留在外面', () => {
+	// 图注内缩到 x=162; 正文栏从 x=48 起排, 落在图注跨度之外。
+	const caption = captionLine('cap', 'Figure 6: Images in a 7-year-old male child with shortness of breath. Noncontrast chest photon-', 372.9, 534, 'caption');
+	const otherColumn: SourceBlock = {
+		id: 'other', pageIndex: 0, order: 0, type: 'paragraph',
+		sourceText: 'entially use 120 kV over 70 or 90 kV because the increased contrast of reduced tube potentials.',
+		lineRectsPdf: [[48, 354.9, 288, 362.9]], fontSize: 8, column: -1, isReference: false
+	};
+	assert.equal(canMergeCaption(caption, otherColumn), false, '起点在图注左边 → 不是它的续行');
+});
+
+test('caption 聚合不跨图: 下一条 "Figure N" 题注不会被上一条吞掉', () => {
+	const first = captionLine('c0', 'Figure 6: Images in a 7-year-old male child with shortness of breath. Noncontrast chest photon-', 372.9, 534, 'caption');
+	const second = captionLine('c1', 'Figure 7: Coronal reformats in the same patient acquired at 120 kV with the Bl60 kernel.', 362.9);
+	assert.equal(canMergeCaption(first, second), false);
+	assert.equal(coalesceRegions([first, second], []).length, 2);
+});
+
+test('caption 聚合不跨图: 已写完句子的图注只接句中开头的续行', () => {
+	const done = captionLine('c0', 'Figure 3: Axial chest CT in a 3-year-old child with cystic fibrosis.', 372.9, 534, 'caption');
+	const newSentence = captionLine('c1', 'Some studies have highlighted improved spectral separation of multienergy imaging at 140 kV.', 362.9);
+	const continuation = captionLine('c2', 'reconstructed with the Br44 kernel at a section thickness of 3 mm and QIR level 2.', 362.9);
+	assert.equal(canMergeCaption(done, newSentence), false, '大写开头 = 图下方另起的正文');
+	assert.equal(canMergeCaption(done, continuation), true, '小写开头 = 这条图注自己的续行');
+});
+
+test('caption 聚合有边界: 行距超过一行的量级就不是续行', () => {
+	const caption = captionLine('c0', 'Figure 4: Free-breathing photon-counting detector CT scans without and with high-pitch mode', 573, 513, 'caption');
+	const farBelow = captionLine('c1', 'mode in two children, each aged 3 years, with cystic fibrosis. The diaphragms are crisper.', 520);
+	assert.equal(canMergeCaption(caption, farBelow), false, '53pt 的落差是段间距, 不是行距');
 });

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TranslationManager, looksContextBleed, looksTranslated, type PageTranslationState, type TranslationDeps } from '../../src/translation/translationManager';
+import { TranslationManager, looksContextBleed, looksTranslated, untranslatedLatinWords, type PageTranslationState, type TranslationDeps } from '../../src/translation/translationManager';
 import type { GlossaryRule, SourceBlock, TranslationRequest, TranslationResponse } from '../../src/types/models';
 
 function makeBlocks(pageIndex: number, n: number): SourceBlock[] {
@@ -259,34 +259,46 @@ test('a compress for a page no longer wanted IS cancelled on scroll', async () =
 });
 
 test('salvage is BOUNDED: a dropping provider cannot cause a request storm', async () => {
-	// New contract (0.9.8): total requests for a page are capped at 2×chunks + 2,
-	// so an engine that keeps dropping ids can never explode into per-block
-	// storms. Whatever comes back within budget is kept; the rest is left for
-	// 「刷新本页」 (and the circuit breaker reroutes to a backup engine).
-	const N = 12;
-	let totalCalls = 0;
-	const { deps } = makeDeps({
-		extractPage: async (pageIndex) => Array.from({ length: N }, (_, i) => ({
-			id: `page-${pageIndex}-block-${i}`,
-			pageIndex, order: i, type: 'paragraph' as const,
-			sourceText: `Paragraph ${i} with enough text to be a real block on page ${pageIndex}.`
-		})),
-		translateRequest: async (request) => {
-			totalCalls++;
-			// A provider that drops everything but the first block of any batch,
-			// and even fails single-block salvage → worst case for the budget.
-			return { translations: [{ id: request.blocks[0]!.id, translatedText: '批量译文内容' }] };
-		}
-	});
-	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
-	await manager.ensurePage(0, 10);
-	const state = manager.getPageState(0)!;
-	assert.equal(state.status, 'done');
-	// N short blocks → one planned chunk → cap = 2×1 + 2 = 4 total requests.
-	assert.ok(totalCalls <= 4, `page requests are bounded, ran ${totalCalls}`);
-	// Successful blocks are always retained (never re-requested or dropped).
-	assert.ok(state.translations.size >= 1 && state.translations.size < N, `kept ${state.translations.size} recovered blocks`);
-	manager.dispose();
+	// Contract (0.9.8, 预算在 1.1.8 扩了一档): 打捞链本身封顶在 2×chunks + 2,
+	// 纯文本兜底另有一份不与打捞共享、上限 FINAL_RECOVERY_MAX 的预算 —— 单
+	// chunk 的页面因此是 4 + 4 = 8 次。扩这一档的理由见 canSpendFinal 的注释
+	// (Horst 2024 第 1 页: 打捞正好烧完 4 次, 兜底永远轮不到, 三个块直接落进
+	// unrecovered)。
+	//
+	// 真正要守住的不变量不是那个具体数字, 而是「请求数不随块数增长」—— 所以
+	// 这里用两个相差 3 倍的块数跑同一个最坏情况引擎, 断言同一个上限。
+	const run = async (N: number, cap: number): Promise<number> => {
+		let totalCalls = 0;
+		const { deps } = makeDeps({
+			extractPage: async (pageIndex) => Array.from({ length: N }, (_, i) => ({
+				id: `page-${pageIndex}-block-${i}`,
+				pageIndex, order: i, type: 'paragraph' as const,
+				sourceText: `Paragraph ${i} with enough text to be a real block on page ${pageIndex}.`
+			})),
+			translateRequest: async (request) => {
+				totalCalls++;
+				// A provider that drops everything but the first block of any batch,
+				// and even fails single-block salvage → worst case for the budget.
+				return { translations: [{ id: request.blocks[0]!.id, translatedText: '批量译文内容' }] };
+			}
+		});
+		const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+		await manager.ensurePage(0, 10);
+		const state = manager.getPageState(0)!;
+		assert.equal(state.status, 'done');
+		assert.ok(totalCalls <= cap, `page requests are bounded, ran ${totalCalls} for N=${N} (cap ${cap})`);
+		// Successful blocks are always retained (never re-requested or dropped).
+		assert.ok(state.translations.size >= 1 && state.translations.size < N, `kept ${state.translations.size} recovered blocks`);
+		manager.dispose();
+		return totalCalls;
+	};
+	// 12 个短块 → 1 个批次 → 2×1 + 2 + 4 = 8。
+	const small = await run(12, 8);
+	// 36 个短块 → 2 个批次 → 2×2 + 2 + 4 = 10。预算跟的是批次数, 不是块数。
+	const large = await run(36, 10);
+	// 这才是「不会变成请求风暴」的定义: 块数翻三倍, 请求数远低于每块一次。
+	assert.ok(large < 36 / 3, `requests must not scale per-block (${large} for 36 blocks)`);
+	assert.ok(large - small <= 2, `tripling blocks added ${large - small} request(s), not a storm`);
 });
 
 test('熔断: >25% of a chunk missing fires onProviderUnstable exactly once per page', async () => {
@@ -1260,4 +1272,71 @@ test('cross-page tail is NOT injected when the last line falls short of the bloc
 	assert.ok(!contexts.some(c => c.includes('resulting values were')),
 		'short last line must veto the injection');
 	manager.dispose();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1.1.8 超短块验收 (Horst 2024 第 1 页 region-2 / region-4 连拒的真实载体)
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('looksTranslated: 专名密集的短标题, 忠实译文不再被小样本比率误拒', () => {
+	// 保留 5 个专名/缩写的短标题。旧规则: 中文 4 字 vs 拉丁词 9 个 → 比率
+	// 0.31 < 0.45 → 拒。新规则只数「还没翻译的普通词」(这里是 0) → 收。
+	const source = 'Siemens Naeotom Alpha PCD CT and Somatom Force EID CT scanners';
+	assert.equal(
+		looksTranslated(source, 'Siemens Naeotom Alpha PCD CT 与 Somatom Force EID CT 扫描仪', 'zh-CN'),
+		true,
+		'保留原样的专名不该被算作未翻译的拉丁词'
+	);
+});
+
+test('looksTranslated: 被拆到第二行的署名行原样返回即为正确答案 (专名放行)', () => {
+	// Horst 2024 第 1 页 region-2 的原文, 一字不差 (58 字符)。整块没有一个
+	// 可译的普通词, 原样返回就是对的; looksLikeAuthorNameList 因为只剩两个
+	// 人名分段而失效, 短块规则接住了它。
+	const byline = 'Marilyn J. Siegel, MD • Juan Carlos Ramirez-Giraldo, PhD •';
+	assert.equal(byline.length, 58, '语料对齐: 诊断里 region-2 是 58 字符');
+	assert.equal(looksTranslated(byline, byline, 'zh-CN'), true);
+});
+
+test('looksTranslated: 短标题的纯英文回声仍被拒 (真未翻译)', () => {
+	// 同一条短标题, 原样回声。普通词 (and / scanners) 原封不动地留着,
+	// 中文字数为 0 → 比率 0 → 拒。放宽比率不等于放行回声。
+	const source = 'Siemens Naeotom Alpha PCD CT and Somatom Force EID CT scanners';
+	assert.equal(looksTranslated(source, source, 'zh-CN'), false);
+});
+
+test('looksTranslated: 短标题只译了一半 (专名之外的散文仍是英文) 被拒', () => {
+	const source = 'Automatic exposure control in pediatric photon-counting CT';
+	assert.equal(
+		looksTranslated(source, 'automatic exposure control 在儿科 photon counting CT', 'zh-CN'),
+		false,
+		'普通词一个都没动 → 残留 5 词 vs 中文 3 字 → 比率 0.375 < 0.45'
+	);
+});
+
+test('looksTranslated: 全大写/专名短块的原样输出放行, 但空输出仍被拒', () => {
+	const source = 'NAEOTOM Alpha Siemens Healthineers Somatom Force Bruker Avance';
+	assert.equal(looksTranslated(source, source, 'zh-CN'), true, '无可译普通词 → 放行');
+	assert.equal(looksTranslated(source, '   ', 'zh-CN'), false, '空输出永远是失败');
+});
+
+test('正常段落的验收强度未被放松: 长段落的低比率译文仍被拒', () => {
+	// 短块规则的闸门是「散文 ≤80 字符」。这一段 300+ 字符, 走的还是原来的
+	// MIN_TARGET_RATIO, 哪怕它同样专名密集。
+	const source = 'The Siemens Naeotom Alpha PCD CT scanner and the Somatom Force EID CT scanner were '
+		+ 'compared across a range of pediatric body sizes, with attention to radiation dose, image '
+		+ 'noise, and spectral separation at each of the available tube potentials in routine clinical use.';
+	assert.ok(source.length > 80, '前提: 这是一个正常段落 (>80 字符散文), 不是短块');
+	assert.equal(
+		looksTranslated(source, 'Siemens Naeotom Alpha PCD CT scanner and Somatom Force EID CT scanner 做了比较。', 'zh-CN'),
+		false,
+		'长段落的半译输出必须照旧被拒'
+	);
+});
+
+test('untranslatedLatinWords: 只数小写开头的普通词', () => {
+	assert.equal(untranslatedLatinWords('Siemens Naeotom Alpha PCD CT'), 0);
+	assert.equal(untranslatedLatinWords('Siemens and Somatom scanners'), 2, 'and / scanners');
+	assert.equal(untranslatedLatinWords('Marilyn J. Siegel, MD • Juan Carlos Ramirez-Giraldo, PhD •'), 0);
+	assert.equal(untranslatedLatinWords('光子计数 CT 扫描仪'), 0, '中文里没有拉丁散文词');
 });
