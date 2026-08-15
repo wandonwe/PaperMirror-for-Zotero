@@ -289,7 +289,7 @@ interface PaperMirrorPublicAPI {
 
 			const concurrencyInput = byId<HTMLInputElement>('papermirror-concurrency');
 			if (concurrencyInput) {
-				// Plain global ceiling: 1–24, default 12 (migrate 0/legacy → 12).
+				// Plain global ceiling: 2–24, default 12 (migrate 0/legacy → 12).
 				const migrated = normalizeGlobalMax(getPref('maxConcurrentRequests'));
 				setPref('maxConcurrentRequests', migrated);
 				concurrencyInput.value = String(migrated);

@@ -24,6 +24,7 @@ import { buildBlocks, buildBlocksFromPlainText, medianFontSize } from './blockBu
 import { buildBlocksFromSpans } from './spanBlockBuilder';
 import { coalesceRegions } from './regionCoalescer';
 import { orderBlocksForReading } from './readingOrder';
+import { structureTableCells } from './tableStructure';
 import * as adapter from './zoteroReaderAdapter';
 import type { ReaderLike } from './zoteroReaderAdapter';
 
@@ -180,7 +181,10 @@ export class TextExtractor {
 				// Canonical reading order BEFORE coalescing: row-wise streams
 				// interleave the columns, and the coalescer only merges adjacent
 				// blocks — without this, one-line shreds never rejoin.
-				result.blocks = coalesceRegions(orderBlocksForReading(result.blocks), obstacles);
+				const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10);
+				const tableCells = structured.filter(b => b.translationMode !== undefined);
+				const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
+				result.blocks = orderBlocksForReading([...prose, ...tableCells]);
 				this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
 				if (result.blocks.length) {
 					this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
@@ -221,6 +225,15 @@ export class TextExtractor {
 		throw new PaperMirrorError('NO_TEXT_LAYER', 'This PDF has no text layer and needs OCR.');
 	}
 
+	/**
+	 * Current-page recovery path. It deliberately skips getPageData and
+	 * PDFWorker so a timed-out worker request is never duplicated.
+	 */
+	async extractRenderedPage(pageIndex: number): Promise<SourceBlock[]> {
+		const blocks = await this.extractFromTextLayer(pageIndex, await this.obstaclesFor(pageIndex));
+		return blocks ?? [];
+	}
+
 	/** Build blocks from the rendered PDF.js text layer, if there is one. */
 	private async extractFromTextLayer(pageIndex: number, obstacles: [number, number, number, number][] = []): Promise<SourceBlock[] | null> {
 		try {
@@ -242,7 +255,10 @@ export class TextExtractor {
 			// Rebuild semantic regions from whatever fragments extraction
 			// produced: whole regions translate as whole sentences.
 			const sourceBlockCount = result.blocks.length;
-			result.blocks = coalesceRegions(orderBlocksForReading(result.blocks), obstacles);
+			const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10);
+			const tableCells = structured.filter(b => b.translationMode !== undefined);
+			const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
+			result.blocks = orderBlocksForReading([...prose, ...tableCells]);
 			this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
 			this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
 			logger.info(MODULE, `Page ${pageIndex + 1}: extracted ${result.blocks.length} block(s) from the text layer`);

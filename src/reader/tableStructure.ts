@@ -17,7 +17,8 @@
  * Pure geometry over plain boxes — fully unit-testable, no DOM, no PDF.
  */
 
-import { looksTabular } from './tableGuard';
+import { detectTableRegions, looksTabular } from './tableGuard';
+import type { SourceBlock } from '../types/models';
 
 export interface Box {
 	left: number;
@@ -216,4 +217,84 @@ function coerceNumericColumns(cells: TableCell[], colCount: number): void {
 			}
 		}
 	}
+}
+
+function contained(box: Box, region: Box): number {
+	const w = Math.min(box.left + box.width, region.left + region.width) - Math.max(box.left, region.left);
+	const h = Math.min(box.top + box.height, region.top + region.height) - Math.max(box.top, region.top);
+	return w > 0 && h > 0 && box.width > 0 && box.height > 0 ? (w * h) / (box.width * box.height) : 0;
+}
+
+/**
+ * Extraction-stage table normalization. This runs before prose coalescing so a
+ * row or column can never be welded into a body paragraph. Text cells receive
+ * stable ids and become provider request units; numeric/data cells remain in
+ * the page model but are explicitly marked preserve.
+ */
+export function structureTableCells(blocks: SourceBlock[], pageIndex: number, em: number): SourceBlock[] {
+	const originalById = new Map(blocks.map(block => [block.id, block]));
+	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox);
+	if (geometric.length < 2) {
+		return blocks;
+	}
+	const guard = detectTableRegions(geometric.map(b => ({
+		id: b.id,
+		text: b.sourceText,
+		type: b.type,
+		box: { left: b.boundingBox.x, top: b.boundingBox.y, width: b.boundingBox.width, height: b.boundingBox.height },
+		fontSize: b.fontSize
+	})), Math.max(6, em));
+	if (!guard.regions.length) {
+		return blocks;
+	}
+
+	const consumed = new Set<string>();
+	const cells: SourceBlock[] = [];
+	guard.regions.forEach((region, tableIndex) => {
+		const members = geometric.filter(b => contained({
+			left: b.boundingBox.x, top: b.boundingBox.y,
+			width: b.boundingBox.width, height: b.boundingBox.height
+		}, region) >= 0.5).map(b => ({
+			id: b.id,
+			box: { left: b.boundingBox.x, top: b.boundingBox.y, width: b.boundingBox.width, height: b.boundingBox.height },
+			text: b.sourceText,
+			fontSize: b.fontSize
+		}));
+		const model = buildTableModel(pageIndex, tableIndex, region, members);
+		for (const cell of model.cells) {
+			const originals = cell.memberIds.map(id => originalById.get(id)).filter((b): b is SourceBlock => !!b);
+			if (!originals.length) continue;
+			for (const original of originals) consumed.add(original.id);
+			const sizes = originals.map(b => b.fontSize ?? 0).filter(Boolean).sort((a, b) => a - b);
+			// PAGE column, not table column (审核 P1): `column` drives the page
+			// reading order — a 3-column table must not turn a 1-column page into
+			// a fake 3-column layout. The cell inherits the page column of its
+			// member fragments (unanimous → that column, mixed → -1 full-width);
+			// the table-internal column index lives in `tableCol`.
+			const memberColumns = originals
+				.map(b => b.column)
+				.filter((c): c is number => typeof c === 'number');
+			const pageColumn = memberColumns.length
+				? (memberColumns.every(c => c === memberColumns[0]) ? memberColumns[0]! : -1)
+				: undefined;
+			cells.push({
+				id: cell.id,
+				pageIndex,
+				order: Math.min(...originals.map(b => b.order)),
+				type: 'paragraph',
+				sourceText: cell.text,
+				boundingBox: { x: cell.box.left, y: cell.box.top, width: cell.box.width, height: cell.box.height },
+				lineRectsPdf: originals.flatMap(b => b.lineRectsPdf ?? []),
+				fontSize: sizes.length ? sizes[Math.floor(sizes.length / 2)] : undefined,
+				column: pageColumn,
+				tableCol: cell.col,
+				memberIds: cell.memberIds,
+				isReference: originals.some(b => b.isReference),
+				translationMode: cell.kind === 'data' ? 'preserve' : 'translate'
+			});
+		}
+	});
+	const out = [...blocks.filter(b => !consumed.has(b.id)), ...cells]
+		.sort((a, b) => a.order - b.order || (a.boundingBox?.x ?? 0) - (b.boundingBox?.x ?? 0));
+	return out.map((b, order) => ({ ...b, order }));
 }

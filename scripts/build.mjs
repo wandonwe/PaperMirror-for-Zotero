@@ -5,12 +5,15 @@
  */
 
 import { build } from 'esbuild';
-import { cpSync, mkdirSync, rmSync, copyFileSync, existsSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, rmSync, copyFileSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const addonDir = join(root, 'build', 'addon');
+
+const distributable = (source) => !source.split(/[\\/]/).some(part =>
+	part === '.DS_Store' || part.startsWith('._'));
 
 export async function buildAddon() {
 	rmSync(join(root, 'build'), { recursive: true, force: true });
@@ -46,8 +49,10 @@ export async function buildAddon() {
 	copyFileSync(join(root, 'manifest.json'), join(addonDir, 'manifest.json'));
 	copyFileSync(join(root, 'bootstrap.js'), join(addonDir, 'bootstrap.js'));
 	copyFileSync(join(root, 'prefs.js'), join(addonDir, 'prefs.js'));
+	copyFileSync(join(root, 'LICENSE'), join(addonDir, 'LICENSE'));
+	copyFileSync(join(root, 'THIRD-PARTY-NOTICES.md'), join(addonDir, 'THIRD-PARTY-NOTICES.md'));
 	copyFileSync(join(root, 'src', 'preferences', 'preferences.xhtml'), join(addonDir, 'content', 'preferences.xhtml'));
-	cpSync(join(root, 'locale'), join(addonDir, 'locale'), { recursive: true });
+	cpSync(join(root, 'locale'), join(addonDir, 'locale'), { recursive: true, filter: distributable });
 
 	// Icons (generated if missing)
 	const iconsDir = join(addonDir, 'content', 'icons');
@@ -66,10 +71,8 @@ export async function buildAddon() {
 	mkdirSync(fontsDir, { recursive: true });
 	const srcFonts = join(root, 'assets', 'fonts');
 	if (existsSync(srcFonts)) {
-		cpSync(srcFonts, fontsDir, { recursive: true });
+		cpSync(srcFonts, fontsDir, { recursive: true, filter: distributable });
 	}
-
-	writeFileSync(join(addonDir, '.built'), new Date().toISOString());
 	console.log(`\nAddon assembled at ${addonDir}`);
 }
 

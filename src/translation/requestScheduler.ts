@@ -215,14 +215,16 @@ export class RequestScheduler {
 	}
 
 	/** Cancel queued jobs not in the keep-set (fast page flipping). */
-	cancelExcept(keep: Set<string>): void {
-		const stale = this.queue.filter(job => !keep.has(job.key));
-		this.queue = this.queue.filter(job => keep.has(job.key));
+	cancelExcept(keep: Set<string>, keepPrefixes: string[] = []): void {
+		const kept = (key: string): boolean =>
+			keep.has(key) || keepPrefixes.some(prefix => key.startsWith(prefix));
+		const stale = this.queue.filter(job => !kept(job.key));
+		this.queue = this.queue.filter(job => kept(job.key));
 		for (const job of stale) {
 			job.reject(new PaperMirrorError('CANCELLED', 'Superseded by navigation.'));
 		}
 		for (const [key, job] of this.active) {
-			if (!keep.has(key)) {
+			if (!kept(key)) {
 				job.controller.abort();
 			}
 		}

@@ -81,3 +81,26 @@ test('user do-not-translate literals are masked via extraLiterals', () => {
 	const restored = restoreFormulas(text.replace('The', '该').replace('model outperforms baselines.', '模型优于基线。'), placeholders);
 	assert.ok(restored.includes('RetainNet'));
 });
+
+// ---------------------------------------------------------------------------
+// 1.0.2 审核 P1: 裸占位符前缀碰撞 —— PM1 不得吃掉 PM10
+// ---------------------------------------------------------------------------
+
+test('bare-token fallback respects digit boundaries (PM1 vs PM10)', () => {
+	// 11 formulas → tokens ⟦PM0⟧…⟦PM10⟧.
+	const source = Array.from({ length: 11 }, (_, i) => `$f_{${i}}=${i}$`).join(' and ');
+	const { placeholders } = protectFormulas(source);
+	assert.equal(placeholders.length, 11);
+	// Translation kept every bracket token EXCEPT PM1, and PM10 came back BARE.
+	const translated = '结果 ' + placeholders
+		.filter((_, i) => i !== 1)
+		.map((p, idx) => (idx === placeholders.length - 2 ? 'PM10' : p.token))
+		.join(' 与 ');
+	const report = verifyPlaceholders(translated, placeholders);
+	assert.ok(report.missing.includes('⟦PM1⟧'), 'PM1 truly missing — PM10 must not satisfy it');
+	assert.ok(!report.missing.includes('⟦PM10⟧'), 'bare PM10 counts as present');
+	// Restore must map bare PM10 to formula #10 intact — never original1 + "0".
+	const restored = restoreFormulas(translated, placeholders);
+	assert.ok(restored.includes('$f_{10}=10$'), `PM10 restored correctly: ${restored}`);
+	assert.ok(!restored.includes('$f_{1}=1$0'), 'PM10 must not be torn into original1+"0"');
+});

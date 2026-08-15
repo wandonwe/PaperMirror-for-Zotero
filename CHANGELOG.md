@@ -4,16 +4,51 @@ All notable changes to PaperMirror for Zotero are recorded here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-While the version stays below `1.0.0`, the reading UI is still settling and
-minor releases may change defaults.
 
 ## [Unreleased]
 
-- Planned (needs real-PDF validation): build a unified PageLayout before any
-  merging; detect tables at extraction time with stable per-cell ids so the
-  translator receives text cells; make region coalescing table-structure-aware
-  instead of removing it; run page extraction on its own local queue so a slow
-  PDF.js call never occupies a provider concurrency slot.
+## [1.0.2] — 2026-08-15
+
+### Fixed(两轮审核发现一并修复;含 Codex 改动合入)
+
+Codex 改动(经专项审核后合入):
+
+- 当前页切换会取消过期的提取等待者;已经离开预取窗口的旧页面即使稍后提取完成,
+  也不会再进入翻译队列或覆盖当前页面状态。
+- PDF worker 提取超时后,当前可见页面直接从已渲染文字层恢复;仍在运行的同页底层
+  请求会被记录且不再重复启动,避免"闪一下又消失"和切到新页卡住。
+- 全局并行数最小值统一为 2,始终给当前页保留处理能力。
+- 表格在正文合并前建立稳定的行/列/单元格模型:文字单元格逐格翻译,纯数字与统计值
+  原样保留,已经归入单元格的碎片不再作为正文重复翻译或叠加。
+- 发布包过滤 `.DS_Store`/AppleDouble 和构建时间戳,包含 LICENSE 与第三方声明,
+  打包后自动校验文件清单和版本号(verify-xpi 闸门)。
+
+审核修复:
+
+- **表格单元格不再把表格列号写进页面栏号**(审核 P1):`column` 改为继承成员碎片
+  的页面栏(不一致时 -1 通栏),表格内列号移入新字段 `tableCol`——单栏页放三列
+  表格不再被误判成三栏页、阅读序不再被打散。
+- **裸占位符前缀碰撞**(审核 P1):PM1 是 PM10–PM19 的前缀,旧的子串匹配会把
+  丢失的 PM1 误判为存在、还原时把 PM10 撕成"公式1+0"。校验与还原统一改用
+  `(?!\d)` 数字边界正则,公式偶发乱码的根源修复。
+- **keep-origin 段不再被页缓存冻死**(审核 P1):带 keep-origin 标记的页面不进
+  页缓存;**普通刷新**现在会清除本页段落的止损记忆,给被跳过的段落真实的重试
+  机会(其他页面共享同一文本的止损记忆保留)。
+- **字号功能移植到实际渲染路径**(审核自查):0.9.28 的页面基准字号(role_min)
+  与字号/行距倍率写在了无消费者的 renderTranslatedPage 上,左右对照从未生效;
+  现已移植进实际使用的 buildStrictPage——严格测量闸门仍然把关,放大超框的块
+  照旧保留原文而不是溢出。
+- 提取信号量 `if` 改 `while`,关闭唤醒间隙的 3 路并发竞态;文字层恢复路径同样
+  套提取超时;可见页 worker 挂起且文字层为空时给出可重试错误提示而非静默回到
+  等待点击;强制重译清除本页僵尸提取记录,允许一次全质量 worker 重试;单段重译
+  任务在滚动时按前缀保活,不再被静默取消,失败提示改为中性文案;flashNotice
+  加销毁保护;两处缩进修正。
+
+### Tests
+
+- 新增/重写 7 组回归(跨页止损语义、普通刷新重试、keep-origin 不入缓存、
+  PM1/PM10 边界、表格页面栏继承、文字层为空的可重试错误、codex 的 4 组保留)。
+  全套 536 项通过。
 
 ## [1.0.1] — 2026-08-15
 

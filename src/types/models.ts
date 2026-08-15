@@ -58,6 +58,13 @@ export interface SourceBlock {
 	 * preserves the provenance instead of losing it in the merge.
 	 */
 	memberIds?: string[];
+	/** Preserve this geometry/text in the original page bitmap and never send it
+	 * to a translation provider (numeric table cells, symbols, etc.). */
+	translationMode?: 'translate' | 'preserve';
+	/** Table-internal column index for structured table cells. NOT the page
+	 * column — that stays in `column` (audit: writing the table col into
+	 * `column` scrambled the page reading order). */
+	tableCol?: number;
 	/** Placeholders that must be restored after translation (formulas etc.). */
 	placeholders?: PlaceholderEntry[];
 	/** True when this block belongs to the references section. */

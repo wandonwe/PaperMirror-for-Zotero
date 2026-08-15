@@ -66,10 +66,11 @@ test('prefetchWindowFor: per-mode windows', () => {
 	assert.deepEqual(prefetchWindowFor('auto', 9), { forward: 10, backward: 1 }); // clamp 10
 });
 
-test('normalizeGlobalMax: 0/legacy → 12, clamp [1,24]', () => {
+test('normalizeGlobalMax: 0/legacy → 12, clamp [2,24]', () => {
 	assert.equal(normalizeGlobalMax(0), 12);
 	assert.equal(normalizeGlobalMax(undefined), 12);
 	assert.equal(normalizeGlobalMax(-5), 12);
+	assert.equal(normalizeGlobalMax(1), 2);
 	assert.equal(normalizeGlobalMax(3), 3);
 	assert.equal(normalizeGlobalMax(99), 24);
 });

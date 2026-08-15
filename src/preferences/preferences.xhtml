@@ -293,9 +293,9 @@
 		<label id="papermirror-perfmode-desc" class="pm-desc" style="margin-top: 0;" value=""/>
 		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 8px;">
 			<label value="最大并行页面数(全局)" control="papermirror-concurrency" style="flex: 1;"/>
-			<html:input type="number" id="papermirror-concurrency" min="1" max="24" style="width: 4.5em; text-align: right;"/>
+			<html:input type="number" id="papermirror-concurrency" min="2" max="24" style="width: 4.5em; text-align: right;"/>
 		</hbox>
-		<label class="pm-desc" style="margin-top: 0;" value="限制所有服务商合计同时处理的页面数,范围1–24。每个服务商仍独立限流,实际并行数可能更低。"/>
+		<label class="pm-desc" style="margin-top: 0;" value="限制所有服务商合计同时处理的页面数,范围2–24。至少保留一个当前页槽位;每个服务商仍独立限流。"/>
 		<!-- 自定义模式:每个已启用服务商的最大并行页面数 -->
 		<html:div id="papermirror-custom-rows" class="pm-field" style="flex-direction: column; align-items: stretch; gap: 3px; margin-top: 6px; display: none;"></html:div>
 		<!-- 当前配置摘要卡 -->

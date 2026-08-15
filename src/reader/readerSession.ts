@@ -360,6 +360,7 @@ export class ReaderSession {
 		this.manager = new TranslationManager(
 			{
 				extractPage: pageIndex => this.extractor.extractPage(pageIndex),
+				extractRenderedPage: pageIndex => this.extractor.extractRenderedPage(pageIndex),
 				translateRequest: (request, signal) => this.translateRequest(request, signal),
 				readCache: async (pageIndex, blocks) => {
 					const parts = await this.cacheKey(pageIndex, blocks.map(b => b.sourceText));
@@ -675,7 +676,7 @@ export class ReaderSession {
 			const common = {
 				currentPage: state.pageIndex + 1,
 				totalPages: adapter.getPageCount(this.reader),
-				segTotal: state.blocks.length,
+				segTotal: state.blocks.filter(block => block.translationMode !== 'preserve').length,
 				segTranslated: state.translations.size
 			};
 			switch (state.status) {
@@ -778,6 +779,9 @@ export class ReaderSession {
 	 * the visible surface and auto-clears back to whatever was underneath.
 	 */
 	private flashNotice(message: string): void {
+		if (this.destroyed) {
+			return; // a promise resolving after teardown must not spawn a zombie toast
+		}
 		this.setTask('flash', {
 			phase: 'notice', message,
 			currentPage: adapter.getCurrentPageIndex(this.reader) + 1,
@@ -1113,7 +1117,9 @@ export class ReaderSession {
 						this.flashNotice('正在重译此段…');
 						void this.manager.retranslateBlock(pageIndex, id).then((ok) => {
 							node.classList.remove('pm-retranslating');
-							this.flashNotice(ok ? '此段已重译' : '重译未成功(响应无效或被拒),可再试或换服务商');
+							// Neutral failure text: a scroll-cancel and a rejected response
+							// look the same from here — don't claim a reason we don't know.
+							this.flashNotice(ok ? '此段已重译' : '此段重译未完成,可再试或换服务商');
 						});
 					});
 				}

@@ -39,6 +39,8 @@ import {
 	samplePaper,
 	type PixelBox
 } from './translatedPageView';
+import { bodyAnchorPt, parseFactor } from './pageLayout';
+import { getPref } from '../utils/prefs';
 
 const MODULE = 'strictPageReplacement';
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
@@ -243,10 +245,23 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	page.appendChild(canvas);
 
 	// ---- 2. what may be replaced -------------------------------------------
-	const translatable = input.blocks.filter(b =>
+	const geometric = input.blocks.filter(b =>
 		!b.isReference && b.type !== 'table' && !!b.lineRectsPdf?.length);
+	const translatable = geometric.filter(b => b.translationMode !== 'preserve');
 	const bodySizes = translatable.map(b => b.fontSize ?? 0).filter(s => s > 0).sort((a, b) => a - b);
 	const bodyPt = bodySizes.length ? bodySizes[Math.floor(bodySizes.length / 2)]! : 10;
+	// 页面基准字号 (role_min, 0.9.28 — 审核修正: the feature had landed on the
+	// unused renderTranslatedPage path; THIS builder is what the split view
+	// actually renders). Body blocks unify to the page's robust-minimum body
+	// size so adjacent paragraphs never render at visibly different sizes;
+	// headings/captions keep their own. 用户倍率 scales on top — the strict
+	// measure gate still governs commit, so an over-scaled block simply fails
+	// placement and stays original rather than overflowing.
+	const anchorPt = bodyAnchorPt(translatable
+		.filter(b => b.type === 'paragraph' || b.type === 'list')
+		.map(b => b.fontSize ?? 0));
+	const fontFactor = parseFactor(getPref('fontSizeFactor', '1'));
+	const lineFactor = parseFactor(getPref('lineHeightFactor', '1'), 0.9, 1.4);
 
 	const imageBoxes: PixelBox[] = (input.imageRectsPdf ?? [])
 		.map(r => rectToPixels(r, render, 1))
@@ -256,10 +271,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	for (const b of translatable) {
 		pxOf.set(b.id, pixelBox(b, render, 1));
 	}
-	const blockById = new Map(translatable.map(b => [b.id, b]));
+	const blockById = new Map(geometric.map(b => [b.id, b]));
 
 	const guard = detectTableRegions(
-		translatable.map(b => ({
+		geometric.map(b => ({
 			id: b.id, text: b.sourceText, type: b.type,
 			box: pxOf.get(b.id)!, fontSize: b.fontSize
 		})),
@@ -278,7 +293,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	let tableIntentional = 0;
 	let tableFailed = 0;
 	guard.regions.forEach((region, tableIndex) => {
-		const members: CellMember[] = translatable
+		const members: CellMember[] = geometric
 			.filter(b => containedFraction(pxOf.get(b.id)!, region) >= 0.5 && b.lineRectsPdf?.length)
 			.map(b => ({ id: b.id, box: pxOf.get(b.id)!, text: b.sourceText, fontSize: b.fontSize }));
 		if (!members.length) {
@@ -464,6 +479,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 
 	const ink = inkFor(paper);
 	page.style.setProperty('--pm-repage-ink', ink);
+	page.style.setProperty('--pm-line-scale', String(lineFactor));
 	page.style.background = paper;
 
 	// ---- 4. translations at FIXED geometry ----------------------------------
@@ -503,7 +519,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// and — critically — its mask is NOT yet painted, so the original text
 		// shows through. Acceptance flips visibility AND paints the mask together.
 		node.style.visibility = 'hidden';
-		const fontPx = Math.max(6, (block.fontSize ?? bodyPt) * pxPerPoint);
+		const rolePt = (block.type === 'paragraph' || block.type === 'list') && anchorPt > 0
+			? anchorPt
+			: (block.fontSize ?? bodyPt);
+		const fontPx = Math.max(6, rolePt * pxPerPoint * fontFactor);
 		node.style.fontSize = `${fontPx.toFixed(2)}px`;
 		const bg = blockPaper.get(block.id);
 		if (bg) {

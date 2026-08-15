@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildAddon } from './build.mjs';
+import { verifyXpi } from './verify-xpi.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const addonDir = join(root, 'build', 'addon');
@@ -27,6 +28,7 @@ async function main() {
 	// -X strips extra file attributes; store from inside addonDir so
 	// manifest.json sits at the zip root.
 	execFileSync('zip', ['-r', '-X', xpiPath, '.'], { cwd: addonDir, stdio: 'inherit' });
+	verifyXpi(xpiPath);
 	console.log(`\nXPI written to ${xpiPath}`);
 }
 

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTableModel, type CellMember, type Box } from '../../src/reader/tableStructure';
+import { buildTableModel, structureTableCells, type CellMember, type Box } from '../../src/reader/tableStructure';
+import type { SourceBlock } from '../../src/types/models';
 
 function cell(id: string, left: number, top: number, width: number, height: number, text: string): CellMember {
 	return { id, box: { left, top, width, height }, text };
@@ -95,4 +96,35 @@ test('a legitimately wide column (like "Key results") translates, not flagged da
 	assert.ok(keyResults.every(c => c.kind === 'text'), 'wide prose column translates, not kept English');
 	// The "Task" prose column translates too.
 	assert.ok(model.cells.filter(c => c.col === 0).every(c => c.kind === 'text'));
+});
+
+test('extraction-stage normalization emits stable cells and marks numeric cells preserve', () => {
+	const raw: SourceBlock[] = [];
+	for (let row = 0; row < 4; row++) {
+		raw.push({ id: `label-${row}`, pageIndex: 2, order: raw.length, type: 'paragraph', sourceText: row === 0 ? 'Mortality' : `Clinical outcome ${row}`, boundingBox: { x: 40, y: 200 + row * 18, width: 150, height: 12 } });
+		raw.push({ id: `value-${row}-a`, pageIndex: 2, order: raw.length, type: 'paragraph', sourceText: `${40 + row} ± 6`, boundingBox: { x: 200, y: 200 + row * 18, width: 60, height: 12 } });
+		raw.push({ id: `value-${row}-b`, pageIndex: 2, order: raw.length, type: 'paragraph', sourceText: `${41 + row} ± 7`, boundingBox: { x: 270, y: 200 + row * 18, width: 60, height: 12 } });
+	}
+	const out = structureTableCells(raw, 2, 10);
+	const stable = out.filter(block => block.id.startsWith('page-2-table-'));
+	assert.ok(stable.length >= 4, 'raw table fragments become stable grid cells');
+	assert.ok(stable.some(block => block.translationMode === 'preserve'), 'numeric cells remain original');
+	assert.ok(stable.some(block => block.sourceText === 'Mortality' && block.translationMode === 'translate'), 'row label is translated in place');
+	assert.ok(!out.some(block => block.id === 'value-0-a'), 'consumed raw fragments cannot also be translated');
+});
+
+test('cells inherit the PAGE column; the table column lives in tableCol (审核 P1)', () => {
+	const raw: SourceBlock[] = [];
+	for (let row = 0; row < 4; row++) {
+		raw.push({ id: `label-${row}`, pageIndex: 3, order: raw.length, type: 'paragraph', column: 0, sourceText: row === 0 ? 'Mortality' : `Clinical outcome ${row}`, boundingBox: { x: 40, y: 200 + row * 18, width: 150, height: 12 } });
+		raw.push({ id: `value-${row}-a`, pageIndex: 3, order: raw.length, type: 'paragraph', column: 0, sourceText: `${40 + row} ± 6`, boundingBox: { x: 200, y: 200 + row * 18, width: 60, height: 12 } });
+		raw.push({ id: `value-${row}-b`, pageIndex: 3, order: raw.length, type: 'paragraph', column: 0, sourceText: `${41 + row} ± 7`, boundingBox: { x: 270, y: 200 + row * 18, width: 60, height: 12 } });
+	}
+	const out = structureTableCells(raw, 3, 10);
+	const cells = out.filter(block => block.id.startsWith('page-3-table-'));
+	assert.ok(cells.length >= 4);
+	// All member fragments sat in page column 0 → every cell stays column 0;
+	// a 3-column table must NOT fabricate page columns 1 and 2.
+	assert.ok(cells.every(c => c.column === 0), JSON.stringify(cells.map(c => c.column)));
+	assert.ok(cells.some(c => typeof c.tableCol === 'number' && c.tableCol > 0), 'table-internal column preserved in tableCol');
 });

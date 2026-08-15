@@ -214,8 +214,11 @@ export function verifyPlaceholders(text: string, placeholders: PlaceholderEntry[
 			if (text.includes(p.token)) {
 				return false;
 			}
+			// Same (?!\d) boundary as restore: "PM1" present must not be satisfied
+			// by "PM10" (审核 P1 — the lost token was wrongly counted present and
+			// the formula silently vanished after restore).
 			const bare = p.token.replace(PLACEHOLDER_PREFIX, 'PM').replace(PLACEHOLDER_SUFFIX, '');
-			return !text.includes(bare);
+			return !new RegExp(`${bare}(?!\\d)`).test(text);
 		})
 		.map(p => p.token);
 	const issued = new Set(placeholders.map(p => p.token));
@@ -227,10 +230,14 @@ export function restoreFormulas(text: string, placeholders: PlaceholderEntry[]):
 	let out = text;
 	for (const { token, original } of placeholders) {
 		out = out.split(token).join(original);
-		// Models sometimes drop the brackets; try a bare-number fallback token
+		// Models sometimes drop the brackets; try a bare-number fallback token.
+		// (?!\d) boundary (审核 P1): "PM1" is a PREFIX of "PM10"…"PM19" — the
+		// old substring replace tore PM10 into original1+"0" whenever a block
+		// carried ≥11 placeholders, which citation masking made routine.
 		const bare = token.replace(PLACEHOLDER_PREFIX, 'PM').replace(PLACEHOLDER_SUFFIX, '');
-		if (!out.includes(original) && out.includes(bare)) {
-			out = out.split(bare).join(original);
+		const bareRe = new RegExp(`${bare}(?!\\d)`, 'g');
+		if (!out.includes(original) && bareRe.test(out)) {
+			out = out.replace(bareRe, () => original);
 		}
 	}
 	return out;

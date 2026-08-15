@@ -178,12 +178,13 @@ export function prefetchWindowFor(mode: PerfMode, poolSize: number): { forward: 
 	return { forward: Math.max(1, Math.min(2 * poolSize, 10)), backward: 1 };
 }
 
-/** Global ceiling setting: plain number, 1–24, default 12 (0/legacy → 12). */
+/** Global ceiling setting: 2–24. Two slots are required to guarantee that one
+ * background prefetch can never occupy the current page's only slot. */
 export const GLOBAL_MAX_DEFAULT = 12;
-export const GLOBAL_MAX_MIN = 1;
+export const GLOBAL_MAX_MIN = 2;
 export const GLOBAL_MAX_MAX = 24;
 
-/** Migrate a stored 最大并行页面数 value: 0/absent → 12, clamp to [1,24]. */
+/** Migrate a stored value: 0/absent → 12, clamp to [2,24]. */
 export function normalizeGlobalMax(value: unknown): number {
 	const n = Math.round(Number(value));
 	if (!Number.isFinite(n) || n <= 0) {

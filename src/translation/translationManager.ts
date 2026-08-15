@@ -326,6 +326,12 @@ export interface PageDiagnostics {
 export interface TranslationDeps {
 	/** Extract source blocks for a page (throws PaperMirrorError on failure). */
 	extractPage(pageIndex: number): Promise<SourceBlock[]>;
+	/**
+	 * Fast current-page fallback that only reads the already-rendered text layer.
+	 * Used after a PDF-worker extraction times out; it must not start another
+	 * worker request for the same page.
+	 */
+	extractRenderedPage?(pageIndex: number): Promise<SourceBlock[]>;
 	/** Perform one provider request. */
 	translateRequest(request: TranslationRequest, signal: AbortSignal): Promise<TranslationResponse>;
 	/** Cache access; may be no-ops. */
@@ -412,7 +418,11 @@ export class TranslationManager {
 	/** Extraction semaphore: at most 2 concurrent PDF extractions, current page first. */
 	private extractActive = 0;
 	private extractTimeoutMs = EXTRACT_TIMEOUT_MS;
-	private extractWaiters: { pageIndex: number; resolve: () => void }[] = [];
+	private extractWaiters: { pageIndex: number; resolve: () => void; reject: (error: PaperMirrorError) => void }[] = [];
+	/** Extraction runs outside RequestScheduler, so navigation needs an independent stale-work guard. */
+	private navigationGeneration = 0;
+	/** Raw PDF extractions that outlived the manager timeout. One per page. */
+	private extractZombies = new Map<number, Promise<SourceBlock[]>>();
 
 	constructor(deps: TranslationDeps, events: ManagerEvents, options?: { maxConcurrent?: number; reservedForeground?: number; prefetch?: boolean; delayFn?: (ms: number) => Promise<void>; extractTimeoutMs?: number }) {
 		this.deps = deps;
@@ -462,18 +472,29 @@ export class TranslationManager {
 			return;
 		}
 		this.currentPage = pageIndex;
+		this.navigationGeneration++;
 		const wanted = this.wantedPages();
+		const wantedSet = new Set(wanted);
+		const staleExtracts = this.extractWaiters.filter(w => !wantedSet.has(w.pageIndex));
+		this.extractWaiters = this.extractWaiters.filter(w => wantedSet.has(w.pageIndex));
+		for (const waiter of staleExtracts) {
+			waiter.reject(new PaperMirrorError('CANCELLED', 'Superseded by navigation.'));
+		}
 		// 1. Drop queued/running work for pages that left the prefetch window, so
 		//    a fast run of scrolls does not leave the current page stuck behind
 		//    stale prefetches holding the slots — but KEEP the compress-and-retry
 		//    tasks of pages still wanted: cancelling those on every scroll wasted
 		//    the strict renderer's budget rounds and long blocks reverted.
 		const keep = new Set<string>();
+		const keepPrefixes: string[] = [];
 		for (const p of wanted) {
 			keep.add(`page-${p}`);
 			keep.add(`page-${p}-compress`);
+			// 单段重译 keys carry the block id — keep them by prefix so a scroll
+			// no longer silently cancels a right-click retranslate (审核 P2).
+			keepPrefixes.push(`page-${p}-seg-`);
 		}
-		this.scheduler.cancelExcept(keep);
+		this.scheduler.cancelExcept(keep, keepPrefixes);
 		// 2. The visible page's provider LANE keeps a reserved foreground slot, so
 		//    the current page can always start even amid same-lane prefetch.
 		this.scheduler.setForegroundLane(this.laneFor(pageIndex));
@@ -618,11 +639,27 @@ export class TranslationManager {
 	 *  - 'force' (强制重译): bypass both caches — every segment re-requests.
 	 */
 	async retranslatePage(pageIndex: number, mode: 'normal' | 'force' = 'normal'): Promise<void> {
+		// 审核 P1: an EXPLICIT refresh of this page clears its blocks' 止损 memory
+		// — the user asked for a retry, so the skipped segments get one. Cross-page
+		// duplicates of the same hash on OTHER pages keep their memory.
+		const prior = this.pages.get(pageIndex);
+		if (prior?.blocks.length) {
+			try {
+				const sample = prior.blocks.map(b => b.sourceText).join('\n').slice(0, 4000);
+				const { source, target } = this.deps.getLanguages(sample);
+				for (const b of prior.blocks) {
+					this.failedSegments.delete(segmentHash(b.sourceText, source, target));
+				}
+			}
+			catch { /* language resolution is best-effort here */ }
+		}
 		this.pages.delete(pageIndex);
 		this.unstableFired.delete(pageIndex); // a fresh run may report anew
 		if (mode === 'force') {
-			// 强制重译 gives every keep-origin segment a fresh chance.
+			// 强制重译 gives every keep-origin segment a fresh chance, and drops the
+			// page's zombie so a full-quality worker extraction may run again.
 			this.failedSegments.clear();
+			this.extractZombies.delete(pageIndex);
 		}
 		this.scheduler.cancel(`page-${pageIndex}`);
 		await this.ensurePage(pageIndex, PRIORITY.CURRENT_RETRANSLATE, {
@@ -748,8 +785,12 @@ export class TranslationManager {
 
 	dispose(): void {
 		this.disposed = true;
+		for (const waiter of this.extractWaiters.splice(0)) {
+			waiter.reject(new PaperMirrorError('CANCELLED', 'Manager disposed.'));
+		}
 		this.scheduler.dispose();
 		this.pages.clear();
+		this.extractZombies.clear();
 	}
 
 	private wantedPages(): number[] {
@@ -777,10 +818,9 @@ export class TranslationManager {
 	 * getPageData holds no translation capacity.
 	 */
 	/**
-	 * Race an extraction against the phase timeout. The zombie promise keeps
-	 * running harmlessly in the background (its result is discarded via the
-	 * supersede check); what matters is that the SLOT comes back and the page
-	 * state is released for an automatic retry.
+	 * Race an extraction against the phase timeout. A late raw promise is tracked
+	 * by page until it settles, so production can use the rendered-layer fallback
+	 * without starting a duplicate PDF-worker request.
 	 */
 	private withExtractTimeout(p: Promise<SourceBlock[]>, pageIndex: number): Promise<SourceBlock[]> {
 		const ms = this.extractTimeoutMs;
@@ -789,7 +829,12 @@ export class TranslationManager {
 		}
 		return new Promise<SourceBlock[]>((resolve, reject) => {
 			const timer = setTimeout(() => {
-				p.catch(() => { /* orphaned promise must not surface as unhandled */ });
+				this.extractZombies.set(pageIndex, p);
+				p.finally(() => {
+					if (this.extractZombies.get(pageIndex) === p) {
+						this.extractZombies.delete(pageIndex);
+					}
+				}).catch(() => { /* orphaned promise must not surface as unhandled */ });
 				reject(new PaperMirrorError('TIMEOUT', `Page ${pageIndex + 1} text extraction made no progress for ${Math.round(ms / 1000)} s.`, { retryable: true }));
 			}, ms);
 			p.then(
@@ -800,9 +845,15 @@ export class TranslationManager {
 	}
 
 	private async withExtractionSlot<T>(pageIndex: number, fn: () => Promise<T>): Promise<T> {
-		if (this.extractActive >= 2) {
-			await new Promise<void>((resolve) => {
-				this.extractWaiters.push({ pageIndex, resolve });
+		// WHILE, not if (审核 P2): between a waiter's wake-up and its increment a
+		// fresh caller could slip past the single check — the cap briefly ran 3.
+		while (this.extractActive >= 2) {
+			await new Promise<void>((resolve, reject) => {
+				this.extractWaiters.push({
+					pageIndex,
+					resolve,
+					reject: (error) => reject(error)
+				});
 			});
 		}
 		this.extractActive++;
@@ -859,6 +910,7 @@ export class TranslationManager {
 			translations: new Map(),
 			extractingSince: Date.now()
 		};
+		const navigationAtStart = this.navigationGeneration;
 		this.pages.set(pageIndex, state);
 		this.notify(state);
 
@@ -869,27 +921,68 @@ export class TranslationManager {
 			// current page first) bounds concurrent extractions instead.
 			let blocks: SourceBlock[];
 			try {
-				blocks = await this.withExtractionSlot(pageIndex,
-					() => this.withExtractTimeout(this.deps.extractPage(pageIndex), pageIndex));
+				const zombie = this.extractZombies.get(pageIndex);
+				if (zombie && this.deps.extractRenderedPage) {
+					// Never start a second PDF-worker extraction while the timed-out
+					// one is still alive. The visible page can still be recovered from
+					// its rendered text layer (timeout-guarded like any extraction).
+					if (pageIndex !== this.currentPage) {
+						this.pages.delete(pageIndex);
+						return;
+					}
+					blocks = await this.withExtractTimeout(this.deps.extractRenderedPage(pageIndex), pageIndex);
+				}
+				else {
+					blocks = await this.withExtractionSlot(pageIndex,
+						() => this.withExtractTimeout(this.deps.extractPage(pageIndex), pageIndex));
+				}
 			}
 			catch (extractError) {
 				const err = extractError instanceof PaperMirrorError
 					? extractError
 					: new PaperMirrorError('UNKNOWN', String(extractError));
 				if (err.code === 'TIMEOUT') {
-					// A hung extraction (usually a prefetch page not rendered yet):
-					// free everything and forget the state — the next visit to the
-					// page re-runs the whole pipeline automatically, no click needed.
-					if (this.pages.get(pageIndex) === state) {
-						this.pages.delete(pageIndex);
+					// If this is the visible page, recover immediately from the DOM
+					// text layer. Otherwise forget the prefetch state; a later visit
+					// will use the DOM without duplicating the live worker request.
+					if (pageIndex === this.currentPage && this.deps.extractRenderedPage) {
+						const rendered = await this.deps.extractRenderedPage(pageIndex)
+							.catch(() => [] as SourceBlock[]);
+						if (rendered.length) {
+							blocks = rendered;
+							logger.info(MODULE, `Page ${pageIndex + 1}: recovered timed-out extraction from rendered text layer`);
+						}
+						else {
+							// The VISIBLE page has neither worker result nor text layer:
+							// surface a retryable error instead of silently going idle
+							// (审核 P2 — the silent delete re-created the "点击圆环" limbo
+							// for exactly this page).
+							state.status = 'error';
+							state.error = new PaperMirrorError('EXTRACTION_FAILED',
+								`第 ${pageIndex + 1} 页读取超时且文字层不可用,可用刷新重试。`, { retryable: true });
+							this.notify(state);
+							return;
+						}
 					}
-					logger.warn(MODULE, `Page ${pageIndex + 1}: extraction timed out after ${this.extractTimeoutMs} ms — released for automatic retry on next visit`);
-					return;
+					else {
+						if (this.pages.get(pageIndex) === state) {
+							this.pages.delete(pageIndex);
+						}
+						logger.warn(MODULE, `Page ${pageIndex + 1}: extraction timed out after ${this.extractTimeoutMs} ms — released for automatic retry on next visit`);
+						return;
+					}
 				}
-				throw err; // real extraction errors keep their error/no-text-layer states
+				else {
+					throw err; // real extraction errors keep their error/no-text-layer states
+				}
 			}
 			if (this.disposed || this.pages.get(pageIndex) !== state) {
 				return; // superseded while extracting
+			}
+			if (navigationAtStart !== this.navigationGeneration
+				&& !this.wantedPages().includes(pageIndex)) {
+				this.pages.delete(pageIndex);
+				return;
 			}
 			state.blocks = blocks;
 			if (!blocks.length) {
@@ -1117,6 +1210,12 @@ export class TranslationManager {
 			this.notify(state);
 			return;
 		}
+		const activeBlocks = blocks.filter(b => b.translationMode !== 'preserve');
+		if (!activeBlocks.length) {
+			state.status = 'done';
+			this.notify(state);
+			return;
+		}
 
 		// 2. Cache
 		if (!bypass.bypassPageCache) {
@@ -1140,10 +1239,10 @@ export class TranslationManager {
 		state.status = 'translating';
 		this.notify(state);
 
-		const sampleText = blocks.map(b => b.sourceText).join('\n').slice(0, 4000);
+		const sampleText = activeBlocks.map(b => b.sourceText).join('\n').slice(0, 4000);
 		const { source, target } = this.deps.getLanguages(sampleText);
-		const glossary = this.glossaryFor(blocks.map(b => b.sourceText));
-		const sourceById = new Map(blocks.map(b => [b.id, b.sourceText]));
+		const glossary = this.glossaryFor(activeBlocks.map(b => b.sourceText));
+		const sourceById = new Map(activeBlocks.map(b => [b.id, b.sourceText]));
 		// Accept a response only if it is actually translated (not echoed English).
 		const accept = (id: string, text: string): boolean =>
 			text.trim().length > 0 && looksTranslated(sourceById.get(id) ?? '', text, target);
@@ -1156,9 +1255,9 @@ export class TranslationManager {
 		const segHash = (b: SourceBlock): string => segmentHash(b.sourceText, source, target);
 		let segmentHits = 0;
 		if (!bypass.bypassSegments && this.deps.readSegments) {
-			const cached = await this.deps.readSegments(pageIndex, blocks.map(segHash)).catch(() => null);
+			const cached = await this.deps.readSegments(pageIndex, activeBlocks.map(segHash)).catch(() => null);
 			if (cached?.size) {
-				for (const block of blocks) {
+				for (const block of activeBlocks) {
 					const hit = cached.get(segHash(block));
 					if (hit !== undefined && accept(block.id, hit)) {
 						state.translations.set(block.id, hit);
@@ -1174,7 +1273,7 @@ export class TranslationManager {
 		// in the original language instead of burning the same requests again.
 		const keepOrigin = new Map<string, string>();
 		state.keepOrigin = keepOrigin;
-		const toTranslate = blocks.filter((b) => {
+		const toTranslate = activeBlocks.filter((b) => {
 			if (state.translations.has(b.id)) {
 				return false;
 			}
@@ -1195,7 +1294,7 @@ export class TranslationManager {
 			if (pageIndex === this.currentPage) {
 				this.prefetchNeighbours();
 			}
-			await this.deps.writeCache(pageIndex, blocks, blocks
+			await this.deps.writeCache(pageIndex, blocks, activeBlocks
 				.filter(b => state.translations.has(b.id))
 				.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })));
 			return;
@@ -1542,7 +1641,7 @@ export class TranslationManager {
 		// and merge into `results` so the fix reaches the cache — the page is not
 		// re-extracted or re-rendered wholesale.
 		if (canSpend()) {
-			await this.resolveEnglishResidue(state, blocks, results, source, target, signal, countedTranslate, canSpend);
+			await this.resolveEnglishResidue(state, activeBlocks, results, source, target, signal, countedTranslate, canSpend);
 		}
 
 		// 纯文本兜底 (修复链路最后一环, 参照 retain-pdf final recovery): blocks the
@@ -1645,7 +1744,7 @@ export class TranslationManager {
 		// completeness — a good segment is a good segment; only the PAGE index
 		// below requires completeness.
 		if (this.deps.writeSegments && results.length) {
-			const byId = new Map(blocks.map(b => [b.id, b]));
+			const byId = new Map(activeBlocks.map(b => [b.id, b]));
 			await this.deps.writeSegments(pageIndex, results
 				.map(r => ({ hash: segHash(byId.get(r.id)!), translatedText: r.translatedText }))
 			).catch(e => logger.warn(MODULE, 'segment write failed', e));
@@ -1655,8 +1754,13 @@ export class TranslationManager {
 		// cache and never retry the missing blocks. Left uncached, the next
 		// visit (or 重新翻译) runs the whole pipeline again — with the segment
 		// store still saving the segments that DID succeed.
-		if (untranslatedCount === 0) {
-			const all: TranslatedBlock[] = blocks
+		if (untranslatedCount === 0 && keepOrigin.size === 0) {
+			// keepOrigin pages stay OUT of the page cache (审核 P1): caching one
+			// froze its English segments forever — every revisit hit the cache and
+			// the repair chain never ran again. Uncached, the segment store still
+			// serves the good segments and the skipped ones get their chance the
+			// moment 普通刷新 clears the 止损 memory below.
+			const all: TranslatedBlock[] = activeBlocks
 				.filter(b => state.translations.has(b.id))
 				.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! }));
 			await this.deps.writeCache(pageIndex, blocks, all);

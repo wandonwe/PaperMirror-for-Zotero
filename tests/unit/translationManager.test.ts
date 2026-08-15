@@ -812,36 +812,39 @@ test('plain-mode recovery rescues a block the JSON chain kept rejecting (批次3
 	manager.dispose();
 });
 
-test('a segment that failed two runs is keep-origin skipped on the third (止损)', async () => {
-	let requestsForStuck = 0;
-	const blocks: SourceBlock[] = [
-		{ id: 'good', pageIndex: 0, order: 0, type: 'paragraph', sourceText: 'A perfectly normal paragraph that always translates without any drama.' },
-		{ id: 'stuck', pageIndex: 0, order: 1, type: 'paragraph', sourceText: 'A cursed paragraph that the provider refuses to ever translate properly.' }
+test('a hash that failed on two pages is keep-origin skipped on a third page (止损)', async () => {
+	const CURSED = 'A cursed paragraph that the provider refuses to ever translate properly.';
+	let cursedRequests = 0;
+	const pageBlocks = (p: number): SourceBlock[] => [
+		{ id: `p${p}-good`, pageIndex: p, order: 0, type: 'paragraph', sourceText: 'Short good text.' },
+		{ id: `p${p}-cursed`, pageIndex: p, order: 1, type: 'paragraph', sourceText: CURSED }
 	];
 	const { deps } = makeDeps({
-		extractPage: async () => blocks,
-		readCache: async () => null, // never serve the page cache
+		extractPage: async p => pageBlocks(p),
+		readCache: async () => null,
 		translateRequest: async (req) => {
-			if (req.blocks.some(b => b.id === 'stuck')) {
-				requestsForStuck++;
+			if (req.blocks.some(b => b.text.includes('cursed') || b.text === CURSED || b.text.includes('refuses'))) {
+				cursedRequests++;
 			}
 			return {
 				translations: req.blocks.map(b => ({
 					id: b.id,
-					translatedText: b.id === 'stuck' ? b.text : '好段落的完整中文译文内容示例。'
+					translatedText: b.id.endsWith('cursed') ? b.text : '好段落的完整中文译文内容示例。'
 				}))
 			};
 		}
 	});
-	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
-	await manager.ensurePage(0, 10);
-	await manager.retranslatePage(0, 'normal');
-	const afterTwo = requestsForStuck;
-	assert.ok(afterTwo > 0);
-	await manager.retranslatePage(0, 'normal');
-	assert.equal(requestsForStuck, afterTwo, 'third run must not spend requests on the dead segment');
-	const state = manager.getPageState(0)!;
-	assert.equal(state.keepOrigin?.get('stuck'), 'repeated-failure');
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10); // failure #1 for the hash
+	await manager.ensurePage(1, 10); // failure #2 (same text, different page)
+	const before = cursedRequests;
+	await manager.ensurePage(2, 10); // third page with the same hash → skipped
+	assert.equal(cursedRequests, before, 'third page must not spend requests on the dead hash');
+	assert.equal(manager.getPageState(2)!.keepOrigin?.get('p2-cursed'), 'repeated-failure');
+	// 审核 P1 修复: keepOrigin pages stay OUT of the page cache, and an EXPLICIT
+	// 普通刷新 of the page clears its 止损 memory — the retry really happens.
+	await manager.retranslatePage(2, 'normal');
+	assert.ok(cursedRequests > before, '普通刷新 must give the skipped segment a fresh chance');
 	manager.dispose();
 });
 
@@ -1072,5 +1075,98 @@ test('two hung extractions do not deadlock the 2-slot semaphore for later pages'
 		manager.ensurePage(2, 10) // queued behind the two hung slots
 	]);
 	assert.equal(manager.getPageState(2)!.status, 'done', 'page 3 must not starve behind hung extractions');
+	manager.dispose();
+});
+
+test('timed-out current page recovers from rendered text without starting a duplicate worker extraction', async () => {
+	let workerCalls = 0;
+	let renderedCalls = 0;
+	const { deps } = makeDeps({
+		extractPage: async () => {
+			workerCalls++;
+			return new Promise(() => { /* worker promise remains alive */ });
+		},
+		extractRenderedPage: async (pageIndex) => {
+			renderedCalls++;
+			return makeBlocks(pageIndex, 1);
+		},
+		translateRequest: async request => ({
+			translations: request.blocks.map(block => ({ id: block.id, translatedText: '当前页译文已恢复完成。' }))
+		}),
+		readCache: async () => null
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, extractTimeoutMs: 30 });
+	await manager.ensurePage(0, 10);
+	const recoveredPage = manager.getPageState(0);
+	assert.equal(recoveredPage?.status, 'done', recoveredPage?.error?.message);
+	assert.equal(workerCalls, 1);
+	assert.equal(renderedCalls, 1);
+	await manager.ensurePage(0, 10);
+	assert.equal(workerCalls, 1, 'the still-live worker extraction is never duplicated');
+	manager.dispose();
+});
+
+test('an extraction completed after navigation cannot enqueue stale translation work', async () => {
+	let resolveOld!: (blocks: SourceBlock[]) => void;
+	const translatedPages: number[] = [];
+	const { deps } = makeDeps({
+		extractPage: async (pageIndex) => pageIndex === 0
+			? new Promise<SourceBlock[]>(resolve => { resolveOld = resolve; })
+			: makeBlocks(pageIndex, 1),
+		translateRequest: async request => {
+			translatedPages.push(request.blocks[0]!.id.startsWith('page-0-') ? 0 : 5);
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: `译:${b.text}` })) };
+		},
+		readCache: async () => null
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	const old = manager.ensurePage(0, 10);
+	await Promise.resolve();
+	manager.setCurrentPage(5);
+	resolveOld(makeBlocks(0, 1));
+	await old;
+	await new Promise(resolve => setTimeout(resolve, 10));
+	assert.ok(!translatedPages.includes(0), 'the page left behind must not reach a provider');
+	manager.dispose();
+});
+
+test('a keep-origin page is never written to the page cache (审核 P1)', async () => {
+	const CURSED = 'A cursed paragraph that the provider refuses to ever translate properly.';
+	const cacheWrites: number[] = [];
+	const pageBlocks = (p: number): SourceBlock[] => [
+		{ id: `p${p}-good`, pageIndex: p, order: 0, type: 'paragraph', sourceText: 'Short good text.' },
+		{ id: `p${p}-cursed`, pageIndex: p, order: 1, type: 'paragraph', sourceText: CURSED }
+	];
+	const { deps } = makeDeps({
+		extractPage: async p => pageBlocks(p),
+		readCache: async () => null,
+		writeCache: async (pageIndex) => { cacheWrites.push(pageIndex); },
+		translateRequest: async req => ({
+			translations: req.blocks.map(b => ({
+				id: b.id,
+				translatedText: b.id.endsWith('cursed') ? b.text : '好段落的完整中文译文内容示例。'
+			}))
+		})
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	await manager.ensurePage(1, 10);
+	await manager.ensurePage(2, 10); // keepOrigin page (repeated-failure skip)
+	assert.ok(!cacheWrites.includes(2), 'the keepOrigin page must stay uncached so repair can run again');
+	manager.dispose();
+});
+
+test('visible page with hung worker AND empty text layer surfaces a retryable error, not idle', async () => {
+	const { deps } = makeDeps({
+		extractPage: async () => new Promise(() => { /* hangs */ }),
+		extractRenderedPage: async () => [],
+		readCache: async () => null
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, extractTimeoutMs: 30 });
+	await manager.ensurePage(0, 10);
+	const state = manager.getPageState(0);
+	assert.equal(state?.status, 'error');
+	assert.equal(state?.error?.code, 'EXTRACTION_FAILED');
+	assert.equal(state?.error?.retryable, true);
 	manager.dispose();
 });
