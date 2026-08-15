@@ -80,3 +80,31 @@ export function registerPrefObserver(key: PrefKey, handler: (value: unknown) => 
 export function unregisterPrefObserver(id: symbol | string): void {
 	Zotero.Prefs.unregisterObserver(id);
 }
+
+/**
+ * Drive a boolean-pref-gated side effect (1.1.10): call `apply` once with the
+ * pref's current value, then again on every change, and return a cleanup that
+ * unregisters the observer. Used to show/hide the 「诊断」 button in step with
+ * the debugLogging pref, but pref-key agnostic. Observer registration failure
+ * is non-fatal — the initial `apply` has already run — so a missing Prefs API
+ * (e.g. a stripped test env) degrades to a one-shot read, never a throw.
+ */
+export function observeBoolPref(key: PrefKey, apply: (on: boolean) => void): () => void {
+	apply(getPref<boolean>(key, false));
+	let id: symbol | string | null = null;
+	try {
+		id = registerPrefObserver(key, value => apply(!!value));
+	}
+	catch {
+		id = null;
+	}
+	return () => {
+		if (id !== null) {
+			try {
+				unregisterPrefObserver(id);
+			}
+			catch { /* best-effort */ }
+			id = null;
+		}
+	};
+}

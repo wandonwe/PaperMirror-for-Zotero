@@ -18,6 +18,7 @@
 import { isFormulaRun } from '../reader/formulaGuard';
 import { stripStyleMarkers } from '../reader/styleRuns';
 import * as logger from '../utils/logger';
+import { observeBoolPref } from '../utils/prefs';
 import type { ExplanationSection } from '../translation/explainer';
 import type { PageTranslationState } from '../translation/translationManager';
 import type { SourceBlock } from '../types/models';
@@ -162,6 +163,10 @@ export class TranslationPane {
 	private providerName!: HTMLElement;
 	private providerMark!: HTMLElement;
 	private syncSwitch!: HTMLElement;
+	// 「诊断」是排障工具,默认对普通用户隐藏 (1.1.10);仅在开启调试日志时出现,
+	// 随该偏好实时显隐。存显隐观察者的清理函数,destroy 时调用。
+	private diagnosticsButton: HTMLElement | null = null;
+	private debugGateCleanup: (() => void) | null = null;
 
 	private pages = new Map<number, PageSection>();
 	private selectedBlockId: string | null = null;
@@ -295,6 +300,25 @@ export class TranslationPane {
 		const btn = this.el('button', className, label);
 		btn.setAttribute('title', title);
 		btn.addEventListener('click', onClick);
+		return btn;
+	}
+
+	/**
+	 * 「诊断」按钮 (1.1.10): 排障工具,默认隐藏,仅在开启调试日志
+	 * (extensions.…bilingualReader.debugLogging) 时显示,并随该偏好实时显隐 ——
+	 * 与 logger 的调试开关共用同一偏好,普通用户看不到这个开发者入口,需要提交
+	 * 诊断时在设置里勾选「开启调试日志」即可。按钮始终建出来(便于反应式显隐),
+	 * 初始与后续可见性都由 debugLogging 决定。
+	 */
+	private buildDiagnosticsButton(): HTMLElement {
+		const btn = this.textButton(
+			'pm-bar-action', '诊断',
+			'复制诊断 JSON:全文档脱敏指标 + 当前页布局语料(含本页原文坐标,不含译文与密钥)',
+			() => this.callbacks.onShowDiagnostics()
+		);
+		this.diagnosticsButton = btn;
+		this.debugGateCleanup?.();
+		this.debugGateCleanup = observeBoolPref('debugLogging', on => { btn.style.display = on ? '' : 'none'; });
 		return btn;
 	}
 
@@ -653,7 +677,7 @@ export class TranslationPane {
 			this.syncSwitch,
 			this.textButton('pm-bar-action', `✦ ${this.strings.explain}`, this.strings.explainTip, () => this.callbacks.onExplainSelection()),
 			this.textButton('pm-bar-action', this.strings.saveNote, this.strings.saveNote, () => this.callbacks.onSaveNote()),
-			this.textButton('pm-bar-action', '诊断', '复制诊断 JSON:全文档脱敏指标 + 当前页布局语料(含本页原文坐标,不含译文与密钥)', () => this.callbacks.onShowDiagnostics()),
+			this.buildDiagnosticsButton(),
 			this.textButton('pm-bar-action', '术语', '复制本篇自动学得的术语对照表 (TSV,可粘贴进词汇表)', () => this.callbacks.onCopyTerms()),
 			this.el('span', 'pm-bar-sep'),
 			this.makeSideButton(),
@@ -1527,6 +1551,9 @@ export class TranslationPane {
 			clearTimeout(this.ensureTimer);
 			this.ensureTimer = null;
 		}
+		this.debugGateCleanup?.();
+		this.debugGateCleanup = null;
+		this.diagnosticsButton = null;
 		this.closeBarMenu();
 		this.resizeObserver?.disconnect();
 		this.resizeObserver = null;

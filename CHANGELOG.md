@@ -7,6 +7,24 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.10] — 2026-08-15
+
+### Changed
+
+- **「诊断」按钮默认隐藏,仅在开启调试日志时显示**。诊断是排障/反馈用的开发者
+  入口(导出全文档脱敏指标 + 当前页布局语料),原来常驻工具栏对普通用户是噪声。
+  现在它与 logger 的调试开关共用同一偏好
+  (`extensions.zotero.bilingualReader.debugLogging`,设置里的「开启调试日志」):
+  默认隐藏,勾选后出现,并随该偏好**实时显隐**(无需重开阅读器)。需要提交诊断
+  时到「高级设置」勾一下即可;该开关明确「永不记录 API Key 或完整论文文本」,打开
+  是安全的。「术语」按钮不受影响(它是面向用户的词表导出,照常显示)。
+  显隐逻辑抽成 `observeBoolPref`(utils/prefs)的通用偏好观察器,面板销毁时反注册。
+
+### Added
+
+- 测试 593 → 597:`observeBoolPref` 的四条覆盖 —— 初始按当前偏好、翻转时实时回调、
+  清理后反注册不再回调、观察者 API 缺失时降级为一次性读取且不抛错。
+
 ## [1.1.9] — 2026-08-15
 
 ### Fixed
