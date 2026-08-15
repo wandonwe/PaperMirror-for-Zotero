@@ -243,6 +243,7 @@ export class ReaderSession {
 			onSaveNote: () => void this.saveSelectionToNote(),
 			onShowDiagnostics: () => this.copyDiagnostics(),
 			onCopyTerms: () => this.copyLearnedTerms(),
+			onExportCorpus: () => this.copyLayoutCorpus(),
 			onOpenSettings: () => this.openSettings(),
 			onToggleViewKind: kind => setPref('paneView', kind),
 			onPickLanguages: (source, target) => this.applyLanguagePick(source, target),
@@ -1880,6 +1881,37 @@ export class ReaderSession {
 		}
 		catch (e) {
 			logger.warn(MODULE, 'term table copy failed', e);
+		}
+	}
+
+	/**
+	 * 布局语料一键导出 (1.1.6): 当前页文本层 span → dump-spans 同格式 JSON
+	 * 进剪贴板,免终端。注意与「诊断」不同:语料含本页原文文本与坐标(回归
+	 * 测试需要),导出动作本身即用户授权;不含译文、不含密钥。
+	 */
+	private copyLayoutCorpus(): void {
+		try {
+			const pageIndex = adapter.getCurrentPageIndex(this.reader);
+			const page = adapter.getTextLayerItems(this.reader, pageIndex);
+			if (!page || !page.items.length) {
+				this.flashNotice('本页没有可导出的文本层(纯图/扫描页)');
+				return;
+			}
+			const out = {
+				source: adapter.getReaderItem(this.reader)?.getDisplayTitle?.() ?? 'document',
+				page: pageIndex + 1,
+				pageWidth: page.pageWidth,
+				pageHeight: page.pageHeight,
+				items: page.items.map(i => ({ text: i.text, rect: i.rect, ...(i.fontSize ? { fontSize: i.fontSize } : {}) }))
+			};
+			Components.classes['@mozilla.org/widget/clipboardhelper;1']
+				.getService(Components.interfaces.nsIClipboardHelper)
+				.copyString(JSON.stringify(out));
+			this.flashNotice(`第 ${pageIndex + 1} 页语料已复制(${page.items.length} 个 span)——存为 tests/fixtures/layout/<名>-p${pageIndex + 1}.spans.json 或直接粘贴反馈`);
+		}
+		catch (e) {
+			logger.warn(MODULE, 'corpus export failed', e);
+			this.flashNotice('语料导出失败,可改用 scripts/dump-spans.mjs');
 		}
 	}
 

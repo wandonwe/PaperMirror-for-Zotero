@@ -7,6 +7,15 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.6] — 2026-08-15
+
+### Added
+
+- 面板菜单新增「语料」:一键把当前页文本层 span 语料(dump-spans 同格式
+  JSON,含本页原文与坐标)复制到剪贴板——回归语料收编与问题反馈不再需要
+  终端。与「诊断」分工明确:诊断脱敏无正文,语料含本页原文(导出动作即
+  授权),两者都不含译文与密钥。
+
 ## [1.1.5] — 2026-08-15
 
 ### Added
