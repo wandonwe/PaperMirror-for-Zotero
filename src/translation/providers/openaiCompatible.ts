@@ -121,7 +121,17 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 					markReasoningEffortUnsupported(config.id, url, model);
 					continue;
 				}
-				if (!drop.temperature && !temperatureIsExplicit && isTemperatureRejection(e)) {
+				if (!drop.temperature && isTemperatureRejection(e)) {
+					if (temperatureIsExplicit) {
+						// 显式设置的温度被模型拒绝: 这是该浮出的配置错误 (1.3.0),
+						// 但必须可操作 —— 告诉用户清空哪个设置,而不是甩一段
+						// 被误标成"模型名被拒"的原始 JSON (1.3.1)。
+						throw new PaperMirrorError('UNKNOWN',
+							`当前模型不接受你在高级设置中显式设置的温度 (temperature)。`
+							+ `请在 PaperMirror 设置 → 高级 中清空温度(使用模型默认值)后重试。`
+							+ ` 原始错误: ${(e instanceof Error ? e.message : String(e)).slice(0, 160)}`,
+							{ httpStatus: 400, retryable: false, cause: e });
+					}
 					drop.temperature = true;
 					markTemperatureUnsupported(config.id, url, model);
 					continue;

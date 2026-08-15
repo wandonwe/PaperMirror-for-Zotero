@@ -152,7 +152,9 @@ test('显式用户温度被拒 → 配置错误浮出, 不静默吞 (1.3.0)', as
 		: { status: 200, text: OK_TEXT });
 	try {
 		const p = createOpenAICompatibleProvider({ id: 'openrouter', displayName: 'OpenRouter', defaultBaseURL: 'https://openrouter.ai/api', defaultModel: 'auto' });
-		await assert.rejects(() => p.complete!('x', settings({ providerId: 'openrouter', temperature: 0, reasoning: undefined, model: 'or-explicit-temp-test' }), {}));
+		await assert.rejects(
+			() => p.complete!('x', settings({ providerId: 'openrouter', temperature: 0, reasoning: undefined, model: 'or-explicit-temp-test' }), {}),
+			(err: Error) => /高级.*温度|温度.*高级/s.test(err.message), '报错必须可操作: 指向高级设置里的温度');
 		assert.equal(http.bodies.length, 1, '显式温度不重试');
 		assert.equal(http.bodies[0].temperature, 0);
 	}

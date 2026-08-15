@@ -100,3 +100,24 @@ test('httpClient still refuses insecure HTTP endpoints', async () => {
 		(e: unknown) => e instanceof PaperMirrorError && e.code === 'HTTP_INSECURE'
 	);
 });
+
+// ---- 参数被拒的 400 不再被误标为「模型名被拒」 (1.3.1) -------------------------
+
+test('temperature 拒绝语含 "with this model" 也不再归为 INVALID_MODEL', () => {
+	const e = mapHTTPError(400, `{"error":{"message":"Unsupported value: 'temperature' does not support 0 with this model. Only the default (1) value is supported.","param":"temperature"}}`);
+	assert.notEqual(e.code, 'INVALID_MODEL');
+	assert.ok(/request parameter/i.test(e.message), '按参数被拒描述');
+	assert.ok(/temperature/i.test(e.message), '原始片段保留 (自愈匹配依赖它)');
+	assert.equal(e.httpStatus, 400);
+});
+
+test('reasoning_effort 的 Unrecognized argument 同样归为参数被拒', () => {
+	const e = mapHTTPError(400, '{"error":{"message":"Unrecognized request argument supplied: reasoning_effort"}}');
+	assert.notEqual(e.code, 'INVALID_MODEL');
+	assert.ok(/reasoning_effort/i.test(e.message));
+});
+
+test('真正的模型名 400 仍归 INVALID_MODEL', () => {
+	const e = mapHTTPError(400, '{"error":{"message":"The model `bogus-x` does not exist or you do not have access to it."}}');
+	assert.equal(e.code, 'INVALID_MODEL');
+});

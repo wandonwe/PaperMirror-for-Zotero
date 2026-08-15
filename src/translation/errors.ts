@@ -19,6 +19,14 @@ export function mapHTTPError(status: number, bodySnippet?: string): PaperMirrorE
 		}
 		return new PaperMirrorError('RATE_LIMITED', 'The API is rate-limiting requests (HTTP 429). PaperMirror will retry with backoff.', { httpStatus: status, retryable: true });
 	}
+	// 参数被拒的 400 必须先于「模型名」判定 (1.3.1): temperature/reasoning_effort
+	// 的拒绝语里常带 "with this model" 字样,曾被下面的 /model/ 分支包装成
+	// "The API rejected the model name" —— 完全误导。消息保留原始片段,
+	// postChat 的自愈匹配 (isTemperatureRejection 等) 依赖它。
+	if (status === 400
+		&& /unsupported\s+value|unrecognized\s+request\s+argument|unknown\s+parameter|not\s+supported\s+with\s+this\s+model|only\s+the\s+default/i.test(snippet)) {
+		return new PaperMirrorError('UNKNOWN', `The API rejected a request parameter (HTTP 400): ${snippet}`, { httpStatus: status, retryable: false });
+	}
 	if (status === 400 && /model/i.test(snippet)) {
 		return new PaperMirrorError('INVALID_MODEL', `The API rejected the model name (HTTP 400): ${snippet}`, { httpStatus: status, retryable: false });
 	}

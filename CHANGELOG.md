@@ -7,6 +7,21 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-08-15
+
+单点修复:temperature 被拒的报错误导性极强,且不可操作。
+
+### Fixed
+
+- **参数被拒的 400 被误标成「模型名被拒」**。temperature/reasoning_effort 的
+  拒绝语里常带 "with this model" 字样,mapHTTPError 的 /model/ 分支把它包装成
+  "The API rejected the model name" —— 与真实原因完全无关。新增参数被拒分支
+  (先于模型名判定),消息保留原始片段(自愈匹配依赖它)。
+- **显式温度被拒时给出可操作提示**。1.3.0 起显式设置的温度被模型拒绝会按
+  配置错误浮出(设计如此),但用户看到的是一段原始 JSON。现在明确提示:
+  「当前模型不接受你显式设置的温度,请在 设置 → 高级 清空温度后重试」。
+
+
 ## [1.3.0] — 2026-08-15
 
 缓存一致性专项(外部审核第一批 P0/P1 全部处理 + 第二批多项)。缓存 schema
