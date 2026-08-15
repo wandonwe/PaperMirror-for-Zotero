@@ -21,270 +21,609 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 3,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
 		"text": "Outcome"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 4,
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "translate",
 		"text": "(N=92)*"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 5,
+		"tableRow": 0,
+		"tableCol": 2,
+		"mode": "translate",
 		"text": "(N=90)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 6,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "translate",
 		"text": "Primary efficacy outcome: median score o"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 7,
-		"text": "59/75 (79)"
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "3 (1–4)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 8,
-		"text": "12/67 (18)"
+		"tableRow": 1,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "4 (3–6)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 9,
-		"text": "Complete recanalization at 24 hr — no./t"
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Rankin scale at 90 days (IQR)‡"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 10,
-		"text": "65/83 (78)"
+		"tableRow": 3,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Secondary efficacy outcome: functional i"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 11,
-		"text": "14/77 (18)"
+		"tableRow": 3,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "41 (45)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 12,
-		"text": "TICI score of 2b or 3 — no./total no. (%"
+		"tableRow": 3,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "15 (17)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 13,
+		"tableRow": 4,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "at 90 days — no. (%)¶"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 14,
+		"tableRow": 5,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Safety outcomes — no. (%)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 15,
+		"tableRow": 6,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Death at 90 days"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 16,
+		"tableRow": 6,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "13 (14)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 17,
+		"tableRow": 6,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "23 (26)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 18,
+		"tableRow": 7,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Symptomatic intracranial hemorrhage‖"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 19,
+		"tableRow": 7,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "6 (7)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 20,
+		"tableRow": 7,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "4 (4)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 21,
+		"tableRow": 8,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Early neurologic deterioration"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 22,
+		"tableRow": 8,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "8 (9)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 23,
+		"tableRow": 8,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "11 (12)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 24,
+		"tableRow": 9,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Parenchymal hematoma type 2"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 25,
+		"tableRow": 9,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "8 (9)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 26,
+		"tableRow": 9,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "3 (3)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 27,
+		"tableRow": 10,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Imaging outcomes**"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 28,
+		"tableRow": 11,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Median infarct volume at 24 hr (IQR) — m"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 29,
+		"tableRow": 11,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "35 (18–82)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 30,
+		"tableRow": 11,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "41 (25–106)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 31,
+		"tableRow": 12,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Median infarct growth at 24 hr (IQR) — m"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 32,
+		"tableRow": 12,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "23 (10–75)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 33,
+		"tableRow": 12,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "33 (18–75)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 34,
+		"tableRow": 13,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Reperfusion >90% at 24 hr — no./total no"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 35,
+		"tableRow": 13,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "59/75 (79)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 36,
+		"tableRow": 13,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "12/67 (18)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 37,
+		"tableRow": 14,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Complete recanalization at 24 hr — no./t"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 38,
+		"tableRow": 14,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "65/83 (78)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 39,
+		"tableRow": 14,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "14/77 (18)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 40,
+		"tableRow": 15,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "TICI score of 2b or 3 — no./total no. (%"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 41,
+		"tableRow": 15,
+		"tableCol": 1,
+		"mode": "preserve",
 		"text": "69/91 (76)"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 14,
-		"text": "Odds Ratio or Risk Ratio (95% CI)†"
+		"column": 0,
+		"readingIndex": 42,
+		"tableRow": 15,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "—"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 15,
+		"readingIndex": 43,
+		"text": "Odds Ratio or"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 44,
+		"tableRow": 0,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "Risk Ratio (95% CI)†"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 45,
+		"tableRow": 0,
+		"tableCol": 4,
+		"mode": "translate",
 		"text": "P Value"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 16,
-		"tableRow": 0,
-		"tableCol": 0,
+		"readingIndex": 46,
+		"tableRow": 1,
+		"tableCol": 3,
 		"mode": "preserve",
 		"text": "2.77 (1.63–4.70)§"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 17,
-		"tableRow": 0,
-		"tableCol": 1,
+		"readingIndex": 47,
+		"tableRow": 1,
+		"tableCol": 4,
 		"mode": "preserve",
 		"text": "<0.001"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 18,
-		"tableRow": 1,
-		"tableCol": 0,
+		"readingIndex": 48,
+		"tableRow": 3,
+		"tableCol": 3,
 		"mode": "preserve",
 		"text": "2.67 (1.60–4.48)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 19,
-		"tableRow": 1,
-		"tableCol": 1,
+		"readingIndex": 49,
+		"tableRow": 3,
+		"tableCol": 4,
 		"mode": "preserve",
 		"text": "<0.001"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 20,
-		"tableRow": 0,
-		"tableCol": 0,
+		"readingIndex": 50,
+		"tableRow": 6,
+		"tableCol": 3,
 		"mode": "preserve",
 		"text": "0.55 (0.30–1.02)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 21,
-		"tableRow": 1,
-		"tableCol": 0,
+		"readingIndex": 51,
+		"tableRow": 6,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": "0.05"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 52,
+		"tableRow": 7,
+		"tableCol": 3,
 		"mode": "preserve",
 		"text": "1.47 (0.40–6.55)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 22,
-		"tableRow": 2,
-		"tableCol": 0,
+		"readingIndex": 53,
+		"tableRow": 7,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": "0.75"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 54,
+		"tableRow": 8,
+		"tableCol": 3,
 		"mode": "preserve",
 		"text": "0.71 (0.30–1.69)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 23,
-		"tableRow": 3,
-		"tableCol": 0,
+		"readingIndex": 55,
+		"tableRow": 8,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": "0.44"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 56,
+		"tableRow": 9,
+		"tableCol": 3,
 		"mode": "preserve",
 		"text": "2.61 (0.73–14.69)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 24,
-		"tableRow": 0,
-		"tableCol": 0,
+		"readingIndex": 57,
+		"tableRow": 9,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": "0.21"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 58,
+		"tableRow": 11,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "—"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 59,
+		"tableRow": 11,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": "0.19"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 60,
+		"tableRow": 12,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "—"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 61,
+		"tableRow": 12,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": "0.08"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 62,
+		"tableRow": 13,
+		"tableCol": 3,
 		"mode": "preserve",
 		"text": "4.39 (2.60–7.43)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 25,
-		"tableRow": 0,
-		"tableCol": 1,
+		"readingIndex": 63,
+		"tableRow": 13,
+		"tableCol": 4,
 		"mode": "preserve",
 		"text": "<0.001"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 26,
-		"tableRow": 1,
-		"tableCol": 0,
+		"readingIndex": 64,
+		"tableRow": 14,
+		"tableCol": 3,
 		"mode": "preserve",
 		"text": "4.31 (2.65–7.01)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 27,
-		"tableRow": 1,
-		"tableCol": 1,
+		"readingIndex": 65,
+		"tableRow": 14,
+		"tableCol": 4,
 		"mode": "preserve",
 		"text": "<0.001"
 	},
 	{
-		"type": "list",
-		"column": -1,
-		"readingIndex": 28,
-		"text": "* An intervention was attempted in 90 pa"
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 66,
+		"tableRow": 15,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "—"
 	},
 	{
-		"type": "paragraph",
+		"type": "list",
 		"column": -1,
-		"readingIndex": 29,
-		"text": "24 hours were assessed in 90 patients in"
+		"readingIndex": 67,
+		"text": "* An intervention was attempted in 90 pa"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 30,
+		"readingIndex": 68,
 		"text": "Imaging Outcomes"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 31,
+		"readingIndex": 69,
 		"text": "tion of the primary arterial occlusive l"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 32,
+		"readingIndex": 70,
 		"text": "Imaging outcomes are summarized in Table"
 	},
 	{
 		"type": "heading",
-		"column": -1,
-		"readingIndex": 33,
-		"text": "The median growth of the volume of the i"
-	},
-	{
-		"type": "heading",
-		"column": -1,
-		"readingIndex": 34,
-		"text": "region between baseline and 24 hours was"
-	},
-	{
-		"type": "heading",
 		"column": 0,
-		"readingIndex": 35,
+		"readingIndex": 71,
 		"text": "in the endovascular-therapy group and 33"
 	},
 	{
-		"type": "heading",
-		"column": 0,
-		"readingIndex": 36,
-		"text": "the medical-therapy group (P=0.08). Repe"
-	},
-	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 37,
+		"readingIndex": 72,
 		"text": "of more than 90% of the initial perfusio"
-	},
-	{
-		"type": "heading",
-		"column": -1,
-		"readingIndex": 38,
-		"text": "at 24 hours was more common in the endov"
-	},
-	{
-		"type": "heading",
-		"column": -1,
-		"readingIndex": 39,
-		"text": "cular-therapy group than in the medical-"
-	},
-	{
-		"type": "heading",
-		"column": -1,
-		"readingIndex": 40,
-		"text": "group (79% vs. 18%, P<0.001). Similarly,"
-	},
-	{
-		"type": "heading",
-		"column": -1,
-		"readingIndex": 41,
-		"text": "percentage of patients with complete rec"
 	}
 ]

@@ -202,3 +202,60 @@ test('isBareFigureLabel matches torn-off labels only', async () => {
 	assert.equal(isBareFigureLabel('Figure 6: Photon-counting detector design.'), false);
 	assert.equal(isBareFigureLabel('Configure 6:'), false);
 });
+
+// ---- 1.2.0: a numeric table is held out of prose grouping and kept per-cell --
+
+test('table rows are NOT welded into a prose wall — labels stay per-row', () => {
+	// A compact 6-row table: a prose LABEL column + two far-apart numeric
+	// columns. Before 1.2.0, groupIntoParagraphs glued the label column into one
+	// multi-row block (the collapse). Now the table lines are held out and each
+	// stays its own one-line block for the grid stage.
+	const labels = [
+		'Death at 90 days',
+		'Symptomatic intracranial hemorrhage',
+		'Early neurologic deterioration',
+		'Parenchymal hematoma type 2',
+		'Median infarct volume at 24 hr',
+		'Reperfusion at 24 hr'
+	];
+	const items: SpanItem[] = [];
+	let y = 600;
+	for (const lab of labels) {
+		items.push(span(lab, 48, y, 130, 8));       // label col (x48)
+		items.push(span('13 (14)', 250, y, 34, 8));  // col A (x250)
+		items.push(span('23 (26)', 330, y, 34, 8));  // col B (x330)
+		y -= 14;
+	}
+	const { blocks } = buildBlocksFromSpans(items, {
+		pageIndex: 0, pageHeight: PAGE_HEIGHT, pageWidth: 567,
+		includeReferences: false, referencesAlreadyStarted: false, imageRectsPdf: []
+	});
+	// No block may fuse two different row labels together (the collapse signature).
+	const collapsed = blocks.find(b =>
+		b.sourceText.includes('Death at 90 days') && b.sourceText.includes('Early neurologic'));
+	assert.equal(collapsed, undefined, 'row labels must not be welded into one block');
+	// Each label survives as its own block.
+	for (const lab of labels) {
+		assert.ok(blocks.some(b => b.sourceText.trim() === lab), `label kept per-row: "${lab}"`);
+	}
+	// And the numeric cells survive too (not merged away).
+	assert.ok(blocks.filter(b => /^\d+ \(\d+\)$/.test(b.sourceText.trim())).length >= 6,
+		'numeric cells preserved as their own blocks');
+});
+
+test('a prose-only page is unaffected by the table reorder', () => {
+	// Two ordinary wrapped paragraphs, no numeric grid → detection finds nothing,
+	// grouping behaves exactly as before (paragraphs merge across their lines).
+	const items: SpanItem[] = [];
+	const p1 = ['This study evaluated the diagnostic performance of the new',
+		'imaging protocol across a heterogeneous cohort of patients with',
+		'a range of clinical indications and disease severities overall.'];
+	let y = 700;
+	for (const line of p1) { items.push(span(line, 60, y, 240, 10)); y -= 12; }
+	const { blocks } = buildBlocksFromSpans(items, {
+		pageIndex: 0, pageHeight: PAGE_HEIGHT, pageWidth: 612,
+		includeReferences: false, referencesAlreadyStarted: false, imageRectsPdf: []
+	});
+	assert.equal(blocks.length, 1, 'the three wrapped lines stay one prose paragraph');
+	assert.ok(blocks[0]!.sourceText.includes('This study') && blocks[0]!.sourceText.includes('overall'));
+});

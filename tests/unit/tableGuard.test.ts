@@ -62,3 +62,45 @@ test('a small cluster is only a table when a Table caption anchors it', () => {
 	];
 	assert.equal(detectTableRegions(withCaption, 10).regions.length, 1, 'a Table caption anchors them');
 });
+
+// ---- 1.2.0: wide grid — far-apart columns + a far-left label column ----------
+
+test('wide table: far-apart numeric columns sharing rows merge into ONE region', () => {
+	// Two numeric columns with a ~150px gutter between them (far beyond the
+	// old hOverlap tolerance), 5 aligned rows each. They are columns of one
+	// table, not two blobs.
+	const items: GuardItem[] = [];
+	for (let row = 0; row < 5; row++) {
+		items.push(item(`L${row}`, `${20 + row} ± 4`, 60, 200 + row * 16, 40));
+		items.push(item(`R${row}`, `${30 + row} ± 5`, 260, 200 + row * 16, 40)); // gutter 60→260 = 160px
+	}
+	const { regions } = detectTableRegions(items, 10);
+	assert.equal(regions.length, 1, 'aligned columns however wide the gutter are one table');
+});
+
+test('wide table: far-left prose label column aligned to numeric rows is swallowed', () => {
+	const items: GuardItem[] = [];
+	for (let row = 0; row < 5; row++) {
+		// label far to the LEFT of the first numeric column (big gutter)
+		items.push(item(`lab${row}`, 'Median infarct volume at 24 hr (IQR)', 40, 200 + row * 16, 150));
+		items.push(item(`a${row}`, `${35 + row} (18-82)`, 300, 200 + row * 16, 44));
+		items.push(item(`b${row}`, `${41 + row} (25-9)`, 380, 200 + row * 16, 44));
+	}
+	const { excluded } = detectTableRegions(items, 10);
+	for (let row = 0; row < 5; row++) {
+		assert.ok(excluded.has(`lab${row}`), `far-left row label ${row} captured with its table`);
+	}
+});
+
+test('wide table: unrelated numeric line NOT sharing the table rows stays out', () => {
+	const items: GuardItem[] = [];
+	for (let row = 0; row < 5; row++) {
+		items.push(item(`a${row}`, `${20 + row} ± 4`, 60, 200 + row * 16, 40));
+		items.push(item(`b${row}`, `${30 + row} ± 5`, 130, 200 + row * 16, 40));
+	}
+	// A lone numeric fragment far below, on no table row.
+	items.push(item('stray', '99 ± 9', 60, 520, 40));
+	const { excluded, regions } = detectTableRegions(items, 10);
+	assert.equal(regions.length, 1);
+	assert.ok(!excluded.has('stray'), 'a numeric fragment off the table rows is not swallowed');
+});

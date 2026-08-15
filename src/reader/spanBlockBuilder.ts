@@ -23,6 +23,7 @@
  */
 
 import type { BlockType, SourceBlock } from '../types/models';
+import { detectTableRegions } from './tableGuard';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
 import { isMetadataBlock, isPublisherBoilerplateLine, isRunningHeadOrFoot } from './metaFilter';
 import {
@@ -348,6 +349,39 @@ export interface SpanBuildResult {
 	referencesStarted: boolean;
 }
 
+/**
+ * Which line indices fall inside a detected table region (1.2.0). Runs the same
+ * geometric table detector used downstream, but at the LINE level — before prose
+ * paragraph grouping welds the grid — so those lines can be held out and gridded
+ * cleanly. Conservative by construction: detectTableRegions needs ≥4 aligned
+ * numeric-dense cells (or a Table caption), so a prose page yields an empty set
+ * and the whole reorder is inert.
+ */
+function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em: number): Set<number> {
+	const out = new Set<number>();
+	if (lines.length < 6) {
+		return out;
+	}
+	const items = lines.map((l, i) => ({
+		id: String(i),
+		text: lineText(l),
+		type: 'paragraph' as const,
+		box: { left: l.rect[0], top: pageHeight - l.rect[3], width: l.rect[2] - l.rect[0], height: l.rect[3] - l.rect[1] },
+		fontSize: l.fontSize
+	}));
+	const guard = detectTableRegions(items, em);
+	if (!guard.regions.length) {
+		return out;
+	}
+	for (const id of guard.excluded) {
+		const n = Number(id);
+		if (Number.isInteger(n)) {
+			out.add(n);
+		}
+	}
+	return out;
+}
+
 export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOptions): SpanBuildResult {
 	const pageWidth = options.pageWidth && options.pageWidth > 0 ? options.pageWidth : 612;
 	const obstacles = options.imageRectsPdf ?? [];
@@ -355,10 +389,20 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		? items.filter(i => !insideObstacle(i.rect, obstacles))
 		: items;
 	const lines = groupIntoLines(filteredItems, pageWidth, options.pageHeight);
-	const paragraphs = groupIntoParagraphs(lines, pageWidth, options.pageHeight, obstacles);
 
 	const sizes = lines.map(l => l.fontSize).filter(s => s > 0).sort((a, b) => a - b);
 	const bodySize = sizes.length ? sizes[Math.floor(sizes.length / 2)]! : 0;
+
+	// 表格行先摘出去 (1.2.0): 数值表的行/列本是网格,但 groupIntoParagraphs 是给
+	// 散文设计的 —— 它把标签列跨行黏成一堵墙、把数字列纵向并块,等 structureTableCells
+	// 拿到时网格早已被毁 (NEJM「Clinical and Imaging Outcomes」的标签列坍成一块
+	// 443 字符、数字列碎成两行小表)。所以先在「行」这一层探出表格区域,把落在表格
+	// 里的行整条摘出散文分组,各自成一行块,交给下游 structureTableCells 重新组网格
+	// (标签列作 tableCol=0)。非表格页探不到区域 → 摘出集为空 → 行为与从前逐字节
+	// 一致,不影响任何非表格版面。
+	const tableLineIdx = detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10));
+	const proseLines = tableLineIdx.size ? lines.filter((_, i) => !tableLineIdx.has(i)) : lines;
+	const paragraphs = groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, obstacles);
 
 	// Materialise, then repair anything still split mid-sentence.
 	const bands = detectColumns(lines.map(l => l.rect), pageWidth, options.pageHeight);
@@ -389,7 +433,8 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			column: columnOf(rect, bands, pageWidth),
 			type,
 			fontSize,
-			gapAfter: undefined as number | undefined
+			gapAfter: undefined as number | undefined,
+			isTableLine: false
 		};
 	}).filter(p => p.text.length >= 2);
 	for (let i = 0; i < draft.length - 1; i++) {
@@ -446,6 +491,28 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		});
 	}
 
+	// Table lines rejoin here as one-line blocks (never through prose grouping,
+	// planMerges or caption reunification), so structureTableCells sees a clean
+	// per-cell grid — labels included — instead of a collapsed wall.
+	const tableParas = [...tableLineIdx].sort((a, b) => a - b).map((i) => {
+		const line = lines[i]!;
+		const text = joinLines([lineText(line)]);
+		const type = classify(text, line.fontSize, bodySize, 1);
+		const fontSize = (type === 'paragraph' || type === 'list' || type === 'caption')
+			? (replacementFontSize([line.fontSize]) || line.fontSize)
+			: line.fontSize;
+		return {
+			group: [line],
+			text,
+			rect: line.rect,
+			column: columnOf(line.rect, bands, pageWidth),
+			type,
+			fontSize,
+			gapAfter: undefined as number | undefined,
+			isTableLine: true
+		};
+	}).filter(p => p.text.length >= 1);
+
 	let referencesStarted = !!options.referencesAlreadyStarted;
 	// Column stamp (was MISSING on this path): without it every text-layer
 	// block defaulted to column 0 downstream, so semantic modules ran straight
@@ -458,22 +525,27 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	const columnBands = detectColumns(lines.map(l => l.rect), pageWidth, options.pageHeight);
 	const blocks: SourceBlock[] = [];
 	let order = 0;
-	for (const p of merged) {
-		if (p.type !== 'title' && p.type !== 'heading' && isMetadataBlock(p.text, p.rect, pageWidth, { fontSize: p.fontSize, bodySize })) {
-			continue;
-		}
-		// Running heads and page-foot lines repeat the journal's furniture on
-		// every page. Translating them is pure noise. `title` is exempt: on a
-		// cover page with no masthead the paper's own title can sit inside the
-		// band, and losing it is far worse than translating one running head.
-		if (p.type !== 'title' && isRunningHeadOrFoot(p.rect, options.pageHeight, p.group.length, p.text)) {
-			continue;
-		}
-		if ((p.type === 'heading' || p.type === 'title') && REFERENCES_HEADINGS.test(p.text)) {
-			referencesStarted = true;
-		}
-		if (referencesStarted && !options.includeReferences && !REFERENCES_HEADINGS.test(p.text)) {
-			continue;
+	for (const p of [...merged, ...tableParas]) {
+		// Table-line blocks bypass the prose furniture filters: a detected table
+		// cell is content, never a running head / metadata / reference tail, and
+		// the numeric cells that look furniture-ish must survive to be gridded.
+		if (!p.isTableLine) {
+			if (p.type !== 'title' && p.type !== 'heading' && isMetadataBlock(p.text, p.rect, pageWidth, { fontSize: p.fontSize, bodySize })) {
+				continue;
+			}
+			// Running heads and page-foot lines repeat the journal's furniture on
+			// every page. Translating them is pure noise. `title` is exempt: on a
+			// cover page with no masthead the paper's own title can sit inside the
+			// band, and losing it is far worse than translating one running head.
+			if (p.type !== 'title' && isRunningHeadOrFoot(p.rect, options.pageHeight, p.group.length, p.text)) {
+				continue;
+			}
+			if ((p.type === 'heading' || p.type === 'title') && REFERENCES_HEADINGS.test(p.text)) {
+				referencesStarted = true;
+			}
+			if (referencesStarted && !options.includeReferences && !REFERENCES_HEADINGS.test(p.text)) {
+				continue;
+			}
 		}
 		blocks.push({
 			id: `page-${options.pageIndex}-block-${order}`,
@@ -490,7 +562,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			lineRectsPdf: p.group.map(l => [...l.rect] as Rect),
 			fontSize: p.fontSize,
 			column: columnOf(p.rect, columnBands, pageWidth),
-			isReference: referencesStarted
+			isReference: p.isTableLine ? false : referencesStarted
 		});
 		order++;
 	}

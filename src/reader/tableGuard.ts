@@ -83,6 +83,25 @@ function grow(region: TableRegion, box: GuardItem['box']): TableRegion {
 	};
 }
 
+/** Row centres (y) of a set of cells, ascending. */
+function rowCentres(members: GuardItem[]): number[] {
+	return members.map(m => m.box.top + m.box.height / 2).sort((a, b) => a - b);
+}
+
+/** How many of A's row centres line up (within tol) with a row centre of B.
+ *  Two side-by-side COLUMNS of one table share the same rows even across a wide
+ *  gutter that keeps them from horizontally overlapping. */
+function sharedRowCount(a: GuardItem[], b: GuardItem[], tol: number): number {
+	const cb = rowCentres(b);
+	let n = 0;
+	for (const y of rowCentres(a)) {
+		if (cb.some(z => Math.abs(z - y) <= tol)) {
+			n++;
+		}
+	}
+	return n;
+}
+
 function containedRatio(box: GuardItem['box'], region: TableRegion): number {
 	const w = Math.min(box.left + box.width, region.left + region.width) - Math.max(box.left, region.left);
 	const h = Math.min(box.top + box.height, region.top + region.height) - Math.max(box.top, region.top);
@@ -122,10 +141,19 @@ export function detectTableRegions(
 		}
 	}
 
-	// Merge adjacent clusters transitively: greedy growth splits a table into
-	// per-column strips when the column gap sits at the join threshold, and a
-	// table is exactly a grid of such strips. Bounded fixed-point.
-	for (let pass = 0; pass < 5; pass++) {
+	// Merge adjacent clusters transitively until a joint fixed point. Two rules,
+	// both needed for a wide grid:
+	//   • vertical-overlap: clusters that horizontally overlap and sit within a
+	//     row gap are the same column split by a big gap, or stacked row groups.
+	//   • column merge (1.2.0): clusters sharing ≥3 aligned row centres are the
+	//     side-by-side COLUMNS of one table however wide the gutter — the wide
+	//     NEJM "Clinical and Imaging Outcomes" table (a prose label column plus
+	//     several far-apart numeric columns) shattered into one-column fragments
+	//     under the first rule alone, and its labels collapsed. The ≥3 threshold
+	//     keeps two unrelated numeric blobs from fusing.
+	// Running both in one loop lets a column merge make strips full-width, after
+	// which the vertical rule joins the full-width top and bottom row groups.
+	for (let pass = 0; pass < 8; pass++) {
 		let mergedAny = false;
 		for (let i = 0; i < clusters.length; i++) {
 			for (let j = clusters.length - 1; j > i; j--) {
@@ -133,7 +161,9 @@ export function detectTableRegions(
 				const b = clusters[j]!;
 				const vAdjacent = a.region.top <= b.region.top + b.region.height + em * 2.2
 					&& b.region.top <= a.region.top + a.region.height + em * 2.2;
-				if (vAdjacent && hOverlaps(a.region, b.region as unknown as GuardItem['box'], em * 3)) {
+				const merge = (vAdjacent && hOverlaps(a.region, b.region as unknown as GuardItem['box'], em * 3))
+					|| sharedRowCount(a.members, b.members, em) >= 3;
+				if (merge) {
 					a.region = grow(a.region, b.region as unknown as GuardItem['box']);
 					a.members.push(...b.members);
 					clusters.splice(j, 1);
@@ -156,12 +186,20 @@ export function detectTableRegions(
 			continue;
 		}
 		let region = cluster.region;
+		// The numeric cells' row centres — the anchors a label column lines up
+		// with. Fixed from the seed cells, so growing the region leftward can't
+		// drift the anchor set.
+		const numericRowCentres = rowCentres(cluster.members);
 		// Sweep in the rest of the table the cell test misses: (a) anything
 		// substantially INSIDE the region; (b) short row labels/header cells
 		// BESIDE it — vertically aligned with the region's rows, horizontally
-		// within a couple of ems. Long prose stays out even when adjacent, so
-		// a body paragraph in the neighbouring column is never swallowed.
-		// Growing the region can pull in more blocks; iterate (bounded).
+		// within a couple of ems; (c) a left-gutter LABEL that lines up with an
+		// actual numeric row, however wide the gutter (a wide table's label
+		// column sits far left of its first numeric column — the ≤2em rule (b)
+		// never reached it, which is why those labels collapsed). Long prose
+		// stays out even when adjacent, so a body paragraph in the neighbouring
+		// column is never swallowed. Growing the region can pull in more blocks;
+		// iterate (bounded).
 		for (let pass = 0; pass < 4; pass++) {
 			let grew = false;
 			for (const item of items) {
@@ -176,7 +214,15 @@ export function detectTableRegions(
 					if (vOverlap >= item.box.height * 0.6) {
 						const gapLeft = region.left - (item.box.left + item.box.width);
 						const gapRight = item.box.left - (region.left + region.width);
-						rowAligned = Math.max(gapLeft, gapRight) <= em * 2 || (gapLeft < 0 && gapRight < 0);
+						const nearSide = Math.max(gapLeft, gapRight) <= em * 2 || (gapLeft < 0 && gapRight < 0);
+						// (c): sits in the LEFT gutter (right edge not crossing into
+						// the numeric columns) AND its centre matches a real numeric
+						// row. Far-left labels of a wide table qualify; a neighbouring
+						// body line does not — it won't line up with a numeric row.
+						const centre = item.box.top + item.box.height / 2;
+						const inLeftGutter = (item.box.left + item.box.width) <= region.left + em && gapLeft >= -em;
+						const alignsNumericRow = numericRowCentres.some(y => Math.abs(y - centre) <= em * 0.6);
+						rowAligned = nearSide || (inLeftGutter && alignsNumericRow);
 					}
 				}
 				if (inside || rowAligned) {
