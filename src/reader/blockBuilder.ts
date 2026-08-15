@@ -7,6 +7,7 @@
 import type { BlockType, BoundingBox, PdfChar, SourceBlock } from '../types/models';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
 import { detectGlyphFormulaRuns } from './glyphFormula';
+import { detectStyleRuns } from './styleRuns';
 import { isMetadataBlock, isPublisherBoilerplateLine } from './metaFilter';
 import {
 	columnOf,
@@ -532,6 +533,8 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 			}
 		}
 		const formulaRuns = detectGlyphFormulaRuns(paraChars, p.fontSize);
+		// 段内粗/斜体跨度 (BabelDOC RichTextPlaceholder 思想,styleRuns.ts)。
+		const styleRuns = detectStyleRuns(paraChars);
 		blocks.push({
 			id: `page-${pageIndex}-block-${order}`,
 			pageIndex,
@@ -543,7 +546,8 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 			fontSize: p.fontSize,
 			column: columnOf(p.rect as Rect, columnBands, pageWidth),
 			isReference,
-			...(formulaRuns.length ? { formulaRuns } : {})
+			...(formulaRuns.length ? { formulaRuns } : {}),
+			...(styleRuns.length ? { styleRuns } : {})
 		});
 		order++;
 	}

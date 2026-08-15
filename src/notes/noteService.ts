@@ -4,6 +4,7 @@
  */
 
 import * as logger from '../utils/logger';
+import { stripStyleMarkers } from '../reader/styleRuns';
 
 const MODULE = 'noteService';
 
@@ -32,7 +33,7 @@ export function buildNoteHTML(payload: NotePayload): string {
 		'<blockquote>',
 		`<p>${escapeHTML(payload.originalText)}</p>`,
 		'</blockquote>',
-		`<p>${escapeHTML(payload.translatedText)}</p>`,
+		`<p>${escapeHTML(stripStyleMarkers(payload.translatedText))}</p>`,
 		`<p>来源 / Source: ${source}, 第 ${payload.pageNumber} 页 / p. ${payload.pageNumber}</p>`
 	].join('\n');
 }

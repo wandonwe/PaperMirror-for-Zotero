@@ -149,6 +149,10 @@ function mergeTwo(a: SourceBlock, b: SourceBlock): SourceBlock {
 		...((a.formulaRuns?.length || b.formulaRuns?.length)
 			? { formulaRuns: [...new Set([...(a.formulaRuns ?? []), ...(b.formulaRuns ?? [])])] }
 			: {}),
+		// 样式跨度同理随合并累积 (styleRuns, BabelDOC RichTextPlaceholder 思想)。
+		...((a.styleRuns?.length || b.styleRuns?.length)
+			? { styleRuns: [...(a.styleRuns ?? []), ...(b.styleRuns ?? [])].filter((r, i, all) => all.findIndex(x => x.text === r.text && x.style === r.style) === i) }
+			: {}),
 		// Representative size follows the LONGER text, not blindly the first
 		// fragment — fragment one may carry a drop cap or lead-in styling.
 		fontSize: (b.sourceText.length > a.sourceText.length ? b.fontSize : a.fontSize) ?? a.fontSize,

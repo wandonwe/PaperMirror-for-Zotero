@@ -130,6 +130,8 @@ export class ReaderSession {
 	 * reverted to English ("译文显示后又消失").
 	 */
 	private compressPending = new Set<number>();
+	/** 扫描/纯图页每页只提示一次。 */
+	private scannedNoticeShown = new Set<number>();
 	/**
 	 * Per-page render generation. Bumped at the start of every renderDocPage;
 	 * an async render (or its settle/compress callbacks) that discovers a newer
@@ -1038,6 +1040,15 @@ export class ReaderSession {
 		};
 		const doc = slot.ownerDocument!;
 		const state = this.manager?.getPageState(pageIndex);
+		// 扫描/纯图页提示 (BabelDOC detect_scanned_file 思想的用户侧一半):
+		// 提取干净地得到 0 块时,这页不是"翻译失败"而是"没有可译文本"——
+		// 明说一次,免得用户对着原样页面点圆环等翻译。每页只提示一次。
+		if (state && state.status === 'done' && !state.blocks.length
+			&& pageIndex === adapter.getCurrentPageIndex(this.reader)
+			&& !this.scannedNoticeShown.has(pageIndex)) {
+			this.scannedNoticeShown.add(pageIndex);
+			this.flashNotice(`第 ${pageIndex + 1} 页未检测到可翻译文本(纯图或扫描页),已保留原样`);
+		}
 		if (state && state.status === 'done' && state.blocks.length) {
 			// Real image boundaries (operator list) — fetched once per page and
 			// cached for the document's lifetime; null = fall back to the grid.

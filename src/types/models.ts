@@ -79,6 +79,12 @@ export interface SourceBlock {
 	 * 公式 RUN,formulaGuard 掩蔽时优先于文本正则。
 	 */
 	formulaRuns?: string[];
+	/**
+	 * 段内粗/斜体跨度 (参照 BabelDOC RichTextPlaceholder,见 reader/styleRuns.ts):
+	 * 与主导样式不同的样式 RUN,翻译请求侧以成对 ⟦b⟧…⟦/b⟧ / ⟦i⟧…⟦/i⟧ 夹住,
+	 * 译后按对恢复为样式;丢对/破对一律降级为纯文本,绝不因样式拒绝译文。
+	 */
+	styleRuns?: { text: string; style: 'b' | 'i' }[];
 	/** Placeholders that must be restored after translation (formulas etc.). */
 	placeholders?: PlaceholderEntry[];
 	/** True when this block belongs to the references section. */

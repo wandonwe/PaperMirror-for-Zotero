@@ -190,6 +190,17 @@ export class TextExtractor implements PageParser {
 		// --- path 1: the fork's char stream (best structure) -----------------
 		try {
 			const { pageData, pageWidth, pageHeight } = await this.getPageData(pageIndex);
+			// 扫描件/坏字体页检测 (参照 BabelDOC midend/detect_scanned_file.py 的
+			// 思想): char 流大半是未解码的 (cid:N) 时,buildBlocks 只会产出乱码
+			// 块并送去翻译烧请求 —— 按"无可用文本"处理,落到文本层路径,那边
+			// 拿到的是 PDF.js 真正渲染出的字符。
+			if (pageData.chars.length >= 10) {
+				const cid = pageData.chars.filter(c => (c.c ?? '').startsWith('(cid:')).length;
+				if (cid / pageData.chars.length > 0.6) {
+					logger.warn(MODULE, `Page ${pageIndex + 1}: ${cid}/${pageData.chars.length} chars are undecoded (cid:) — treating char stream as unusable`);
+					pageData.chars = [];
+				}
+			}
 			if (pageData.chars.length) {
 				const result = buildBlocks(pageData.chars, {
 					pageIndex,

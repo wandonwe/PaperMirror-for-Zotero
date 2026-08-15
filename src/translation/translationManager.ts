@@ -578,7 +578,7 @@ export class TranslationManager {
 		try {
 			await this.scheduler.enqueue(`page-${pageIndex}-compress`, PRIORITY.CURRENT_COMPRESS, async (signal) => {
 				const protectedBlocks = blocks.map((block) => {
-					const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block));
+					const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block), block.styleRuns);
 					return { block, reg, text: reg.text };
 				});
 				const request: TranslationRequest = {
@@ -693,7 +693,7 @@ export class TranslationManager {
 			return false;
 		}
 		const { source, target } = this.deps.getLanguages(block.sourceText);
-		const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block));
+		const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block), block.styleRuns);
 		const text = reg.text;
 		this.failedSegments.delete(segmentHash(block.sourceText, source, target));
 		try {
@@ -1142,7 +1142,7 @@ export class TranslationManager {
 				logger.warn(MODULE, `Page ${state.pageIndex + 1}: request cap reached — stopping residue repair (${fixed} fixed)`);
 				break;
 			}
-			const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block));
+			const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block), block.styleRuns);
 			const text = reg.text;
 			try {
 				const resp = await translateFn({
@@ -1347,7 +1347,7 @@ export class TranslationManager {
 		// Protect formulas / citations / statistics per block (+ 不译词列表) —
 		// 占位符注册表 (1.1.0): 掩蔽/校验/还原共用同一实例,清单不可能串块。
 		const protectedBlocks = toTranslate.map((block) => {
-			const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block));
+			const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block), block.styleRuns);
 			return { block, reg, text: reg.text };
 		});
 		// 占位符清单校验 (参照 retain-pdf): a model response that LOST a protected

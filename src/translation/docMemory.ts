@@ -16,6 +16,7 @@
  */
 
 import type { GlossaryRule } from '../types/models';
+import { stripStyleMarkers } from '../reader/styleRuns';
 
 /** 「中文术语(ABBR)」 in a translation: CJK run directly before (ALLCAPS-ish). */
 const PAIR_RE = /([一-鿿]{2,14})\s*[(（]\s*([A-Z][A-Za-z0-9-]{1,11})\s*[)）]/g;
@@ -38,6 +39,7 @@ export function extractTermPairs(sourceText: string, translatedText: string): Te
 	if (!sourceText || !translatedText) {
 		return pairs;
 	}
+	translatedText = stripStyleMarkers(translatedText);
 	PAIR_RE.lastIndex = 0;
 	let m: RegExpExecArray | null;
 	while ((m = PAIR_RE.exec(translatedText)) !== null) {

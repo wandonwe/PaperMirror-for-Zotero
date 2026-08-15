@@ -32,6 +32,7 @@ import * as logger from '../utils/logger';
 import { detectTableRegions } from '../reader/tableGuard';
 import { buildTableModel, type CellMember } from '../reader/tableStructure';
 import { auditPlacedBoxes, type AuditBox } from './layoutSafety';
+import { parseStyledSegments } from '../reader/styleRuns';
 import {
 	inkFor,
 	localPaper,
@@ -493,6 +494,31 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	textLayer.className = 'pm-repage-text';
 	page.appendChild(textLayer);
 
+	/**
+	 * 样式化填充 (BabelDOC RichTextPlaceholder 思想, styleRuns.ts): 成对
+	 * ⟦b⟧/⟦i⟧ 标记 → <b>/<i> 子元素。安全路径:createTextNode/createElement +
+	 * textContent,绝不 innerHTML;解析失败整段回退纯文本。node.textContent
+	 * 读取值 = 去标记后的正文,budgetFor 等长度测量自然正确。
+	 */
+	const fillStyled = (node: HTMLElement, text: string): void => {
+		const segments = parseStyledSegments(text);
+		if (segments.length === 1 && segments[0]!.style === null) {
+			node.textContent = segments[0]!.text; // SAFE: text node
+			return;
+		}
+		node.textContent = '';
+		for (const seg of segments) {
+			if (seg.style === null) {
+				node.appendChild(doc.createTextNode(seg.text));
+			}
+			else {
+				const el = doc.createElementNS(HTML_NS, seg.style) as HTMLElement;
+				el.textContent = seg.text; // SAFE: text node
+				node.appendChild(el);
+			}
+		}
+	};
+
 	interface StrictItem {
 		id: string;
 		node: HTMLElement;
@@ -540,7 +566,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		if (block.type === 'heading' || block.type === 'title') {
 			node.setAttribute('data-pm-strong', 'true');
 		}
-		node.textContent = translationOf(block.id)!; // SAFE: text node
+		fillStyled(node, translationOf(block.id)!); // SAFE: text nodes + b/i elements, never innerHTML
 		node.title = block.sourceText;
 		textLayer.appendChild(node);
 		// The block's own original leading: the median gap between successive
@@ -632,7 +658,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			if (!item || item.committed || item.abandoned || !text.trim()) {
 				continue;
 			}
-			item.node.textContent = text; // SAFE: text node
+			fillStyled(item.node, text); // SAFE: text nodes + b/i elements
 			if (ladderFits(item)) {
 				commit(item);
 			}

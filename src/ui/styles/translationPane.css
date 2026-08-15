@@ -771,6 +771,11 @@
 	line-height: calc(1.36 * var(--pm-line-scale, 1));
 }
 
+/* 段内样式跨度 (BabelDOC RichTextPlaceholder 思想, styleRuns.ts): fillStyled
+   生成的 <b>/<i> 子元素——显式声明,不赌 UA 默认样式。 */
+.pm-repage-block b { font-weight: 700; }
+.pm-repage-block i { font-style: italic; }
+
 .pm-repage-block[data-pm-type="caption"] {
 	line-height: calc(1.4 * var(--pm-line-scale, 1));
 }

@@ -9,6 +9,7 @@
  */
 
 import type { PlaceholderEntry } from '../types/models';
+import { stripStyleMarkers } from './styleRuns';
 
 const PLACEHOLDER_PREFIX = '⟦PM'; // ⟦PM0⟧
 const PLACEHOLDER_SUFFIX = '⟧';
@@ -183,7 +184,9 @@ export function normalizePlaceholderVariants(text: string, placeholders: Placeho
  * so counting them as "untranslated Latin" only produces false rejections.
  */
 export function stripProtectable(text: string): string {
-	return protectFormulas(text).text.replace(TOKEN_RE, ' ');
+	// 样式标记 (⟦b⟧ 等, styleRuns.ts) 同样不属于"散文":所有译文质量判定
+	// (looksTranslated / residue / risk) 经此函数,统一在这里剥掉。
+	return protectFormulas(stripStyleMarkers(text)).text.replace(TOKEN_RE, ' ');
 }
 
 /**

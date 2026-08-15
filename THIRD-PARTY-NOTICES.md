@@ -68,10 +68,14 @@ SOFTWARE.
 - License 协议: AGPL-3.0(与本项目同协议)
 
 参照其 `document_il/utils/formular_helper.py`(公式起始/中间字符分类、纯数字
-公式降级)与 ImplementationDetails 设计文档:ParagraphFinding(中位行宽短行
-分段、连点号目录行)、Typesetting(排版算法 2/3:行距-缩放梯子与边界扩展)。
-对应本项目 `src/reader/glyphFormula.ts`、`src/reader/paragraphHeuristics.ts`
-的 shortLine/leaderDots 信号及 strict 排版扩展。诚挚致谢。
+公式降级)、`midend/il_translator.py`(占位符碰撞规避、幻觉占位符清理、
+RichTextPlaceholder 成对样式占位符)、`midend/detect_scanned_file.py`
+(扫描件检测思想)与 ImplementationDetails 设计文档:ParagraphFinding
+(中位行宽短行分段、连点号目录行)、Typesetting(排版算法 2/3:行距-缩放
+梯子与边界扩展)。对应本项目 `src/reader/glyphFormula.ts`、
+`src/reader/paragraphHeuristics.ts` 的 shortLine/leaderDots 信号、
+`src/reader/formulaGuard.ts` 的碰撞规避与变体归一、`src/reader/styleRuns.ts`
+的成对样式标记,及 strict 排版扩展。诚挚致谢。
 
 ## MinerU
 

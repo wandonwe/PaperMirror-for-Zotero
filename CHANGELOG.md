@@ -7,6 +7,37 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-08-15
+
+1.1.x 批次:段内样式保留 + 扫描件检测(参照 BabelDOC,AGPL-3.0,
+见 THIRD-PARTY-NOTICES)。
+
+### Added — 段内粗/斜体保留(参照 BabelDOC `il_translator.py` RichTextPlaceholder)
+
+- `src/reader/styleRuns.ts`:char 层按字体名找出与主导样式不同的粗/斜体
+  跨度(≥2 字母、≤60 字符、每段 ≤6 个、整段同样式不算);翻译请求侧以
+  成对 ⟦b⟧…⟦/b⟧ / ⟦i⟧…⟦/i⟧ 夹住,译后按对恢复为 `<b>/<i>` 子元素
+  (createTextNode/createElement + textContent 安全路径,不经 innerHTML)。
+- **降级安全是硬约束**:样式是装饰不是内容——配对校验(栈式,拒绝交错/
+  未闭合/空对)在占位符 restore 之后跑,任何破对一律剥掉全部标记回到
+  纯文本,绝不因样式拒绝译文、绝不烧重试。
+- 全链路接线:blockBuilder 检出 → coalescer 合并累积 → 注册表包标记 →
+  prompt 成对指令 → strict 渲染 `<b>/<i>`;文本消费路径统一剥标记
+  (对照面板、覆盖模式、PDF 导出、笔记、术语记忆),质量判定经
+  `stripProtectable` 统一免疫。
+
+### Added — 扫描件/坏字体页检测(参照 BabelDOC `detect_scanned_file.py` 思想)
+
+- char 流 ≥60% 为未解码 `(cid:N)` 时按"无可用文本"处理,落到文本层路径
+  ——不再把乱码块送去翻译烧请求。
+- 提取干净得到 0 块的页(纯图/扫描页)在当前页提示一次"未检测到可翻译
+  文本,已保留原样"——这不是失败,不该让用户对着圆环等。
+
+### Tests
+
+- 新增 5 个(共 573):样式跨度检测、插入/配对/解析、破对降级四态、
+  注册表端到端(公式掩蔽不破坏配对)、质量判定免疫。
+
 ## [1.1.0] — 2026-08-15
 
 IR 里程碑(目标架构第 1、3、5 步 + 第 6 步的接口部分;方案审核第四节)。

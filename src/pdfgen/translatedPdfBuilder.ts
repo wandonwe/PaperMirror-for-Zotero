@@ -28,6 +28,7 @@ import { PaperMirrorError } from '../types/models';
 import { isMetadataBlock } from '../reader/metaFilter';
 import * as logger from '../utils/logger';
 import { layoutBlock } from './textWrap';
+import { stripStyleMarkers } from '../reader/styleRuns';
 
 const MODULE = 'translatedPdfBuilder';
 
@@ -161,7 +162,7 @@ export async function buildTranslatedPdf(
 			const boxWidth = union[2]! - union[0]!;
 			const boxHeight = union[3]! - union[1]!;
 			const sourceSize = block.fontSize && block.fontSize > 0 ? block.fontSize : 10;
-			const layout = layoutBlock(sanitize(translation!), boxWidth, boxHeight, sourceSize, measure);
+			const layout = layoutBlock(sanitize(stripStyleMarkers(translation!)), boxWidth, boxHeight, sourceSize, measure);
 			if (layout.overflow) {
 				clippedBlocks++;
 			}

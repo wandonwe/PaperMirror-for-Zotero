@@ -31,7 +31,8 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 			`Translate the academic text the user sends into ${target}.`,
 			'Output ONLY the translation itself — no explanations, no quotes, no JSON, no markdown.',
 			'Never alter numbers, statistics, citation markers, URLs, or math.',
-			'Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation unchanged.'
+			'Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation unchanged.',
+			'Paired tags like ⟦b⟧…⟦/b⟧ or ⟦i⟧…⟦/i⟧ mark bold/italic spans; keep each pair wrapping the corresponding translated words, or omit the pair entirely.'
 		];
 		if (request.glossary?.length) {
 			lines.push('Terminology: ' + request.glossary.map(r => `"${r.source}" → "${r.target}"`).join('; ') + '.');
@@ -50,6 +51,7 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 		'- On first occurrence of a technical abbreviation, keep the original abbreviation in parentheses.',
 		'- Never alter numbers, P values, confidence intervals, units, DOIs, URLs, citation markers (e.g. [12], (Smith et al., 2020)), gene names, chemical formulas, variable names, or math.',
 		'- Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation UNCHANGED and in a natural position.',
+		'- Paired tags like ⟦b⟧…⟦/b⟧ or ⟦i⟧…⟦/i⟧ mark bold/italic spans: keep each pair wrapping the corresponding translated words (open AND close), or omit the pair entirely. Never emit an unmatched tag.',
 		'- The previousContext and moduleContext fields are for understanding only — do NOT translate or repeat them in the output.',
 		'- Respond with ONLY a JSON object of this exact shape, no markdown fences, no commentary:',
 		'  {"translations":[{"id":"<block id>","translatedText":"<translation>"}]}',

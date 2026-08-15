@@ -15,6 +15,7 @@
  */
 
 import { protectFormulas, restoreFormulas, verifyPlaceholders, type PlaceholderReport } from '../reader/formulaGuard';
+import { finalizeStyleMarkers, insertStyleMarkers, type StyleRun } from '../reader/styleRuns';
 import type { PlaceholderEntry } from '../types/models';
 
 export class PlaceholderRegistry {
@@ -31,8 +32,15 @@ export class PlaceholderRegistry {
 		this.entries = entries;
 	}
 
-	static protect(sourceText: string, extraLiterals: string[] = []): PlaceholderRegistry {
-		const { text, placeholders } = protectFormulas(sourceText, extraLiterals);
+	/**
+	 * styleRuns (可选): 段内粗/斜体跨度,先包成对样式标记再做公式掩蔽——
+	 * 掩蔽可能临时拆散一对(公式 RUN 吞掉半个标记),restore 会原样放回,
+	 * 所以配对校验在 restore 尾部做 (finalizeStyleMarkers),破对一律降级
+	 * 剥标记,绝不因样式拒绝译文。参照 BabelDOC RichTextPlaceholder。
+	 */
+	static protect(sourceText: string, extraLiterals: string[] = [], styleRuns?: StyleRun[]): PlaceholderRegistry {
+		const marked = insertStyleMarkers(sourceText, styleRuns);
+		const { text, placeholders } = protectFormulas(marked, extraLiterals);
 		return new PlaceholderRegistry(text, placeholders);
 	}
 
@@ -59,7 +67,7 @@ export class PlaceholderRegistry {
 	}
 
 	restore(translated: string): string {
-		return restoreFormulas(translated, this.entries);
+		return finalizeStyleMarkers(restoreFormulas(translated, this.entries));
 	}
 
 	/** 诊断状态:校验通过/拒绝次数与最近一次报告(token 名,无文本)。 */

@@ -36,6 +36,7 @@
  */
 
 import type { SourceBlock } from '../types/models';
+import { stripStyleMarkers } from './styleRuns';
 import * as logger from '../utils/logger';
 import {
 	distributeText,
@@ -550,7 +551,9 @@ export class PdfOverlay {
 			if (!lineRects.length) {
 				continue;
 			}
-			const translated = data.translations.get(block.id);
+			// overlay 逐行分配无法承载样式跨度 → 剥标记 (styleRuns.ts)。
+			const rawTranslated = data.translations.get(block.id);
+			const translated = rawTranslated === undefined ? undefined : stripStyleMarkers(rawTranslated);
 			const runs = groupLineRects(lineRects);
 			const parts = distributeText(translated ?? '', runs);
 

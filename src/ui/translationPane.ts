@@ -16,6 +16,7 @@
  */
 
 import { isFormulaRun } from '../reader/formulaGuard';
+import { stripStyleMarkers } from '../reader/styleRuns';
 import * as logger from '../utils/logger';
 import type { ExplanationSection } from '../translation/explainer';
 import type { PageTranslationState } from '../translation/translationManager';
@@ -1330,7 +1331,9 @@ export class TranslationPane {
 			}
 		}
 		for (const block of state.blocks) {
-			const translated = state.translations.get(block.id);
+			// 样式标记只在 strict 渲染器里成为 <b>/<i>;文本面板剥掉 (styleRuns.ts)。
+			const raw = state.translations.get(block.id);
+			const translated = raw === undefined ? undefined : stripStyleMarkers(raw);
 			let node = existing.get(block.id);
 			if (!node) {
 				node = this.el('div', 'pm-block');
@@ -1485,10 +1488,11 @@ export class TranslationPane {
 	getPageText(_pageIndex: number, blocks: SourceBlock[], translations: Map<string, string>, mode: 'plain' | 'both'): string {
 		const lines: string[] = [];
 		for (const block of blocks) {
-			const t = translations.get(block.id);
-			if (t === undefined) {
+			const raw = translations.get(block.id);
+			if (raw === undefined) {
 				continue;
 			}
+			const t = stripStyleMarkers(raw);
 			if (mode === 'both') {
 				lines.push(block.sourceText, t, '');
 			}
