@@ -7,6 +7,29 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.11] — 2026-08-15
+
+### Fixed
+
+- **非推理模型对 `reasoning_effort` 回 HTTP 400 导致「深度解析」失败**(OpenAI /
+  OpenRouter 及自建 OpenAI 兼容端点)。当用户在设置里选了推理档位,插件会给
+  openai/openrouter 请求加 `reasoning_effort`;但同一供应商下的非推理模型
+  (gpt-4o / gpt-4.1) 和大量「OpenAI 兼容」端点并不认这个参数,直接回
+  `400 Unrecognized request argument supplied: reasoning_effort` —— 用户在
+  「深度解析」上撞见的正是它(翻译走同一条请求路径,同样会中招)。现在遇到这个
+  400 时**剥掉 `reasoning_effort` 自动重试一次**,并把「这个模型不支持」按
+  (供应商, 模型) 记下来,后续请求直接不发该参数,不再每次先 400 再重试。判据
+  很窄:仅当响应是 400 且报错文本点名 `reasoning_effort` 才触发 —— 模型名错等
+  其它 400 照旧原样抛出,不吞不重试;从未设过推理档位的配置根本不会带这个参数,
+  该路径对它完全静默、零行为变化。翻译与「深度解析」两条路共用同一修复。
+
+### Added
+
+- 测试 597 → 604:`isReasoningEffortRejection` 判据(认 400+点名、拒模型名错 400/
+  429/非错误)、按 (供应商, 模型) 记忆的注册表、以及 OpenAI 兼容适配器的
+  端到端自愈五例(complete 剥参重试成功、记忆命中后首发即不带、translate 同样
+  自愈且译文正常解析、无推理设置时静默单发、非 reasoning_effort 的 400 照旧抛出)。
+
 ## [1.1.10] — 2026-08-15
 
 ### Changed

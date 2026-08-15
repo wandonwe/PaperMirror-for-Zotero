@@ -11,7 +11,12 @@ import { parsePlainResponse, validateResponse } from '../responseValidator';
 import { requestJSON } from './httpClient';
 import type { TranslateOptions, TranslationProvider } from './types';
 import { openaiChatURL, resolveChatURL } from './urls';
-import { openaiChatExtras } from './advancedParams';
+import {
+	openaiChatExtras,
+	isReasoningEffortRejection,
+	markReasoningEffortUnsupported,
+	reasoningEffortUnsupported
+} from './advancedParams';
 
 export interface OpenAICompatibleConfig {
 	id: string;
@@ -54,6 +59,52 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 		? chatURL({ apiBaseURL: '' } as ProviderSettings, config.defaultBaseURL, config.noV1Suffix)
 			.replace(/\/chat\/completions$/, '')
 		: '';
+
+	/**
+	 * POST a chat request built from `baseBody` + the opt-in advanced extras
+	 * (reasoning_effort / temperature / max tokens), with reasoning_effort
+	 * self-healing (1.1.11): non-reasoning models on openai/openrouter (and many
+	 * OpenAI-compatible servers) 400 on reasoning_effort. When they do, strip
+	 * that one param and retry once, and remember the model rejects it so the
+	 * next request omits it up front. Every other error propagates unchanged;
+	 * a profile that never set reasoning produces no reasoning_effort at all, so
+	 * this path is inert for it.
+	 */
+	const postChat = async (
+		baseBody: Record<string, unknown>,
+		settings: ProviderSettings,
+		options: TranslateOptions
+	): Promise<unknown> => {
+		const url = chatURL(settings, config.defaultBaseURL, config.noV1Suffix);
+		const model = settings.model || config.defaultModel;
+		const bodyWith = (dropReasoning: boolean): Record<string, unknown> => {
+			const extras = openaiChatExtras(settings, config.id);
+			if (dropReasoning) {
+				delete extras.reasoning_effort;
+			}
+			return { ...baseBody, ...extras };
+		};
+		const known = reasoningEffortUnsupported(config.id, model);
+		const post = (dropReasoning: boolean): Promise<{ json: unknown }> => requestJSON(url, {
+			headers: headers(settings),
+			body: bodyWith(dropReasoning),
+			timeoutMs: settings.timeoutMs,
+			signal: options.signal,
+			allowInsecureHTTP: config.allowInsecureHTTP?.(settings) ?? false
+		});
+		try {
+			return (await post(known)).json;
+		}
+		catch (e) {
+			// Retry-once only if reasoning_effort was actually in this request
+			// (i.e. we hadn't already learned to drop it) and the server named it.
+			if (!known && isReasoningEffortRejection(e)) {
+				markReasoningEffortUnsupported(config.id, model);
+				return (await post(true)).json;
+			}
+			throw e;
+		}
+	};
 
 	return {
 		id: config.id,
@@ -99,24 +150,16 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 		},
 
 		async translate(request: TranslationRequest, settings: ProviderSettings, options: TranslateOptions): Promise<TranslationResponse> {
-			const { json } = await requestJSON(chatURL(settings, config.defaultBaseURL, config.noV1Suffix), {
-				headers: headers(settings),
-				body: {
-					model: settings.model || config.defaultModel,
-					messages: [
-						{ role: 'system', content: buildSystemPrompt(request, settings.customPrompt) },
-						{ role: 'user', content: buildUserPayload(request) }
-					],
-					// Ask compliant servers for strict JSON; harmless elsewhere.
-					// Plain-mode (兜底重译) answers are bare text — no JSON coercion.
-					...(request.plain ? {} : { response_format: { type: 'json_object' } }),
-					// Opt-in advanced params (reasoning_effort / temperature / max tokens)
-					...openaiChatExtras(settings, config.id)
-				},
-				timeoutMs: settings.timeoutMs,
-				signal: options.signal,
-				allowInsecureHTTP: config.allowInsecureHTTP?.(settings) ?? false
-			});
+			const json = await postChat({
+				model: settings.model || config.defaultModel,
+				messages: [
+					{ role: 'system', content: buildSystemPrompt(request, settings.customPrompt) },
+					{ role: 'user', content: buildUserPayload(request) }
+				],
+				// Ask compliant servers for strict JSON; harmless elsewhere.
+				// Plain-mode (兜底重译) answers are bare text — no JSON coercion.
+				...(request.plain ? {} : { response_format: { type: 'json_object' } })
+			}, settings, options);
 			const text = extractText(json);
 			const { translations } = request.plain
 				? parsePlainResponse(text, request.blocks[0]!.id)
@@ -125,17 +168,10 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 		},
 
 		async complete(prompt: string, settings: ProviderSettings, options: TranslateOptions): Promise<string> {
-			const { json } = await requestJSON(chatURL(settings, config.defaultBaseURL, config.noV1Suffix), {
-				headers: headers(settings),
-				body: {
-					model: settings.model || config.defaultModel,
-					messages: [{ role: 'user', content: prompt }],
-					...openaiChatExtras(settings, config.id)
-				},
-				timeoutMs: settings.timeoutMs,
-				signal: options.signal,
-				allowInsecureHTTP: config.allowInsecureHTTP?.(settings) ?? false
-			});
+			const json = await postChat({
+				model: settings.model || config.defaultModel,
+				messages: [{ role: 'user', content: prompt }]
+			}, settings, options);
 			return extractText(json);
 		}
 	};

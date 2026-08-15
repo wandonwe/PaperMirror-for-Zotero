@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeReasoning, openaiChatExtras, supportsReasoningControl } from '../../src/translation/providers/advancedParams';
+import { normalizeReasoning, openaiChatExtras, supportsReasoningControl, isReasoningEffortRejection, reasoningEffortUnsupported, markReasoningEffortUnsupported } from '../../src/translation/providers/advancedParams';
+import { PaperMirrorError } from '../../src/types/models';
 import { resolveChatURL } from '../../src/translation/providers/urls';
 import { geminiGenerateURL, geminiGenerationConfig } from '../../src/translation/providers/geminiNative';
 import type { ProviderSettings } from '../../src/types/models';
@@ -102,4 +103,30 @@ test('resolveChatURL: custom apiPath overrides path building', () => {
 	assert.equal(resolveChatURL('https://x.example/', 'd', false, 'foo/bar'), 'https://x.example/foo/bar');
 	// no apiPath → normal building (adds /v1/chat/completions)
 	assert.equal(resolveChatURL('', 'https://api.openai.com', false), 'https://api.openai.com/v1/chat/completions');
+});
+
+// ---- 1.1.11: reasoning_effort 拒收自愈 ------------------------------------
+
+test('isReasoningEffortRejection: 只认 400 且 message 带 reasoning_effort', () => {
+	const real = new PaperMirrorError('UNKNOWN',
+		'Unexpected API response (HTTP 400): {"error":{"message":"Unrecognized request argument supplied: reasoning_effort"}}',
+		{ httpStatus: 400 });
+	assert.equal(isReasoningEffortRejection(real), true);
+	// 其它 400 (模型名错) 不算 —— 不该误触发剥参重试
+	assert.equal(isReasoningEffortRejection(
+		new PaperMirrorError('INVALID_MODEL', 'The API rejected the model name (HTTP 400): no such model', { httpStatus: 400 })), false);
+	// 429 / 500 / 非错误都不算
+	assert.equal(isReasoningEffortRejection(
+		new PaperMirrorError('RATE_LIMITED', 'reasoning_effort mentioned but 429', { httpStatus: 429 })), false);
+	assert.equal(isReasoningEffortRejection(new Error('reasoning_effort')), false);
+	assert.equal(isReasoningEffortRejection(null), false);
+});
+
+test('reasoningEffortUnsupported 注册表: 按 (供应商, 模型) 记忆, 互不影响', () => {
+	assert.equal(reasoningEffortUnsupported('openai', 'gpt-4o-unique-a'), false);
+	markReasoningEffortUnsupported('openai', 'gpt-4o-unique-a');
+	assert.equal(reasoningEffortUnsupported('openai', 'gpt-4o-unique-a'), true);
+	// 不牵连同供应商的推理模型, 也不牵连别的供应商
+	assert.equal(reasoningEffortUnsupported('openai', 'o3-unique-b'), false);
+	assert.equal(reasoningEffortUnsupported('openrouter', 'gpt-4o-unique-a'), false);
 });
