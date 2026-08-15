@@ -7,6 +7,24 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.4] — 2026-08-15
+
+单点修复:密排双栏正文的栏底几行在译文侧显示为英文原文。
+
+### Fixed
+
+- **抵达页面底部页边的正文行被误判为页脚而丢弃**,于是严格排版没有遮罩它们,
+  译文页在每栏底部露出整段英文原文(Booz 2019 首页两栏底部的
+  "of lumbar disk herniation. More recently…" / "constructed from
+  third-generation…" 等)。页眉页脚判定用的是页面上下 8% 的边带 + 「≤2 行且
+  ≤140 字」的形状判据;设计上假设伸进边带的正文段落是多行的,可靠 `lineCount`
+  排除——但当某页的栏未被合并成段落时,每一行都是独立的单行块,于是逐行落入
+  边带被丢。改为:以小写字母开头(句中续写,如 "of…"/连字符断词 "agnostic…")
+  的行按正文续写处理、不再丢弃;同时排除仍以小写排版的真页脚
+  ("n engl j med 378;8 nejm.org February 22, 2018" —— 带域名 / 卷;期号),
+  避免误留。新增 isRunningHeadOrFoot 单测,10 个既有真实语料快照零变化,
+  新增 Booz 首页语料基线相应更新。
+
 ## [1.2.3] — 2026-08-15
 
 单点修复:多行标题在译文侧"消失"。

@@ -152,6 +152,23 @@ export function isRunningHeadOrFoot(
 	if (/^\d{1,4}$/.test(t) || /^\d{1,3}\s*[/／|]\s*\d{1,3}$/.test(t)) {
 		return true;
 	}
+	// A run that BEGINS mid-sentence (lowercase first letter — a body line
+	// "of lumbar disk herniation…" or a hyphenation fragment "agnostic
+	// accuracy…") is body text that merely reached the margin on a dense page.
+	// The `lineCount <= 2` shape test alone does NOT spare it: on pages whose
+	// columns aren't coalesced every body line arrives as its own one-line
+	// block, so the bottom lines of each column were dropped and the translated
+	// page showed raw English at the column foot. BUT some genuine journal feet
+	// are typeset lowercase too ("n engl j med 378;8 nejm.org February 22,
+	// 2018") — those carry a bare domain and/or a volume;issue token that prose
+	// continuations never do, so only spare a lowercase run that reads as plain
+	// prose (no domain, no "N;M" citation number).
+	const looksLikeJournalFoot =
+		/\b[\w-]+\.(org|com|net|edu|gov|io|co|uk|de|fr)\b/i.test(t)
+		|| /\d+\s*;\s*\d+/.test(t);
+	if (/^[a-z]/.test(t) && !looksLikeJournalFoot) {
+		return false;
+	}
 	return lineCount <= 2 && t.length <= 140;
 }
 

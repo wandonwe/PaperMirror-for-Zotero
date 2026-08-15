@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isMarginSidebar, isMetadataBlock, isVerticalSliver, type Rect } from '../../src/reader/metaFilter';
+import { isMarginSidebar, isMetadataBlock, isRunningHeadOrFoot, isVerticalSliver, type Rect } from '../../src/reader/metaFilter';
 
 // ---- the exact failure cases from the ESC review paper ----------------------
 
@@ -188,4 +188,35 @@ test('没有字号信息时页边栏判定保持原状 (向后兼容)', () => {
 test('字号阈值是 0.9 倍: 略小于正文的窄栏仍算正文, 明显小的才算页边', () => {
 	assert.equal(isMarginSidebar(narrowBodyRect, 594, { fontSize: 9.2, bodySize: 10 }), false, '9.2 ≥ 10×0.9 → 正文');
 	assert.equal(isMarginSidebar(narrowBodyRect, 594, { fontSize: 8.5, bodySize: 10 }), true, '8.5 < 10×0.9 → 页边');
+});
+
+// ---- running head/foot vs body lines that reach the margin (1.2.4) ----------
+test('a mid-sentence body line in the bottom band is NOT a running foot', () => {
+	// Booz 2019 p1: the last lines of each dense column reach y≈23 (bottom 8%
+	// band). As one-line blocks they slipped the lineCount<=2 shape test and
+	// were dropped, so the translated page showed raw English at the foot.
+	const H = 783;
+	assert.equal(isRunningHeadOrFoot(
+		[66, 23, 285, 33], H, 1,
+		'of lumbar disk herniation. More recently, Notohamiprodjo'
+	), false);
+	assert.equal(isRunningHeadOrFoot(
+		[303, 23, 522, 33], H, 1,
+		'and confidence for the detection of lumbar disk herniation'
+	), false);
+	// a hyphenation fragment continuing the previous line
+	assert.equal(isRunningHeadOrFoot([66, 35, 285, 45], H, 1, 'agnostic accuracy of single-energy CT compared with MRI'), false);
+});
+
+test('real running feet in the band are still dropped', () => {
+	const H = 783;
+	// page number
+	assert.equal(isRunningHeadOrFoot([290, 23, 312, 33], H, 1, '451'), true);
+	// n / N page marker
+	assert.equal(isRunningHeadOrFoot([280, 23, 330, 33], H, 1, '3 / 13'), true);
+	// a title echo running foot begins with a capital
+	assert.equal(isRunningHeadOrFoot([66, 23, 400, 33], H, 1, 'Virtual Noncalcium Dual-Energy CT'), true);
+	// a journal foot typeset lowercase still carries a domain + volume;issue —
+	// it must NOT be mistaken for a body continuation and spared.
+	assert.equal(isRunningHeadOrFoot([66, 23, 400, 33], H, 1, 'n engl j med 378;8 nejm.org February 22, 2018'), true);
 });
