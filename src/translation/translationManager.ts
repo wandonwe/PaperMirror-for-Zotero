@@ -312,6 +312,8 @@ export interface PageTranslationState {
 	 * ('repeated-failure'). 强制重译 clears the memory and tries again.
 	 */
 	keepOrigin?: Map<string, string>;
+	/** 最近一次验收拒绝的原因 (仅原因码,无文本): validator | placeholder。 */
+	rejectReasons?: Map<string, string>;
 }
 
 export interface PageDiagnostics {
@@ -763,7 +765,10 @@ export class TranslationManager {
 						chars: b.sourceText.length,
 						state: s.translations.has(b.id)
 							? 'translated'
-							: (s.keepOrigin?.get(b.id) ?? 'untranslated')
+							: (s.keepOrigin?.get(b.id) ?? 'untranslated'),
+						...(s.rejectReasons?.has(b.id) && !s.translations.has(b.id)
+							? { lastReject: s.rejectReasons.get(b.id) }
+							: {})
 					}))
 				})),
 			docMemoryTerms: this.docMemory.size()
@@ -1367,12 +1372,21 @@ export class TranslationManager {
 		// retry/salvage chain as a missing id, instead of silently restoring into
 		// a paragraph with the formula/citation gone.
 		const regById = new Map(protectedBlocks.map(p => [p.block.id, p.reg]));
+		// 拒绝原因埋点 (1.1.3): unrecovered 只说"没救回来",不说"为什么每次都被
+		// 拒" —— 记住每块最近一次验收失败的原因码(validator = looksTranslated/
+		// 完整性;placeholder = 清单校验),进诊断导出。
+		state.rejectReasons = state.rejectReasons ?? new Map();
 		const acceptResponse = (id: string, text: string): boolean => {
 			if (!accept(id, text)) {
+				state.rejectReasons!.set(id, 'validator');
 				return false;
 			}
 			const reg = regById.get(id);
-			return !reg || reg.ok(text);
+			if (reg && !reg.ok(text)) {
+				state.rejectReasons!.set(id, 'placeholder');
+				return false;
+			}
+			return true;
 		};
 
 		// Plan requests: semantic modules are SOFT boundaries (context tags), the

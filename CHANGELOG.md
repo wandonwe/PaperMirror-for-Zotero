@@ -7,6 +7,20 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.3] — 2026-08-15
+
+字段定位版:针对首个真实诊断样本(第 1 页 2 段 unrecovered + 1 段几何撤销)
+补两处原因埋点,不改行为。
+
+### Added
+
+- 诊断导出:keep-origin 块新增 `lastReject`(validator = 译文验收 /
+  placeholder = 清单校验;仅原因码,无文本)——unrecovered 从此能区分
+  "为什么每次都被拒"。
+- `geometryAudits` 新增 `detail`:每轮处置的违例
+  `kind:块id[→对方id](新增面积px²)`——几何撤销从此能看到判的是哪类
+  违例、谁压了谁。
+
 ## [1.1.2] — 2026-08-15
 
 四项合批:回归语料 + 诊断闭环 + 术语表出口 + P2 清理。574 测试全绿。

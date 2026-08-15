@@ -774,7 +774,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	//  - 只在 FINAL 状态由 reportPlacement 调用,provisional pass 永不触发。
 	// 处置顺序与 pmShrinkFit 相反:回退扩展(违例几乎都来自扩展)→ 原盒缩字梯
 	// → 仍不适配才放弃(保留原文,诚实计数)。
-	(page as HTMLElement & { pmGeometryAudit?: () => { violations: number; adjusted: number; reverted: number } }).pmGeometryAudit = (): { violations: number; adjusted: number; reverted: number } => {
+	(page as HTMLElement & { pmGeometryAudit?: () => { violations: number; adjusted: number; reverted: number; detail?: string[] } }).pmGeometryAudit = (): { violations: number; adjusted: number; reverted: number; detail?: string[] } => {
 		const pageW = canvas.width / BITMAP_SCALE;
 		const pageH = canvas.height / BITMAP_SCALE;
 		const preserved = geometric
@@ -784,6 +784,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		let firstCount = 0;
 		let adjusted = 0;
 		let reverted = 0;
+		const detail: string[] = [];
 		for (let round = 0; round < 4; round++) {
 			const placed: AuditBox[] = items
 				.filter(i => i.committed && !i.abandoned)
@@ -795,6 +796,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			if (round === 0) {
 				firstCount = violations.length;
 			}
+			const v = violations[0]!;
+			detail.push(`${v.kind}:${v.id}${v.otherId ? '→' + v.otherId : ''}(${Math.round(v.area)}px²)`);
 			const item = byId.get(violations[0]!.id);
 			if (!item) {
 				break;
@@ -824,7 +827,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				reverted++;
 			}
 		}
-		return { violations: firstCount, adjusted, reverted };
+		return { violations: firstCount, adjusted, reverted, detail };
 	};
 
 	// ---- live placement stats (#6): never a silent English block -----------
@@ -867,6 +870,8 @@ export interface GeometryAuditResult {
 	violations: number;
 	adjusted: number;
 	reverted: number;
+	/** 每轮处置的违例: kind:块id[→对方id](新增面积) — 只有 id 与几何,无文本。 */
+	detail?: string[];
 }
 
 /**
