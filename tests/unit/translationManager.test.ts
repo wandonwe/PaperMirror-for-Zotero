@@ -1023,3 +1023,54 @@ test('hasEnglishResidue: Title-Case residue span caught, NMR line exempt (跨度
 	assert.equal(hasEnglishResidue('该方法优于基线。 The Proposed Method Consistently Outperforms Existing Baselines On Every Benchmark Considered Here. 其余正常。'), true);
 	assert.equal(hasEnglishResidue('产物表征 1H NMR (400 MHz, CDCl3) 7.42 (d, J = 8.2 Hz, 2H), 7.21 (t, 1H), 3.85 (s, 3H) 与文献一致。'), false);
 });
+
+// ---------------------------------------------------------------------------
+// 1.0.1: 每页必点圆环 bug —— 提取悬挂不再卡死状态与信号量
+// ---------------------------------------------------------------------------
+
+test('a hung extraction times out, releases the page, and the next visit retries automatically', async () => {
+	let calls = 0;
+	const { deps } = makeDeps({
+		extractPage: async (pageIndex) => {
+			calls++;
+			if (calls === 1) {
+				return new Promise(() => { /* hangs forever (unrendered page) */ });
+			}
+			return [{
+				id: `page-${pageIndex}-block-0`, pageIndex, order: 0, type: 'paragraph',
+				sourceText: 'Short paragraph here.'
+			}];
+		},
+		readCache: async () => null
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, extractTimeoutMs: 40 });
+	await manager.ensurePage(0, 10); // hangs → times out → state released
+	assert.equal(manager.getPageState(0), undefined, 'timed-out page must be forgotten, not stuck at extracting');
+	await manager.ensurePage(0, 10); // the "revisit" — must run WITHOUT any manual click
+	assert.equal(manager.getPageState(0)!.status, 'done');
+	assert.equal(calls, 2);
+	manager.dispose();
+});
+
+test('two hung extractions do not deadlock the 2-slot semaphore for later pages', async () => {
+	const { deps } = makeDeps({
+		extractPage: async (pageIndex) => {
+			if (pageIndex <= 1) {
+				return new Promise(() => { /* pages 1+2 hang */ });
+			}
+			return [{
+				id: `page-${pageIndex}-block-0`, pageIndex, order: 0, type: 'paragraph',
+				sourceText: 'Third page text.'
+			}];
+		},
+		readCache: async () => null
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, extractTimeoutMs: 40 });
+	await Promise.all([
+		manager.ensurePage(0, 10),
+		manager.ensurePage(1, 10),
+		manager.ensurePage(2, 10) // queued behind the two hung slots
+	]);
+	assert.equal(manager.getPageState(2)!.status, 'done', 'page 3 must not starve behind hung extractions');
+	manager.dispose();
+});

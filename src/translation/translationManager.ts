@@ -280,6 +280,13 @@ const REQUEST_RETRIES = 2;
  *  chunk's request depends on a previous chunk's RESPONSE (context comes from
  *  SOURCE text), so limited parallelism is safe and roughly halves page time. */
 const CHUNK_CONCURRENCY = 2;
+/** 提取阶段超时 (每页必点圆环 bug 修复): extraction of a not-yet-rendered page
+ *  can hang indefinitely — since 0.9.22 it runs OUTSIDE the watchdogged lane
+ *  job, so a hang pinned the page at 'extracting' forever (later visits
+ *  early-returned and did nothing) and two hangs deadlocked the 2-slot
+ *  extraction semaphore for every page after them. The timeout frees the slot
+ *  and deletes the state so the next visit retries silently. */
+const EXTRACT_TIMEOUT_MS = 20000;
 
 export interface PageTranslationState {
 	pageIndex: number;
@@ -288,6 +295,8 @@ export interface PageTranslationState {
 	translations: Map<string, string>;
 	error?: PaperMirrorError;
 	fromCache?: boolean;
+	/** When the 'extracting' phase began — guards against a stuck state. */
+	extractingSince?: number;
 	/**
 	 * 页级诊断 (参照 retain-pdf translation_diagnostics): what this page's run
 	 * actually cost. Feeds the 诊断导出 and the pane summary — screenshots stop
@@ -402,11 +411,13 @@ export class TranslationManager {
 	private delay: (ms: number) => Promise<void>;
 	/** Extraction semaphore: at most 2 concurrent PDF extractions, current page first. */
 	private extractActive = 0;
+	private extractTimeoutMs = EXTRACT_TIMEOUT_MS;
 	private extractWaiters: { pageIndex: number; resolve: () => void }[] = [];
 
-	constructor(deps: TranslationDeps, events: ManagerEvents, options?: { maxConcurrent?: number; reservedForeground?: number; prefetch?: boolean; delayFn?: (ms: number) => Promise<void> }) {
+	constructor(deps: TranslationDeps, events: ManagerEvents, options?: { maxConcurrent?: number; reservedForeground?: number; prefetch?: boolean; delayFn?: (ms: number) => Promise<void>; extractTimeoutMs?: number }) {
 		this.deps = deps;
 		this.events = events;
+		this.extractTimeoutMs = options?.extractTimeoutMs ?? EXTRACT_TIMEOUT_MS;
 		this.prefetchEnabled = options?.prefetch ?? true;
 		this.delay = options?.delayFn ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
 		this.scheduler = new RequestScheduler({
@@ -765,6 +776,29 @@ export class TranslationManager {
 	 * jumping the queue. Never a provider-lane slot — a page waiting on
 	 * getPageData holds no translation capacity.
 	 */
+	/**
+	 * Race an extraction against the phase timeout. The zombie promise keeps
+	 * running harmlessly in the background (its result is discarded via the
+	 * supersede check); what matters is that the SLOT comes back and the page
+	 * state is released for an automatic retry.
+	 */
+	private withExtractTimeout(p: Promise<SourceBlock[]>, pageIndex: number): Promise<SourceBlock[]> {
+		const ms = this.extractTimeoutMs;
+		if (!(ms > 0)) {
+			return p;
+		}
+		return new Promise<SourceBlock[]>((resolve, reject) => {
+			const timer = setTimeout(() => {
+				p.catch(() => { /* orphaned promise must not surface as unhandled */ });
+				reject(new PaperMirrorError('TIMEOUT', `Page ${pageIndex + 1} text extraction made no progress for ${Math.round(ms / 1000)} s.`, { retryable: true }));
+			}, ms);
+			p.then(
+				(v) => { clearTimeout(timer); resolve(v); },
+				(e) => { clearTimeout(timer); reject(e); }
+			);
+		});
+	}
+
 	private async withExtractionSlot<T>(pageIndex: number, fn: () => Promise<T>): Promise<T> {
 		if (this.extractActive >= 2) {
 			await new Promise<void>((resolve) => {
@@ -804,7 +838,14 @@ export class TranslationManager {
 			return;
 		}
 		const existing = this.pages.get(pageIndex);
-		if (existing && (existing.status === 'done' || existing.status === 'translating' || existing.status === 'extracting')) {
+		if (existing && (existing.status === 'done' || existing.status === 'translating')) {
+			return;
+		}
+		// A page may legitimately be mid-extraction — but a state STUCK there
+		// past twice the extraction timeout is a zombie (the bug behind 每页必点
+		// 圆环): fall through and replace it instead of early-returning forever.
+		if (existing?.status === 'extracting'
+			&& Date.now() - (existing.extractingSince ?? Date.now()) < this.extractTimeoutMs * 2) {
 			return;
 		}
 		if (this.scheduler.isScheduled(`page-${pageIndex}`)) {
@@ -815,7 +856,8 @@ export class TranslationManager {
 			pageIndex,
 			status: 'extracting',
 			blocks: [],
-			translations: new Map()
+			translations: new Map(),
+			extractingSince: Date.now()
 		};
 		this.pages.set(pageIndex, state);
 		this.notify(state);
@@ -825,7 +867,27 @@ export class TranslationManager {
 			// getPageData used to occupy a provider slot for up to ~58s without a
 			// single network request in flight). A small local semaphore (2,
 			// current page first) bounds concurrent extractions instead.
-			const blocks = await this.withExtractionSlot(pageIndex, () => this.deps.extractPage(pageIndex));
+			let blocks: SourceBlock[];
+			try {
+				blocks = await this.withExtractionSlot(pageIndex,
+					() => this.withExtractTimeout(this.deps.extractPage(pageIndex), pageIndex));
+			}
+			catch (extractError) {
+				const err = extractError instanceof PaperMirrorError
+					? extractError
+					: new PaperMirrorError('UNKNOWN', String(extractError));
+				if (err.code === 'TIMEOUT') {
+					// A hung extraction (usually a prefetch page not rendered yet):
+					// free everything and forget the state — the next visit to the
+					// page re-runs the whole pipeline automatically, no click needed.
+					if (this.pages.get(pageIndex) === state) {
+						this.pages.delete(pageIndex);
+					}
+					logger.warn(MODULE, `Page ${pageIndex + 1}: extraction timed out after ${this.extractTimeoutMs} ms — released for automatic retry on next visit`);
+					return;
+				}
+				throw err; // real extraction errors keep their error/no-text-layer states
+			}
 			if (this.disposed || this.pages.get(pageIndex) !== state) {
 				return; // superseded while extracting
 			}
