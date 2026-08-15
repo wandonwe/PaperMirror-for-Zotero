@@ -144,6 +144,11 @@ function mergeTwo(a: SourceBlock, b: SourceBlock): SourceBlock {
 		// Provenance: the group keeps the ids of every fragment it absorbed —
 		// merging must not lose the source relationship.
 		memberIds: [...(a.memberIds ?? [a.id]), ...(b.memberIds ?? [b.id])],
+		// 字形级公式字面量随合并累积 (glyphFormula, pdf2zh/BabelDOC 移植) —
+		// 丢了它们,掩蔽就退化回文本正则。
+		...((a.formulaRuns?.length || b.formulaRuns?.length)
+			? { formulaRuns: [...new Set([...(a.formulaRuns ?? []), ...(b.formulaRuns ?? [])])] }
+			: {}),
 		// Representative size follows the LONGER text, not blindly the first
 		// fragment — fragment one may carry a drop cap or lead-in styling.
 		fontSize: (b.sourceText.length > a.sourceText.length ? b.fontSize : a.fontSize) ?? a.fontSize,

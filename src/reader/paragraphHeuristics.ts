@@ -388,6 +388,14 @@ export function endsSentence(text: string): boolean {
 	return /[.!?。！？]["'”’」』)\]]*\s*$/.test(text.trim());
 }
 
+/**
+ * 目录引导行 (BabelDOC ParagraphFinding): ≥4 个连续(或点-空格交替)点号,
+ * "1. Introduction ......... 5" 这种行必须自成一段。
+ */
+export function hasLeaderDots(text: string): boolean {
+	return /(?:\.{4,}|(?:\.\s){4,})/.test(text);
+}
+
 /** Starts the way a continuation does, not the way a new paragraph does. */
 export function startsContinuation(text: string): boolean {
 	const t = text.trim();
@@ -604,11 +612,29 @@ export interface BreakContext {
 	fontJump: boolean;
 	/** The next line looks like a list item. */
 	listStart: boolean;
+	/**
+	 * 短行分段 (移植自 BabelDOC ParagraphFinding `split_short_lines`,
+	 * https://github.com/funstory-ai/BabelDOC, AGPL-3.0): 当前行显著短于页面
+	 * 中位行宽(< 0.7×)且下一行不是续接 → 段落在此结束,即使行距不大。
+	 */
+	shortLine?: boolean;
+	/**
+	 * 目录行 (BabelDOC ParagraphFinding): 连续点号引导行 ("Introduction .... 5")
+	 * 自成一段,不与上下行合并。
+	 */
+	leaderDots?: boolean;
 }
 
 export function shouldBreak(ctx: BreakContext): boolean {
 	const size = ctx.fontSize > 0 ? ctx.fontSize : 10;
 	if (ctx.newColumn || ctx.listStart) {
+		return true;
+	}
+	// 目录行/短行 (BabelDOC): 连点号行自成一段;明显短于中位行宽的行是段末。
+	if (ctx.leaderDots) {
+		return true;
+	}
+	if (ctx.shortLine && !ctx.wrapped) {
 		return true;
 	}
 	// A gap this big is a section break no matter what the line looked like.

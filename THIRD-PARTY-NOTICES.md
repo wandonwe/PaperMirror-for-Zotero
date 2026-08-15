@@ -53,6 +53,35 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## PDFMathTranslate (pdf2zh)
+
+- Project 项目: [PDFMathTranslate/PDFMathTranslate](https://github.com/PDFMathTranslate/PDFMathTranslate)
+- License 协议: AGPL-3.0(与本项目同协议)
+
+字形级公式判定移植自其 `pdf2zh/converter.py::vflag`:数学字体名正则
+(CM/TeX/Sym/Math/Mono/Ital 族)、Unicode 类别与希腊区码位、同段字号 <0.79×
+判角标、公式括号配平。对应本项目 `src/reader/glyphFormula.ts`。诚挚致谢。
+
+## BabelDOC
+
+- Project 项目: [funstory-ai/BabelDOC](https://github.com/funstory-ai/BabelDOC)
+- License 协议: AGPL-3.0(与本项目同协议)
+
+参照其 `document_il/utils/formular_helper.py`(公式起始/中间字符分类、纯数字
+公式降级)与 ImplementationDetails 设计文档:ParagraphFinding(中位行宽短行
+分段、连点号目录行)、Typesetting(排版算法 2/3:行距-缩放梯子与边界扩展)。
+对应本项目 `src/reader/glyphFormula.ts`、`src/reader/paragraphHeuristics.ts`
+的 shortLine/leaderDots 信号及 strict 排版扩展。诚挚致谢。
+
+## MinerU
+
+- Project 项目: [opendatalab/MinerU](https://github.com/opendatalab/MinerU)
+- License 协议: Apache-2.0(附加条款约束其模型权重;本项目仅参照其纯代码启发式)
+
+列表块检测(≥80% 行以列表终止符结尾)与跨页段落合并的几何条件参照其
+`backend/pipeline/para_split.py`。对应本项目 `src/reader/blockBuilder.ts`
+的列表分类与跨页续接判定。诚挚致谢。
+
 ## old-immersive-translate
 
 - Project: [immersive-translate/old-immersive-translate](https://github.com/immersive-translate/old-immersive-translate)

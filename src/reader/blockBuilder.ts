@@ -6,6 +6,7 @@
 
 import type { BlockType, BoundingBox, PdfChar, SourceBlock } from '../types/models';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
+import { detectGlyphFormulaRuns } from './glyphFormula';
 import { isMetadataBlock, isPublisherBoilerplateLine } from './metaFilter';
 import {
 	columnOf,
@@ -17,6 +18,8 @@ import {
 	LINE_HYPHENS,
 	linesShareColumn,
 	looksLikeListStart,
+	hasLeaderDots,
+	startsContinuation,
 	isOrderedListStart,
 	isSectionNumberHeading,
 	planMerges,
@@ -208,6 +211,10 @@ export function buildParagraphs(chars: PdfChar[], lines: Line[], pageWidth = 612
 	const flagged = lines.filter(l => !!chars[l.end]?.paragraphBreakAfter).length;
 	const distrustExplicit = lines.length >= 8 && flagged / lines.length > 0.8;
 
+	// 中位行宽 (BabelDOC ParagraphFinding 步骤 3): 短行分段的基准。
+	const widths = lines.map(l => l.rect[2] - l.rect[0]).filter(w => w > 0).sort((a, b) => a - b);
+	const medianLineWidth = widths.length ? widths[Math.floor(widths.length / 2)]! : 0;
+
 	const raw: Paragraph[] = [];
 	const rawColumns: number[] = [];
 	let group: Line[] = [];
@@ -267,7 +274,12 @@ export function buildParagraphs(chars: PdfChar[], lines: Line[], pageWidth = 612
 			indented: next.rect[0] > margins.left + size * 0.8,
 			fontJump: line.fontSize > 0 && next.fontSize > 0
 				&& Math.abs(next.fontSize - line.fontSize) / line.fontSize > 0.2,
-			listStart: looksLikeListStart(textForRange(chars, next.start, next.end))
+			listStart: looksLikeListStart(textForRange(chars, next.start, next.end)),
+			// BabelDOC 短行/目录行信号 (来源见 paragraphHeuristics 注释)。
+			shortLine: medianLineWidth > 0
+				&& (line.rect[2] - line.rect[0]) < medianLineWidth * 0.7
+				&& !startsContinuation(textForRange(chars, next.start, next.end)),
+			leaderDots: hasLeaderDots(textForRange(chars, line.start, line.end))
 		});
 		if (explicitBreak || styleBreak) {
 			flush();
@@ -392,7 +404,7 @@ export function isHeaderOrFooter(p: Paragraph, pageHeight: number): boolean {
 	return false;
 }
 
-export function classifyBlock(p: Paragraph, bodyFontSize: number, pageWidth: number): BlockType {
+export function classifyBlock(p: Paragraph, bodyFontSize: number, pageWidth: number, chars?: PdfChar[]): BlockType {
 	const text = p.text.trim();
 	if (/^(figure|fig\.?|table|图|表|圖)\s*\d+/i.test(text)) {
 		return text.toLowerCase().startsWith('table') || /^表/.test(text) ? 'table' : 'caption';
@@ -402,6 +414,17 @@ export function classifyBlock(p: Paragraph, bodyFontSize: number, pageWidth: num
 	// font size — a larger numbered line ("3. Model Architecture") is a heading.
 	if (/^[•▪◦‣·o*-]\s+/.test(text) || (isOrderedListStart(text) && fontRatio < 1.1)) {
 		return 'list';
+	}
+	// 列表块检测 — 移植自 MinerU `backend/pipeline/para_split.py::__is_list_or_
+	// index_block` (https://github.com/opendatalab/MinerU, Apache-2.0):
+	// ≥80% 的行以列表终止符 (.。;;) 结尾 → 列表块,防止参考文献式列表被
+	// planMerges 当正文并段。
+	if (chars && p.lines.length >= 3) {
+		const lineTexts = p.lines.map(l => textForRange(chars, l.start, l.end).trim()).filter(Boolean);
+		const listEnded = lineTexts.filter(t => /[.。;;]$/.test(t)).length;
+		if (lineTexts.length >= 3 && listEnded / lineTexts.length >= 0.8) {
+			return 'list';
+		}
 	}
 	if (p.lines.length <= 2 && fontRatio >= 1.35 && text.length < 250) {
 		return 'title';
@@ -478,7 +501,7 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 	const blocks: SourceBlock[] = [];
 	let order = 0;
 	for (const p of paragraphs) {
-		const type = classifyBlock(p, bodySize, pageWidth);
+		const type = classifyBlock(p, bodySize, pageWidth, chars);
 		const text = p.text.trim();
 		// Author lists, affiliations, copyright, DOI lines, watermarks: keep
 		// them on the original page, keep them OUT of the translation.
@@ -496,6 +519,19 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 				continue;
 			}
 		}
+		// 字形级公式判定 (pdf2zh vflag / BabelDOC formular_helper 移植,见
+		// glyphFormula.ts): 段落的字符序列直接给出应保护的公式字面量 —
+		// formulaGuard 掩蔽时优先于文本正则。
+		const paraChars: PdfChar[] = [];
+		for (const line of p.lines) {
+			for (let k = line.start; k <= line.end; k++) {
+				const ch = chars[k];
+				if (ch) {
+					paraChars.push(ch);
+				}
+			}
+		}
+		const formulaRuns = detectGlyphFormulaRuns(paraChars, p.fontSize);
 		blocks.push({
 			id: `page-${pageIndex}-block-${order}`,
 			pageIndex,
@@ -506,7 +542,8 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 			lineRectsPdf: p.lines.map(line => [...line.rect] as [number, number, number, number]),
 			fontSize: p.fontSize,
 			column: columnOf(p.rect as Rect, columnBands, pageWidth),
-			isReference
+			isReference,
+			...(formulaRuns.length ? { formulaRuns } : {})
 		});
 		order++;
 	}

@@ -33,6 +33,8 @@ import {
 	replacementFontSize,
 	joinFragments,
 	joinLines,
+	hasLeaderDots,
+	startsContinuation,
 	linesShareColumn,
 	looksLikeListStart,
 	isOrderedListStart,
@@ -242,6 +244,10 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 		};
 	};
 
+	// 中位行宽 (BabelDOC ParagraphFinding): 短行分段基准。
+	const widths = lines.map(l => l.rect[2] - l.rect[0]).filter(w => w > 0).sort((a, b) => a - b);
+	const medianLineWidth = widths.length ? widths[Math.floor(widths.length / 2)]! : 0;
+
 	const paragraphs: SpanLine[][] = [];
 	let current: SpanLine[] = [];
 	const flush = (): void => {
@@ -279,7 +285,11 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 				|| !linesShareColumn(line.rect, next.rect),
 			indented: next.rect[0] > margins.left + size * 0.8,
 			fontJump: size > 0 && next.fontSize > 0 && Math.abs(next.fontSize - size) / size > 0.2,
-			listStart: looksLikeListStart(lineText(next))
+			listStart: looksLikeListStart(lineText(next)),
+			shortLine: medianLineWidth > 0
+				&& (line.rect[2] - line.rect[0]) < medianLineWidth * 0.7
+				&& !startsContinuation(lineText(next)),
+			leaderDots: hasLeaderDots(lineText(line))
 		});
 		if (brk) {
 			flush();

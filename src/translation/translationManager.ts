@@ -413,6 +413,16 @@ export class TranslationManager {
 			return [];
 		}
 	}
+
+	/**
+	 * 掩蔽字面量 = 用户不译词 + 字形级公式 RUN (glyphFormula, 移植自 pdf2zh
+	 * vflag / BabelDOC formular_helper — 字体/码位证据比文本正则可靠)。
+	 */
+	private literalsFor(block: SourceBlock): string[] {
+		const runs = block.formulaRuns ?? [];
+		const user = this.noTranslate();
+		return runs.length ? [...user, ...runs] : user;
+	}
 	/** Injected (tests) or real timer delay, for request-level retry backoff. */
 	private delay: (ms: number) => Promise<void>;
 	/** Extraction semaphore: at most 2 concurrent PDF extractions, current page first. */
@@ -567,7 +577,7 @@ export class TranslationManager {
 		try {
 			await this.scheduler.enqueue(`page-${pageIndex}-compress`, PRIORITY.CURRENT_COMPRESS, async (signal) => {
 				const protectedBlocks = blocks.map((block) => {
-					const { text, placeholders } = protectFormulas(block.sourceText, this.noTranslate());
+					const { text, placeholders } = protectFormulas(block.sourceText, this.literalsFor(block));
 					return { block, text, placeholders };
 				});
 				const request: TranslationRequest = {
@@ -682,7 +692,7 @@ export class TranslationManager {
 			return false;
 		}
 		const { source, target } = this.deps.getLanguages(block.sourceText);
-		const { text, placeholders } = protectFormulas(block.sourceText, this.noTranslate());
+		const { text, placeholders } = protectFormulas(block.sourceText, this.literalsFor(block));
 		this.failedSegments.delete(segmentHash(block.sourceText, source, target));
 		try {
 			return await this.scheduler.enqueue(`page-${pageIndex}-seg-${blockId}`, PRIORITY.CURRENT_RETRANSLATE, async (signal) => {
@@ -1130,7 +1140,7 @@ export class TranslationManager {
 				logger.warn(MODULE, `Page ${state.pageIndex + 1}: request cap reached — stopping residue repair (${fixed} fixed)`);
 				break;
 			}
-			const { text, placeholders } = protectFormulas(block.sourceText, this.noTranslate());
+			const { text, placeholders } = protectFormulas(block.sourceText, this.literalsFor(block));
 			try {
 				const resp = await translateFn({
 					pageIndex: state.pageIndex,
@@ -1332,9 +1342,8 @@ export class TranslationManager {
 		}
 
 		// Protect formulas / citations / statistics per block (+ 不译词列表)
-		const noTranslate = this.noTranslate();
 		const protectedBlocks = toTranslate.map((block) => {
-			const { text, placeholders } = protectFormulas(block.sourceText, noTranslate);
+			const { text, placeholders } = protectFormulas(block.sourceText, this.literalsFor(block));
 			return { block, text, placeholders };
 		});
 		// 占位符清单校验 (参照 retain-pdf): a model response that LOST a protected

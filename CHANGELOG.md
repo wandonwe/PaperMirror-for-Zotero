@@ -7,6 +7,30 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.4] — 2026-08-15
+
+### Added(参照 MinerU / PDFMathTranslate / BabelDOC 批次1)
+
+- **字形级公式判定**(移植自 PDFMathTranslate `converter.py::vflag` 与 BabelDOC
+  `formular_helper.py`,均 AGPL-3.0,来源标注于 `src/reader/glyphFormula.ts`
+  与 THIRD-PARTY-NOTICES.md):公式保护从"拼好文本后猜正则"升级为字符层证据——
+  数学字体名(CM/TeX/XY/MT/Sym/Math/Mono/Ital 族,子集前缀截断)、公式码位
+  (希腊区、数学运算符、箭头、组合附标、上下标、=<>+±×÷ 等、(cid:) 未解码字形、
+  私有区)、同段字号 <0.79× 判角标(0.76 角标与 0.799 大写取中,首字下沉豁免)、
+  公式括号配平、RUN 间单空格桥接。后处理按 BabelDOC:纯数字"公式"降级回数据、
+  无强证据的短 RUN 不掩蔽。char 提取路径逐段生成 `formulaRuns` 字面量,掩蔽
+  优先于文本正则;合并/表格建模全程保留;span 路径保持正则兜底。
+- **列表块检测**(参照 MinerU `para_split.py::__is_list_or_index_block`,
+  Apache-2.0):≥3 行且 ≥80% 行以列表终止符(.。;;)结尾 → 判为列表块,
+  参考文献式列表不再被并进正文段。
+- **短行分段与目录行**(参照 BabelDOC ParagraphFinding 设计):行宽 < 页面
+  中位行宽 ×0.7 且下一行非续接 → 段落在此结束;连续点号引导行
+  ("1. Introduction …… 5")自成一段,目录页不再拼坏。两条提取路径同步生效。
+- THIRD-PARTY-NOTICES 新增三个项目的来源致谢与协议说明(pdf2zh/BabelDOC 与
+  本项目同为 AGPL-3.0;MinerU 启发式为 Apache-2.0)。
+- 新增 9 组回归测试(字体名族、码位、整段 RUN、角标、括号配平、纯数字降级、
+  散文零误报、字面量掩蔽往返)。全套 546 项通过。
+
 ## [1.0.3] — 2026-08-15
 
 ### Fixed(用户实测两症状:表格页排版卡死 / 到页仍要点圆环)

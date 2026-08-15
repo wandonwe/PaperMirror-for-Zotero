@@ -288,6 +288,10 @@ export function structureTableCells(blocks: SourceBlock[], pageIndex: number, em
 				fontSize: sizes.length ? sizes[Math.floor(sizes.length / 2)] : undefined,
 				column: pageColumn,
 				tableCol: cell.col,
+				...((): { formulaRuns?: string[] } => {
+					const runs = [...new Set(originals.flatMap(b => b.formulaRuns ?? []))];
+					return runs.length ? { formulaRuns: runs } : {};
+				})(),
 				memberIds: cell.memberIds,
 				isReference: originals.some(b => b.isReference),
 				translationMode: cell.kind === 'data' ? 'preserve' : 'translate'

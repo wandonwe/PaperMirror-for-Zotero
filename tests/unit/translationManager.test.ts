@@ -1211,3 +1211,26 @@ test('a permanently empty text layer surfaces a retryable error, never a fake do
 	assert.equal(manager.getPageState(0)?.status, 'error');
 	manager.dispose();
 });
+
+test('glyph formula runs are masked as literals in requests (字形级公式, 1.0.4)', async () => {
+	const sent: string[] = [];
+	const blocks: SourceBlock[] = [{
+		id: 'b', pageIndex: 0, order: 0, type: 'paragraph',
+		sourceText: 'The regression y = βx + ε predicts the outcome in every cohort we studied.',
+		formulaRuns: ['y = βx + ε']
+	}];
+	const { deps } = makeDeps({
+		extractPage: async () => blocks,
+		readCache: async () => null,
+		translateRequest: async (req) => {
+			sent.push(req.blocks.map(b => b.text).join('\n'));
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: b.text.replace(/The regression (⟦PM\d+⟧) predicts the outcome in every cohort we studied\./, '回归模型 $1 在我们研究的每个队列中都能预测结局。') })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 10);
+	const state = manager.getPageState(0)!;
+	assert.ok(sent.every(t => !t.includes('βx')), `formula literal must be masked: ${sent[0]}`);
+	assert.ok(state.translations.get('b')?.includes('y = βx + ε'), 'formula restored byte-identical');
+	manager.dispose();
+});

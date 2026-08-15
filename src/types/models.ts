@@ -65,6 +65,12 @@ export interface SourceBlock {
 	 * column — that stays in `column` (audit: writing the table col into
 	 * `column` scrambled the page reading order). */
 	tableCol?: number;
+	/**
+	 * 字形级公式字面量 (移植自 pdf2zh vflag / BabelDOC formular_helper,见
+	 * reader/glyphFormula.ts): char 提取路径按数学字体/码位/角标证据标出的
+	 * 公式 RUN,formulaGuard 掩蔽时优先于文本正则。
+	 */
+	formulaRuns?: string[];
 	/** Placeholders that must be restored after translation (formulas etc.). */
 	placeholders?: PlaceholderEntry[];
 	/** True when this block belongs to the references section. */
