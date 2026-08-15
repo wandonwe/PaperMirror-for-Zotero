@@ -640,7 +640,26 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		return still;
 	};
 
-	// ---- last-resort shrink (see SHRINK_STEPS): fit-and-commit, or hand back -
+	// ---- 边界扩展 (移植自 BabelDOC Typesetting「算法3」, funstory-ai/BabelDOC,
+	// AGPL-3.0, docs/ImplementationDetails/Typesetting): 在缩字号之前,先测量
+	// 块右侧/下方的实际空白并把盒子扩进去 —— "图 1 → Figure 1" 式越译越长的
+	// 短标签与标题正是靠这一层救回,而不是被缩小或放弃。
+	// 空白测量:对每个未适配块,取所有几何块盒 + 图形盒中与其在垂直向(右扩)
+	// 或水平向(下扩)重叠者的最近边,留 3px 边距;右扩以版心 90% 为界
+	// (BabelDOC 同),下扩以页高 95% 为界;各设温和上限防贪婪。
+	const expansionAllowance = (item: StrictItem): { right: number; down: number } =>
+		computeExpansionAllowance(item.box, [
+			...imageBoxes,
+			...geometric.filter(b => b.id !== item.id).map(b => pxOf.get(b.id)!).filter(Boolean)
+		], canvas.width / BITMAP_SCALE, canvas.height / BITMAP_SCALE, item.fontPx);
+	const applyBox = (item: StrictItem, width: number, height: number): void => {
+		item.box = { ...item.box, width, height };
+		item.node.style.width = `${width}px`;
+		item.node.style.height = `${height}px`;
+	};
+
+	// ---- last-resort fit: 先扩边界(算法3),再缩字号(SHRINK_STEPS),最后
+	// 底线组合(最小字号 + 最大扩展)——全失败才交还给放弃流程。
 	(page as HTMLElement & { pmShrinkFit?: (ids: string[]) => string[] }).pmShrinkFit = (ids: string[]): string[] => {
 		const still: string[] = [];
 		for (const id of ids) {
@@ -648,13 +667,43 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			if (!item || item.committed || item.abandoned) {
 				continue;
 			}
+			const original = { width: item.box.width, height: item.box.height };
+			const grow = expansionAllowance(item);
 			let fits = false;
-			for (const factor of SHRINK_STEPS) {
-				const px = Math.max(SHRINK_FLOOR_PX, item.fontPx * factor);
-				item.node.style.fontSize = `${px.toFixed(2)}px`;
+			// 1. 算法3: 原字号下的扩展阶梯 — 右扩(标签/标题) → 下扩(段落) → 双向。
+			const expansions: [number, number][] = [];
+			if (grow.right > 4) {
+				expansions.push([original.width + grow.right, original.height]);
+			}
+			if (grow.down > 4) {
+				expansions.push([original.width, original.height + grow.down]);
+			}
+			if (grow.right > 4 && grow.down > 4) {
+				expansions.push([original.width + grow.right, original.height + grow.down]);
+			}
+			for (const [w, h] of expansions) {
+				applyBox(item, w, h);
 				fits = ladderFits(item);
-				if (fits || px <= SHRINK_FLOOR_PX) {
+				if (fits) {
 					break;
+				}
+			}
+			if (!fits) {
+				applyBox(item, original.width, original.height);
+				// 2. 既有缩字梯子(原盒)。
+				for (const factor of SHRINK_STEPS) {
+					const px = Math.max(SHRINK_FLOOR_PX, item.fontPx * factor);
+					item.node.style.fontSize = `${px.toFixed(2)}px`;
+					fits = ladderFits(item);
+					if (fits || px <= SHRINK_FLOOR_PX) {
+						break;
+					}
+				}
+				// 3. 底线: 最小字号 + 最大扩展的组合再试一次。
+				if (!fits && expansions.length) {
+					const last = expansions[expansions.length - 1]!;
+					applyBox(item, last[0], last[1]);
+					fits = ladderFits(item);
 				}
 			}
 			if (fits) {
@@ -662,6 +711,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			}
 			else {
 				item.node.style.fontSize = `${item.fontPx.toFixed(2)}px`; // restore
+				applyBox(item, original.width, original.height);
 				still.push(id);
 			}
 		}
@@ -825,6 +875,36 @@ export function revertStrictBlocks(element: HTMLElement, ids: string[]): void {
  * Returns the ids that STILL do not fit — those are the only candidates left
  * for revertStrictBlocks.
  */
+/**
+ * 边界扩展空白测量 (移植自 BabelDOC Typesetting「算法3」, funstory-ai/BabelDOC,
+ * AGPL-3.0): 右扩以版心 90% 为界、下扩以页高 95% 为界,被任何几何块/图形盒的
+ * 最近边截断(3px 边距);上限右 ≤0.6×原宽、下 ≤max(两行, 0.5×原高)。
+ * Pure — unit-tested.
+ */
+export function computeExpansionAllowance(
+	box: PixelBox,
+	blockers: PixelBox[],
+	pageW: number,
+	pageH: number,
+	fontPx: number
+): { right: number; down: number } {
+	let right = Math.max(0, pageW * 0.9 - (box.left + box.width));
+	let down = Math.max(0, pageH * 0.95 - (box.top + box.height));
+	for (const other of blockers) {
+		const vOverlap = Math.min(box.top + box.height, other.top + other.height) - Math.max(box.top, other.top);
+		if (vOverlap > 2 && other.left >= box.left + box.width - 1) {
+			right = Math.min(right, other.left - (box.left + box.width) - 3);
+		}
+		const hOverlap = Math.min(box.left + box.width, other.left + other.width) - Math.max(box.left, other.left);
+		if (hOverlap > 2 && other.top >= box.top + box.height - 1) {
+			down = Math.min(down, other.top - (box.top + box.height) - 3);
+		}
+	}
+	right = Math.max(0, Math.min(right, box.width * 0.6));
+	down = Math.max(0, Math.min(down, Math.max(fontPx * 2.8, box.height * 0.5)));
+	return { right, down };
+}
+
 export function shrinkStrictBlocks(element: HTMLElement, ids: string[]): string[] {
 	const shrink = (element as HTMLElement & { pmShrinkFit?: (ids: string[]) => string[] }).pmShrinkFit;
 	return shrink ? shrink(ids) : ids;

@@ -7,6 +7,25 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.5] — 2026-08-15
+
+### Added(参照 BabelDOC / MinerU 批次2)
+
+- **排版"先扩边界、再缩字号"**(移植自 BabelDOC Typesetting「算法3」,
+  funstory-ai/BabelDOC,AGPL-3.0):strict 适配器在缩字梯子之前,先测量块
+  右侧/下方的实际空白(以版心 90%/页高 95% 为界,被最近的几何块或图形盒截断,
+  3px 边距;右扩 ≤0.6×原宽、下扩 ≤max(两行, 0.5×原高)),按 右扩 → 下扩 →
+  双向 的阶梯尝试适配;全部失败才进入缩字,最后再以"最小字号+最大扩展"组合
+  兜底。"图 1 → Figure 1"式越译越长的短标签、标题溢出从此优先靠空白救回,
+  而不是缩小或保留原文。空白测量为纯函数(computeExpansionAllowance),
+  有单测锁定。
+- **跨页续接几何收紧**(参照 MinerU `para_split.py::__merge_2_text_blocks`,
+  Apache-2.0):在既有"未完句/续接开头"文本条件之上增加两条几何否决——
+  上页末段最后一行必须顶到块右边界(差 < 行高;没顶满说明段落已结束),
+  且两块宽度差 < min(两块宽)。减少"上页末段其实已完"时的错误上下文注入。
+- 新增 3 组回归测试(扩展被邻块截断与上限钳制、90% 版心界限与非负、
+  短末行否决跨页注入)。全套 549 项通过。
+
 ## [1.0.4] — 2026-08-15
 
 ### Added(参照 MinerU / PDFMathTranslate / BabelDOC 批次1)

@@ -1410,7 +1410,21 @@ export class TranslationManager {
 				const tail = lastBody.sourceText.trim();
 				const unfinished = !/[.!?。!?]["'”’)\]]*$/.test(tail);
 				const continuing = /^[a-z,;)\]]/.test(first.sourceText.trim());
-				if (unfinished || continuing) {
+				// 几何收紧 (移植自 MinerU `para_split.py::__merge_2_text_blocks` 的
+				// 两条条件, opendatalab/MinerU, Apache-2.0): (a) 上页末段的最后一行
+				// 必须顶到块右边界(差 < 行高)——没顶满说明段落其实已结束;
+				// (b) 两块宽度差 < min(两块宽)——宽度悬殊的多半不是同一段。
+				const lastLine = lastBody.lineRectsPdf?.[lastBody.lineRectsPdf.length - 1];
+				const blockRight = lastBody.boundingBox
+					? lastBody.boundingBox.x + lastBody.boundingBox.width
+					: undefined;
+				const lineHeight = lastLine ? Math.max(4, lastLine[3] - lastLine[1]) : 0;
+				const lastLineFull = !lastLine || blockRight === undefined
+					|| (blockRight - lastLine[2]) < lineHeight;
+				const w1 = lastBody.boundingBox?.width;
+				const w2 = first.boundingBox?.width;
+				const similarWidth = !w1 || !w2 || Math.abs(w1 - w2) < Math.min(w1, w2);
+				if ((unfinished || continuing) && lastLineFull && similarWidth) {
 					contexts[0] = tail.length <= 600 ? tail : tail.slice(-600);
 				}
 			}

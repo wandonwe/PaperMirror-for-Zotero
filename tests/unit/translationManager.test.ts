@@ -1234,3 +1234,30 @@ test('glyph formula runs are masked as literals in requests (字形级公式, 1.
 	assert.ok(state.translations.get('b')?.includes('y = βx + ε'), 'formula restored byte-identical');
 	manager.dispose();
 });
+
+test('cross-page tail is NOT injected when the last line falls short of the block edge (MinerU 几何收紧)', async () => {
+	const contexts: string[] = [];
+	const pageBlocks = (p: number): SourceBlock[] => [{
+		id: `p${p}b0`, pageIndex: p, order: 0, type: 'paragraph',
+		sourceText: p === 0
+			? 'The protocol was applied to every cohort and the resulting values were' // 未完句…
+			: 'subsequently normalized against baseline scans acquired before injection.',
+		// …但末行远未顶到块右边界 (行右 300 vs 块右 500, 行高 10) → 段落其实已结束。
+		boundingBox: { x: 60, y: 100, width: 440, height: 60 },
+		lineRectsPdf: p === 0 ? [[60, 700, 500, 710], [60, 688, 300, 698]] : [[60, 700, 500, 710]]
+	}];
+	const { deps } = makeDeps({
+		extractPage: async p => pageBlocks(p),
+		readCache: async () => null,
+		translateRequest: async (req) => {
+			contexts.push(req.previousContext);
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容示例。' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 10);
+	await manager.ensurePage(1, 10);
+	assert.ok(!contexts.some(c => c.includes('resulting values were')),
+		'short last line must veto the injection');
+	manager.dispose();
+});

@@ -159,3 +159,31 @@ test('ladderFor never crushes lines below the source leading', async () => {
 	assert.ok(ladderFor(5).every(s => s.lineHeight <= 1.42));
 	assert.ok(ladderFor(0).every(s => s.lineHeight >= 1.0));
 });
+
+// ---------------------------------------------------------------------------
+// 1.0.5 批次2: BabelDOC 算法3 —— 缩字前先扩边界(空白测量,纯函数)
+// ---------------------------------------------------------------------------
+
+import { computeExpansionAllowance } from '../../src/ui/strictPageReplacement';
+
+test('expansion is clipped by the nearest right/below blocker with margin (算法3)', () => {
+	const box = { left: 100, top: 100, width: 100, height: 40 };
+	const blockers = [
+		{ left: 260, top: 90, width: 50, height: 60 },  // right neighbour, 60px gap
+		{ left: 100, top: 180, width: 100, height: 30 } // below neighbour, 40px gap
+	];
+	const { right, down } = computeExpansionAllowance(box, blockers, 612, 792, 12);
+	assert.equal(right, 57, 'right = 260 − 200 − 3');
+	// cap = max(2.8×字号=33.6, 0.5×高=20) → min(37px 间隙−边距, 33.6) = 33.6
+	assert.ok(Math.abs(down - 33.6) < 0.01, `down=${down}`);
+});
+
+test('expansion respects the 90% page-width / caps and never goes negative', () => {
+	const box = { left: 500, top: 700, width: 80, height: 40 };
+	const free = computeExpansionAllowance(box, [], 612, 792, 12);
+	// 612×0.9 = 550.8 → right allowance = 0 (box already past the limit is clamped ≥0)
+	assert.equal(free.right, 0);
+	assert.ok(free.down > 0 && free.down <= Math.max(12 * 2.8, 20));
+	const tight = computeExpansionAllowance(box, [{ left: 500, top: 741, width: 80, height: 20 }], 612, 792, 12);
+	assert.equal(tight.down, 0, 'blocker 1px below → clamp to 0, not negative');
+});
