@@ -120,6 +120,9 @@ export async function startup(params: StartupParams): Promise<void> {
 	migrateToOverlayArchitecture();
 	migrateProviderConfig();
 
+	// 缓存 schema v2 兼容性清理 (1.3.0): 惰性、尽力而为,绝不阻塞启动。
+	void cacheManager.sweepStaleCacheFiles().catch(() => { /* best effort */ });
+
 	toolbarController = new ReaderToolbarController(params.id);
 	toolbarController.init();
 	addDisposer(() => {

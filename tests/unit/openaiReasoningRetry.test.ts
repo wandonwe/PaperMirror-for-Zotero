@@ -144,27 +144,43 @@ test('temperature 记忆生效: 同模型后续请求直接不带 temperature', 
 	finally { http.teardown(); }
 });
 
-test('双雷区: 先 400 temperature 再 400 reasoning_effort, 各剥一次后成功', async () => {
-	const http = installHTTP((body) => {
-		if (body.temperature !== undefined) {
-			return { status: 400, text: TEMP_REJECT };
-		}
-		if (body.reasoning_effort !== undefined) {
-			return { status: 400, text: REJECT };
-		}
-		return { status: 200, text: OK_TEXT };
-	});
+test('显式用户温度被拒 → 配置错误浮出, 不静默吞 (1.3.0)', async () => {
+	// 用户显式设置的温度被模型拒绝时,这是该浮出的配置错误 —— 只有插件自动加的
+	// 默认温度可以静默剥离重试。
+	const http = installHTTP((body) => body.temperature !== undefined
+		? { status: 400, text: TEMP_REJECT }
+		: { status: 200, text: OK_TEXT });
 	try {
-		// openai-compatible is in DEFAULT_TEMP_PROVIDERS AND we set reasoning —
-		// but openai-compatible is NOT a reasoning-effort provider, so use
-		// openrouter? openrouter is NOT in DEFAULT_TEMP_PROVIDERS. Force both
-		// params via an explicit temperature on openrouter + reasoning.
 		const p = createOpenAICompatibleProvider({ id: 'openrouter', displayName: 'OpenRouter', defaultBaseURL: 'https://openrouter.ai/api', defaultModel: 'auto' });
-		const out = await p.complete!('x', settings({ providerId: 'openrouter', temperature: 0, reasoning: 'minimal', model: 'or-double-400-test' }), {});
+		await assert.rejects(() => p.complete!('x', settings({ providerId: 'openrouter', temperature: 0, reasoning: undefined, model: 'or-explicit-temp-test' }), {}));
+		assert.equal(http.bodies.length, 1, '显式温度不重试');
+		assert.equal(http.bodies[0].temperature, 0);
+	}
+	finally { http.teardown(); }
+});
+
+test('温度自愈记忆按端点隔离: 换 baseURL 后重新携带默认温度 (1.3.0)', async () => {
+	// deepseek-reasoner-temp-test 已在官方端点上被标记不支持;换一个代理端点,
+	// 首发必须重新带上默认 temperature(即会再吃一次 400 → 自愈)。
+	const http = installHTTP((body) => body.temperature !== undefined
+		? { status: 400, text: TEMP_REJECT }
+		: { status: 200, text: OK_TEXT });
+	try {
+		const p = createOpenAICompatibleProvider({ id: 'deepseek', displayName: 'DeepSeek', defaultBaseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-chat' });
+		const out = await p.complete!('x', settings({ providerId: 'deepseek', reasoning: undefined, model: 'deepseek-reasoner-temp-test', apiBaseURL: 'https://proxy.example.com/v1' }), {});
 		assert.equal(out, '深度解析内容');
-		assert.equal(http.bodies.length, 3, '两次 400 + 一次成功');
-		assert.equal(http.bodies[2].temperature, undefined);
-		assert.equal(http.bodies[2].reasoning_effort, undefined);
+		assert.equal(http.bodies.length, 2, '新端点重新试探 → 一次 400 + 一次重试');
+		assert.equal(http.bodies[0].temperature, 0, '新端点首发仍带默认温度');
+	}
+	finally { http.teardown(); }
+});
+
+test('非「不支持参数」形态的 temperature 400 (类型/越界) 照旧抛出 (1.3.0)', async () => {
+	const http = installHTTP(() => ({ status: 400, text: '{"error":{"message":"Invalid type for temperature: expected number, got string","type":"invalid_request_error"}}' }));
+	try {
+		const p = createOpenAICompatibleProvider({ id: 'deepseek', displayName: 'DeepSeek', defaultBaseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-chat' });
+		await assert.rejects(() => p.complete!('x', settings({ providerId: 'deepseek', reasoning: undefined, model: 'deepseek-badtemp-test' }), {}));
+		assert.equal(http.bodies.length, 1, '配置错误不重试不吞');
 	}
 	finally { http.teardown(); }
 });

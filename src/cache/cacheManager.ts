@@ -22,6 +22,22 @@ import {
 
 const MODULE = 'cache';
 
+/**
+ * 每个缓存文件一条写队列 (1.3.0, 审核 P1): 段落缓存的写入是「读旧文件 → 合并
+ * → 原子覆盖」。原子写只保证文件不写坏,保证不了并发合并正确 —— 页面 A、B
+ * 同时读到 {x},A 写 {x,a},B 再写 {x,b},a 被覆盖丢失。表现为翻译成功但下次
+ * 打开重新翻译、段落命中率异常低、完成顺序影响缓存。同一路径的写现在串行:
+ * 后一次写必须等前一次的 读→合并→写 全部落盘。不同文件互不阻塞。
+ */
+const writeQueues = new Map<string, Promise<void>>();
+
+function enqueueWrite(path: string, job: () => Promise<void>): Promise<void> {
+	const prev = writeQueues.get(path) ?? Promise.resolve();
+	const next = prev.then(job, job); // 前一次失败也不能卡死队列
+	writeQueues.set(path, next.then(() => undefined, () => undefined));
+	return next;
+}
+
 export function cacheRootDir(): string {
 	return PathUtils.join(Zotero.DataDirectory.dir, 'bilingual-reader', 'cache');
 }
@@ -65,16 +81,18 @@ export async function writePage(parts: CacheKeyParts, translations: TranslatedBl
 		createdAt: new Date().toISOString(),
 		translations
 	};
-	try {
-		if (dir) {
-			await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
+	await enqueueWrite(path, async () => {
+		try {
+			if (dir) {
+				await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
+			}
+			// Atomic: write to tmp file, then rename over the target.
+			await IOUtils.writeJSON(path, entry, { tmpPath: path + '.tmp' });
 		}
-		// Atomic: write to tmp file, then rename over the target.
-		await IOUtils.writeJSON(path, entry, { tmpPath: path + '.tmp' });
-	}
-	catch (e) {
-		logger.warn(MODULE, 'Cache write failed (continuing without cache)', e);
-	}
+		catch (e) {
+			logger.warn(MODULE, 'Cache write failed (continuing without cache)', e);
+		}
+	});
 }
 
 function segmentsPath(parts: SegmentContextParts): string {
@@ -117,8 +135,10 @@ export async function readSegments(parts: SegmentContextParts, hashes: string[])
 
 /**
  * 段落级缓存 write: merge the new entries into the existing store (read →
- * merge → atomic write), so concurrent pages appending segments do not clobber
- * each other's earlier writes.
+ * merge → atomic write). The whole read→merge→write runs inside the file's
+ * write queue (enqueueWrite), so concurrent pages appending segments can no
+ * longer clobber each other's earlier writes — the atomic rename alone never
+ * guaranteed the MERGE was based on the latest contents.
  */
 export async function writeSegments(parts: SegmentContextParts, entries: { hash: string; translatedText: string }[]): Promise<void> {
 	if (!entries.length) {
@@ -127,28 +147,30 @@ export async function writeSegments(parts: SegmentContextParts, entries: { hash:
 	const path = segmentsPath(parts);
 	const dir = PathUtils.parent(path);
 	const context = segmentContextHash(parts);
-	try {
-		let segments: Record<string, string> = {};
-		if (await IOUtils.exists(path)) {
-			const data = await IOUtils.readJSON(path).catch(() => null);
-			if (isValidCachedSegments(data, context)) {
-				segments = data.segments;
+	await enqueueWrite(path, async () => {
+		try {
+			let segments: Record<string, string> = {};
+			if (await IOUtils.exists(path)) {
+				const data = await IOUtils.readJSON(path).catch(() => null);
+				if (isValidCachedSegments(data, context)) {
+					segments = data.segments;
+				}
 			}
-		}
-		for (const e of entries) {
-			if (e.hash && e.translatedText) {
-				segments[e.hash] = e.translatedText;
+			for (const e of entries) {
+				if (e.hash && e.translatedText) {
+					segments[e.hash] = e.translatedText;
+				}
 			}
+			const entry: CachedSegments = { schemaVersion: CACHE_SCHEMA_VERSION, context, segments };
+			if (dir) {
+				await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
+			}
+			await IOUtils.writeJSON(path, entry, { tmpPath: path + '.tmp' });
 		}
-		const entry: CachedSegments = { schemaVersion: CACHE_SCHEMA_VERSION, context, segments };
-		if (dir) {
-			await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
+		catch (e) {
+			logger.warn(MODULE, 'Segment cache write failed (continuing without cache)', e);
 		}
-		await IOUtils.writeJSON(path, entry, { tmpPath: path + '.tmp' });
-	}
-	catch (e) {
-		logger.warn(MODULE, 'Segment cache write failed (continuing without cache)', e);
-	}
+	});
 }
 
 export async function clearAttachment(attachmentKey: string, fileHash: string): Promise<void> {
@@ -178,6 +200,61 @@ export async function clearAttachmentAllVersions(attachmentKey: string): Promise
 
 export async function clearAll(): Promise<void> {
 	await IOUtils.remove(cacheRootDir(), { recursive: true, ignoreAbsent: true });
+}
+
+/**
+ * 兼容性清理 (schema v2, 1.3.0): schema 升级后旧条目的文件名布局也变了
+ * (页面文件名多了 customPromptHash 段),读取路径永远碰不到它们,只会白占磁盘。
+ * 启动后惰性扫一遍:凡 JSON 里 schemaVersion 与当前不符的缓存文件直接删除。
+ * 纯尽力而为 —— 任何失败都吞掉,绝不影响启动。每会话至多跑一次。
+ */
+let sweepDone = false;
+
+export async function sweepStaleCacheFiles(): Promise<number> {
+	if (sweepDone) {
+		return 0;
+	}
+	sweepDone = true;
+	let removed = 0;
+	try {
+		const root = cacheRootDir();
+		if (!(await IOUtils.exists(root))) {
+			return 0;
+		}
+		for (const dir of await IOUtils.getChildren(root)) {
+			let children: string[];
+			try {
+				children = await IOUtils.getChildren(dir);
+			}
+			catch {
+				continue; // a file at root level, or unreadable — skip
+			}
+			for (const file of children) {
+				if (!file.endsWith('.json')) {
+					continue;
+				}
+				try {
+					const data = await IOUtils.readJSON(file) as { schemaVersion?: number } | null;
+					if (!data || data.schemaVersion !== CACHE_SCHEMA_VERSION) {
+						await IOUtils.remove(file, { ignoreAbsent: true });
+						removed++;
+					}
+				}
+				catch {
+					// unreadable JSON is stale by definition
+					await IOUtils.remove(file, { ignoreAbsent: true }).catch(() => { /* ignore */ });
+					removed++;
+				}
+			}
+		}
+		if (removed) {
+			logger.info(MODULE, `Schema sweep removed ${removed} stale cache file(s)`);
+		}
+	}
+	catch (e) {
+		logger.warn(MODULE, 'Schema sweep failed (ignored)', e);
+	}
+	return removed;
 }
 
 export async function totalSizeBytes(): Promise<number> {

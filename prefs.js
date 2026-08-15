@@ -64,7 +64,6 @@ pref('extensions.zotero.bilingualReader.privacyNoticeAccepted', false);
 pref('extensions.zotero.bilingualReader.allowHTTPEndpoint', false);
 pref('extensions.zotero.bilingualReader.localOnlyMode', false);
 pref('extensions.zotero.bilingualReader.glossaryGlobal', '[]');
-pref('extensions.zotero.bilingualReader.promptVersion', 1);
 // Fallback API key storage (used only when the Mozilla Login Manager is
 // unavailable). Never logged, never exported with settings.
 pref('extensions.zotero.bilingualReader.apiKeyFallback', '');

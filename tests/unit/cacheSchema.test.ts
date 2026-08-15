@@ -11,6 +11,7 @@ const baseKey: CacheKeyParts = {
 	provider: 'anthropic',
 	model: 'claude-sonnet-4-5',
 	promptVersion: 1,
+	customPromptHash: hashSourceTexts(['']),
 	sourceTextHash: hashSourceTexts(['hello world'])
 };
 
@@ -52,4 +53,29 @@ test('isValidCachedPage accepts a matching entry and rejects mismatches', () => 
 test('cache key/file names never contain unsafe path characters', () => {
 	const name = pageFileName({ ...baseKey, model: 'org/model:v1 beta' });
 	assert.ok(!/[/:\\ ]/.test(name));
+});
+
+// ---- schema v2: 自定义提示词进入缓存身份 (1.3.0) ------------------------------
+
+test('customPromptHash 改变 → 页面文件名与校验双双失效', () => {
+	const withPrompt: CacheKeyParts = { ...baseKey, customPromptHash: hashSourceTexts(['请使用医学术语直译']) };
+	assert.notEqual(pageFileName(baseKey), pageFileName(withPrompt), '不同提示词是不同文件');
+	const entry = {
+		schemaVersion: CACHE_SCHEMA_VERSION,
+		key: baseKey,
+		createdAt: 'now',
+		translations: [{ id: 'b0', translatedText: '你好' }]
+	};
+	assert.equal(isValidCachedPage(entry, baseKey), true);
+	assert.equal(isValidCachedPage(entry, withPrompt), false, '提示词变了旧条目不再命中');
+});
+
+test('schema v1 旧条目一律不再有效 (强制失效)', () => {
+	const v1entry = {
+		schemaVersion: 1,
+		key: baseKey,
+		createdAt: 'now',
+		translations: [{ id: 'b0', translatedText: '你好' }]
+	};
+	assert.equal(isValidCachedPage(v1entry, baseKey), false);
 });

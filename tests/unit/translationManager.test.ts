@@ -1340,3 +1340,67 @@ test('untranslatedLatinWords: 只数小写开头的普通词', () => {
 	assert.equal(untranslatedLatinWords('Marilyn J. Siegel, MD • Juan Carlos Ramirez-Giraldo, PhD •'), 0);
 	assert.equal(untranslatedLatinWords('光子计数 CT 扫描仪'), 0, '中文里没有拉丁散文词');
 });
+
+// ---- 页面缓存完整性 (1.3.0, 审核 P1) -----------------------------------------
+
+test('不完整的页面缓存只作预填, 缺失块继续翻译, 不允许直接 done', async () => {
+	// 缓存里只有 block-0 的译文(比如压缩路径曾写入部分结果),block-1 缺失。
+	// 旧行为: 命中即 done,block-1 永远英文。新行为: 预填 block-0,翻译 block-1。
+	const { deps, calls } = makeDeps({
+		readCache: async () => [{ id: 'page-0-block-0', translatedText: '缓存译文零' }]
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const final = manager.getPageState(0)!;
+	assert.equal(final.status, 'done');
+	assert.equal(final.translations.get('page-0-block-0'), '缓存译文零', '有效缓存被复用');
+	assert.equal(final.translations.get('page-0-block-1'), '译:Source paragraph 1 on page 0.', '缺失块被翻译');
+	assert.ok(calls.translate >= 1, '不完整缓存必须触发翻译');
+	assert.notEqual(final.fromCache, true, '不完整命中不算 fromCache 整页命中');
+	manager.dispose();
+});
+
+test('缓存含过期 ID 与回显英文时: 过期 ID 忽略, 未通过校验的译文不复用', async () => {
+	// 用足够长的散文源文,确保回显英文会被 looksTranslated 拒绝
+	// (短标签源文有小样本豁免,是既有设计)。
+	const longSrc = (i: number): string =>
+		`The quick brown fox jumps over the lazy dog while the committee deliberates extensively on paragraph ${i} of the manuscript today.`;
+	const { deps } = makeDeps({
+		extractPage: async (pageIndex) => [0, 1].map(i => ({
+			id: `page-${pageIndex}-block-${i}`, pageIndex, order: i,
+			type: 'paragraph' as const, sourceText: longSrc(i)
+		})),
+		translateRequest: async (request) => ({
+			translations: request.blocks.map(b => ({ id: b.id, translatedText: '敏捷的棕色狐狸跳过懒狗,与此同时委员会今天对稿件的这一段进行了详尽的审议。' }))
+		}),
+		readCache: async () => [
+			{ id: 'page-0-block-999', translatedText: '幽灵块' },   // 过期 ID
+			{ id: 'page-0-block-0', translatedText: longSrc(0) },   // 回显英文
+			{ id: 'page-0-block-1', translatedText: '这是一段完全有效的中文译文,足够长也足够中文。' }
+		]
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const final = manager.getPageState(0)!;
+	assert.equal(final.status, 'done');
+	assert.equal(final.translations.get('page-0-block-1'), '这是一段完全有效的中文译文,足够长也足够中文。');
+	assert.ok(/敏捷的棕色狐狸/.test(final.translations.get('page-0-block-0') ?? ''), '回显英文被重翻');
+	assert.equal(final.translations.has('page-0-block-999'), false, '过期 ID 不进状态');
+	manager.dispose();
+});
+
+test('完整且全部通过校验的缓存仍整页命中 (行为不回退)', async () => {
+	const { deps, calls } = makeDeps({
+		readCache: async () => [
+			{ id: 'page-0-block-0', translatedText: '译文零' },
+			{ id: 'page-0-block-1', translatedText: '译文一' }
+		]
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 10);
+	const final = manager.getPageState(0)!;
+	assert.equal(final.status, 'done');
+	assert.equal(final.fromCache, true);
+	assert.equal(calls.translate, 0, '完整命中零请求');
+	manager.dispose();
+});

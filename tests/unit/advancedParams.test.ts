@@ -122,11 +122,15 @@ test('isReasoningEffortRejection: 只认 400 且 message 带 reasoning_effort', 
 	assert.equal(isReasoningEffortRejection(null), false);
 });
 
-test('reasoningEffortUnsupported 注册表: 按 (供应商, 模型) 记忆, 互不影响', () => {
-	assert.equal(reasoningEffortUnsupported('openai', 'gpt-4o-unique-a'), false);
-	markReasoningEffortUnsupported('openai', 'gpt-4o-unique-a');
-	assert.equal(reasoningEffortUnsupported('openai', 'gpt-4o-unique-a'), true);
+test('reasoningEffortUnsupported 注册表: 按 (供应商, 端点, 模型) 记忆, 互不影响', () => {
+	const EP = 'https://api.openai.com/v1/chat/completions';
+	assert.equal(reasoningEffortUnsupported('openai', EP, 'gpt-4o-unique-a'), false);
+	markReasoningEffortUnsupported('openai', EP, 'gpt-4o-unique-a');
+	assert.equal(reasoningEffortUnsupported('openai', EP, 'gpt-4o-unique-a'), true);
 	// 不牵连同供应商的推理模型, 也不牵连别的供应商
-	assert.equal(reasoningEffortUnsupported('openai', 'o3-unique-b'), false);
-	assert.equal(reasoningEffortUnsupported('openrouter', 'gpt-4o-unique-a'), false);
+	assert.equal(reasoningEffortUnsupported('openai', EP, 'o3-unique-b'), false);
+	assert.equal(reasoningEffortUnsupported('openrouter', EP, 'gpt-4o-unique-a'), false);
+	// 端点隔离 (1.3.0): 端点 A 的「不支持」不波及端点 B; 大小写/尾斜杠归一化。
+	assert.equal(reasoningEffortUnsupported('openai', 'https://proxy.example.com/v1/chat/completions', 'gpt-4o-unique-a'), false);
+	assert.equal(reasoningEffortUnsupported('openai', EP.toUpperCase() + '/', 'gpt-4o-unique-a'), true);
 });

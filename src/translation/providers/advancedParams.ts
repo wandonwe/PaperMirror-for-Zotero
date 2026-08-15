@@ -97,17 +97,29 @@ export function isReasoningEffortRejection(e: unknown): boolean {
 }
 
 const reasoningEffortUnsupportedModels = new Set<string>();
-const modelKey = (providerId: string, model: string): string => JSON.stringify([providerId, model]);
 
-/** Has this (provider, model) already 400'd on reasoning_effort this session? */
-export function reasoningEffortUnsupported(providerId: string, model: string): boolean {
-	return reasoningEffortUnsupportedModels.has(modelKey(providerId, model));
+/**
+ * 记忆键按端点隔离 (1.3.0, 审核 P2): 同一 providerId + 模型名可能连接官方 API、
+ * 用户代理、本地兼容端点等完全不同的后端 —— 端点 A 不支持某参数,不能让端点 B
+ * 在本会话里也不再发送。endpoint 传归一化后的请求 URL(小写、去尾斜杠),
+ * 自然覆盖 baseURL 与 API path 的差异。
+ */
+export function normalizeEndpoint(url: string): string {
+	return (url || '').trim().toLowerCase().replace(/\/+$/, '');
 }
 
-/** Remember that this (provider, model) rejects reasoning_effort, so future
- *  requests omit it up front instead of eating a 400 + retry every time. */
-export function markReasoningEffortUnsupported(providerId: string, model: string): void {
-	reasoningEffortUnsupportedModels.add(modelKey(providerId, model));
+const modelKey = (providerId: string, endpoint: string, model: string): string =>
+	JSON.stringify([providerId, normalizeEndpoint(endpoint), model]);
+
+/** Has this (provider, endpoint, model) already 400'd on reasoning_effort this session? */
+export function reasoningEffortUnsupported(providerId: string, endpoint: string, model: string): boolean {
+	return reasoningEffortUnsupportedModels.has(modelKey(providerId, endpoint, model));
+}
+
+/** Remember that this (provider, endpoint, model) rejects reasoning_effort, so
+ *  future requests omit it up front instead of eating a 400 + retry every time. */
+export function markReasoningEffortUnsupported(providerId: string, endpoint: string, model: string): void {
+	reasoningEffortUnsupportedModels.add(modelKey(providerId, endpoint, model));
 }
 
 /**
@@ -122,19 +134,24 @@ export function markReasoningEffortUnsupported(providerId: string, model: string
  * (provider, model) 记住,后续请求直接不发,避免每次先 400 再重试。
  */
 export function isTemperatureRejection(e: unknown): boolean {
-	return e instanceof PaperMirrorError
-		&& e.httpStatus === 400
-		&& /temperature/i.test(e.message ?? '');
+	if (!(e instanceof PaperMirrorError) || e.httpStatus !== 400) {
+		return false;
+	}
+	const msg = e.message ?? '';
+	// 只匹配明确的「不支持该参数 / 只允许默认值」形态 (审核 P2) —— 单纯
+	// /temperature/ 会把用户输入越界值、类型错误等配置问题也静默吞掉。
+	return /temperature/i.test(msg)
+		&& /unsupported\s+value|only\s+the\s+default|does\s+not\s+support|unrecognized\s+request\s+argument|unknown\s+parameter|not\s+supported\s+with\s+this\s+model/i.test(msg);
 }
 
 const temperatureUnsupportedModels = new Set<string>();
 
-/** Has this (provider, model) already 400'd on temperature this session? */
-export function temperatureUnsupported(providerId: string, model: string): boolean {
-	return temperatureUnsupportedModels.has(modelKey(providerId, model));
+/** Has this (provider, endpoint, model) already 400'd on temperature this session? */
+export function temperatureUnsupported(providerId: string, endpoint: string, model: string): boolean {
+	return temperatureUnsupportedModels.has(modelKey(providerId, endpoint, model));
 }
 
-/** Remember that this (provider, model) rejects a non-default temperature. */
-export function markTemperatureUnsupported(providerId: string, model: string): void {
-	temperatureUnsupportedModels.add(modelKey(providerId, model));
+/** Remember that this (provider, endpoint, model) rejects a non-default temperature. */
+export function markTemperatureUnsupported(providerId: string, endpoint: string, model: string): void {
+	temperatureUnsupportedModels.add(modelKey(providerId, endpoint, model));
 }

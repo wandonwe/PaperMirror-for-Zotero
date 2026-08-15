@@ -42,7 +42,6 @@ export type PrefKey
 	| 'allowHTTPEndpoint'
 	| 'localOnlyMode'
 	| 'glossaryGlobal'
-	| 'promptVersion'
 	| 'apiKeyFallback'
 	| 'parallelProviders'
 	| 'layoutMigration';

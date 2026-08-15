@@ -637,7 +637,11 @@ export class ReaderSession {
 			targetLanguage: target,
 			provider: settings.providerId,
 			model: settings.model,
-			promptVersion: getPref<number>('promptVersion', PROMPT_VERSION),
+			// 代码常量,不读 promptVersion 首选项 (审核 P0): prefs.js 固定的 1
+			// 曾把代码里的 v2 永远压回 v1,提示词升级从未真正让缓存失效。
+			promptVersion: PROMPT_VERSION,
+			// 自定义提示词是译文身份的一部分: 用户改提示词后旧译文不再命中。
+			customPromptHash: hashSourceTexts([getPref<string>('customPrompt', '')]),
 			sourceTextHash: hashSourceTexts(texts)
 		};
 	}
@@ -658,7 +662,8 @@ export class ReaderSession {
 			fileHash: this.fileHash || 'nohash',
 			provider: settings.providerId,
 			model: settings.model,
-			promptVersion: getPref<number>('promptVersion', PROMPT_VERSION),
+			promptVersion: PROMPT_VERSION,
+			customPromptHash: hashSourceTexts([getPref<string>('customPrompt', '')]),
 			glossaryHash: hashSourceTexts([getPref<string>('glossaryGlobal', '[]')])
 		};
 	}

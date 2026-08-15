@@ -678,7 +678,15 @@ export class TranslationManager {
 					const all: TranslatedBlock[] = state.blocks
 						.filter(b => state.translations.has(b.id))
 						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! }));
-					await this.deps.writeCache(pageIndex, state.blocks, all);
+					// Only a COMPLETE page enters the page cache (审核 P1): this
+					// path can run while some blocks are keep-origin — writing the
+					// partial set used to freeze the page as a cache entry that hit
+					// and went straight to done with those blocks left in English.
+					const complete = state.blocks.every(b =>
+						b.translationMode === 'preserve' || state.translations.has(b.id));
+					if (complete) {
+						await this.deps.writeCache(pageIndex, state.blocks, all);
+					}
 					// The SHORTER (fitting) version replaces the long one in the
 					// segment store too, so a 普通刷新 does not resurrect a
 					// translation that already failed placement once.
@@ -1335,28 +1343,6 @@ export class TranslationManager {
 			return;
 		}
 
-		// 2. Cache
-		if (!bypass.bypassPageCache) {
-			const cached = await this.deps.readCache(pageIndex, blocks);
-			if (cached) {
-				for (const t of cached) {
-					state.translations.set(t.id, t.translatedText);
-				}
-				state.status = 'done';
-				state.fromCache = true;
-				state.diagnostics = {
-					requests: 0, salvage: 0, rateLimited: 0, timeouts: 0,
-					segmentHits: 0, durationMs: Date.now() - metrics.startedAt, fromCache: true
-				};
-				this.notify(state);
-				return;
-			}
-		}
-
-		// 3. Translate chunk by chunk
-		state.status = 'translating';
-		this.notify(state);
-
 		const sampleText = activeBlocks.map(b => b.sourceText).join('\n').slice(0, 4000);
 		const { source, target } = this.deps.getLanguages(sampleText);
 		const glossary = this.glossaryFor(activeBlocks.map(b => b.sourceText));
@@ -1364,6 +1350,47 @@ export class TranslationManager {
 		// Accept a response only if it is actually translated (not echoed English).
 		const accept = (id: string, text: string): boolean =>
 			text.trim().length > 0 && looksTranslated(sourceById.get(id) ?? '', text, target);
+
+		// 2. Cache — a hit is only COMPLETE when every active block has a usable
+		// translation (审核 P1): the file being valid never meant it covered the
+		// page. A partial entry (e.g. written by the compress path while some
+		// blocks were keep-origin) used to flip the page straight to done with
+		// blocks silently left in English. Now: cached ids that no longer exist
+		// are dropped, every entry must still pass the same accept() gate as a
+		// live response, and an incomplete hit only PREFILLS — the rest of the
+		// pipeline translates the missing blocks (toTranslate skips prefilled).
+		if (!bypass.bypassPageCache) {
+			const cached = await this.deps.readCache(pageIndex, blocks);
+			if (cached) {
+				const cachedById = new Map(cached.map(t => [t.id, t.translatedText]));
+				let usable = 0;
+				for (const block of activeBlocks) {
+					const text = cachedById.get(block.id);
+					if (typeof text === 'string' && accept(block.id, text)) {
+						state.translations.set(block.id, text);
+						usable++;
+					}
+				}
+				if (usable === activeBlocks.length) {
+					state.status = 'done';
+					state.fromCache = true;
+					state.diagnostics = {
+						requests: 0, salvage: 0, rateLimited: 0, timeouts: 0,
+						segmentHits: 0, durationMs: Date.now() - metrics.startedAt, fromCache: true
+					};
+					this.notify(state);
+					return;
+				}
+				if (usable) {
+					logger.info(MODULE, `Page ${pageIndex + 1}: partial cache (${usable}/${activeBlocks.length}) — prefilled, translating the rest`);
+					this.notify(state); // show reused blocks immediately
+				}
+			}
+		}
+
+		// 3. Translate chunk by chunk
+		state.status = 'translating';
+		this.notify(state);
 
 		// 2.5 段落级缓存: prefill whatever segments this context has already
 		// translated (content+language hash; provider/model scoping lives in the

@@ -82,10 +82,16 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 	): Promise<unknown> => {
 		const url = chatURL(settings, config.defaultBaseURL, config.noV1Suffix);
 		const model = settings.model || config.defaultModel;
+		// 记忆按 (provider, endpoint, model) 隔离 (1.3.0): 同名模型接不同后端时,
+		// 端点 A 的「不支持」不再波及端点 B。url 即含 baseURL 与 API path。
 		const drop = {
-			reasoning: reasoningEffortUnsupported(config.id, model),
-			temperature: temperatureUnsupported(config.id, model)
+			reasoning: reasoningEffortUnsupported(config.id, url, model),
+			temperature: temperatureUnsupported(config.id, url, model)
 		};
+		// 只有插件自动加的默认温度可以静默剥离 (审核 P2): 用户显式设置的温度被
+		// 拒时,这是一个该浮出的配置错误,不是该吞的兼容性问题。
+		const temperatureIsExplicit = typeof settings.temperature === 'number'
+			&& Number.isFinite(settings.temperature);
 		const bodyNow = (): Record<string, unknown> => {
 			const extras = openaiChatExtras(settings, config.id);
 			if (drop.reasoning) {
@@ -112,12 +118,12 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 				// (i.e. we hadn't already learned to drop it).
 				if (!drop.reasoning && isReasoningEffortRejection(e)) {
 					drop.reasoning = true;
-					markReasoningEffortUnsupported(config.id, model);
+					markReasoningEffortUnsupported(config.id, url, model);
 					continue;
 				}
-				if (!drop.temperature && isTemperatureRejection(e)) {
+				if (!drop.temperature && !temperatureIsExplicit && isTemperatureRejection(e)) {
 					drop.temperature = true;
-					markTemperatureUnsupported(config.id, model);
+					markTemperatureUnsupported(config.id, url, model);
 					continue;
 				}
 				throw e;
