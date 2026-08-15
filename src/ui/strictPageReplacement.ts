@@ -268,7 +268,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		.filter(b => b.width > 8 && b.height > 8);
 
 	const pxOf = new Map<string, PixelBox>();
-	for (const b of translatable) {
+	// GEOMETRIC, not translatable (1.0.3 卡死修复): preserve table cells are in
+	// `geometric` and feed the table guard below — building pxOf from
+	// `translatable` left their boxes undefined, and the first table page threw
+	// inside detectTableRegions/containedFraction. The exception aborted
+	// buildStrictPage, so 翻译 18/18 段 stood forever at 排版 0/18.
+	for (const b of geometric) {
 		pxOf.set(b.id, pixelBox(b, render, 1));
 	}
 	const blockById = new Map(geometric.map(b => [b.id, b]));

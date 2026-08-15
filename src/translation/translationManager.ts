@@ -844,6 +844,27 @@ export class TranslationManager {
 		});
 	}
 
+	/**
+	 * Rendered-text-layer extraction with a short retry loop: the text layer of
+	 * a page the user JUST scrolled to typically appears within a second — one
+	 * immediate empty read must not condemn the page (1.0.3 到页点圆环修复).
+	 */
+	private async renderedWithRetry(pageIndex: number): Promise<SourceBlock[]> {
+		for (let attempt = 0; attempt < 6; attempt++) {
+			if (this.disposed || pageIndex !== this.currentPage) {
+				return [];
+			}
+			const blocks = await this.withExtractTimeout(
+				this.deps.extractRenderedPage!(pageIndex), pageIndex
+			).catch(() => [] as SourceBlock[]);
+			if (blocks.length) {
+				return blocks;
+			}
+			await this.delay(500);
+		}
+		return [];
+	}
+
 	private async withExtractionSlot<T>(pageIndex: number, fn: () => Promise<T>): Promise<T> {
 		// WHILE, not if (审核 P2): between a waiter's wake-up and its increment a
 		// fresh caller could slip past the single check — the cap briefly ran 3.
@@ -930,7 +951,18 @@ export class TranslationManager {
 						this.pages.delete(pageIndex);
 						return;
 					}
-					blocks = await this.withExtractTimeout(this.deps.extractRenderedPage(pageIndex), pageIndex);
+					blocks = await this.renderedWithRetry(pageIndex);
+					if (!blocks.length) {
+						// 1.0.3 修复 (到页仍要点圆环): the user often ARRIVES at the
+						// page before its text layer exists — the old code marked the
+						// empty result "done" and the page could never auto-translate
+						// again. Surface a retryable error instead.
+						state.status = 'error';
+						state.error = new PaperMirrorError('EXTRACTION_FAILED',
+							`第 ${pageIndex + 1} 页文字层尚未就绪,稍后自动重试或点击刷新。`, { retryable: true });
+						this.notify(state);
+						return;
+					}
 				}
 				else {
 					blocks = await this.withExtractionSlot(pageIndex,
@@ -946,8 +978,7 @@ export class TranslationManager {
 					// text layer. Otherwise forget the prefetch state; a later visit
 					// will use the DOM without duplicating the live worker request.
 					if (pageIndex === this.currentPage && this.deps.extractRenderedPage) {
-						const rendered = await this.deps.extractRenderedPage(pageIndex)
-							.catch(() => [] as SourceBlock[]);
+						const rendered = await this.renderedWithRetry(pageIndex);
 						if (rendered.length) {
 							blocks = rendered;
 							logger.info(MODULE, `Page ${pageIndex + 1}: recovered timed-out extraction from rendered text layer`);

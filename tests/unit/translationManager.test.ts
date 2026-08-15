@@ -1170,3 +1170,44 @@ test('visible page with hung worker AND empty text layer surfaces a retryable er
 	assert.equal(state?.error?.retryable, true);
 	manager.dispose();
 });
+
+// ---------------------------------------------------------------------------
+// 1.0.3: 到页仍要点圆环 —— 文字层未就绪的空结果绝不能标 done
+// ---------------------------------------------------------------------------
+
+test('zombie fallback retries the text layer and never marks an empty page done', async () => {
+	let renderedCalls = 0;
+	const { deps } = makeDeps({
+		extractPage: async () => new Promise(() => { /* worker hangs → zombie */ }),
+		extractRenderedPage: async (pageIndex) => {
+			renderedCalls++;
+			// The text layer appears on the third read (user just arrived).
+			return renderedCalls >= 3 ? makeBlocks(pageIndex, 1) : [];
+		},
+		readCache: async () => null
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, extractTimeoutMs: 30, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10); // times out → rendered retry loop kicks in
+	const state = manager.getPageState(0);
+	assert.equal(state?.status, 'done', state?.error?.message);
+	assert.ok(renderedCalls >= 3, 'the empty first reads must be retried');
+	assert.ok(state!.translations.size > 0, 'the page really translated after the layer appeared');
+	manager.dispose();
+});
+
+test('a permanently empty text layer surfaces a retryable error, never a fake done', async () => {
+	const { deps } = makeDeps({
+		extractPage: async () => new Promise(() => { /* worker hangs */ }),
+		extractRenderedPage: async () => [],
+		readCache: async () => null
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, extractTimeoutMs: 30, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const state = manager.getPageState(0);
+	assert.equal(state?.status, 'error');
+	assert.equal(state?.error?.retryable, true);
+	// The zombie path on a REVISIT must behave the same (error, not done).
+	await manager.ensurePage(0, 10);
+	assert.equal(manager.getPageState(0)?.status, 'error');
+	manager.dispose();
+});

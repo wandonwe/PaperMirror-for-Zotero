@@ -1053,13 +1053,25 @@ export class ReaderSession {
 			// rectangle triggers up to two budgeted compress-and-retry rounds
 			// (the manager's update re-renders this slot); after that the
 			// block REVERTS to the original text — never clipped or moved.
-			const built = buildStrictPage(doc, {
-				blocks: state.blocks,
-				translations: state.translations,
-				pageIndex,
-				render,
-				imageRectsPdf: this.imageRects.get(pageIndex) ?? undefined
-			});
+			// A geometry exception in the builder must DEGRADE, not freeze: an
+			// uncaught throw here left the capsule at "排版 0/N" forever while the
+			// page stayed English (1.0.3 表格页卡死). Fall back to the original
+			// page and clear the stuck layout task instead.
+			let built: ReturnType<typeof buildStrictPage> | null = null;
+			try {
+				built = buildStrictPage(doc, {
+					blocks: state.blocks,
+					translations: state.translations,
+					pageIndex,
+					render,
+					imageRectsPdf: this.imageRects.get(pageIndex) ?? undefined
+				});
+			}
+			catch (e) {
+				logger.error(MODULE, `buildStrictPage threw on page ${pageIndex + 1}; showing original`, e);
+				this.setTask('translation', null);
+				this.flashNotice(`第 ${pageIndex + 1} 页排版失败,已保留原文(可刷新本页重试)`);
+			}
 			if (built) {
 				if (!current()) {
 					return false;
