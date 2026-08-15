@@ -15,6 +15,17 @@ test('looksTabular: cells yes, prose no', () => {
 	assert.equal(looksTabular('Methods'), false);
 });
 
+test('looksTabular: author-initial lists are prose, not cells (1.2.0 false-table fix)', () => {
+	// Period/comma-dense but DIGIT-FREE — a journal author-contribution line.
+	// Without the digit gate these seeded false table clusters across the page.
+	assert.equal(looksTabular('mental studies, A.H., H.P., C.J.W., J.K., S.L., S.N.G.; sta-'), false);
+	assert.equal(looksTabular('A.H., A.U.H., T.d.B., S.N.G.'), false);
+	assert.equal(looksTabular('S.N.G.'), false);
+	// A genuine stat cell (has a digit) is still tabular.
+	assert.equal(looksTabular('(SD, 0.22)'), true);
+	assert.equal(looksTabular('3.4 ± 1.2 (n=52)'), true);
+});
+
 test('a grid of numeric cells becomes one protected region', () => {
 	const items: GuardItem[] = [];
 	// 4 rows × 3 columns of cells

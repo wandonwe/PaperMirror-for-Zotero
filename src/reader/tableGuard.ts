@@ -48,8 +48,11 @@ export function looksTabular(text: string): boolean {
 	if (letters === 0 && digitsAndSymbols > 0) {
 		return true;
 	}
-	// Symbol-dense short fragments: "3.4 ± 1.2 (n=52)" etc.
-	if (t.length <= 80 && digitsAndSymbols >= Math.max(3, t.length * 0.3)) {
+	// Symbol-dense short fragments: "3.4 ± 1.2 (n=52)" etc. Must contain a DIGIT
+	// (1.2.0 fix): an author-initial list ("A.H., H.P., C.J.W., J.K., S.L.") is
+	// just as period/comma-dense but is prose, not a cell — without the digit
+	// gate it seeded false table clusters in journal author-contribution boxes.
+	if (t.length <= 80 && /[0-9]/.test(t) && digitsAndSymbols >= Math.max(3, t.length * 0.3)) {
 		return true;
 	}
 	// Very short label-ish fragments count when they carry a digit OR a
