@@ -132,8 +132,6 @@ export interface PaneCallbacks {
 	onShowDiagnostics(): void;
 	/** 菜单栏「术语」— copy 本篇学得的术语对 (TSV,自动抽取入口 1.1.2)。 */
 	onCopyTerms(): void;
-	/** 菜单栏「语料」— copy 当前页文本层 span 语料 JSON (dump-spans 同格式)。 */
-	onExportCorpus(): void;
 	onToggleViewKind(kind: 'page' | 'article'): void;
 	/** 菜单栏直接切换 — no round-trip through the settings pane. */
 	onPickLanguages(source: string, target: string): void;
@@ -655,9 +653,8 @@ export class TranslationPane {
 			this.syncSwitch,
 			this.textButton('pm-bar-action', `✦ ${this.strings.explain}`, this.strings.explainTip, () => this.callbacks.onExplainSelection()),
 			this.textButton('pm-bar-action', this.strings.saveNote, this.strings.saveNote, () => this.callbacks.onSaveNote()),
-			this.textButton('pm-bar-action', '诊断', '复制本文档的脱敏翻译诊断(不含正文与密钥)', () => this.callbacks.onShowDiagnostics()),
+			this.textButton('pm-bar-action', '诊断', '复制诊断 JSON:全文档脱敏指标 + 当前页布局语料(含本页原文坐标,不含译文与密钥)', () => this.callbacks.onShowDiagnostics()),
 			this.textButton('pm-bar-action', '术语', '复制本篇自动学得的术语对照表 (TSV,可粘贴进词汇表)', () => this.callbacks.onCopyTerms()),
-			this.textButton('pm-bar-action', '语料', '复制当前页布局语料 JSON(含本页文本与坐标,用于回归测试/问题反馈)', () => this.callbacks.onExportCorpus()),
 			this.el('span', 'pm-bar-sep'),
 			this.makeSideButton(),
 			this.iconButton(ICON_PATHS.settings, this.strings.settings, () => this.callbacks.onOpenSettings()),

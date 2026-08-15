@@ -243,7 +243,6 @@ export class ReaderSession {
 			onSaveNote: () => void this.saveSelectionToNote(),
 			onShowDiagnostics: () => this.copyDiagnostics(),
 			onCopyTerms: () => this.copyLearnedTerms(),
-			onExportCorpus: () => this.copyLayoutCorpus(),
 			onOpenSettings: () => this.openSettings(),
 			onToggleViewKind: kind => setPref('paneView', kind),
 			onPickLanguages: (source, target) => this.applyLanguagePick(source, target),
@@ -1849,12 +1848,15 @@ export class ReaderSession {
 				// 几何安全复核结果 (1.1.2 诊断闭环): 页号 → 违例/调整/保留计数。
 				geometryAudits: [...this.geometryAudits.entries()]
 					.sort((a, b) => a[0] - b[0])
-					.map(([page, r]) => ({ page: page + 1, ...r }))
+					.map(([page, r]) => ({ page: page + 1, ...r })),
+				// 当前页布局语料 (1.1.7, 与「语料」按钮合并): dump-spans 同格式,
+				// 含本页原文与坐标——点「诊断」即授权;仍不含译文与密钥。
+				currentPageCorpus: this.layoutCorpus()
 			};
 			Components.classes['@mozilla.org/widget/clipboardhelper;1']
 				.getService(Components.interfaces.nsIClipboardHelper)
 				.copyString(JSON.stringify(payload, null, 2));
-			this.flashNotice('诊断已复制到剪贴板(脱敏,不含正文与密钥)');
+			this.flashNotice('诊断已复制(指标脱敏 + 当前页布局语料;不含译文与密钥)');
 		}
 		catch (e) {
 			logger.warn(MODULE, 'diagnostics copy failed', e);
@@ -1889,29 +1891,24 @@ export class ReaderSession {
 	 * 进剪贴板,免终端。注意与「诊断」不同:语料含本页原文文本与坐标(回归
 	 * 测试需要),导出动作本身即用户授权;不含译文、不含密钥。
 	 */
-	private copyLayoutCorpus(): void {
+	private layoutCorpus(): unknown {
 		try {
 			const pageIndex = adapter.getCurrentPageIndex(this.reader);
 			const page = adapter.getTextLayerItems(this.reader, pageIndex);
 			if (!page || !page.items.length) {
-				this.flashNotice('本页没有可导出的文本层(纯图/扫描页)');
-				return;
+				return null;
 			}
-			const out = {
+			return {
 				source: adapter.getReaderItem(this.reader)?.getDisplayTitle?.() ?? 'document',
 				page: pageIndex + 1,
 				pageWidth: page.pageWidth,
 				pageHeight: page.pageHeight,
 				items: page.items.map(i => ({ text: i.text, rect: i.rect, ...(i.fontSize ? { fontSize: i.fontSize } : {}) }))
 			};
-			Components.classes['@mozilla.org/widget/clipboardhelper;1']
-				.getService(Components.interfaces.nsIClipboardHelper)
-				.copyString(JSON.stringify(out));
-			this.flashNotice(`第 ${pageIndex + 1} 页语料已复制(${page.items.length} 个 span)——存为 tests/fixtures/layout/<名>-p${pageIndex + 1}.spans.json 或直接粘贴反馈`);
 		}
 		catch (e) {
 			logger.warn(MODULE, 'corpus export failed', e);
-			this.flashNotice('语料导出失败,可改用 scripts/dump-spans.mjs');
+			return null;
 		}
 	}
 

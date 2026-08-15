@@ -7,6 +7,14 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.7] — 2026-08-15
+
+### Changed
+
+- 「语料」并入「诊断」:一个按钮输出一份 JSON——全文档脱敏指标 +
+  `currentPageCorpus`(当前页布局语料,dump-spans 同格式)。反馈问题从
+  两次点击变一次;仍不含译文与密钥。
+
 ## [1.1.6] — 2026-08-15
 
 ### Added
