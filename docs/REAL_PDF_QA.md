@@ -26,3 +26,16 @@
 - `npm run package` 成功且自动通过 XPI 内容校验。
 - 上述样本没有 P0（遮图、跨栏叠字、页面消失、任务卡死）问题。
 - P1 问题必须修复或写入发布说明；验收人记录 Zotero 版本、操作系统和样本类型。
+
+## 布局回归语料 (1.1.2)
+
+把有代表性的真实 PDF(多栏、表格页、公式密集页)转成回归语料:
+
+```
+node scripts/dump-spans.mjs paper.pdf 3,7     # 指定页
+npm test                                      # 首跑自动生成 .snapshot.json
+```
+
+语料与快照都提交进 `tests/fixtures/layout/`。此后任何改动导致分段/阅读序/
+表格结构变化都会在 `layoutSnapshot.test.ts` 现形;有意的布局改进 → 删旧快照
+重新生成,把 diff 放进 PR 审阅。语料只含文本 span 与几何,不含图片。

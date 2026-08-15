@@ -130,6 +130,8 @@ export interface PaneCallbacks {
 	onSaveNote(): void;
 	/** 菜单栏「诊断」— copy the sanitized per-page diagnostics JSON. */
 	onShowDiagnostics(): void;
+	/** 菜单栏「术语」— copy 本篇学得的术语对 (TSV,自动抽取入口 1.1.2)。 */
+	onCopyTerms(): void;
 	onToggleViewKind(kind: 'page' | 'article'): void;
 	/** 菜单栏直接切换 — no round-trip through the settings pane. */
 	onPickLanguages(source: string, target: string): void;
@@ -652,6 +654,7 @@ export class TranslationPane {
 			this.textButton('pm-bar-action', `✦ ${this.strings.explain}`, this.strings.explainTip, () => this.callbacks.onExplainSelection()),
 			this.textButton('pm-bar-action', this.strings.saveNote, this.strings.saveNote, () => this.callbacks.onSaveNote()),
 			this.textButton('pm-bar-action', '诊断', '复制本文档的脱敏翻译诊断(不含正文与密钥)', () => this.callbacks.onShowDiagnostics()),
+			this.textButton('pm-bar-action', '术语', '复制本篇自动学得的术语对照表 (TSV,可粘贴进词汇表)', () => this.callbacks.onCopyTerms()),
 			this.el('span', 'pm-bar-sep'),
 			this.makeSideButton(),
 			this.iconButton(ICON_PATHS.settings, this.strings.settings, () => this.callbacks.onOpenSettings()),

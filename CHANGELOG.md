@@ -7,6 +7,35 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.2] — 2026-08-15
+
+四项合批:回归语料 + 诊断闭环 + 术语表出口 + P2 清理。574 测试全绿。
+
+### Added — 布局回归语料(无 BabelDOC 的回归测试集方案)
+
+- `scripts/dump-spans.mjs`:pdfjs-dist(devDependency)把真实 PDF 页转成
+  与阅读器文本层路径同形的 span 语料(仅文本与几何,无图片);
+- `tests/integration/layoutSnapshot.test.ts`:对每个语料页跑完整纯函数流水
+  线,分段/栏/阅读序/表格结构摘要与快照对比,首跑自动生成;每页同时回归
+  IR 契约。附带一页合成双栏样例;真实难例语料按 docs/REAL_PDF_QA.md 补充。
+
+### Added — 诊断闭环
+
+- PageDiagnostics 增 `placeholderTokens`/`placeholderRejected`(注册表状态
+  汇总,仅计数无文本);诊断导出增 `geometryAudits`(每页几何复核的
+  违例/调整/保留计数)。
+- 面板菜单新增「术语」:docMemory 边翻边学的术语对 → TSV 进剪贴板
+  (automatic_term_extractor 思想的增量出口,参照 BabelDOC)。
+
+### Removed / Changed — P2 清理
+
+- 删除 `translatedPageView.ts` 死代码族 buildTranslatedPage /
+  settleTranslatedPage / buildFallbackPage 及输入/结果接口(1033 → 277 行,
+  最终审核 P2;strict 分屏是唯一渲染通道后它们再无调用方);存活导出不变。
+- `stripProtectable` 记忆化(FIFO 500):同段在校验/打捞/残留链里反复被剥,
+  正则代价可观。
+- 仍留 P2:translationManager 结构拆分、错误页退避、getPref 渲染期缓存。
+
 ## [1.1.1] — 2026-08-15
 
 1.1.x 批次:段内样式保留 + 扫描件检测(参照 BabelDOC,AGPL-3.0,

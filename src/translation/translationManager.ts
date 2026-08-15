@@ -322,6 +322,9 @@ export interface PageDiagnostics {
 	segmentHits: number;
 	durationMs: number;
 	fromCache: boolean;
+	/** 占位符注册表 (1.1.2 诊断闭环): 本页签发 token 总数与校验拒绝次数。 */
+	placeholderTokens?: number;
+	placeholderRejected?: number;
 }
 
 export interface TranslationDeps {
@@ -765,6 +768,15 @@ export class TranslationManager {
 				})),
 			docMemoryTerms: this.docMemory.size()
 		};
+	}
+
+	/**
+	 * 本篇学得的术语对 (自动抽取入口, 1.1.2 — automatic_term_extractor 思想的
+	 * 增量形态): docMemory 从已接受译文里收的「中文术语(ABBR)」对,交给 UI
+	 * 导出为可编辑的对照表。只读快照。
+	 */
+	learnedTerms(): { source: string; target: string }[] {
+		return this.docMemory.rules().map(r => ({ source: r.source, target: r.target }));
 	}
 
 	/**
@@ -1782,7 +1794,10 @@ export class TranslationManager {
 			timeouts: metrics.timeouts,
 			segmentHits,
 			durationMs: Date.now() - metrics.startedAt,
-			fromCache: false
+			fromCache: false,
+			// 注册表状态汇总 (仅计数,无文本 — 日志卫生基线)。
+			placeholderTokens: protectedBlocks.reduce((n, p) => n + p.reg.count, 0),
+			placeholderRejected: protectedBlocks.reduce((n, p) => n + p.reg.status.rejected, 0)
 		};
 		this.notify(state);
 		// 指标: groupCount(翻译单元) / chunkCount(请求批次) / requestCount(总请求) /

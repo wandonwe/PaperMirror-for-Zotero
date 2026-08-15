@@ -183,10 +183,22 @@ export function normalizePlaceholderVariants(text: string, placeholders: Placeho
  * should score — the stats are identical in source and translation BY DESIGN,
  * so counting them as "untranslated Latin" only produces false rejections.
  */
+const stripCache = new Map<string, string>();
 export function stripProtectable(text: string): string {
 	// 样式标记 (⟦b⟧ 等, styleRuns.ts) 同样不属于"散文":所有译文质量判定
 	// (looksTranslated / residue / risk) 经此函数,统一在这里剥掉。
-	return protectFormulas(stripStyleMarkers(text)).text.replace(TOKEN_RE, ' ');
+	// 记忆化 (最终审核 P2): 同一段在校验/打捞/残留链里会被剥 3–6 次,
+	// protectFormulas 的正则代价不小;FIFO 上限 500 防增长。
+	const hit = stripCache.get(text);
+	if (hit !== undefined) {
+		return hit;
+	}
+	const out = protectFormulas(stripStyleMarkers(text)).text.replace(TOKEN_RE, ' ');
+	if (stripCache.size >= 500) {
+		stripCache.delete(stripCache.keys().next().value!);
+	}
+	stripCache.set(text, out);
+	return out;
 }
 
 /**

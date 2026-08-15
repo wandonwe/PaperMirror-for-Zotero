@@ -132,6 +132,8 @@ export class ReaderSession {
 	private compressPending = new Set<number>();
 	/** 扫描/纯图页每页只提示一次。 */
 	private scannedNoticeShown = new Set<number>();
+	/** 几何安全复核结果按页留档(进诊断导出;只计数,无文本)。 */
+	private geometryAudits = new Map<number, import('../ui/strictPageReplacement').GeometryAuditResult>();
 	/**
 	 * Per-page render generation. Bumped at the start of every renderDocPage;
 	 * an async render (or its settle/compress callbacks) that discovers a newer
@@ -240,6 +242,7 @@ export class ReaderSession {
 			onCollapsedChange: (c) => this.setCapsuleCollapsed(c), // 折叠状态由会话统一管理
 			onSaveNote: () => void this.saveSelectionToNote(),
 			onShowDiagnostics: () => this.copyDiagnostics(),
+			onCopyTerms: () => this.copyLearnedTerms(),
 			onOpenSettings: () => this.openSettings(),
 			onToggleViewKind: kind => setPref('paneView', kind),
 			onPickLanguages: (source, target) => this.applyLanguagePick(source, target),
@@ -1234,6 +1237,9 @@ export class ReaderSession {
 		// stats/tally,所以必须先审计后取数。
 		try {
 			const audit = auditStrictGeometry(element);
+			if (audit) {
+				this.geometryAudits.set(pageIndex, audit);
+			}
 			if (audit && audit.violations > 0) {
 				logger.info(
 					MODULE,
@@ -1838,7 +1844,11 @@ export class ReaderSession {
 			const payload = {
 				plugin: 'PaperMirror',
 				generatedAt: new Date().toISOString(),
-				...(this.manager.exportDiagnostics() as Record<string, unknown>)
+				...(this.manager.exportDiagnostics() as Record<string, unknown>),
+				// 几何安全复核结果 (1.1.2 诊断闭环): 页号 → 违例/调整/保留计数。
+				geometryAudits: [...this.geometryAudits.entries()]
+					.sort((a, b) => a[0] - b[0])
+					.map(([page, r]) => ({ page: page + 1, ...r }))
 			};
 			Components.classes['@mozilla.org/widget/clipboardhelper;1']
 				.getService(Components.interfaces.nsIClipboardHelper)
@@ -1847,6 +1857,29 @@ export class ReaderSession {
 		}
 		catch (e) {
 			logger.warn(MODULE, 'diagnostics copy failed', e);
+		}
+	}
+
+	/**
+	 * 术语表出口 (1.1.2, 参照 BabelDOC automatic_term_extractor 的思想做成
+	 * 增量形态): docMemory 边翻边学的「术语(ABBR)」对 → TSV 进剪贴板,
+	 * 用户可直接粘贴进词汇表或表格里编辑。
+	 */
+	private copyLearnedTerms(): void {
+		const terms = this.manager?.learnedTerms() ?? [];
+		if (!terms.length) {
+			this.flashNotice('本篇尚未学得术语对(翻译几页后再试)');
+			return;
+		}
+		try {
+			const tsv = terms.map(t => `${t.source}\t${t.target}`).join('\n');
+			Components.classes['@mozilla.org/widget/clipboardhelper;1']
+				.getService(Components.interfaces.nsIClipboardHelper)
+				.copyString(tsv);
+			this.flashNotice(`已复制 ${terms.length} 条术语对照(TSV)`);
+		}
+		catch (e) {
+			logger.warn(MODULE, 'term table copy failed', e);
 		}
 	}
 

@@ -1,6 +1,6 @@
 {
 	"name": "zotero-bilingual-reader",
-	"version": "1.1.1",
+	"version": "1.1.2",
 	"description": "PaperMirror for Zotero — bilingual side-by-side reading mode for the Zotero PDF reader",
 	"private": true,
 	"license": "AGPL-3.0-or-later",
@@ -18,6 +18,7 @@
 	"devDependencies": {
 		"@types/node": "^22.20.1",
 		"esbuild": "^0.24.0",
+		"pdfjs-dist": "^4.10.38",
 		"typescript": "^5.6.0"
 	},
 	"dependencies": {
