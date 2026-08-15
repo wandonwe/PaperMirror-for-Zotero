@@ -91,18 +91,109 @@ function rowCentres(members: GuardItem[]): number[] {
 	return members.map(m => m.box.top + m.box.height / 2).sort((a, b) => a - b);
 }
 
-/** How many of A's row centres line up (within tol) with a row centre of B.
- *  Two side-by-side COLUMNS of one table share the same rows even across a wide
- *  gutter that keeps them from horizontally overlapping. */
+/** Distinct row bands of a set of cells: y-centres deduped within tol. */
+function distinctRows(members: GuardItem[], tol: number): number[] {
+	const out: number[] = [];
+	for (const y of rowCentres(members)) {
+		if (!out.length || y > out[out.length - 1]! + tol) {
+			out.push(y);
+		}
+	}
+	return out;
+}
+
+/** How many DISTINCT rows of A line up (within tol) with a row of B (1.2.2:
+ *  dedup 修复 — 旧实现按成员多重计数,同一行的 4 个单元格数成 4,一个单行
+ *  碎片就能凑满 ≥3,靠事故桥接两块区域). Two side-by-side COLUMNS of one
+ *  table share the same rows even across a wide gutter. */
 function sharedRowCount(a: GuardItem[], b: GuardItem[], tol: number): number {
-	const cb = rowCentres(b);
+	const cb = distinctRows(b, tol);
 	let n = 0;
-	for (const y of rowCentres(a)) {
+	for (const y of distinctRows(a, tol)) {
 		if (cb.some(z => Math.abs(z - y) <= tol)) {
 			n++;
 		}
 	}
 	return n;
+}
+
+/** Distinct column bands of a set of cells (x-centres deduped within tol). */
+function distinctCols(members: GuardItem[], tol: number): number {
+	const centres = members.map(m => m.box.left + m.box.width / 2).sort((x, y) => x - y);
+	let n = 0;
+	let last = -Infinity;
+	for (const x of centres) {
+		if (x > last + tol) {
+			n++;
+			last = x;
+		}
+	}
+	return n;
+}
+
+/** Horizontal gap between two regions (negative when they overlap). */
+function hGapBetween(a: TableRegion, b: TableRegion): number {
+	return Math.max(a.left - (b.left + b.width), b.left - (a.left + a.width));
+}
+
+/** Is there an obstacle (figure/image box, top-down coords) standing in the
+ *  gutter BETWEEN two horizontally separated regions, within their shared
+ *  vertical span? A figure between two aligned numeric clusters means they are
+ *  the columns of two different things, never one table. */
+function obstacleBetweenRegions(a: TableRegion, b: TableRegion, obstacles: GuardItem['box'][]): boolean {
+	if (!obstacles.length || hGapBetween(a, b) <= 0) {
+		return false;
+	}
+	const gutterLeft = Math.min(a.left + a.width, b.left + b.width);
+	const gutterRight = Math.max(a.left, b.left);
+	const top = Math.max(a.top, b.top);
+	const bottom = Math.min(a.top + a.height, b.top + b.height);
+	if (bottom <= top) {
+		return false;
+	}
+	return obstacles.some(o =>
+		o.left < gutterRight && (o.left + o.width) > gutterLeft
+		&& o.top < bottom && (o.top + o.height) > top);
+}
+
+/** Vertical gap between two regions (0 when they intersect vertically). */
+function verticalGap(a: TableRegion, b: TableRegion): number {
+	if (b.top >= a.top + a.height) {
+		return b.top - (a.top + a.height);
+	}
+	if (a.top >= b.top + b.height) {
+		return a.top - (b.top + b.height);
+	}
+	return 0;
+}
+
+/** Horizontal overlap as a fraction of the NARROWER region's width. */
+function mutualHOverlapRatio(a: TableRegion, b: TableRegion): number {
+	const overlap = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
+	const narrower = Math.min(a.width, b.width);
+	return narrower > 0 ? overlap / narrower : 0;
+}
+
+/** Is the gutter between two horizontally separated regions occupied by OTHER
+ *  tabular cells within their (slightly expanded) shared vertical span? A
+ *  populated gutter means the pair are non-adjacent columns of one table; an
+ *  empty gutter is what two independent side-by-side tables look like. */
+function gutterPopulated(a: TableRegion, b: TableRegion, cells: GuardItem[], em: number): boolean {
+	if (hGapBetween(a, b) <= 0) {
+		return false;
+	}
+	const gutterLeft = Math.min(a.left + a.width, b.left + b.width);
+	const gutterRight = Math.max(a.left, b.left);
+	const top = Math.max(a.top, b.top) - em;
+	const bottom = Math.min(a.top + a.height, b.top + b.height) + em;
+	if (bottom <= top) {
+		return false;
+	}
+	return cells.some((c) => {
+		const cx = c.box.left + c.box.width / 2;
+		const cy = c.box.top + c.box.height / 2;
+		return cx > gutterLeft && cx < gutterRight && cy > top && cy < bottom;
+	});
 }
 
 function containedRatio(box: GuardItem['box'], region: TableRegion): number {
@@ -121,7 +212,8 @@ function containedRatio(box: GuardItem['box'], region: TableRegion): number {
  */
 export function detectTableRegions(
 	items: GuardItem[],
-	emPx: number
+	emPx: number,
+	obstacles: GuardItem['box'][] = []
 ): { excluded: Set<string>; regions: TableRegion[] } {
 	const em = Math.max(6, emPx);
 	const cells = items.filter(i => looksTabular(i.text));
@@ -164,8 +256,32 @@ export function detectTableRegions(
 				const b = clusters[j]!;
 				const vAdjacent = a.region.top <= b.region.top + b.region.height + em * 2.2
 					&& b.region.top <= a.region.top + a.region.height + em * 2.2;
+				// Column merge is bounded (1.2.2, 审核项): shared DISTINCT rows alone
+				// let two UNRELATED aligned clusters fuse across arbitrary width. The
+				// gutter between them must be table-scale (≤ em*8) — UNLESS the
+				// gutter itself is populated by other tabular cells, which is what a
+				// non-adjacent column pair of ONE table looks like (merge order is
+				// arbitrary: NEJM's count column legitimately merges the P-value
+				// column at 203px because two more columns sit in between). An image
+				// obstacle in the gutter always separates.
+				const columnMerge = sharedRowCount(a.members, b.members, em) >= 3
+					&& !obstacleBetweenRegions(a.region, b.region, obstacles)
+					&& (hGapBetween(a.region, b.region) <= em * 8
+						|| gutterPopulated(a.region, b.region, cells, em));
+				// Row-group merge (1.2.2): a table's HEADER rows share no data rows
+				// with the body, and their vertical gap (a rule line + padding) can
+				// exceed the plain-adjacency tolerance. Two stacked clusters that
+				// strongly overlap horizontally, each with ≥2 distinct columns, at a
+				// moderate gap (≤ em*4) are row groups of one table. Single-column
+				// stacks (figure axis ticks, lists) never qualify.
+				const rowGroupMerge = !vAdjacent
+					&& verticalGap(a.region, b.region) <= em * 4
+					&& mutualHOverlapRatio(a.region, b.region) >= 0.7
+					&& distinctCols(a.members, em * 2) >= 2
+					&& distinctCols(b.members, em * 2) >= 2
+					&& !obstacleBetweenRegions(a.region, b.region, obstacles);
 				const merge = (vAdjacent && hOverlaps(a.region, b.region as unknown as GuardItem['box'], em * 3))
-					|| sharedRowCount(a.members, b.members, em) >= 3;
+					|| columnMerge || rowGroupMerge;
 				if (merge) {
 					a.region = grow(a.region, b.region as unknown as GuardItem['box']);
 					a.members.push(...b.members);

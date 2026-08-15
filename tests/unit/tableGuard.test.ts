@@ -76,17 +76,41 @@ test('a small cluster is only a table when a Table caption anchors it', () => {
 
 // ---- 1.2.0: wide grid — far-apart columns + a far-left label column ----------
 
-test('wide table: far-apart numeric columns sharing rows merge into ONE region', () => {
-	// Two numeric columns with a ~150px gutter between them (far beyond the
-	// old hOverlap tolerance), 5 aligned rows each. They are columns of one
-	// table, not two blobs.
+test('wide table: far-apart numeric columns sharing rows merge into ONE region (gutter within cap)', () => {
+	// Two numeric columns with a ~70px gutter (beyond the old hOverlap
+	// tolerance, within the em*8 column-merge cap), 5 aligned rows each.
 	const items: GuardItem[] = [];
 	for (let row = 0; row < 5; row++) {
 		items.push(item(`L${row}`, `${20 + row} ± 4`, 60, 200 + row * 16, 40));
-		items.push(item(`R${row}`, `${30 + row} ± 5`, 260, 200 + row * 16, 40)); // gutter 60→260 = 160px
+		items.push(item(`R${row}`, `${30 + row} ± 5`, 170, 200 + row * 16, 40)); // gutter 100→170 = 70px ≤ em*8
 	}
 	const { regions } = detectTableRegions(items, 10);
-	assert.equal(regions.length, 1, 'aligned columns however wide the gutter are one table');
+	assert.equal(regions.length, 1, 'aligned columns with a table-scale gutter are one table');
+});
+
+test('1.2.2 收紧: 超过 em*8 间距的两个对齐数值簇不再并成一表', () => {
+	// 行完全对齐、但槽宽 160px (> 10*8) —— 这是两个并排的独立小表/列表,
+	// 不是一张表的相邻列。审核项: sharedRowCount 不再单独放行任意宽度。
+	const items: GuardItem[] = [];
+	for (let row = 0; row < 5; row++) {
+		items.push(item(`L${row}`, `${20 + row} ± 4`, 60, 200 + row * 16, 40));
+		items.push(item(`R${row}`, `${30 + row} ± 5`, 260, 200 + row * 16, 40)); // gutter 100→260 = 160px
+	}
+	const { regions } = detectTableRegions(items, 10);
+	assert.equal(regions.length, 2, 'beyond-cap aligned clusters stay two regions');
+});
+
+test('1.2.2 收紧: 两个对齐数值簇之间隔着图片时不合并', () => {
+	// 间距在 cap 之内、行也对齐,但槽里立着一张图 —— 图两侧的数字属于两个
+	// 不同的东西 (双图各带坐标轴刻度的典型版式)。
+	const items: GuardItem[] = [];
+	for (let row = 0; row < 5; row++) {
+		items.push(item(`L${row}`, `${20 + row} ± 4`, 60, 200 + row * 16, 40));
+		items.push(item(`R${row}`, `${30 + row} ± 5`, 170, 200 + row * 16, 40));
+	}
+	const figure = { left: 110, top: 190, width: 50, height: 100 }; // 站在槽里
+	const { regions } = detectTableRegions(items, 10, [figure]);
+	assert.equal(regions.length, 2, 'an obstacle in the gutter keeps the clusters apart');
 });
 
 test('wide table: far-left prose label column aligned to numeric rows is swallowed', () => {

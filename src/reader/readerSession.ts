@@ -1221,7 +1221,14 @@ export class ReaderSession {
 					this.reportPlacement(pageIndex, element);
 				}
 			})
-			.catch(() => this.compressPending.delete(pageIndex));
+			.catch(() => {
+				this.compressPending.delete(pageIndex);
+				// 压缩请求异常退出也必须走一次最终清点 (1.2.2, 审核项): 否则
+				// 几何复核与 placement tally 永不发生,胶囊停在「排版中」。
+				if (live()) {
+					this.reportPlacement(pageIndex, element);
+				}
+			});
 	}
 
 	/**

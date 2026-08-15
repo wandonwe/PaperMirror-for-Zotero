@@ -357,7 +357,7 @@ export interface SpanBuildResult {
  * numeric-dense cells (or a Table caption), so a prose page yields an empty set
  * and the whole reorder is inert.
  */
-function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em: number): Set<number> {
+function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em: number, obstaclesPdf: Rect[] = []): Set<number> {
 	const out = new Set<number>();
 	if (lines.length < 6) {
 		return out;
@@ -369,7 +369,12 @@ function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em: numbe
 		box: { left: l.rect[0], top: pageHeight - l.rect[3], width: l.rect[2] - l.rect[0], height: l.rect[3] - l.rect[1] },
 		fontSize: l.fontSize
 	}));
-	const guard = detectTableRegions(items, em);
+	// 图片矩形转 top-down 后作为列合并的硬屏障 (1.2.2): 两个数值簇之间隔着一张
+	// 图,就绝不是同一张表的相邻列。
+	const obstacleBoxes = obstaclesPdf.map(r => ({
+		left: r[0], top: pageHeight - r[3], width: r[2] - r[0], height: r[3] - r[1]
+	}));
+	const guard = detectTableRegions(items, em, obstacleBoxes);
 	if (!guard.regions.length) {
 		return out;
 	}
@@ -400,7 +405,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// 里的行整条摘出散文分组,各自成一行块,交给下游 structureTableCells 重新组网格
 	// (标签列作 tableCol=0)。非表格页探不到区域 → 摘出集为空 → 行为与从前逐字节
 	// 一致,不影响任何非表格版面。
-	const tableLineIdx = detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10));
+	const tableLineIdx = detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10), obstacles);
 	const proseLines = tableLineIdx.size ? lines.filter((_, i) => !tableLineIdx.has(i)) : lines;
 	const paragraphs = groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, obstacles);
 
@@ -527,9 +532,21 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	let order = 0;
 	for (const p of [...merged, ...tableParas]) {
 		// Table-line blocks bypass the prose furniture filters: a detected table
-		// cell is content, never a running head / metadata / reference tail, and
-		// the numeric cells that look furniture-ish must survive to be gridded.
-		if (!p.isTableLine) {
+		// cell is content, never a running head / metadata, and the numeric cells
+		// that look furniture-ish must survive to be gridded. The REFERENCES
+		// exclusion however applies to them too (1.2.2, 审核项): tableParas are
+		// appended after the merged loop, so `referencesStarted` here is the
+		// page's final state — on a references(-continuation) page the citation
+		// years/numbers must not sneak back in as "table cells" when the user
+		// excluded references. Edge case documented: a genuine table ABOVE a
+		// same-page References heading is also skipped — it stays untranslated
+		// in the original layout, which errs conservative.
+		if (p.isTableLine) {
+			if (referencesStarted && !options.includeReferences) {
+				continue;
+			}
+		}
+		else {
 			if (p.type !== 'title' && p.type !== 'heading' && isMetadataBlock(p.text, p.rect, pageWidth, { fontSize: p.fontSize, bodySize })) {
 				continue;
 			}

@@ -259,3 +259,29 @@ test('a prose-only page is unaffected by the table reorder', () => {
 	assert.equal(blocks.length, 1, 'the three wrapped lines stay one prose paragraph');
 	assert.ok(blocks[0]!.sourceText.includes('This study') && blocks[0]!.sourceText.includes('overall'));
 });
+
+test('1.2.2 审核项: 排除参考文献时, 表格行不再绕过参考文献过滤', () => {
+	// 与上一测试同样的 6 行网格, 但页面从参考文献区续页开始
+	// (referencesAlreadyStarted) 且 includeReferences=false —— 引用年份/编号
+	// 不得再以「表格单元格」的身份溜回翻译流。
+	const labels = ['Death at 90 days', 'Symptomatic intracranial hemorrhage', 'Early neurologic deterioration',
+		'Parenchymal hematoma type 2', 'Median infarct volume at 24 hr', 'Reperfusion at 24 hr'];
+	const items: SpanItem[] = [];
+	let y = 600;
+	for (const lab of labels) {
+		items.push(span(lab, 48, y, 130, 8));
+		items.push(span('13 (14)', 250, y, 34, 8));
+		items.push(span('23 (26)', 330, y, 34, 8));
+		y -= 14;
+	}
+	const excluded = buildBlocksFromSpans(items, {
+		pageIndex: 0, pageHeight: PAGE_HEIGHT, pageWidth: 567,
+		includeReferences: false, referencesAlreadyStarted: true, imageRectsPdf: []
+	});
+	assert.equal(excluded.blocks.length, 0, '排除参考文献时表格行一并排除');
+	const included = buildBlocksFromSpans(items, {
+		pageIndex: 0, pageHeight: PAGE_HEIGHT, pageWidth: 567,
+		includeReferences: true, referencesAlreadyStarted: true, imageRectsPdf: []
+	});
+	assert.ok(included.blocks.length >= 12, '包含参考文献时表格行照常提取');
+});

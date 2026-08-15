@@ -898,7 +898,11 @@ export function strictPageStats(element: HTMLElement): StrictPageStats | null {
  * acting on their fallback-font metrics is what made long-text translations
  * flash in and then vanish.
  */
-export function settleStrictPage(element: HTMLElement, onMeasured: (unfit: UnfitBlock[], final: boolean) => void): void {
+export function settleStrictPage(
+	element: HTMLElement,
+	onMeasured: (unfit: UnfitBlock[], final: boolean) => void,
+	fontTimeoutMs = 5000
+): void {
 	const settle = (element as HTMLElement & { pmSettleStrict?: (commitFitting: boolean) => UnfitBlock[] }).pmSettleStrict;
 	if (!settle) {
 		return;
@@ -916,29 +920,55 @@ export function settleStrictPage(element: HTMLElement, onMeasured: (unfit: Unfit
 		return;
 	}
 	const f = fonts;
+	// 超时保险 + 单次 final 闸 (1.2.2, 审核项): document.fonts.ready 是一个可以
+	// 永不 resolve 的 Promise(字体源挂起、隐藏文档)。没有超时,final 测量永远
+	// 不来,整页停在 provisional、一个块都不 reveal —— 用户看到"翻译完成但页面
+	// 还是英文"。fireFinal 由闸保证至多执行一次,无论它来自 ready、第二波、
+	// 超时还是异常兜底,竞争各方都安全;超时触发时用当时已渲染的字体测量,
+	// 比永远不显示强。
+	let finalFired = false;
+	let timer: ReturnType<typeof setTimeout> | null = null;
+	const fireFinal = (): void => {
+		if (finalFired) {
+			return;
+		}
+		finalFired = true;
+		if (timer !== null) {
+			try {
+				clearTimeout(timer);
+			}
+			catch { /* timers may be gone in a tearing-down document */ }
+			timer = null;
+		}
+		if (element.isConnected) {
+			onMeasured(settle(true), true);
+		}
+	};
+	try {
+		timer = setTimeout(fireFinal, fontTimeoutMs);
+	}
+	catch { /* no timer API — ready / 兜底 still fire the final */ }
 	onMeasured(settle(false), false); // provisional: measure only, reveal nothing
 	try {
 		void ready.then(() => {
-			if (!element.isConnected) {
+			if (finalFired || !element.isConnected) {
 				return;
 			}
 			const secondWave = f.status === 'loading' ? f.ready : undefined;
 			if (secondWave) {
 				// A second load wave started — one more provisional pass now,
-				// the final one when it completes.
+				// the final one when it completes (or when the timeout wins).
 				onMeasured(settle(false), false);
 				void secondWave.then(() => {
-					if (element.isConnected) {
-						onMeasured(settle(true), true);
-					}
+					fireFinal();
 				});
 				return;
 			}
-			onMeasured(settle(true), true);
+			fireFinal();
 		});
 	}
 	catch {
-		onMeasured(settle(true), true); // insurance: never leave the caller waiting
+		fireFinal(); // insurance: never leave the caller waiting
 	}
 }
 

@@ -73,12 +73,18 @@ test(`layout snapshots (${dumps.length} fixture(s))`, () => {
 		const summary = summarize(blocks);
 		const snapshotFile = join(layoutDir, file.replace(/\.spans\.json$/, '.snapshot.json'));
 		if (!existsSync(snapshotFile)) {
-			writeFileSync(snapshotFile, JSON.stringify(summary, null, '\t') + '\n');
-			console.log(`snapshot created: ${snapshotFile} (${summary.length} block(s)) — review and commit it`);
-			continue;
+			// 假绿灯修复 (1.2.2, 审核项): 缺基线曾被"当场生成并通过"掩盖 —— 测试
+			// 报绿却没有任何被审阅过的基线。现在缺失即失败;只有显式
+			// UPDATE_SNAPSHOTS=1 才允许生成,生成后必须人工审阅并提交。
+			if (process.env.UPDATE_SNAPSHOTS) {
+				writeFileSync(snapshotFile, JSON.stringify(summary, null, '\t') + '\n');
+				console.log(`snapshot created: ${snapshotFile} (${summary.length} block(s)) — review and commit it`);
+				continue;
+			}
+			assert.fail(`${file}: missing baseline snapshot — run UPDATE_SNAPSHOTS=1 npm test to create it, review it, and commit it`);
 		}
 		const expected = JSON.parse(readFileSync(snapshotFile, 'utf8'));
 		assert.deepEqual(summary, expected,
-			`${file}: layout changed vs snapshot — if intentional, delete ${snapshotFile} and re-run to regenerate`);
+			`${file}: layout changed vs snapshot — if intentional, delete ${snapshotFile} and re-run with UPDATE_SNAPSHOTS=1, review the diff, and commit it`);
 	}
 });

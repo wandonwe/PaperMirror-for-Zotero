@@ -198,3 +198,34 @@ test('auditStrictGeometry: null on a non-strict element, passthrough on the hook
 	} as unknown as HTMLElement;
 	assert.deepEqual(auditStrictGeometry(el), { violations: 2, adjusted: 1, reverted: 1 });
 });
+
+// ---- 1.2.2 审核项: fonts.ready 永不 resolve 时的超时保险 --------------------
+
+test('fonts.ready 永不 resolve → 超时后仍有且只有一次 final 测量', async () => {
+	const never = new Promise<unknown>(() => { /* 挂起: 字体源永不就绪 */ });
+	const { el, calls } = fakeElement({ status: 'loading', ready: never });
+	settleStrictPage(el, (unfit, final) => calls.push({ unfit, final }), 30);
+	await new Promise(r => setTimeout(r, 90));
+	assert.deepEqual(calls.map(c => c.final), [false, true], '一次 provisional + 超时兜底的一次 final');
+	assert.equal(calls.filter(c => c.final).length, 1);
+});
+
+test('超时先到、ready 后到 → final 仍然只有一次 (闸生效)', async () => {
+	let release: (v?: unknown) => void = () => {};
+	const slow = new Promise<unknown>(r => { release = r; });
+	const { el, calls } = fakeElement({ status: 'loaded', ready: slow });
+	settleStrictPage(el, (unfit, final) => calls.push({ unfit, final }), 30);
+	await new Promise(r => setTimeout(r, 90)); // 超时先触发 final
+	release();                                  // ready 迟到
+	await new Promise(r => setTimeout(r, 20));
+	assert.equal(calls.filter(c => c.final).length, 1, '迟到的 ready 不得再发第二次 final');
+});
+
+test('元素已断开 → 超时不再执行测量 (无泄漏测量)', async () => {
+	const never = new Promise<unknown>(() => {});
+	const { el, calls } = fakeElement({ status: 'loaded', ready: never });
+	settleStrictPage(el, (unfit, final) => calls.push({ unfit, final }), 30);
+	(el as unknown as { isConnected: boolean }).isConnected = false;
+	await new Promise(r => setTimeout(r, 90));
+	assert.deepEqual(calls.map(c => c.final), [false], '断开后 final 测量不发生');
+});
