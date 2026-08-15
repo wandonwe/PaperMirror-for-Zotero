@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isMetadataBlock, isVerticalSliver, type Rect } from '../../src/reader/metaFilter';
+import { isMarginSidebar, isMetadataBlock, isVerticalSliver, type Rect } from '../../src/reader/metaFilter';
 
 // ---- the exact failure cases from the ESC review paper ----------------------
 
@@ -155,4 +155,37 @@ test('body prose starting with a label word but no colon survives', () => {
 	assert.equal(isMetadataBlock(
 		'Funding models for translational research differ between countries, and this shapes what gets studied over the long run.'
 	), false);
+});
+
+// ---- 1.1.9: 正文尺寸的窄栏不再被当页边栏丢弃 (Horst 2024 第 5/11 页) ----------
+
+// 第 11 页左栏的真实几何: 宽 96pt (< 24% × 594 = 143pt), 高 70pt (5 行), 右边缘
+// 144pt (< 34% × 594 = 202pt) —— narrow + tall + outerLeft 三条全中,旧规则丢弃。
+const narrowBodyRect: Rect = [48, 300, 144, 370]; // [x1,y1,x2,y2]
+const bodyPara = 'It is acknowledged that the literature on adult patients has shown the Bl64 kernel to yield improved visualization of bronchial division.';
+
+test('正文尺寸的窄栏 (10pt vs 正文 10pt) 不再被误判为页边栏', () => {
+	assert.equal(isMarginSidebar(narrowBodyRect, 594, { fontSize: 10, bodySize: 10 }), false);
+	assert.equal(isMetadataBlock(bodyPara, narrowBodyRect, 594, { fontSize: 10, bodySize: 10 }), false,
+		'整列正文不该再被当页边引用/编辑栏静默丢弃');
+});
+
+test('真页边栏 (7pt vs 正文 10pt) 仍被识别并过滤', () => {
+	// 同样的窄+高+外侧几何, 但字号是真页边栏的 7pt —— 规则本意必须保住。
+	assert.equal(isMarginSidebar(narrowBodyRect, 594, { fontSize: 7, bodySize: 10 }), true);
+	assert.equal(
+		isMetadataBlock('Received July 6, 2023; revision requested August 30; final revision received December 7; accepted January 3, 2024.',
+			narrowBodyRect, 594, { fontSize: 7, bodySize: 10 }),
+		true);
+});
+
+test('没有字号信息时页边栏判定保持原状 (向后兼容)', () => {
+	// type 省略 —— 老调用点不传字号, 行为必须与 1.1.8 一致 (纯几何判定)。
+	assert.equal(isMarginSidebar(narrowBodyRect, 594), true, '无字号 → 回退到纯几何 → 仍判页边栏');
+	assert.equal(isMarginSidebar([48, 300, 144, 315], 594), false, '高度 15pt < 30pt → 不是页边栏 (单行碎片)');
+});
+
+test('字号阈值是 0.9 倍: 略小于正文的窄栏仍算正文, 明显小的才算页边', () => {
+	assert.equal(isMarginSidebar(narrowBodyRect, 594, { fontSize: 9.2, bodySize: 10 }), false, '9.2 ≥ 10×0.9 → 正文');
+	assert.equal(isMarginSidebar(narrowBodyRect, 594, { fontSize: 8.5, bodySize: 10 }), true, '8.5 < 10×0.9 → 页边');
 });

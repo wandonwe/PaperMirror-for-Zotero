@@ -161,10 +161,22 @@ export function isRunningHeadOrFoot(
  * wider: a two-column page's columns run ~0.44 of the page width, a
  * three-column page's ~0.28.
  */
-export function isMarginSidebar(rect: Rect, pageWidth: number): boolean {
+export function isMarginSidebar(rect: Rect, pageWidth: number, type?: { fontSize?: number; bodySize?: number }): boolean {
 	const width = rect[2] - rect[0];
 	const height = rect[3] - rect[1];
 	if (width <= 0 || pageWidth <= 0) {
+		return false;
+	}
+	// 正文尺寸的窄栏是正文,不是页边栏 (1.1.9, Horst 2024 第 5/11 页实证):
+	// 期刊正文在整版图旁边会挤成一条 <24% 页宽的窄栏 (第 11 页左栏 96pt),尺寸
+	// 与真页边栏 (narrow + tall + outer) 完全重合,于是整列正文被当页边引用/
+	// 编辑栏静默丢弃 —— 只有被词距意外撕成单行的碎片 (高度 < 30pt) 侥幸活下来,
+	// 就是用户看到的那一小撮孤立中文。真页边栏一定比正文排得小 (期刊页边 7pt
+	// vs 正文 10pt),所以字号 ≥ 正文字号 × 0.9 的块直接排除在页边栏判定之外。
+	// 这不放松任何一条文本规则 (RE_META_LABEL / 作者名单 / 版权 等照旧生效)。
+	const fs = type?.fontSize ?? 0;
+	const bs = type?.bodySize ?? 0;
+	if (fs > 0 && bs > 0 && fs >= bs * 0.9) {
 		return false;
 	}
 	const narrow = width < pageWidth * 0.24;
@@ -181,7 +193,7 @@ export function isMarginSidebar(rect: Rect, pageWidth: number): boolean {
  * Should this block be excluded from translation and from the pane?
  * The original page keeps showing it either way.
  */
-export function isMetadataBlock(text: string, rect?: Rect, pageWidth?: number): boolean {
+export function isMetadataBlock(text: string, rect?: Rect, pageWidth?: number, type?: { fontSize?: number; bodySize?: number }): boolean {
 	const t = text.trim();
 	if (!t) {
 		return true;
@@ -193,7 +205,7 @@ export function isMetadataBlock(text: string, rect?: Rect, pageWidth?: number): 
 	// says — that strip is where journals put the citation/editor/funding
 	// stack, and its entries keep leaking past the text rules one novel
 	// format at a time.
-	if (rect && pageWidth && isMarginSidebar(rect, pageWidth) && t.length < 700) {
+	if (rect && pageWidth && isMarginSidebar(rect, pageWidth, type) && t.length < 700) {
 		return true;
 	}
 	if (RE_META_LABEL.test(t) && t.length < 700) {

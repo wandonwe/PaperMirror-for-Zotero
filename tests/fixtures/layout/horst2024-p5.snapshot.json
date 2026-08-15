@@ -3,42 +3,48 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 0,
-		"text": "The higher 120- and"
+		"text": "low 70- and 90-kV mode provides basic sp"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 1,
+		"text": "100 kV, varying with patient size. We pr"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 2,
 		"text": "70 or 90 kV because the increased contra"
 	},
 	{
 		"type": "caption",
 		"column": -1,
-		"readingIndex": 2,
+		"readingIndex": 3,
 		"text": "Figure 6: Images in a 7-year-old male ch"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 3,
+		"readingIndex": 4,
 		"text": "Multienergy Scanning Mode: 120 kV versus"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 4,
+		"readingIndex": 5,
 		"text": "Spectral Beam Shaping: Added Tin Filter "
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 5,
+		"readingIndex": 6,
 		"text": "Automatic Exposure Control"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 6,
+		"readingIndex": 7,
 		"text": "Similar to EID scanners from the same ma"
 	}
 ]

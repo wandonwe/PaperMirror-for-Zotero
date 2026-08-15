@@ -1,0 +1,290 @@
+[
+	{
+		"type": "table",
+		"column": 0,
+		"readingIndex": 0,
+		"text": "Table 2. Clinical and Imaging Outcomes."
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "Endovascular Therapy"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "Medical Therapy"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "Outcome"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 4,
+		"text": "(N=92)*"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 5,
+		"text": "(N=90)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 6,
+		"text": "Primary efficacy outcome: median score o"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 7,
+		"text": "59/75 (79)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 8,
+		"text": "12/67 (18)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 9,
+		"text": "Complete recanalization at 24 hr — no./t"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 10,
+		"text": "65/83 (78)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 11,
+		"text": "14/77 (18)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 12,
+		"text": "TICI score of 2b or 3 — no./total no. (%"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 13,
+		"text": "69/91 (76)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 14,
+		"text": "Odds Ratio or Risk Ratio (95% CI)†"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 15,
+		"text": "P Value"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 16,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2.77 (1.63–4.70)§"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 17,
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "<0.001"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 18,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2.67 (1.60–4.48)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 19,
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "<0.001"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 20,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "0.55 (0.30–1.02)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 21,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "1.47 (0.40–6.55)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 22,
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "0.71 (0.30–1.69)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 23,
+		"tableRow": 3,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2.61 (0.73–14.69)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 24,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "4.39 (2.60–7.43)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 25,
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "<0.001"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 26,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "4.31 (2.65–7.01)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 27,
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "<0.001"
+	},
+	{
+		"type": "list",
+		"column": -1,
+		"readingIndex": 28,
+		"text": "* An intervention was attempted in 90 pa"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 29,
+		"text": "24 hours were assessed in 90 patients in"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 30,
+		"text": "Imaging Outcomes"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 31,
+		"text": "tion of the primary arterial occlusive l"
+	},
+	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 32,
+		"text": "Imaging outcomes are summarized in Table"
+	},
+	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 33,
+		"text": "The median growth of the volume of the i"
+	},
+	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 34,
+		"text": "region between baseline and 24 hours was"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 35,
+		"text": "in the endovascular-therapy group and 33"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 36,
+		"text": "the medical-therapy group (P=0.08). Repe"
+	},
+	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 37,
+		"text": "of more than 90% of the initial perfusio"
+	},
+	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 38,
+		"text": "at 24 hours was more common in the endov"
+	},
+	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 39,
+		"text": "cular-therapy group than in the medical-"
+	},
+	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 40,
+		"text": "group (79% vs. 18%, P<0.001). Similarly,"
+	},
+	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 41,
+		"text": "percentage of patients with complete rec"
+	}
+]

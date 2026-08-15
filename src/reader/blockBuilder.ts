@@ -506,7 +506,7 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 		const text = p.text.trim();
 		// Author lists, affiliations, copyright, DOI lines, watermarks: keep
 		// them on the original page, keep them OUT of the translation.
-		if (type !== 'title' && type !== 'heading' && isMetadataBlock(text, p.rect, pageWidth)) {
+		if (type !== 'title' && type !== 'heading' && isMetadataBlock(text, p.rect, pageWidth, { fontSize: p.fontSize, bodySize })) {
 			continue;
 		}
 		if ((type === 'heading' || type === 'title') && REFERENCES_HEADINGS.test(text)) {

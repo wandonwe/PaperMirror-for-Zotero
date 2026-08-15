@@ -459,7 +459,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	const blocks: SourceBlock[] = [];
 	let order = 0;
 	for (const p of merged) {
-		if (p.type !== 'title' && p.type !== 'heading' && isMetadataBlock(p.text, p.rect, pageWidth)) {
+		if (p.type !== 'title' && p.type !== 'heading' && isMetadataBlock(p.text, p.rect, pageWidth, { fontSize: p.fontSize, bodySize })) {
 			continue;
 		}
 		// Running heads and page-foot lines repeat the journal's furniture on
