@@ -262,6 +262,13 @@ for layout problems, a screenshot.
 
 [AGPL-3.0-or-later](LICENSE).
 
+Several core algorithms are ported from or designed after
+[RetainPDF](https://github.com/wxyhgk/retain-pdf) (MIT) by wxyhgk and the
+RetainPDF contributors — translation-quality validation (copy-dominance,
+truncation, mixed-residue rules), formula-risk routing, and the overall
+placeholder-protection / repair-chain / scheduling design. 诚挚致谢原项目与
+作者;完整声明见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
 The bundled CJK font is a subset of
 [Noto Sans SC](https://fonts.google.com/noto/specimen/Noto+Sans+SC)
 (SIL Open Font License 1.1). The free Bing and Google engine adapters are ported

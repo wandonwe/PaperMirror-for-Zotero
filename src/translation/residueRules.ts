@@ -1,6 +1,10 @@
 /**
- * 残留/质量判定规则 — 逐条移植自 retain-pdf 的生产级实现
+ * 残留/质量判定规则 — 逐条移植自 RetainPDF 的生产级实现
  * (`llm/validation/english_residue.py` + `quality.py` 的可移植部分).
+ *
+ * Ported from RetainPDF (https://github.com/wxyhgk/retain-pdf),
+ * Copyright (c) 2026 RetainPDF contributors, MIT License.
+ * Full license text: THIRD-PARTY-NOTICES.md. 致谢原项目与作者。
  *
  * 那套规则是在真实失败样本上磨出来的,几个关键思想:
  *  - "未翻译"的硬判据是 COPY-DOMINANCE(译文表面与原文表面相似度 ≥0.82),

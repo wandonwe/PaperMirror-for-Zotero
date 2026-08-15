@@ -138,8 +138,9 @@ export function stripProtectable(text: string): string {
 }
 
 /**
- * 公式密集风险评分 — 移植自 retain-pdf `segment_risk.py::formula_risk_score`
- * 的可移植部分. 高分的块正是模型最容易在批处理里搞砸的块(定义句、公式
+ * 公式密集风险评分 — 移植自 RetainPDF `segment_risk.py::formula_risk_score`
+ * 的可移植部分 (https://github.com/wxyhgk/retain-pdf, MIT License,
+ * Copyright (c) 2026 RetainPDF contributors — 全文见 THIRD-PARTY-NOTICES.md). 高分的块正是模型最容易在批处理里搞砸的块(定义句、公式
  * 密集、占位符前置),它们应当走单块慢道。触发短语、阈值与加分值照搬原实现;
  * 依赖其内部分段计划的项目跳过。
  */

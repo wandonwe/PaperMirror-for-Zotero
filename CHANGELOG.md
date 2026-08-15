@@ -15,6 +15,27 @@ minor releases may change defaults.
   instead of removing it; run page extraction on its own local queue so a slow
   PDF.js call never occupies a provider concurrency slot.
 
+## [1.0.0] — 2026-08-15
+
+### 正式版
+
+0.9.x 系列三十余个版本的收敛点。相对 0.9.2 时代,1.0.0 的翻译内核、调度器、
+版面识别与诊断体系均已重写:占位符保护与清单校验、copy-dominance/截断/混合
+残留判定、三分道调度与公式风险路由、纯文本兜底与 keep-origin 止损、文档术语
+记忆、跨页续接、页面基准字号、段级诊断与单段重译。全套 527 项单元测试。
+
+### 致谢 (Acknowledgements)
+
+本项目多项核心算法参照并移植自开源项目
+**[RetainPDF](https://github.com/wxyhgk/retain-pdf)**(作者 **wxyhgk** 及
+RetainPDF contributors,MIT 协议):译文质量判定规则(copy-dominance、截断、
+混合残留、数据密集与署名豁免、协议壳检测)、公式密集风险评分,以及占位符保护、
+分道调度、修复链路、术语记忆、跨页续接、页面基准字号等设计思想。诚挚感谢原
+项目和作者的开创性工作。按 MIT 协议要求,完整版权与许可声明收录于新增的
+`THIRD-PARTY-NOTICES.md`;移植文件(`src/translation/residueRules.ts`、
+`src/reader/formulaGuard.ts` 相关部分)已内嵌来源与协议标注。README 许可
+章节同步致谢。
+
 ## [0.9.31] — 2026-08-15
 
 ### Changed(retain-pdf 源码级核心算法移植)
