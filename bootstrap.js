@@ -1,7 +1,7 @@
 /**
  * PaperMirror for Zotero — bootstrap entry.
  *
- * Zotero 9 loads this file into a per-plugin sandbox that already provides
+ * Zotero 9/10 load this file into a per-plugin sandbox that already provides
  * `Zotero`, `Services`, `ChromeUtils`, `IOUtils`, `PathUtils`, `setTimeout`,
  * `fetch`, etc. (see zotero/zotero chrome/content/zotero/xpcom/plugins.js).
  *

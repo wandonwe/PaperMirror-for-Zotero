@@ -7,6 +7,30 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-08-15
+
+支持 Zotero 10(同时保持 Zotero 9 兼容,一个 xpi 覆盖两个大版本)。
+
+### Changed
+
+- **manifest 兼容边界放宽到 Zotero 10**: `strict_max_version` 9.0.* → 10.0.*,
+  `strict_min_version` 保持 9.0。依据官方《Zotero 10 for Developers》:
+  Zotero 10 与 9 使用同一 Firefox 140 ESR 平台,插件破坏性改动集中在
+  ZoteroPane 集合选择(getSelectedCollection→getSelectedCollections 等)、
+  ItemTree(collectionTreeRow 移除)、Search(fulltextWord 移除 /
+  addCondition legacy 参数)与 Zotero.CookieSandbox 移除 —— 本插件对以上
+  API 零使用(逐一 grep 核对)。官方文档明确 Zotero.Reader、PDF 阅读器、
+  PDFWorker、PreferencePanes、Notifier、HTTP、Prefs、Fluent 本地化均无变化。
+- updates.json 随 manifest 自动携带新边界;版本号跳到 2.0.0 标记大版本支持。
+
+### 注意
+
+- 阅读器适配层使用的 `_internalReader._primaryView._iframeWindow` 等属
+  Zotero 未公开内部结构,官方未声明变化,但**建议在 Zotero 10 正式环境跑一次
+  冒烟**:打开 PDF → 开启对照 → 翻页 → 表格页 → 深度解析 → 设置面板。
+  若内部结构有变,插件会以 READER_API_CHANGED 明确报错而非静默失败。
+
+
 ## [1.3.1] — 2026-08-15
 
 单点修复:temperature 被拒的报错误导性极强,且不可操作。
