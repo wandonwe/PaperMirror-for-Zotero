@@ -672,6 +672,32 @@ export class ReaderToolbarController {
 		await this.setMode(reader, this.currentMode(reader) === 'original' ? this.preferredMode(reader) : 'original');
 	}
 
+	/**
+	 * 按窗口维度销毁会话 (2.0.4, 审核 P2-17)。多窗口场景 (Zotero 的
+	 * 「在新窗口中打开」) 里主窗口关闭并不触发 tab close notifier,也不走
+	 * shutdown —— 此前 onMainWindowUnload 只从 knownWindows 里删掉窗口,
+	 * 属于该窗口的 ReaderSession(定时器、in-flight 请求、DOM 引用)整个泄漏,
+	 * 且继续持有已死窗口的引用。归属判定失败 (getMainWindow 为 null) 的会话
+	 * 保守保留 —— 误杀正在用的会话比多留一个待回收会话更糟。
+	 */
+	disposeWindow(win: Window): void {
+		for (const [key, session] of [...this.sessions]) {
+			if (session.getMainWindow() !== win) {
+				continue;
+			}
+			try {
+				session.destroy();
+			}
+			catch (e) {
+				logger.warn(MODULE, 'disposeWindow: session destroy failed', e);
+			}
+			this.sessions.delete(key);
+			this.modes.delete(key);
+			this.lastTranslatedMode.delete(key);
+			this.busy.delete(key);
+		}
+	}
+
 	dispose(): void {
 		this.disposed = true;
 		for (const session of this.sessions.values()) {

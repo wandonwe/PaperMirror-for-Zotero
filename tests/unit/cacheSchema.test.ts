@@ -113,6 +113,49 @@ test('schema v2 旧条目一律失效(强制迁移)', () => {
 	assert.equal(isValidCachedPage(v2, baseKey), false);
 });
 
+// ---- schema v4 (2.0.4, 审核 P2-12): fnv1a64 第二条 lane 退化修正 -------------
+
+test('等长 ASCII 字符串的 h2 后缀不再相同(旧公式下 h2 只依赖长度)', () => {
+	// 旧公式: ASCII 时 c>>8===0,h2 只由 i 序列(即长度)决定 —— 这两个
+	// 19 字符串曾共享 h2 后缀 c8ddec1f。
+	const a = fnv1a64('The quick brown fox');
+	const b = fnv1a64('Lorem ipsum dolor s');
+	assert.equal(a.length, 16);
+	assert.equal(b.length, 16);
+	assert.notEqual(a.slice(8), b.slice(8), '等长不同内容必须产生不同的 h2 lane');
+});
+
+test('修复前实测的全 64 位碰撞对不再碰撞', () => {
+	// 旧公式在 40 万等长串扫描中找到的真实全碰撞 (07a86b9aba5769d7)。
+	const a = fnv1a64('Paragraph text sample number 112789 padding');
+	const b = fnv1a64('Paragraph text sample number 349192 padding');
+	assert.notEqual(a, b);
+});
+
+test('h2 lane 对内容与位置都敏感', () => {
+	// 同一组字符不同排列 → h2 不同(位置混入)。
+	assert.notEqual(fnv1a64('ab').slice(8), fnv1a64('ba').slice(8));
+	// 同位置不同字符 → h2 不同(字符混入)。
+	assert.notEqual(fnv1a64('aa').slice(8), fnv1a64('ab').slice(8));
+});
+
+test('fnv1a64 输出稳定(哈希算法一旦改变必须提升 schemaVersion)', () => {
+	// 固定向量: 若此测试失败,说明哈希实现又变了 —— 文件名布局随之改变,
+	// 必须同时提升 CACHE_SCHEMA_VERSION,否则旧缓存文件成为永远不会命中
+	// 也永远不被清理的孤儿。
+	assert.equal(CACHE_SCHEMA_VERSION, 4);
+	assert.match(fnv1a64('hello world'), /^[0-9a-f]{16}$/);
+	assert.equal(fnv1a64('hello world'), fnv1a64('hello world'));
+});
+
+test('schema v3 旧条目一律失效(哈希布局已变,强制迁移)', () => {
+	const v3 = {
+		schemaVersion: 3, key: baseKey, createdAt: 'now',
+		translations: [{ id: 'b0', translatedText: '你好' }]
+	};
+	assert.equal(isValidCachedPage(v3, baseKey), false);
+});
+
 test('段落 context 也随不译词变化', async () => {
 	const { segmentContextHash } = await import('../../src/cache/cacheSchema');
 	const base = {

@@ -19,9 +19,17 @@
  *   glossaryHash —— 而页面缓存是先命中的一层,它的键里没有,于是「改了术语表
  *   要让旧译文失效」这个意图对所有已翻译过的页面完全落空(用户会以为术语表
  *   功能坏了)。不译词列表更彻底: 它改变占位符掩蔽从而改变译文,却两层都不在。
+ *
+ * SCHEMA v4 (2.0.4, 审核 P2-12):
+ * - fnv1a64 第二条 lane 修正。旧公式只混 `(c>>8) ^ (i&0xff)`,ASCII 下
+ *   `c>>8 === 0`,h2 完全由字符串**长度**决定 —— 任意两段等长 ASCII 文本
+ *   h2 相同,64 位哈希退化为 32 位(实测 40 万等长串中已出现全 64 位碰撞)。
+ *   新公式把字符本身与位置一起混入第二条 lane。所有旧哈希值随之改变,
+ *   文件名布局不同,故必须提升 schemaVersion 让 sweepStaleCacheFiles
+ *   清走旧文件(代价: 每个文档一次全量重译)。
  */
 
-export const CACHE_SCHEMA_VERSION = 3;
+export const CACHE_SCHEMA_VERSION = 4;
 
 export interface CacheKeyParts {
 	attachmentKey: string;
@@ -56,7 +64,11 @@ export function fnv1a64(input: string): string {
 	for (let i = 0; i < input.length; i++) {
 		const c = input.charCodeAt(i);
 		h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
-		h2 = Math.imul(h2 ^ ((c >> 8) ^ (i & 0xff)), 0x01000193) >>> 0;
+		// 第二条 lane 必须混入字符本身 (v4, 审核 P2-12): 旧公式只混
+		// `(c>>8) ^ (i&0xff)`,ASCII 下 `c>>8 === 0`,h2 只依赖长度。
+		// `c*31+i` 让不同字符/不同位置都改变 lane;质数换成 0x01000197
+		// 使两条 lane 的乘法常数不同,避免相关性。
+		h2 = Math.imul(h2 ^ (((c * 31 + i) & 0xffff) ^ (c >> 8)), 0x01000197) >>> 0;
 	}
 	return h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
 }

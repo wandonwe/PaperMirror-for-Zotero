@@ -22,6 +22,14 @@ export function onMainWindowLoad(window: Window): void {
 
 export function onMainWindowUnload(window: Window): void {
 	knownWindows.delete(window);
+	// P2-17 (2.0.4): 注入的样式表随窗口一起清理 —— 此前只在 disposeAllWindows
+	// (整个插件关停) 时移除,单个窗口关闭什么也不清。
+	try {
+		removeInjectedStyle(window.document);
+	}
+	catch {
+		// window may already be tearing down
+	}
 }
 
 export function disposeAllWindows(): void {

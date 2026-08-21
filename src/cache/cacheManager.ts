@@ -62,11 +62,15 @@ export async function readPage(parts: CacheKeyParts): Promise<TranslatedBlock[] 
 	}
 	catch (e) {
 		logger.warn(MODULE, 'Cache read failed; treating as miss', e);
-		try {
-			await IOUtils.remove(path, { ignoreAbsent: true });
-		}
-		catch {
-			// ignore
+		// 同 P2-13: 只有内容确认损坏 (SyntaxError) 才删;瞬时 I/O 失败不删,
+		// 文件下次读取很可能是好的。
+		if ((e as Error)?.name === 'SyntaxError') {
+			try {
+				await IOUtils.remove(path, { ignoreAbsent: true });
+			}
+			catch {
+				// ignore
+			}
 		}
 		return null;
 	}
@@ -240,10 +244,19 @@ export async function sweepStaleCacheFiles(): Promise<number> {
 						removed++;
 					}
 				}
-				catch {
-					// unreadable JSON is stale by definition
-					await IOUtils.remove(file, { ignoreAbsent: true }).catch(() => { /* ignore */ });
-					removed++;
+				catch (e) {
+					// 只删「内容确认无效」的文件 (2.0.4, 审核 P2-13): JSON 解析失败
+					// (SyntaxError) 说明内容本身坏了,可删;其余异常是 I/O 层面的
+					// 瞬时失败(文件被占用/权限抖动/网盘同步),内容很可能是完好的
+					// 当前版本缓存 —— 旧逻辑一律删除,启动时一次磁盘抖动就能把
+					// 整个缓存清空,代价是所有文档全量重译。
+					if ((e as Error)?.name === 'SyntaxError') {
+						await IOUtils.remove(file, { ignoreAbsent: true }).catch(() => { /* ignore */ });
+						removed++;
+					}
+					else {
+						logger.warn(MODULE, `Schema sweep: read failed, keeping file (${PathUtils.filename(file)})`, e);
+					}
 				}
 			}
 		}

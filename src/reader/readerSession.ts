@@ -195,6 +195,16 @@ export class ReaderSession {
 		return this.reader.tabID;
 	}
 
+	/** 本会话所属的主窗口 (2.0.4, 审核 P2-17) — 供按窗口维度销毁会话。 */
+	getMainWindow(): Window | null {
+		try {
+			return adapter.getMainWindowForReader(this.reader);
+		}
+		catch {
+			return null;
+		}
+	}
+
 	/** Called whenever the mode changes, so the toolbar can restyle itself. */
 	setViewModeListener(listener: (mode: ViewMode) => void): void {
 		this.onViewModeChanged = listener;

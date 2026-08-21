@@ -280,6 +280,15 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	}
 	const blockById = new Map(geometric.map(b => [b.id, b]));
 
+	// 墨迹遮挡物 (2.0.4, 审核 P2-14): isReference / type==='table' 的块被排除在
+	// `geometric` 之外(它们永不参与替换),但它们的原文墨迹仍在位图上。
+	// 边界扩展与几何审计此前对它们**失明**: 扩展可以把译文盒子长进参考文献或
+	// 表格的原文里叠印,审计也看不见。它们以纯几何成员身份进入两处遮挡物列表
+	// (expansionAllowance 的 blockers 与 pmGeometryAudit 的 preserved),
+	// 绝不进入可替换集合。
+	const inkObstacles: { id: string; box: PixelBox }[] =
+		selectInkObstacleBlocks(input.blocks).map(b => ({ id: b.id, box: pixelBox(b, render, 1) }));
+
 	const guard = detectTableRegions(
 		geometric.map(b => ({
 			id: b.id, text: b.sourceText, type: b.type,
@@ -387,8 +396,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		}
 		// A body box overlapping a real image is an extraction error — the
 		// "paragraph" is figure innards. Never mask, never replace.
+		// 阈值 15%→2% (2.0.4, 审核 P2-15): 遮罩对图像是硬裁剪 (clearRect,
+		// 交面积恒 0),但准入曾容忍 ≤15% 重叠 —— 容差带内的块照样 commit,
+		// 遮罩盖不到图像部分的原文(英文透出),译文 div 却覆盖整个盒
+		// (中文叠印图上)。准入与遮罩必须服从同一条规则。
 		const area = box.width * box.height;
-		if (area > 0 && imageBoxes.some(img => intersectArea(box, img) > area * 0.15)) {
+		if (overlapsImageInk(box, imageBoxes)) {
 			imageExcluded++;
 			continue;
 		}
@@ -409,8 +422,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			tableFailed += 1; // a translatable cell too small to place
 			continue;
 		}
-		const area = box.width * box.height;
-		if (area > 0 && imageBoxes.some(img => intersectArea(box, img) > area * 0.15)) {
+		// P2-15: 与上方同一条规则 —— 准入阈值对齐遮罩硬裁剪 (15%→2%)。
+		if (overlapsImageInk(box, imageBoxes)) {
 			tableFailed += 1; // a translatable cell overlapping an image
 			continue;
 		}
@@ -679,6 +692,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const expansionAllowance = (item: StrictItem): { right: number; down: number } =>
 		computeExpansionAllowance(item.box, [
 			...imageBoxes,
+			// P2-14: 参考文献/表格墨迹也是遮挡物 —— 扩展不得长进它们的原文。
+			...inkObstacles.map(o => o.box),
 			...geometric.filter(b => b.id !== item.id).map(b => pxOf.get(b.id)!).filter(Boolean)
 		], canvas.width / BITMAP_SCALE, canvas.height / BITMAP_SCALE, item.fontPx);
 	const applyBox = (item: StrictItem, width: number, height: number): void => {
@@ -780,7 +795,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		const preserved = geometric
 			.filter(b => !byId.has(b.id))
 			.map(b => ({ id: b.id, box: pxOf.get(b.id)! }))
-			.filter(p => !!p.box);
+			.filter(p => !!p.box)
+			// P2-14: 审计与扩展共用同一份墨迹遮挡物 —— 压住参考文献/表格原文的
+			// 已提交块现在会被看见并回退。
+			.concat(inkObstacles);
 		let firstCount = 0;
 		let adjusted = 0;
 		let reverted = 0;
@@ -1023,6 +1041,28 @@ export function revertStrictBlocks(element: HTMLElement, ids: string[]): void {
  * 最近边截断(3px 边距);上限右 ≤0.6×原宽、下 ≤max(两行, 0.5×原高)。
  * Pure — unit-tested.
  */
+/**
+ * 墨迹遮挡物选择 (2.0.4, 审核 P2-14) — pure, unit-tested。
+ * 与 `geometric` 的过滤条件 (`!isReference && type !== 'table'`) 严格互补:
+ * 被排除出替换流水线、但墨迹仍留在位图上的块。没有 lineRectsPdf 的块没有
+ * 可用几何,无从避让,只能排除。
+ */
+export function selectInkObstacleBlocks<T extends { isReference?: boolean; type?: string; lineRectsPdf?: unknown[] }>(blocks: T[]): T[] {
+	return blocks.filter(b => (b.isReference || b.type === 'table') && !!b.lineRectsPdf?.length);
+}
+
+/**
+ * 图像准入规则 (2.0.4, 审核 P2-15) — pure, unit-tested。
+ * 遮罩对图像是硬裁剪 (paintMask 的 clearRect 保证 mask∩image === 0),
+ * 因此文本盒的准入必须服从同一条规则: 与任何图像的重叠超过盒面积 2%
+ * (几何噪声容差,与 layoutSafety 审计的 tol 同数量级) 即拒绝替换。
+ * 旧阈值 15% 留下一条"英文透出 + 中文叠印"的容差带。
+ */
+export function overlapsImageInk(box: PixelBox, imageBoxes: PixelBox[]): boolean {
+	const area = box.width * box.height;
+	return area > 0 && imageBoxes.some(img => intersectArea(box, img) > area * 0.02);
+}
+
 export function computeExpansionAllowance(
 	box: PixelBox,
 	blockers: PixelBox[],
