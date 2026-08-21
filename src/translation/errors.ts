@@ -4,9 +4,23 @@
  */
 
 import { PaperMirrorError } from '../types/models';
+import { sanitize } from '../security/logSanitizer';
 
 export function mapHTTPError(status: number, bodySnippet?: string): PaperMirrorError {
-	const snippet = (bodySnippet ?? '').slice(0, 200);
+	// 响应体片段先脱敏再截断 (审核 P1-5): 这段片段会原样拼进 error.message,
+	// 而 UI 的错误行是直接 textContent 显示 message 的 —— 只有 logger 过
+	// sanitize,UI 路径不过。自建中转网关(one-api 之类)在令牌过期时常返回
+	// HTTP 400 且响应体回显密钥,那样密钥就会显示在面板上、进到用户截图里。
+	// 先脱敏再切片:密钥被 200 字截断成两半时同样能被模式命中。
+	const snippet = sanitize(bodySnippet ?? '').slice(0, 200);
+	// status 0/负数不是 HTTP 状态码,而是「传输层没完成」(见 httpClient 的
+	// status 0 分支)。主路径已在 httpClient 里还原语义,这里是二道防线:
+	// 任何其他调用方拿到 0 时也不该得到「不可重试的 UNKNOWN」。
+	if (!(status > 0)) {
+		return new PaperMirrorError('NETWORK',
+			'Network error: the request did not complete (no response from the server).',
+			{ httpStatus: status, retryable: true });
+	}
 	if (status === 401 || status === 403) {
 		return new PaperMirrorError('INVALID_API_KEY', `Authentication failed (HTTP ${status}). Check your API key.`, { httpStatus: status, retryable: false });
 	}

@@ -51,6 +51,28 @@ const EDGE_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537
 const EDGE_API_URL = 'https://api-edge.cognitive.microsofttranslator.com/translate?api-version=3.0&includeSentenceLength=true';
 const EDGE_TOKEN_TTL_MS = 8 * 60 * 1000;
 
+/**
+ * 用户是否配置了「真正的」自定义 Base URL (审核 P1-3)。
+ *
+ * 判据必须与 resolveBingApiBase 完全一致,否则两处会漂移:空串、解析失败、
+ * 以及 bing.com/*.bing.com 都不算覆盖(那只是把默认值写了出来,仍走官方通道)。
+ * 只有指向第三方主机时才算 —— 那种情况下回退到硬编码的微软端点会违背用户
+ * 把流量收进自有代理的意图。
+ */
+export function hasCustomBingBase(userBaseURL: string | undefined): boolean {
+	const cleaned = (userBaseURL ?? '').trim().replace(/\/+$/, '');
+	if (!cleaned) {
+		return false;
+	}
+	try {
+		const host = new URL(cleaned).hostname.toLowerCase();
+		return !(host === 'bing.com' || host.endsWith('.bing.com'));
+	}
+	catch {
+		return false;
+	}
+}
+
 let edgeToken: string | null = null;
 let edgeTokenAt = 0;
 let edgeTokenPromise: Promise<string> | null = null;
@@ -240,6 +262,18 @@ async function translateOne(
 		logger.debug(MODULE, 'Bing web channel failed; trying Edge auth fallback', e);
 	}
 	let edgeNote: string;
+	// 用户自定义了 Base URL 时,禁用 Edge 兜底 (审核 P1-3)。
+	// translateViaScrape 尊重 settings.apiBaseURL,但 translateViaEdge 的两个
+	// 端点是硬编码常量(edge.microsoft.com / api-edge.cognitive.microsofttranslator.com),
+	// 完全不读 apiBaseURL。bing-free 又是默认引擎 —— 机构用户把 Base URL 指向
+	// 内网代理正是为了让论文不出网,代理返回一次 502 就会让同一段原文被 POST
+	// 到微软端点,且 UI 上毫无提示。宁可报错让用户看见,也不能静默出网。
+	if (hasCustomBingBase(settings.apiBaseURL)) {
+		throw new PaperMirrorError('BAD_RESPONSE',
+			`Bing通道: ${scrapeError} ｜ Edge通道: 已跳过(你配置了自定义 Base URL,`
+			+ `不会回退到微软官方端点;如需回退请清空该设置)`,
+			{ retryable: true });
+	}
 	if (Date.now() >= edgeDisabledUntil) {
 		try {
 			const [translated] = await translateViaEdge([text], sl, tl, settings, signal);

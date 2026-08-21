@@ -1223,6 +1223,13 @@
 	filter: brightness(1.08);
 }
 
+/* 「诊断」+「语料」共用一个显隐开关(debugLogging)但必须各自是独立按钮
+   (审核 P0-2)。display:contents 让包裹层不成为 flex item —— 两个按钮仍是
+   .pm-bar 的直接可见子项,继承同一个 gap,视觉上与其他动作按钮一致。 */
+.pm-bar-actions-group {
+	display: contents;
+}
+
 /* The sync switch sits between the two, so it stays quiet until it is on. */
 .pm-bar .pm-switch-label {
 	height: 26px;

@@ -129,8 +129,10 @@ export interface PaneCallbacks {
 	/** 状态胶囊折叠/展开 — the session owns the shared collapsed state. */
 	onCollapsedChange(collapsed: boolean): void;
 	onSaveNote(): void;
-	/** 菜单栏「诊断」— copy the sanitized per-page diagnostics JSON. */
+	/** 菜单栏「诊断」— copy the sanitized per-page diagnostics JSON (NO source text). */
 	onShowDiagnostics(): void;
+	/** 菜单栏「语料」— copy the current page's text-layer spans (CONTAINS source text). */
+	onCopyCorpus(): void;
 	/** 菜单栏「术语」— copy 本篇学得的术语对 (TSV,自动抽取入口 1.1.2)。 */
 	onCopyTerms(): void;
 	onToggleViewKind(kind: 'page' | 'article'): void;
@@ -311,15 +313,26 @@ export class TranslationPane {
 	 * 初始与后续可见性都由 debugLogging 决定。
 	 */
 	private buildDiagnosticsButton(): HTMLElement {
-		const btn = this.textButton(
+		// 诊断与语料拆成两个动作 (审核 P0-2): 1.1.7 曾把语料并进「诊断」,于是
+		// 一个叫「诊断」的按钮会把整页原文放进剪贴板 —— 用户在「提交诊断」的
+		// 心智下不会预期这一点,粘进 issue 就等于公开了未发表稿件。现在诊断
+		// 只含脱敏指标;要原文请点旁边的「语料」,它的名字和提示都明说含原文。
+		const wrap = this.el('span', 'pm-bar-actions-group');
+		const diag = this.textButton(
 			'pm-bar-action', '诊断',
-			'复制诊断 JSON:全文档脱敏指标 + 当前页布局语料(含本页原文坐标,不含译文与密钥)',
+			'复制诊断 JSON:全文档脱敏指标(不含原文、译文与密钥)',
 			() => this.callbacks.onShowDiagnostics()
 		);
-		this.diagnosticsButton = btn;
+		const corpus = this.textButton(
+			'pm-bar-action', '语料',
+			'复制当前页布局语料 JSON —— 含本页原文文本与坐标(回归测试用);不含译文与密钥',
+			() => this.callbacks.onCopyCorpus()
+		);
+		wrap.append(diag, corpus);
+		this.diagnosticsButton = wrap;
 		this.debugGateCleanup?.();
-		this.debugGateCleanup = observeBoolPref('debugLogging', on => { btn.style.display = on ? '' : 'none'; });
-		return btn;
+		this.debugGateCleanup = observeBoolPref('debugLogging', on => { wrap.style.display = on ? '' : 'none'; });
+		return wrap;
 	}
 
 	/** demo .switch-label — label + iOS-style toggle */

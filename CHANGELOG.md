@@ -7,6 +7,55 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.1] — 2026-08-19
+
+安全与可靠性专项(内部审核第一批 P0/P1)。
+
+### Fixed
+
+- **[P0] 所有传输层失败被误判为「不可重试的 HTTP 0」**。`successCodes: false`
+  让 Zotero.HTTP 对任何状态码都 resolve —— 包括 XHR 的 status 0(断网、连接被拒、
+  TLS/代理失败、离线、`xhr.abort()`)。于是那个把网络错误映射成
+  `NETWORK{retryable:true}`、把 abort 映射成 `CANCELLED` 的分支**永远不执行**,
+  这些失败一路落到兜底 `UNKNOWN{retryable:false}`。后果有两层:网络错误从不重试、
+  自适应限流收不到任何反馈;更糟的是**空闲看门狗被打废** —— 它 abort 后拿到
+  UNKNOWN 而非 CANCELLED,那句「Page N 停滞 150 秒,请点重新翻译」的 TIMEOUT
+  转译从来没有触发过。现在 `send()` 在返回前还原 status 0 的真实语义
+  (aborted → CANCELLED,否则 → NETWORK 可重试),`mapHTTPError` 对
+  `status <= 0` 加了二道防线。同文件的 XHR 回退路径本来就是这么做的,两条路径
+  现在一致了。
+- **[P0] 「诊断」按钮把整页原文复制到剪贴板**。1.1.7 把「语料」并进了「诊断」,
+  于是一个叫「诊断」的动作会把当前页全部原文 span 与文献标题放进剪贴板 ——
+  用户在「提交诊断」的心智下不会预期这一点,粘进 issue 就等于公开了未发表稿件。
+  现在拆回两个按钮:**「诊断」只含脱敏指标**(不含原文、译文与密钥);
+  **「语料」**独立,名字、tooltip、载荷里的 `note` 字段与复制后的提示都明说
+  含本页原文。两者仍共用调试日志开关显隐。新增源码级回归闸,防止再次并回。
+- **[P1] 错误消息把响应体片段原样带进 UI**。`mapHTTPError` 会把上游响应体前
+  200 字节拼进 `error.message`,而 `sanitize()` **只在 logger 里**,UI 的错误行是
+  直接 `textContent` 显示 message 的。自建中转网关(one-api 之类)令牌过期时常
+  返回 HTTP 400 且响应体回显密钥 → 密钥显示在面板上、进用户截图。现在响应体
+  **先脱敏再截断**(密钥被 200 字切成两半时同样命中)。
+- **[P1] Ollama 无条件放行明文 HTTP**。`allowInsecureHTTP: () => true` 忽略入参,
+  而注释写的前提「默认 URL 是 localhost」并不成立 —— Base URL 是用户可编辑字段。
+  于是 `checkEndpointURL` 的回环判断与「允许 HTTP 端点」首选项对 ollama 完全失效:
+  填一个公网地址就明文跨网传输整篇论文,若该端点还配了密钥,
+  `Authorization: Bearer` 也会一并明文发出。现在与 `custom` 一致 —— 回环地址
+  仍无条件放行(默认用法不受影响),非回环需显式开启该首选项。
+- **[P1] 默认引擎 bing-free 的 Edge 兜底绕过用户 Base URL**。`translateViaScrape`
+  尊重 `apiBaseURL`,但兜底的 `translateViaEdge` 端点是硬编码常量
+  (`edge.microsoft.com` / `api-edge.cognitive.microsofttranslator.com`),完全不读它。
+  机构用户把 Base URL 指向内网代理正是为了让论文不出网,代理返回一次 502 就会让
+  同一段原文被 POST 到微软端点,UI 上毫无提示。现在配置了自定义 Base URL 时
+  **禁用 Edge 兜底并明确报错**(宁可让用户看见,也不静默出网)。判据与
+  `resolveBingApiBase` 共用同一套规则,并有测试钉住两处不得漂移。
+
+### 测试
+
+- 648 → **654**:status 0 的两种成因(断网 / 看门狗 abort)走真实 `send()` 路径、
+  响应体脱敏 4 例、Ollama 明文门槛(含「被拒时零字节出网」断言)、
+  bing-free 判据一致性、诊断隐私不变量(行为 + 源码级回归闸)。
+
+
 ## [2.0.0] — 2026-08-15
 
 支持 Zotero 10(同时保持 Zotero 9 兼容,一个 xpi 覆盖两个大版本)。

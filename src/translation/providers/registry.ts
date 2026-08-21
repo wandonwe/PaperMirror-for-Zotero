@@ -106,7 +106,14 @@ const presetProviders: TranslationProvider[] = [
 		defaultBaseURL: 'http://localhost:11434',
 		defaultModel: 'qwen3.5',
 		requiresApiKey: false,
-		allowInsecureHTTP: () => true // localhost only by default URL
+		// 与 custom 一致 (审核 P1-4): 此前是 `() => true` —— 闭包忽略入参,而
+		// 注释写的前提「默认 URL 是 localhost」并不成立,因为 Base URL 是用户
+		// 可编辑字段。于是 checkEndpointURL 的 isLocal 判断与「允许 HTTP 端点」
+		// 首选项对 ollama 完全失效:填一个公网地址就明文跨网传输整篇论文;
+		// 若该端点还配了密钥,Authorization: Bearer 也会一并明文发出。
+		// 默认的 localhost 用法不受影响 —— checkEndpointURL 对回环地址
+		// (localhost / 127.0.0.1 / [::1]) 本来就无条件放行。
+		allowInsecureHTTP: settings => (settings as ProviderSettings & { allowInsecureHTTP?: boolean }).allowInsecureHTTP === true
 	})
 ];
 

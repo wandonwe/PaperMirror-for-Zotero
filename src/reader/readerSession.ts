@@ -242,6 +242,7 @@ export class ReaderSession {
 			onCollapsedChange: (c) => this.setCapsuleCollapsed(c), // 折叠状态由会话统一管理
 			onSaveNote: () => void this.saveSelectionToNote(),
 			onShowDiagnostics: () => this.copyDiagnostics(),
+			onCopyCorpus: () => this.copyLayoutCorpus(),
 			onCopyTerms: () => this.copyLearnedTerms(),
 			onOpenSettings: () => this.openSettings(),
 			onToggleViewKind: kind => setPref('paneView', kind),
@@ -1846,7 +1847,13 @@ export class ReaderSession {
 
 	/**
 	 * 诊断导出: sanitized per-page diagnostics (statuses, request/retry/429
-	 * counts, keep-origin reasons — NO text, NO keys) → clipboard as JSON.
+	 * counts, keep-origin reasons) → clipboard as JSON.
+	 *
+	 * 硬性不变量: NO source text, NO translations, NO keys (审核 P0-2)。
+	 * 1.1.7 曾把「语料」并进这个按钮,于是一个叫「诊断」的动作会把整页原文
+	 * 放进剪贴板 —— 用户在「提交诊断」的心智下不会预期这一点,粘进 issue 就
+	 * 等于公开了未发表稿件。语料已拆回独立的「语料」按钮 (copyLayoutCorpus),
+	 * 那个按钮的名字与提示都明说含原文,导出动作本身即知情授权。
 	 */
 	private copyDiagnostics(): void {
 		if (!this.manager) {
@@ -1860,18 +1867,46 @@ export class ReaderSession {
 				// 几何安全复核结果 (1.1.2 诊断闭环): 页号 → 违例/调整/保留计数。
 				geometryAudits: [...this.geometryAudits.entries()]
 					.sort((a, b) => a[0] - b[0])
-					.map(([page, r]) => ({ page: page + 1, ...r })),
-				// 当前页布局语料 (1.1.7, 与「语料」按钮合并): dump-spans 同格式,
-				// 含本页原文与坐标——点「诊断」即授权;仍不含译文与密钥。
-				currentPageCorpus: this.layoutCorpus()
+					.map(([page, r]) => ({ page: page + 1, ...r }))
 			};
 			Components.classes['@mozilla.org/widget/clipboardhelper;1']
 				.getService(Components.interfaces.nsIClipboardHelper)
 				.copyString(JSON.stringify(payload, null, 2));
-			this.flashNotice('诊断已复制(指标脱敏 + 当前页布局语料;不含译文与密钥)');
+			this.flashNotice('诊断已复制(仅脱敏指标;不含原文、译文与密钥)');
 		}
 		catch (e) {
 			logger.warn(MODULE, 'diagnostics copy failed', e);
+		}
+	}
+
+	/**
+	 * 布局语料导出 (独立动作, 审核 P0-2): 当前页文本层 span → dump-spans 同格式
+	 * JSON 进剪贴板,供回归测试语料与版面排障使用。
+	 *
+	 * 与「诊断」的区别必须对用户可见: 这份 JSON **含本页原文文本与坐标**,
+	 * 所以按钮叫「语料」、提示明说含原文、复制后的 toast 再提醒一次。
+	 * 仍然不含译文,也不含密钥。
+	 */
+	private copyLayoutCorpus(): void {
+		try {
+			const corpus = this.layoutCorpus();
+			if (!corpus) {
+				this.flashNotice('当前页没有可导出的文本层语料');
+				return;
+			}
+			const payload = {
+				plugin: 'PaperMirror',
+				generatedAt: new Date().toISOString(),
+				note: 'CONTAINS SOURCE TEXT of the current page (layout corpus for regression tests).',
+				currentPageCorpus: corpus
+			};
+			Components.classes['@mozilla.org/widget/clipboardhelper;1']
+				.getService(Components.interfaces.nsIClipboardHelper)
+				.copyString(JSON.stringify(payload, null, 2));
+			this.flashNotice('语料已复制 —— 含本页原文,分享前请确认可公开');
+		}
+		catch (e) {
+			logger.warn(MODULE, 'corpus copy failed', e);
 		}
 	}
 

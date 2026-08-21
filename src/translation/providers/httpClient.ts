@@ -144,6 +144,25 @@ async function send(
 			catch {
 				// header access can throw across compartments — best-effort
 			}
+			// status 0 是「传输层根本没完成」,不是一个 HTTP 状态码 (审核 P0-1)。
+			// successCodes:false 让 Zotero.HTTP 对任何状态码都 resolve —— 包括 XHR
+			// 的 status 0(DNS 失败、连接被拒、TLS/代理失败、离线、xhr.abort())。
+			// 于是下面那个把网络错误映射成 NETWORK{retryable:true}、把 abort 映射成
+			// CANCELLED 的 catch 分支永远不会执行,这些失败一路落到
+			// mapHTTPError(0) 的兜底 UNKNOWN{retryable:false}:
+			//   · 网络错误从不重试,自适应限流收不到任何反馈;
+			//   · 更糟的是空闲看门狗 —— 它 abort 后拿到 UNKNOWN 而非 CANCELLED,
+			//     那句「Page N 停滞 150 秒」的 TIMEOUT 转译从来没有触发过。
+			// 这里在返回前把 status 0 还原成它真正的语义。XHR 回退路径
+			// (下面的 onerror)一直是这么做的,两条路径现在一致了。
+			if (!response.status) {
+				if (signal?.aborted) {
+					throw new PaperMirrorError('CANCELLED', 'Translation was cancelled.', { retryable: false });
+				}
+				throw new PaperMirrorError('NETWORK',
+					'Network error: the request did not complete (no response from the server).',
+					{ retryable: true });
+			}
 			return {
 				status: response.status,
 				text: typeof response.responseText === 'string' ? response.responseText : String(response.response ?? ''),
@@ -155,6 +174,10 @@ async function send(
 			};
 		}
 		catch (e) {
+			// 已经分类好的错误原样上抛,不要二次包装(status 0 分支就走这里)。
+			if (e instanceof PaperMirrorError) {
+				throw e;
+			}
 			if (signal?.aborted) {
 				throw new PaperMirrorError('CANCELLED', 'Translation was cancelled.', { retryable: false });
 			}

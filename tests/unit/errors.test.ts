@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { registerSecret } from '../../src/security/logSanitizer';
 import { mapHTTPError, mapFetchFailure } from '../../src/translation/errors';
 import { PaperMirrorError } from '../../src/types/models';
 
@@ -120,4 +121,47 @@ test('reasoning_effort 的 Unrecognized argument 同样归为参数被拒', () =
 test('真正的模型名 400 仍归 INVALID_MODEL', () => {
 	const e = mapHTTPError(400, '{"error":{"message":"The model `bogus-x` does not exist or you do not have access to it."}}');
 	assert.equal(e.code, 'INVALID_MODEL');
+});
+
+// ---- P0-1: 传输层失败(status 0)不是"不可重试的 UNKNOWN" (2.0.1) --------------
+
+test('status 0 / 负数 → NETWORK 且可重试(二道防线)', () => {
+	for (const s of [0, -1]) {
+		const e = mapHTTPError(s, '');
+		assert.equal(e.code, 'NETWORK', `status ${s} 必须是 NETWORK`);
+		assert.equal(e.retryable, true, `status ${s} 必须可重试`);
+	}
+});
+
+test('正常 HTTP 状态码分类不受 status-0 分支影响(回归)', () => {
+	assert.equal(mapHTTPError(401, '').code, 'INVALID_API_KEY');
+	assert.equal(mapHTTPError(404, '').code, 'INVALID_MODEL');
+	assert.equal(mapHTTPError(429, '').code, 'RATE_LIMITED');
+	assert.equal(mapHTTPError(402, '').code, 'QUOTA_EXCEEDED');
+	assert.equal(mapHTTPError(500, '').code, 'NETWORK');
+	assert.equal(mapHTTPError(400, 'The model `x` does not exist').code, 'INVALID_MODEL');
+});
+
+// ---- P1-5: 响应体片段脱敏后才进 error.message (2.0.1) ------------------------
+
+test('网关回显的密钥不会进入 error.message(UI 会直接显示它)', () => {
+	// 自建中转网关令牌过期常返回 400 且回显密钥
+	const e1 = mapHTTPError(400, '{"error":{"message":"invalid token: sk-abcdefghijklmnopqrstuvwxyz123456"}}');
+	assert.ok(!/abcdefghijklmnop/.test(e1.message), 'sk- 模式必须被脱敏');
+	const e2 = mapHTTPError(400, '{"error":{"message":"Authorization: Bearer eyJhbGciOiJIUzI1NiJ9payload"}}');
+	assert.ok(!/eyJhbGciOiJIUzI1NiJ9payload/.test(e2.message), 'Bearer 令牌必须被脱敏');
+	const e3 = mapHTTPError(400, '{"api_key":"abcd1234efgh5678ijkl"}');
+	assert.ok(!/abcd1234efgh5678ijkl/.test(e3.message), 'api_key 字段必须被脱敏');
+});
+
+test('运行时注册的真实密钥也被脱敏', () => {
+	registerSecret('sk-proj-UNIQUEKEYFORTEST0987654321');
+	const e = mapHTTPError(400, 'rejected: sk-proj-UNIQUEKEYFORTEST0987654321 is expired');
+	assert.ok(!/UNIQUEKEYFORTEST/.test(e.message));
+	assert.ok(/REDACTED/.test(e.message), '应留下 [REDACTED] 痕迹便于排查');
+});
+
+test('脱敏不影响无密钥的诊断信息可读性', () => {
+	const e = mapHTTPError(400, 'Unsupported value: temperature does not support 0 with this model');
+	assert.ok(/temperature/.test(e.message), '参数名必须保留,自愈匹配依赖它');
 });
