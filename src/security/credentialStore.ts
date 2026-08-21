@@ -106,7 +106,18 @@ export async function getApiKey(providerId: string): Promise<string> {
 	return key;
 }
 
-export async function setApiKey(providerId: string, apiKey: string): Promise<void> {
+/**
+ * setApiKey 的落库结果 (2.0.5, 审核 P2-18):
+ *  - 'secure'    密钥进了系统凭据库 (Login Manager);
+ *  - 'plaintext' 凭据库不可用,密钥**明文**写进了首选项 (prefs.js) —— 会随
+ *                profile 备份/同步外流,调用方(设置界面)必须显式告知用户;
+ *  - 'failed'    两条路都失败,密钥没有被保存;
+ *  - 'removed'   请求的是删除(空密钥)。
+ * 此前所有路径都静默返回 void,明文回退唯一的痕迹是一条 logger.warn。
+ */
+export type ApiKeyStoreResult = 'secure' | 'plaintext' | 'failed' | 'removed';
+
+export async function setApiKey(providerId: string, apiKey: string): Promise<ApiKeyStoreResult> {
 	registerSecret(apiKey);
 	// The session cache must never serve a stale key after a change.
 	keyCache.delete(providerId);
@@ -116,7 +127,7 @@ export async function setApiKey(providerId: string, apiKey: string): Promise<voi
 			if (existing) {
 				Services.logins.removeLogin(existing);
 			}
-			return;
+			return 'removed';
 		}
 		if (existing) {
 			const updated = loginInfoContract();
@@ -130,7 +141,7 @@ export async function setApiKey(providerId: string, apiKey: string): Promise<voi
 		}
 		// Successful secure storage: make sure no fallback copy remains
 		clearFallbackKey(providerId);
-		return;
+		return 'secure';
 	}
 	catch (e) {
 		logger.warn(MODULE, 'Login Manager write failed; using pref fallback', e);
@@ -146,9 +157,11 @@ export async function setApiKey(providerId: string, apiKey: string): Promise<voi
 			delete map[providerId];
 		}
 		setPref('apiKeyFallback', JSON.stringify(map));
+		return apiKey ? 'plaintext' : 'removed';
 	}
 	catch (e) {
 		logger.error(MODULE, 'Failed to store API key', e);
+		return 'failed';
 	}
 }
 

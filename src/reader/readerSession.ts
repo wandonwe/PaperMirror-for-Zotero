@@ -24,7 +24,7 @@ import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationRes
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
-import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, auditStrictGeometry, type UnfitBlock } from '../ui/strictPageReplacement';
+import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, auditStrictGeometry, flashKeptIndicator, type UnfitBlock } from '../ui/strictPageReplacement';
 import { translateFullPdf, bytesToBase64, type TranslateSubmission } from '../translation/pdfService';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
@@ -175,6 +175,22 @@ export class ReaderSession {
 		if (this.pool.length > 1) {
 			const offset = this.pageProviderOffset.get(pageIndex) ?? 0;
 			return pickProviderForPage(this.pool, pageIndex + offset);
+		}
+		return getPref<string>('provider', 'bing-free');
+	}
+
+	/**
+	 * 缓存身份用的**规范**引擎 (2.0.5, 审核 P2-16): 不含 pageProviderOffset。
+	 * offset 是会话内瞬态路由(熔断换引擎、手动刷新轮换),重启即清零 ——
+	 * 让它进缓存键曾造成: 熔断切到 B 后同一页 readCache 用 A 键、writeCache
+	 * 用 B 键,写进去的译文下次打开(offset 归零 → A 键)永远读不回来,
+	 * 页面缓存必然失效。缓存身份只随**持久配置**(provider 首选项、池成员)
+	 * 变化: 同一页的读写键从此恒等,跨会话也稳定。混合来源的译文(切换前
+	 * A 译了一半)存在该页的规范键下 —— 缓存返回的正是用户当时看到的内容。
+	 */
+	private canonicalProviderForPage(pageIndex: number): string {
+		if (this.pool.length > 1) {
+			return pickProviderForPage(this.pool, pageIndex);
 		}
 		return getPref<string>('provider', 'bing-free');
 	}
@@ -637,7 +653,8 @@ export class ReaderSession {
 		if (!item) {
 			return null;
 		}
-		const chosen = this.providerForPage(pageIndex);
+		// 规范引擎,不是运行时引擎 (P2-16): 读写键必须恒等,见 canonicalProviderForPage。
+		const chosen = this.canonicalProviderForPage(pageIndex);
 		const settings = await this.providerSettingsFor(chosen);
 		const { source, target } = this.resolveLanguages(texts.join('\n').slice(0, 2000));
 		return {
@@ -683,7 +700,8 @@ export class ReaderSession {
 		if (!item) {
 			return null;
 		}
-		const settings = await this.providerSettingsFor(this.providerForPage(pageIndex));
+		// 规范引擎 (P2-16): 段落 store 的读写 context 同样必须恒等。
+		const settings = await this.providerSettingsFor(this.canonicalProviderForPage(pageIndex));
 		return {
 			attachmentKey: item.key,
 			fileHash: this.fileHash || 'nohash',
@@ -917,33 +935,23 @@ export class ReaderSession {
 			const boxes = Array.from(
 				target.element.querySelectorAll('[data-pm-unfit="true"]')
 			) as HTMLElement[];
-			if (boxes.length) {
-				boxes[0]?.scrollIntoView({ block: 'center' });
-				for (const box of boxes) {
-					this.flashKept(box);
+			// P2-19 (2.0.5): unfit 节点是 visibility:hidden 的译文 div,直接
+			// 描边看不见 —— 改为按其几何画独立的可见标记层 (flashKeptIndicator)。
+			// 只有**确实闪出了**至少一个标记才算完成;找到节点但一个都画不出
+			// (旧代码在这种情况下也 return,把回退路径整个屏蔽)则继续走 pane。
+			let flashed = 0;
+			for (const box of boxes) {
+				if (flashKeptIndicator(box)) {
+					flashed++;
 				}
+			}
+			if (flashed > 0) {
+				boxes[0]?.scrollIntoView({ block: 'center' });
 				return;
 			}
 		}
 		// Overlay element gone or empty → let the pane locate them.
 		this.pane?.revealKeptOriginal(pageIndex);
-	}
-
-	/**
-	 * Briefly outline a kept-original segment. Inline styles (not a CSS class)
-	 * so the same routine works in the overlay layer and the pane, whose
-	 * stylesheets differ.
-	 */
-	private flashKept(node: HTMLElement): void {
-		const prevOutline = node.style.outline;
-		const prevTransition = node.style.transition;
-		node.style.transition = 'outline-color 0.25s ease';
-		node.style.outline = '2px solid rgba(240, 173, 78, 0.95)';
-		const win = node.ownerDocument.defaultView;
-		win?.setTimeout(() => {
-			node.style.outline = prevOutline;
-			node.style.transition = prevTransition;
-		}, 2000);
 	}
 
 	private startPolling(): void {

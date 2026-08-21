@@ -23,6 +23,7 @@ import type { ExplanationSection } from '../translation/explainer';
 import type { PageTranslationState } from '../translation/translationManager';
 import type { SourceBlock } from '../types/models';
 import { StatusCapsule, CAPSULE_CSS, type OverlayProgress } from './statusCapsule';
+import { flashKeptIndicator } from './strictPageReplacement';
 // Official brand marks (vendored from lobe-icons, MIT — see brandIcons/README).
 import svgMicrosoft from './brandIcons/microsoft.svg';
 import svgGoogle from './brandIcons/google.svg';
@@ -1460,8 +1461,8 @@ export class TranslationPane {
 	/**
 	 * 查看保留原文: scroll to `pageIndex` and briefly flash the segments whose
 	 * translation could not be placed — the strict `[data-pm-unfit]` boxes in
-	 * page view, or the still-pending blocks in article view. Returns true if
-	 * at least one such segment was found and flashed.
+	 * page view, or the still-pending blocks in article view. Returns true only
+	 * if at least one segment was VISIBLY flashed (P2-19).
 	 */
 	revealKeptOriginal(pageIndex: number): boolean {
 		this.scrollToPage(pageIndex);
@@ -1476,15 +1477,29 @@ export class TranslationPane {
 		if (!kept.length) {
 			return false;
 		}
-		kept[0]?.scrollIntoView({ block: 'center' });
+		let flashed = 0;
 		for (const node of kept) {
+			// P2-19 (2.0.5): unfit 节点是 visibility:hidden 的译文 div —— 加
+			// 动画类描的是隐藏节点,用户什么也看不到。改为按其几何画独立的
+			// 可见标记层;仍然可见的节点 (article view 的 pending 块) 继续用
+			// 原动画类。
+			if (node.getAttribute('data-pm-unfit') === 'true') {
+				if (flashKeptIndicator(node)) {
+					flashed++;
+				}
+				continue;
+			}
 			node.classList.remove('pm-kept-flash');
 			// Force reflow so re-adding the class restarts the animation.
 			void node.offsetWidth;
 			node.classList.add('pm-kept-flash');
 			this.doc.defaultView?.setTimeout(() => node.classList.remove('pm-kept-flash'), 2000);
+			flashed++;
 		}
-		return true;
+		if (flashed > 0) {
+			kept[0]?.scrollIntoView({ block: 'center' });
+		}
+		return flashed > 0;
 	}
 
 	private handleScroll(): void {

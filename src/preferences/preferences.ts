@@ -55,7 +55,7 @@ interface PaperMirrorPublicAPI {
 	version?: string;
 	listProviders(): ProviderInfo[];
 	getApiKey(providerId: string): Promise<string>;
-	setApiKey(providerId: string, key: string): Promise<void>;
+	setApiKey(providerId: string, key: string): Promise<'secure' | 'plaintext' | 'failed' | 'removed' | void>;
 	describeEndpoint(providerId: string, apiBaseURL: string, apiPath?: string): string;
 	testConnection(overrides?: { providerId?: string; apiBaseURL?: string; model?: string; apiPath?: string; reasoning?: string; maxOutputTokens?: number; temperature?: number }): Promise<{ ok: boolean; message?: string; httpStatus?: number; modelAvailable?: boolean; elapsedMs?: number }>;
 	cache: { totalSizeBytes(): Promise<number>; clearAll(): Promise<void> };
@@ -781,6 +781,26 @@ interface PaperMirrorPublicAPI {
 			apiKeyInput.value = value;
 		}
 
+		/** 密钥落库结果提示 (2.0.5, 审核 P2-18): 明文回退绝不静默。 */
+		const showKeyStoreResult = (result: 'secure' | 'plaintext' | 'failed' | 'removed' | void, provider: string): void => {
+			const status = byId<HTMLElement>('papermirror-apikey-status');
+			if (!status || provider !== currentProviderId()) {
+				return; // 用户已切走: 不把上一家的落库提示打在这一家名下
+			}
+			if (result === 'plaintext') {
+				status.setAttribute('value', '⚠ 系统凭据库不可用,密钥已明文保存在 Zotero 配置文件里(会随配置备份/同步一起外流)。解锁主密码或修复凭据库后重新保存即可转入安全存储。');
+				status.setAttribute('data-state', 'fail');
+			}
+			else if (result === 'failed') {
+				status.setAttribute('value', '✗ 密钥保存失败,当前没有被存储 —— 请查看错误日志后重试。');
+				status.setAttribute('data-state', 'fail');
+			}
+			else {
+				status.setAttribute('value', '');
+				status.removeAttribute('data-state');
+			}
+		};
+
 		const commitApiKey = (): void => {
 			if (!apiKeyInput) {
 				return;
@@ -792,7 +812,15 @@ interface PaperMirrorPublicAPI {
 			if (apiKeyOwner !== provider) {
 				return;
 			}
-			void api()?.setApiKey(provider, apiKeyInput.value);
+			void (async () => {
+				try {
+					const result = await api()?.setApiKey(provider, apiKeyInput.value);
+					showKeyStoreResult(result, provider);
+				}
+				catch {
+					showKeyStoreResult('failed', provider);
+				}
+			})();
 		};
 		apiKeyInput?.addEventListener('change', commitApiKey);
 		apiKeyInput?.addEventListener('blur', commitApiKey);

@@ -330,6 +330,48 @@ test('熔断: >25% of a chunk missing fires onProviderUnstable exactly once per 
 	manager.dispose();
 });
 
+test('P2-16: 熔断切换引擎后,429 反馈打到新引擎的 lane,旧引擎不受牵连', async () => {
+	// 页面从引擎 A 开始;熔断把剩余请求切到 B;此后 B 的 429 必须惩罚 B 的
+	// lane —— 旧实现把 lane 在页面开始时快照为 A,B 的 429 去砍 A 的上限。
+	const { PaperMirrorError } = await import('../../src/types/models');
+	const N = 8;
+	let offset = 0; // 模拟 readerSession.pageProviderOffset
+	let rateLimitFired = false;
+	const { deps } = makeDeps({
+		laneFor: () => (offset === 0 ? 'A' : 'B'),
+		extractPage: async (pageIndex) => Array.from({ length: N }, (_, i) => ({
+			id: `page-${pageIndex}-block-${i}`,
+			pageIndex, order: i, type: 'paragraph' as const,
+			sourceText: `Paragraph ${i} with enough English words to count as prose content.`
+		})),
+		translateRequest: async (request) => {
+			if (request.blocks.length > 1) {
+				// 批量丢弃 >25% → 触发熔断切换。
+				return { translations: [{ id: request.blocks[0]!.id, translatedText: '批量译文的中文内容在此。' }] };
+			}
+			// 切换后 (offset=1, 引擎 B):第一次单块救回撞 429。
+			if (offset === 1 && !rateLimitFired) {
+				rateLimitFired = true;
+				throw new PaperMirrorError('RATE_LIMITED', 'too many requests', { retryable: true });
+			}
+			return { translations: [{ id: request.blocks[0]!.id, translatedText: '单块救回的中文译文内容。' }] };
+		}
+	});
+	const manager = new TranslationManager(
+		deps,
+		{ onPageUpdate: () => {}, onProviderUnstable: () => { offset = 1; } },
+		{ prefetch: false, delayFn: () => Promise.resolve() }
+	);
+	// min=1, initial=max=4: 成功奖励封顶不再上调,唯一能改变 cap 的是 429 惩罚。
+	manager.setLaneCaps({ A: { min: 1, initial: 4, max: 4 }, B: { min: 1, initial: 4, max: 4 } });
+	await manager.ensurePage(0, 10);
+	assert.equal(rateLimitFired, true, '场景成立: B 确实收到过 429');
+	const scheduler = (manager as any).scheduler;
+	assert.ok(scheduler.laneCap('B') < 4, `B 的 lane 必须被惩罚 (cap=${scheduler.laneCap('B')})`);
+	assert.equal(scheduler.laneCap('A'), 4, 'A 的 lane 不得为 B 的 429 买单');
+	manager.dispose();
+});
+
 test('looksTranslated rejects echoed English prose but accepts CJK and acronym cells', async () => {
 	const { looksTranslated } = await import('../../src/translation/translationManager');
 	// Provider echoes the English source unchanged → rejected for a zh target.

@@ -592,14 +592,42 @@ export class ReaderToolbarController {
 		return `Reading mode: ${mode}`;
 	}
 
+	/**
+	 * 「活动主窗口」(2.0.5, 审核 P2-20): 多主窗下 (Zotero 的「在新窗口中
+	 * 打开」) `Zotero.getMainWindow()` 并不保证是用户正在操作的那个窗口 ——
+	 * 以它解析 activeReader/activeSession 时,clearCurrentCache /
+	 * exportCurrentPdf 这类 API 入口可能作用到**另一个窗口**里那篇文档。
+	 * 现在优先选真正持有焦点的主窗口;没有任何主窗口有焦点(如从设置
+	 * 窗口调用)时退回 getMainWindow(),与旧行为一致。
+	 */
+	private activeWindow(): (Window & { Zotero_Tabs?: any }) | null {
+		try {
+			const wins = (Zotero.getMainWindows?.() ?? []) as (Window & { Zotero_Tabs?: any })[];
+			for (const w of wins) {
+				try {
+					if (w.document?.hasFocus?.()) {
+						return w;
+					}
+				}
+				catch {
+					// a tearing-down window may throw — skip it
+				}
+			}
+		}
+		catch {
+			// getMainWindows unavailable → fall back below
+		}
+		return Zotero.getMainWindow();
+	}
+
 	private activeReader(): ReaderLike | null {
-		const win = Zotero.getMainWindow();
+		const win = this.activeWindow();
 		const tabID = win?.Zotero_Tabs?.selectedID;
 		return tabID ? adapter.getReaderByTabID(tabID) : null;
 	}
 
 	private activeSession(): ReaderSession | undefined {
-		const win = Zotero.getMainWindow();
+		const win = this.activeWindow();
 		const tabID = win?.Zotero_Tabs?.selectedID;
 		return tabID ? this.sessions.get(String(tabID)) : undefined;
 	}

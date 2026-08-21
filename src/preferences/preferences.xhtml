@@ -152,6 +152,8 @@
 			<html:div><html:input type="password" id="papermirror-apikey" autocomplete="off" spellcheck="false"/></html:div>
 		</html:div>
 		<html:div class="pm-desc">密钥保存在系统凭据库(Mozilla Login Manager),不写入任何配置文件,也绝不会随日志或导出泄露。免费引擎与 Ollama 无需填写。</html:div>
+		<!-- 密钥落库结果 (P2-18): 凭据库写入失败转明文回退时,在这里显式告知,绝不静默。 -->
+		<label id="papermirror-apikey-status" class="pm-result" value="" style="white-space: normal;"/>
 	</vbox>
 
 	<!-- ======================= 模型 / 地址 (每个服务商独立保存) ======================= -->

@@ -1042,6 +1042,42 @@ export function revertStrictBlocks(element: HTMLElement, ids: string[]): void {
  * Pure — unit-tested.
  */
 /**
+ * 「查看保留原文」的可见定位指示 (2.0.5, 审核 P2-19)。
+ *
+ * 保留原文的块 (`[data-pm-unfit]`) 是被 `visibility:hidden` 的**译文** div ——
+ * 用户看到的是位图上同一矩形里的原文。旧实现直接给这个隐藏节点描边/加
+ * 动画类: `visibility:hidden` 连 outline 和背景一起隐藏,用户点「查看保留
+ * 原文」什么也看不到。
+ *
+ * 修复: 不动隐藏节点本身,而是在其 offsetParent 里按同一几何画一个**独立
+ * 的可见标记层**(visibility:hidden 不影响布局,offsetLeft/Top/Width/Height
+ * 仍是原文所在矩形),限时后自动移除。返回 null 表示无法定位(节点已脱离
+ * 文档/无宿主)—— 调用方应把 null 视为「没有闪到任何东西」,继续走回退
+ * 路径,而不是像旧代码那样凭节点存在就返回 true 屏蔽回退。
+ */
+export function flashKeptIndicator(node: HTMLElement, durationMs = 2000): HTMLElement | null {
+	const doc = node.ownerDocument;
+	const host = (node.offsetParent as HTMLElement | null) ?? node.parentElement;
+	if (!doc || !host || !node.isConnected) {
+		return null;
+	}
+	const marker = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
+	marker.className = 'pm-kept-indicator';
+	marker.style.position = 'absolute';
+	marker.style.left = `${node.offsetLeft}px`;
+	marker.style.top = `${node.offsetTop}px`;
+	marker.style.width = `${node.offsetWidth}px`;
+	marker.style.height = `${node.offsetHeight}px`;
+	marker.style.outline = '2px solid rgba(240, 173, 78, 0.95)';
+	marker.style.background = 'rgba(240, 173, 78, 0.18)';
+	marker.style.pointerEvents = 'none';
+	marker.style.zIndex = '10';
+	host.appendChild(marker);
+	doc.defaultView?.setTimeout(() => marker.remove(), durationMs);
+	return marker;
+}
+
+/**
  * 墨迹遮挡物选择 (2.0.4, 审核 P2-14) — pure, unit-tested。
  * 与 `geometric` 的过滤条件 (`!isReference && type !== 'table'`) 严格互补:
  * 被排除出替换流水线、但墨迹仍留在位图上的块。没有 lineRectsPdf 的块没有

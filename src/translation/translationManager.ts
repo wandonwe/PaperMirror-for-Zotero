@@ -1305,7 +1305,6 @@ export class TranslationManager {
 		// and how many were salvage. High salvage counts point at fragment-heavy
 		// grouping or an id-dropping provider — the log tells which.
 		const metrics = { requestCount: 0, salvageCount: 0, rateLimited: 0, timeouts: 0, startedAt: Date.now() };
-		const lane = this.laneFor(pageIndex);
 		const countedTranslate = async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
 			metrics.requestCount++;
 			// Request-level retry (network/rate-limit; TIMEOUT retried ONCE — a
@@ -1316,6 +1315,12 @@ export class TranslationManager {
 				if (sig.aborted) {
 					throw new PaperMirrorError('CANCELLED', 'cancelled');
 				}
+				// 每次请求即时解析 lane (2.0.5, 审核 P2-16): 此前在页面开始时快照
+				// 一次 —— 熔断 (onProviderUnstable) 把本页剩余请求切到引擎 B 之后,
+				// B 的 429/timeout 仍反馈到 A 的 lane,去砍无辜引擎的自适应限流
+				// 上限,而真正超载的 B 的 lane 学不到任何东西。translateRequest
+				// 也是按请求时刻解析引擎的,两者现在同刻同源,必然一致。
+				const lane = this.laneFor(pageIndex);
 				try {
 					const response = await this.deps.translateRequest(request, sig);
 					beat(); // progress: a request finished → re-arm the idle watchdog
