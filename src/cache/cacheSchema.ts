@@ -13,9 +13,15 @@
  *   升级从未真正让缓存失效)。
  * - v1 旧条目 schemaVersion 不匹配,读到即删;文件名布局也变了,残留旧文件由
  *   cacheManager 的 sweepStaleCacheFiles 清理。
+ *
+ * SCHEMA v3 (2.0.2, 审核 P1-10):
+ * - glossaryHash 与 noTranslateHash 进入**页面键**。此前只有段落 context 带
+ *   glossaryHash —— 而页面缓存是先命中的一层,它的键里没有,于是「改了术语表
+ *   要让旧译文失效」这个意图对所有已翻译过的页面完全落空(用户会以为术语表
+ *   功能坏了)。不译词列表更彻底: 它改变占位符掩蔽从而改变译文,却两层都不在。
  */
 
-export const CACHE_SCHEMA_VERSION = 2;
+export const CACHE_SCHEMA_VERSION = 3;
 
 export interface CacheKeyParts {
 	attachmentKey: string;
@@ -29,6 +35,10 @@ export interface CacheKeyParts {
 	/** Hash of the user's custom prompt text ('' hashes too) — part of the
 	 *  translation's identity: a different prompt is a different translation. */
 	customPromptHash: string;
+	/** 术语表与不译词列表的哈希 (v3): 两者都会改变译文,因此都是译文身份的
+	 *  一部分。段落 context 早就带 glossaryHash,页面键此前漏了。 */
+	glossaryHash: string;
+	noTranslateHash: string;
 	sourceTextHash: string;
 }
 
@@ -83,7 +93,9 @@ export function pageFileName(parts: CacheKeyParts): string {
 		parts.provider,
 		parts.model || 'default',
 		`v${parts.promptVersion}`,
-		`p${parts.customPromptHash}`
+		`p${parts.customPromptHash}`,
+		`g${parts.glossaryHash}`,
+		`n${parts.noTranslateHash}`
 	].map(sanitizeComponent).join('_');
 	return `page-${parts.pageIndex}_${config}_${sanitizeComponent(parts.sourceTextHash)}.json`;
 }
@@ -107,6 +119,8 @@ export function isValidCachedPage(data: unknown, expected: CacheKeyParts): data 
 		|| k.model !== expected.model
 		|| k.promptVersion !== expected.promptVersion
 		|| k.customPromptHash !== expected.customPromptHash
+		|| k.glossaryHash !== expected.glossaryHash
+		|| k.noTranslateHash !== expected.noTranslateHash
 		|| k.sourceTextHash !== expected.sourceTextHash
 	) {
 		return false;
@@ -129,6 +143,8 @@ export interface SegmentContextParts {
 	promptVersion: number;
 	customPromptHash: string;
 	glossaryHash: string;
+	/** 不译词列表改变占位符掩蔽,从而改变译文 (v3)。 */
+	noTranslateHash: string;
 }
 
 export interface CachedSegments {
@@ -143,7 +159,8 @@ export function segmentContextHash(parts: SegmentContextParts): string {
 		parts.model || 'default',
 		`v${parts.promptVersion}`,
 		parts.customPromptHash,
-		parts.glossaryHash
+		parts.glossaryHash,
+		parts.noTranslateHash
 	].join('\u0000'));
 }
 

@@ -246,3 +246,71 @@ test('per-job maxRetries:0 overrides the scheduler default (page task runs once)
 	);
 	assert.equal(attempts, 1, 'a maxRetries:0 job is attempted exactly once even for a retryable error');
 });
+
+// ---- P1-8 (2.0.2): cancelAndWait 必须等到任务真正离开 active ----------------
+
+test('cancelAndWait: 返回后 isScheduled 为假, 同 key 可立即重排', async () => {
+	// cancel() 只发 abort —— 任务要等自己的 run() reject 之后才在 execute 的
+	// finally 里离开 active。调用方紧接着 schedule 同一个 key 会被 isScheduled
+	// 挡回,这正是「刷新本页什么都没发生」的机理。
+	const scheduler = new RequestScheduler({ maxConcurrent: 2, maxRetries: 0, delayFn: () => Promise.resolve() });
+	let release: () => void = () => {};
+	const p = scheduler.enqueue('page-7', 0, async (signal: AbortSignal) => {
+		await new Promise<void>((resolve, reject) => {
+			release = resolve;
+			signal.addEventListener('abort', () => reject(new Error('aborted')));
+		});
+		return 'done';
+	}).catch(() => 'cancelled');
+
+	for (let i = 0; i < 100 && !scheduler.isScheduled('page-7'); i++) { await new Promise(r => setTimeout(r, 0)); }
+	assert.equal(scheduler.isScheduled('page-7'), true, '任务应已在运行');
+
+	await scheduler.cancelAndWait('page-7');
+	assert.equal(scheduler.isScheduled('page-7'), false, 'cancelAndWait 返回后不得仍被视为已排期');
+	assert.equal(scheduler.activeCount, 0, '槽位必须已释放');
+
+	// 同 key 立即重排必须成功
+	const again = await scheduler.enqueue('page-7', 0, async () => 'second');
+	assert.equal(again, 'second');
+	release();
+	await p;
+	scheduler.dispose();
+});
+
+test('对比: 裸 cancel() 之后任务可能仍在 active(说明为何需要 cancelAndWait)', async () => {
+	const scheduler = new RequestScheduler({ maxConcurrent: 2, maxRetries: 0, delayFn: () => Promise.resolve() });
+	let release: () => void = () => {};
+	const p = scheduler.enqueue('page-9', 0, async (signal: AbortSignal) => {
+		await new Promise<void>((resolve, reject) => {
+			release = resolve;
+			signal.addEventListener('abort', () => reject(new Error('aborted')));
+		});
+		return 'x';
+	}).catch(() => 'cancelled');
+	for (let i = 0; i < 100 && !scheduler.isScheduled('page-9'); i++) { await new Promise(r => setTimeout(r, 0)); }
+	scheduler.cancel('page-9');
+	// 同步紧随其后:此刻任务尚未解绕完
+	assert.equal(scheduler.isScheduled('page-9'), true, 'cancel 后同步检查仍为真 —— 正是竞态来源');
+	release();
+	await p;
+	scheduler.dispose();
+});
+
+test('cancelAllAndWait: 全部任务解绕后才返回', async () => {
+	const scheduler = new RequestScheduler({ maxConcurrent: 3, maxRetries: 0, delayFn: () => Promise.resolve() });
+	const releases: (() => void)[] = [];
+	const ps = ['a', 'b', 'c'].map(k => scheduler.enqueue(k, 0, async (signal: AbortSignal) => {
+		await new Promise<void>((resolve, reject) => {
+			releases.push(resolve);
+			signal.addEventListener('abort', () => reject(new Error('aborted')));
+		});
+		return k;
+	}).catch(() => 'cancelled'));
+	for (let i = 0; i < 100 && scheduler.activeCount < 3; i++) { await new Promise(r => setTimeout(r, 0)); }
+	await scheduler.cancelAllAndWait();
+	assert.equal(scheduler.activeCount, 0, '返回时不得还有运行中的任务');
+	for (const r of releases) { r(); }
+	await Promise.all(ps);
+	scheduler.dispose();
+});

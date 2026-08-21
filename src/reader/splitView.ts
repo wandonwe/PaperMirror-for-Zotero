@@ -112,6 +112,15 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 	let lastInset = 0;
 	/** The browser width applyRatio last pinned, for the drift watchdog. */
 	let lastPx = 0;
+	// 注意: 这三个必须声明在 applyRatio 之前 —— 首次 applyRatio 调用发生在
+	// createSplitView 的初始化流程里,晚声明会撞 let 的 TDZ。
+	let destroyed = false;
+	/** 「版面尚未就绪」的重试句柄 —— 全局至多一条链 (审核 P1-7)。 */
+	let settleTimer: ReturnType<typeof setTimeout> | null = null;
+	let settleAttempts = 0;
+	/** 2 秒(40 × 50ms)还没就绪就放弃: 标签页不可见时宽度恒为 0,
+	 *  再等也没有意义;等它重新可见时 refreshLayout 的漂移看门狗会接手。 */
+	const MAX_SETTLE_ATTEMPTS = 40;
 
 	/**
 	 * Pixel sizing, not percentage flex.
@@ -123,6 +132,12 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 	 * remainder. A ResizeObserver keeps the split correct on window resizes.
 	 */
 	const applyRatio = (percent: number): void => {
+		if (destroyed) {
+			// 拆除后残留的重试链仍会执行到这里 (审核 P1-7): 若不拦,它会把已经
+			// 恢复原状的阅读器重新用 !important 钉死在 50% 宽,右半空白,
+			// 用户只能关标签页才能恢复。
+			return;
+		}
 		ratio = Math.min(85, Math.max(25, percent));
 		paneHost.style.flex = '1 1 0';
 		// min-width MUST be 0: a flex item defaults to min-width:auto (its
@@ -137,9 +152,28 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 		const total = containerEl.getBoundingClientRect().width;
 		if (total < 50) {
 			// Layout has not settled yet — try again shortly.
-			(doc.defaultView ?? globalThis).setTimeout(() => applyRatio(ratio), 50);
+			//
+			// 单链 + 上限 (审核 P1-7): 此前这里是裸 setTimeout —— 没有句柄、没有
+			// 计数、不看 destroyed。Zotero 会隐藏非选中标签的容器,隐藏元素宽度
+			// 恒为 0,于是 total < 50 恒成立、链永不终止;而会话每 350ms 调一次
+			// refreshLayout,后者又会调 applyRatio,于是**每 350ms 新增一条 20Hz
+			// 链**且互不取消。后台几分钟就是每秒上万次强制重排 + 每 350ms 一条
+			// warn(约 13 秒冲光 40 条环形缓冲,把真正的错误全挤掉)。
+			if (settleTimer !== null) {
+				clearTimeout(settleTimer);
+				settleTimer = null;
+			}
+			if (settleAttempts >= MAX_SETTLE_ATTEMPTS) {
+				return; // 交给 refreshLayout 的漂移看门狗,等标签重新可见
+			}
+			settleAttempts++;
+			settleTimer = (doc.defaultView ?? globalThis).setTimeout(() => {
+				settleTimer = null;
+				applyRatio(ratio);
+			}, 50);
 			return;
 		}
+		settleAttempts = 0; // 就绪,重置预算
 		let inset = 0;
 		try {
 			inset = Math.max(0, Math.min(total * 0.5, insetProvider?.() ?? 0));
@@ -245,12 +279,15 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 	divider.addEventListener('pointerup', onPointerUp);
 	divider.addEventListener('pointercancel', onPointerUp);
 
-	let destroyed = false;
 	const destroy = (): void => {
 		if (destroyed) {
 			return;
 		}
 		destroyed = true;
+		if (settleTimer !== null) {
+			clearTimeout(settleTimer);
+			settleTimer = null;
+		}
 		resizeObserver?.disconnect();
 		resizeObserver = null;
 		divider.removeEventListener('pointerdown', onPointerDown);
@@ -300,10 +337,16 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 		 *    trapping the user.
 		 */
 		refreshLayout(): void {
-			if (!paneVisible) {
+			if (!paneVisible || destroyed) {
 				return;
 			}
 			try {
+				// 标签页不可见时容器宽度为 0 —— 那不是「漂移」,是「没在布局」
+				// (审核 P1-7)。此前这里会把 0 当成漂移: 每 350ms 打一条 warn
+				// (约 13 秒冲光 40 条日志环形缓冲)并再开一条 50ms 重试链。
+				if (containerEl.getBoundingClientRect().width < 50) {
+					return;
+				}
 				if (lastPx > 0) {
 					const actual = browserEl.getBoundingClientRect().width;
 					const pinLost = !browserEl.style.getPropertyValue('max-width');

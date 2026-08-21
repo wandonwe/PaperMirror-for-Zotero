@@ -1404,3 +1404,92 @@ test('完整且全部通过校验的缓存仍整页命中 (行为不回退)', as
 	assert.equal(calls.translate, 0, '完整命中零请求');
 	manager.dispose();
 });
+
+// ---- P2-11 (2.0.2): 重译此段的完整性判据必须给 preserve 块豁免 --------------
+
+test('含 preserve 块的页面: 重译此段后新译文能进页面缓存', async () => {
+	// 表格数据单元格是 translationMode:'preserve',永远不会进 translations。
+	// 旧判据 state.blocks.every(b => translations.has(b.id)) 在这类页面恒假 →
+	// 重译当场生效但写不进页面缓存 → 重开文档回退旧译文,反复重译反复丢失。
+	const written: { id: string; translatedText: string }[][] = [];
+	const blocks: SourceBlock[] = [
+		{ id: 'page-0-block-0', pageIndex: 0, order: 0, type: 'paragraph', sourceText: 'Prose to retranslate.' },
+		{ id: 'page-0-cell-0', pageIndex: 0, order: 1, type: 'paragraph', sourceText: '42.7', translationMode: 'preserve' }
+	];
+	const { deps } = makeDeps({
+		extractPage: async () => blocks,
+		readCache: async () => null,
+		writeCache: async (_p, _b, translations) => { written.push(translations); }
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 1);
+	written.length = 0;
+
+	const ok = await manager.retranslateBlock(0, 'page-0-block-0');
+	assert.equal(ok, true, '重译应成功');
+	assert.equal(written.length, 1, 'preserve 块不得阻止页面缓存写入');
+	assert.ok(written[0]!.some(t => t.id === 'page-0-block-0'), '应写入被重译的块');
+	assert.ok(!written[0]!.some(t => t.id === 'page-0-cell-0'), 'preserve 块不应出现在缓存条目里');
+	manager.dispose();
+});
+
+test('仍有未译的可翻译块时, 页面缓存不得写入(不变量不放宽)', async () => {
+	const written: unknown[] = [];
+	const blocks: SourceBlock[] = [
+		{ id: 'page-0-block-0', pageIndex: 0, order: 0, type: 'paragraph', sourceText: 'First prose block.' },
+		{ id: 'page-0-block-1', pageIndex: 0, order: 1, type: 'paragraph', sourceText: 'Second prose block.' }
+	];
+	const { deps } = makeDeps({
+		extractPage: async () => blocks,
+		readCache: async () => null,
+		// 只翻第一个块,第二个永远缺席
+		translateRequest: async (request) => ({
+			translations: request.blocks.filter(b => b.id === 'page-0-block-0')
+				.map(b => ({ id: b.id, translatedText: '译文' }))
+		}),
+		writeCache: async () => { written.push(1); }
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 1);
+	written.length = 0;
+	await manager.retranslateBlock(0, 'page-0-block-0');
+	assert.equal(written.length, 0, '页面不完整时绝不能写页面缓存');
+	manager.dispose();
+});
+
+// ---- P1-8 (2.0.2): 取消竞态 —— 刷新本页不得被"已中止但仍在 active"的旧任务挡回 ----
+
+test('翻译进行中点「刷新本页」: 必须真的重翻, 而不是两头落空', async () => {
+	// cancel() 对运行中的任务只发 abort,任务要等 run() reject 后才离开 active。
+	// 旧实现同步 cancel + 立即 ensurePage → isScheduled 仍为真 → early-return,
+	// 而页面状态已被删除、新任务又没入队,该页彻底不翻译(点了圆环什么都没发生)。
+	let release: () => void = () => {};
+	let calls = 0;
+	const { deps } = makeDeps({
+		translateRequest: async (request, signal) => {
+			calls++;
+			if (calls === 1) {
+				await new Promise<void>((resolve, reject) => {
+					release = resolve;
+					signal?.addEventListener('abort', () => reject(new Error('aborted')));
+				});
+			}
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '新译文' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+
+	const first = manager.ensurePage(0, 10).catch(() => { /* 会被取消 */ });
+	for (let i = 0; i < 100 && calls === 0; i++) { await new Promise(r => setTimeout(r, 0)); }
+	assert.equal(calls, 1, '第一次翻译应已在飞行中');
+
+	await manager.retranslatePage(0, 'normal');
+
+	const state = manager.getPageState(0);
+	assert.ok(state, '刷新后必须有页面状态,而不是被删掉后什么都没有');
+	assert.equal(state!.status, 'done', `刷新应真的完成翻译,实际 ${state!.status}`);
+	assert.ok(calls >= 2, `必须发出新的翻译请求,实际只发了 ${calls} 次`);
+	release();
+	await first;
+	manager.dispose();
+});

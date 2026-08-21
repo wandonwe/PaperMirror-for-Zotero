@@ -641,14 +641,30 @@ export class ReaderSession {
 			// 代码常量,不读 promptVersion 首选项 (审核 P0): prefs.js 固定的 1
 			// 曾把代码里的 v2 永远压回 v1,提示词升级从未真正让缓存失效。
 			promptVersion: PROMPT_VERSION,
-			// 自定义提示词是译文身份的一部分: 用户改提示词后旧译文不再命中。
-			customPromptHash: hashSourceTexts([getPref<string>('customPrompt', '')]),
+			// 自定义提示词 / 术语表 / 不译词都是译文身份的一部分 (v3):
+			// 改了其中任何一个,旧译文都不该再命中。
+			...this.configIdentity(),
 			sourceTextHash: hashSourceTexts(texts)
 		};
 	}
 
 	private loadGlossary(): GlossaryRule[] {
 		return parseGlossaryJSON(getPref<string>('glossaryGlobal', '[]'));
+	}
+
+	/**
+	 * 会改变译文的「配置身份」的哈希 (审核 P1-9/P1-10)。
+	 *
+	 * 集中在一处读取,页面键与段落 context 共用 —— 此前两个方法各自读 pref,
+	 * 字段集合还不一致(段落有 glossaryHash、页面没有),既容易漂移,也让
+	 * 「改了术语表/不译词旧译文应失效」的意图被先命中的页面缓存整层短路。
+	 */
+	private configIdentity(): { customPromptHash: string; glossaryHash: string; noTranslateHash: string } {
+		return {
+			customPromptHash: hashSourceTexts([getPref<string>('customPrompt', '')]),
+			glossaryHash: hashSourceTexts([getPref<string>('glossaryGlobal', '[]')]),
+			noTranslateHash: hashSourceTexts([String(getPref<string>('noTranslateList', '') ?? '')])
+		};
 	}
 
 	/** Context parts scoping the per-segment store (see cacheSchema). */
@@ -664,8 +680,7 @@ export class ReaderSession {
 			provider: settings.providerId,
 			model: settings.model,
 			promptVersion: PROMPT_VERSION,
-			customPromptHash: hashSourceTexts([getPref<string>('customPrompt', '')]),
-			glossaryHash: hashSourceTexts([getPref<string>('glossaryGlobal', '[]')])
+			...this.configIdentity()
 		};
 	}
 
@@ -1212,6 +1227,16 @@ export class ReaderSession {
 		void this.manager.compressBlocks(pageIndex, entries)
 			.then((accepted) => {
 				if (!live()) {
+					// 注意: compressPending 的清理在下面的 finally,不在这里 ——
+					// 这条早退路径此前不清理,而 catch 分支清理,那个不对称正是
+					// 缺陷本身 (审核 P1-6)。压缩请求可飞行 120 s,期间只要该页
+					// 被重渲染或滚出可视区(releaseFarSlots / relayoutSlots),
+					// live() 即为假,pageIndex 就永久留在 compressPending 里。
+					// 此后该页任何渲染都被 resolveStrictUnfit 的入口闸挡回,且
+					// 「无压缩计划」那条分支也因同一个标记恒假 —— reportPlacement
+					// 永不执行: 几何复核不跑、tally 不产出、胶囊停在「正在适配
+					// 排版」、未适配块永远显示英文且不计入 kept。只有手动
+					// 「刷新本页」能恢复。
 					return;
 				}
 				// Apply shorter retries in place; whatever still overflows (plus
@@ -1219,6 +1244,9 @@ export class ReaderSession {
 				const stillUnfit = applyCompressedStrict(element, accepted);
 				const noProgress = entries.filter(e => !accepted.has(e.id));
 				const next = [...stillUnfit, ...noProgress.filter(e => !stillUnfit.some(s => s.id === e.id))];
+				// 这处 delete 必须留在递归调用之前,不能只靠下面的 finally ——
+				// finally 在 then 体跑完之后才执行,而 resolveStrictUnfit 的入口
+				// 就查 compressPending,届时下一轮会被自己挡回。
 				this.compressPending.delete(pageIndex);
 				if (next.length) {
 					this.resolveStrictUnfit(pageIndex, element, next, token);
@@ -1228,12 +1256,18 @@ export class ReaderSession {
 				}
 			})
 			.catch(() => {
-				this.compressPending.delete(pageIndex);
 				// 压缩请求异常退出也必须走一次最终清点 (1.2.2, 审核项): 否则
 				// 几何复核与 placement tally 永不发生,胶囊停在「排版中」。
+				// (清理交给 finally。)
 				if (live()) {
 					this.reportPlacement(pageIndex, element);
 				}
+			})
+			.finally(() => {
+				// 兜底清理 (审核 P1-6): 无论 then 早退、then 正常、还是 catch,
+				// 这个标记都必须落地清除。Set.delete 幂等,与上面 then 里那次
+				// 提前清除并存无害。
+				this.compressPending.delete(pageIndex);
 			});
 	}
 
@@ -1605,35 +1639,75 @@ export class ReaderSession {
 	 * instant.
 	 */
 	private applyLanguagePick(source: string, target: string): void {
-		setPref('sourceLanguage', source);
-		setPref('targetLanguage', target);
-		this.pane?.setLanguageCodes(source, target);
-		this.pane?.setLanguagePair(languageLabel(source), languageLabel(target));
-		this.restartAfterConfigChange();
+		// 先静默 in-flight,再改配置 (审核 P1-9)。见 quiesceThenReconfigure。
+		void this.quiesceThenReconfigure(() => {
+			setPref('sourceLanguage', source);
+			setPref('targetLanguage', target);
+			this.pane?.setLanguageCodes(source, target);
+			this.pane?.setLanguagePair(languageLabel(source), languageLabel(target));
+		});
 	}
 
 	/** 菜单栏直接切换翻译服务 — same restart contract as a language switch. */
 	private applyProviderPick(providerId: string): void {
-		setPref('provider', providerId);
-		// A provider carries its own base URL and model; stale per-provider
-		// overrides from the previous engine must not leak into the new one.
-		setPref('apiBaseURL', '');
-		setPref('model', '');
-		this.pane?.setProviderInfo(getProvider(providerId).displayName, providerId);
+		// 先静默 in-flight,再改配置 (审核 P1-9)。见 quiesceThenReconfigure。
+		void this.quiesceThenReconfigure(() => {
+			setPref('provider', providerId);
+			// A provider carries its own base URL and model; stale per-provider
+			// overrides from the previous engine must not leak into the new one.
+			setPref('apiBaseURL', '');
+			setPref('model', '');
+			this.pane?.setProviderInfo(getProvider(providerId).displayName, providerId);
+		});
+	}
+
+	/**
+	 * 先让 in-flight 翻译**真正停下**,再改配置,最后重启 (审核 P1-9)。
+	 *
+	 * 缓存身份(provider/model/语言/提示词/术语表/不译词)不是在产出译文时快照
+	 * 的,而是在**落盘时**现读 pref。而取消一个正在翻译的页面会走 persistPartial
+	 * 把已完成的 chunk 写进段落库 —— 旧顺序是「先 setPref 再取消」,于是引擎 A
+	 * 的译文被写进引擎 B 的段落库,重启后依然如此(用户切到 B 却一直读到 A 的
+	 * 译文,只有强制重译才能摆脱)。语言切换同理会污染页面缓存。
+	 *
+	 * 把顺序倒过来 —— 静默 → 改配置 → 重启 —— 落盘就一定发生在旧身份下,
+	 * 各归各的键,切回去还能命中。
+	 */
+	private async quiesceThenReconfigure(apply: () => void): Promise<void> {
+		const manager = this.manager;
+		if (manager) {
+			// 等所有 in-flight(含它们的 persistPartial 落盘)在**旧身份**下结束
+			await manager.resetAllAndWait().catch(() => { /* 尽力而为 */ });
+			if (this.destroyed || this.manager !== manager) {
+				return;
+			}
+		}
+		apply();
 		this.restartAfterConfigChange();
 	}
 
 	private restartAfterConfigChange(): void {
 		void this.rebuildPool();
-		this.manager?.resetAll();
 		this.compressRounds.clear();
 		this.compressPending.clear();
 		this.pageProviderOffset.clear();
 		this.detectedSource = null;
-		if (getPref<boolean>('privacyNoticeAccepted', false)) {
-			const page = adapter.getCurrentPageIndex(this.reader);
-			this.manager?.setCurrentPage(page);
+		// 必须等 in-flight 真正结束再排新任务 (审核 P1-8): resetAll 只发 abort,
+		// 旧任务要等 run() reject 后才离开 scheduler 的 active,紧跟其后的
+		// setCurrentPage 会被 isScheduled 挡回 —— 换了服务商/语言之后当前页
+		// 不会自动重翻,用户得手动点圆环。
+		const manager = this.manager;
+		if (!manager) {
+			return;
 		}
+		void manager.resetAllAndWait().then(() => {
+			if (this.destroyed || this.manager !== manager) {
+				return;
+			}
+			if (getPref<boolean>('privacyNoticeAccepted', false)) {
+				manager.setCurrentPage(adapter.getCurrentPageIndex(this.reader));
+			}
+		});
 	}
 
 	private async retranslateCurrent(): Promise<void> {

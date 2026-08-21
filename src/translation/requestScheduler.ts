@@ -41,6 +41,13 @@ interface Job<T> {
 	lane: string;
 	/** Per-job retry ceiling; falls back to the scheduler-wide maxRetries. */
 	maxRetries?: number;
+	/**
+	 * Settles when execute() has fully unwound and the job has left `active`
+	 * (审核 P1-8)。cancelAndWait 等的就是它 —— abort 只是「请求取消」,任务要
+	 * 等自己的 run() 真正 reject 之后才会在 execute 的 finally 里离开 active。
+	 * 只在 pump() 里赋值;execute 自身不抛,所以它永不 reject。
+	 */
+	done?: Promise<void>;
 }
 
 export class RequestScheduler {
@@ -214,6 +221,28 @@ export class RequestScheduler {
 		}
 	}
 
+	/**
+	 * 取消并等到该任务真正结束 (审核 P1-8)。
+	 *
+	 * `cancel()` 对运行中的任务只发 abort 信号 —— 任务要等自己的 run() reject
+	 * 之后,才会在 execute 的 finally 里离开 `active`。调用方若像
+	 * `retranslatePage` 那样紧接着同步调 `ensurePage`,`isScheduled()` 仍然为真
+	 * (旧任务还在 active),于是新任务被 early-return 挡回;而此时页面状态已被
+	 * 删除、新任务又没入队 —— 两头落空,该页彻底不翻译,只有再点一次圆环才能
+	 * 恢复。「切换服务商后当前页不自动重翻」也是同一机理。
+	 *
+	 * 不能改成「abort 后立刻从 active 删掉」: `active` 同时承担槽位与并发记账,
+	 * 提前删会让正在解绕的请求之外再放行一个(超额),而且同 key 的新任务入
+	 * active 后会被旧任务的 finally 误删,记账直接错乱。这里改为让调用方等待。
+	 */
+	async cancelAndWait(key: string): Promise<void> {
+		const activeJob = this.active.get(key);
+		this.cancel(key);
+		if (activeJob?.done) {
+			await activeJob.done.catch(() => { /* execute 不抛,这里只是保险 */ });
+		}
+	}
+
 	/** Cancel queued jobs not in the keep-set (fast page flipping). */
 	cancelExcept(keep: Set<string>, keepPrefixes: string[] = []): void {
 		const kept = (key: string): boolean =>
@@ -238,6 +267,17 @@ export class RequestScheduler {
 		for (const job of this.active.values()) {
 			job.controller.abort();
 		}
+	}
+
+	/**
+	 * cancelAll + 等所有运行中的任务真正解绕完 (审核 P1-8)。
+	 * 配置切换(换服务商/换语言)必须用它:否则 resetAll 之后紧跟的
+	 * setCurrentPage 会被 isScheduled 挡回,当前页不会自动重翻。
+	 */
+	async cancelAllAndWait(): Promise<void> {
+		const running = [...this.active.values()].map(job => job.done).filter(Boolean);
+		this.cancelAll();
+		await Promise.all(running.map(p => p!.catch(() => { /* 保险 */ })));
 	}
 
 	dispose(): void {
@@ -287,7 +327,9 @@ export class RequestScheduler {
 			}
 			this.queue.splice(i, 1);
 			this.active.set(job.key, job);
-			void this.execute(job);
+			// 保存 done 句柄供 cancelAndWait 等待 (审核 P1-8)。
+			job.done = this.execute(job);
+			void job.done;
 			// A slot/lane was consumed; re-scan from the top (do not advance i).
 		}
 	}

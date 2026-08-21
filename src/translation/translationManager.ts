@@ -742,7 +742,15 @@ export class TranslationManager {
 			this.failedSegments.clear();
 			this.extractZombies.delete(pageIndex);
 		}
-		this.scheduler.cancel(`page-${pageIndex}`);
+		// 必须等旧任务真正结束再重新排 (审核 P1-8): cancel() 对运行中的任务只发
+		// abort,它要等 run() reject 后才离开 active。此前这里是同步 cancel +
+		// 立即 ensurePage,于是 ensurePage 的 isScheduled 仍为真而被挡回 ——
+		// 页面状态已删、新任务没入队,该页彻底不翻译(用户表现: 点了圆环什么
+		// 都没发生,必须再点一次)。
+		await this.scheduler.cancelAndWait(`page-${pageIndex}`);
+		if (this.disposed) {
+			return;
+		}
 		await this.ensurePage(pageIndex, PRIORITY.CURRENT_RETRANSLATE, {
 			bypassCache: true,
 			bypassSegments: mode === 'force',
@@ -794,8 +802,17 @@ export class TranslationManager {
 						translatedText: restored
 					}]).catch(() => { /* best effort */ });
 				}
-				if (state.blocks.every(b => state.translations.has(b.id))) {
+				// preserve 块永远不会进 translations(表格数据单元格等按设计保留
+				// 原文),所以完整性判据必须给它们豁免 —— 否则任何含表格的页面上
+				// 这个条件恒假,「重译此段」的新译文永远写不进页面缓存
+				// (审核 P2-11)。表现是: 重译当场生效,重开文档却又回到旧译文
+				// (页面缓存完整命中后直接 done,根本不读段落库),反复重译反复丢失。
+				// 与 compressBlocks 路径的判据保持一致。
+				const pageComplete = state.blocks.every(b =>
+					b.translationMode === 'preserve' || state.translations.has(b.id));
+				if (pageComplete) {
 					await this.deps.writeCache(pageIndex, state.blocks, state.blocks
+						.filter(b => state.translations.has(b.id))
 						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })))
 						.catch(() => { /* best effort */ });
 				}
@@ -870,6 +887,19 @@ export class TranslationManager {
 		this.pages.clear();
 		this.unstableFired.clear();
 		// Language/provider switch: remembered pairs are in the wrong language.
+		this.docMemory.clear();
+	}
+
+	/**
+	 * resetAll + 等所有 in-flight 任务真正解绕完 (审核 P1-8)。
+	 * 配置切换必须用它:cancelAll 只发 abort,紧跟其后的 setCurrentPage 会被
+	 * isScheduled 挡回,当前页不会自动重翻(用户表现: 换了服务商,当前页一直
+	 * 停在旧译文或原文,得手动点圆环)。
+	 */
+	async resetAllAndWait(): Promise<void> {
+		await this.scheduler.cancelAllAndWait();
+		this.pages.clear();
+		this.unstableFired.clear();
 		this.docMemory.clear();
 	}
 

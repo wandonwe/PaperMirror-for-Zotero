@@ -52,7 +52,7 @@ test('并发 writeSegments 不再互相覆盖: 两个页面的段落全部存活
 		const { writeSegments, readSegments } = await import('../../src/cache/cacheManager');
 		const parts = {
 			attachmentKey: 'K1', fileHash: 'H1', provider: 'openai', model: 'm',
-			promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g'
+			promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n'
 		};
 		// 两个"页面"同时写入不同的段落 —— 旧实现里后写者会覆盖先写者
 		await Promise.all([
@@ -73,7 +73,7 @@ test('高并发 8 路写全部存活', async () => {
 		const { writeSegments, readSegments } = await import('../../src/cache/cacheManager');
 		const parts = {
 			attachmentKey: 'K2', fileHash: 'H2', provider: 'openai', model: 'm',
-			promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g'
+			promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n'
 		};
 		await Promise.all(Array.from({ length: 8 }, (_, i) =>
 			writeSegments(parts, [{ hash: `s${i}`, translatedText: `译${i}` }])));
