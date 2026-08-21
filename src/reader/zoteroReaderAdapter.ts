@@ -800,8 +800,19 @@ export async function renderPageBitmap(
 		}
 
 		const done: { ok: boolean; failed: boolean } = { ok: false, failed: false };
+		// RenderTask 持有引用 (2.0.6, 审核 P3): 失败/超时返回 null 后渲染任务
+		// 此前继续在后台跑到天荒地老。放弃时显式 cancel。
+		let renderTask: { promise: Promise<unknown>; cancel?: () => void } | null = null;
+		const cancelRender = (): void => {
+			try {
+				renderTask?.cancel?.();
+			}
+			catch { /* pdf.js cancel 可因任务已结束而抛,无害 */ }
+		};
 		try {
-			page.render({ canvasContext: ctx, viewport: renderViewport }).promise.then(
+			const task = page.render({ canvasContext: ctx, viewport: renderViewport }) as { promise: Promise<unknown>; cancel?: () => void };
+			renderTask = task;
+			task.promise.then(
 				() => { done.ok = true; },
 				() => { done.failed = true; }
 			);
@@ -846,10 +857,12 @@ export async function renderPageBitmap(
 				break;
 			}
 			if (done.failed) {
+				cancelRender(); // 已失败: 释放任务引用 (幂等)
 				return null;
 			}
 			if (Date.now() - start > 12000) {
 				// Whatever is on the canvas after 12s is not a page.
+				cancelRender(); // P3: 放弃时不再让渲染任务在后台继续跑
 				return null;
 			}
 			await sleep(150);

@@ -14,6 +14,7 @@ const baseKey: CacheKeyParts = {
 	customPromptHash: hashSourceTexts(['']),
 	glossaryHash: hashSourceTexts(['[]']),
 	noTranslateHash: hashSourceTexts(['']),
+	settingsHash: hashSourceTexts(['']),
 	sourceTextHash: hashSourceTexts(['hello world'])
 };
 
@@ -143,7 +144,7 @@ test('fnv1a64 输出稳定(哈希算法一旦改变必须提升 schemaVersion)',
 	// 固定向量: 若此测试失败,说明哈希实现又变了 —— 文件名布局随之改变,
 	// 必须同时提升 CACHE_SCHEMA_VERSION,否则旧缓存文件成为永远不会命中
 	// 也永远不被清理的孤儿。
-	assert.equal(CACHE_SCHEMA_VERSION, 4);
+	assert.equal(CACHE_SCHEMA_VERSION, 5);
 	assert.match(fnv1a64('hello world'), /^[0-9a-f]{16}$/);
 	assert.equal(fnv1a64('hello world'), fnv1a64('hello world'));
 });
@@ -156,11 +157,41 @@ test('schema v3 旧条目一律失效(哈希布局已变,强制迁移)', () => {
 	assert.equal(isValidCachedPage(v3, baseKey), false);
 });
 
+// ---- schema v5 (2.0.6, 审核 P3): 端点/高级参数/useContext 进入缓存身份 -------
+
+test('settingsHash 改变 → 页面文件名与校验双双失效(改端点/温度不再命中旧译文)', () => {
+	const withSettings: CacheKeyParts = { ...baseKey, settingsHash: hashSourceTexts(['https://proxy.example', '', 'high', '4096', '0.3', 'true']) };
+	assert.notEqual(pageFileName(baseKey), pageFileName(withSettings), '不同端点/参数必须是不同文件');
+	const entry = {
+		schemaVersion: CACHE_SCHEMA_VERSION, key: baseKey, createdAt: 'now',
+		translations: [{ id: 'b0', translatedText: '你好' }]
+	};
+	assert.equal(isValidCachedPage(entry, baseKey), true);
+	assert.equal(isValidCachedPage(entry, withSettings), false, '配置变了旧条目不得再命中');
+});
+
+test('段落 context 也随 settingsHash 变化', async () => {
+	const { segmentContextHash } = await import('../../src/cache/cacheSchema');
+	const base = {
+		attachmentKey: 'K', fileHash: 'H', provider: 'openai', model: 'm',
+		promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n', settingsHash: 's1'
+	};
+	assert.notEqual(segmentContextHash(base), segmentContextHash({ ...base, settingsHash: 's2' }));
+});
+
+test('schema v4 旧条目一律失效(键布局已变,强制迁移)', () => {
+	const v4 = {
+		schemaVersion: 4, key: baseKey, createdAt: 'now',
+		translations: [{ id: 'b0', translatedText: '你好' }]
+	};
+	assert.equal(isValidCachedPage(v4, baseKey), false);
+});
+
 test('段落 context 也随不译词变化', async () => {
 	const { segmentContextHash } = await import('../../src/cache/cacheSchema');
 	const base = {
 		attachmentKey: 'K', fileHash: 'H', provider: 'openai', model: 'm',
-		promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n1'
+		promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n1', settingsHash: 's1'
 	};
 	assert.notEqual(segmentContextHash(base), segmentContextHash({ ...base, noTranslateHash: 'n2' }));
 	assert.notEqual(segmentContextHash(base), segmentContextHash({ ...base, glossaryHash: 'g2' }));

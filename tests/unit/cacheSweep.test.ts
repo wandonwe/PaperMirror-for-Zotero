@@ -16,6 +16,8 @@ interface FileSpec {
 	content?: unknown;
 	/** 读取时抛出的错误 */
 	throwError?: Error;
+	/** stat 返回的 lastModified (ms since epoch); 默认「很旧」 */
+	lastModified?: number;
 }
 
 function installIO(dirs: Record<string, Record<string, FileSpec>>): {
@@ -60,7 +62,10 @@ function installIO(dirs: Record<string, Record<string, FileSpec>>): {
 		remove: async (p: string) => { removed.push(p); },
 		writeJSON: async () => {},
 		makeDirectory: async () => {},
-		stat: async () => ({ type: 'regular', size: 0 })
+		stat: async (p: string) => ({
+			type: 'regular', size: 0,
+			lastModified: lookup(p)?.lastModified ?? 0 // 默认「很旧」
+		})
 	};
 	(globalThis as Record<string, any>).PathUtils = {
 		join: (...parts: string[]) => parts.join('/'),
@@ -91,20 +96,23 @@ test('sweep 只删内容确认无效的文件;瞬时读失败的文件必须保�
 			'page-2_locked.json': { throwError: transientError },
 			// 4) JSON 损坏 (SyntaxError) → 内容确认坏了,删
 			'page-3_corrupt.json': { throwError: syntaxError },
-			// 5) 非 json 文件 → 跳过
-			'page-4_partial.json.tmp': { content: {} }
+			// 5) 陈旧 .json.tmp 残骸 (原子写崩溃遗留, ≥5 分钟) → 清理 (P3, 2.0.6)
+			'page-4_stale-write.json.tmp': { content: {}, lastModified: 0 },
+			// 6) 新鲜 .json.tmp (可能是正在进行的原子写) → 保留
+			'page-5_live-write.json.tmp': { content: {}, lastModified: Date.now() }
 		}
 	});
 	try {
 		const { sweepStaleCacheFiles } = await import('../../src/cache/cacheManager');
 		const removedCount = await sweepStaleCacheFiles();
-		assert.equal(removedCount, 2, '恰好删除 stale + corrupt 两个文件');
+		assert.equal(removedCount, 3, '恰好删除 stale + corrupt + 陈旧 tmp 三个文件');
 		const names = io.removed.map(p => p.split('/').pop());
 		assert.ok(names.includes('page-0_stale.json'), '旧 schema 文件应删除');
 		assert.ok(names.includes('page-3_corrupt.json'), '损坏 JSON 应删除');
 		assert.ok(!names.includes('page-2_locked.json'), '瞬时读失败的文件绝不能删 —— 内容可能是完好的当前缓存');
 		assert.ok(!names.includes('page-1_current.json'), '当前 schema 文件应保留');
-		assert.ok(!names.includes('page-4_partial.json.tmp'), '非 .json 文件不在扫描范围');
+		assert.ok(names.includes('page-4_stale-write.json.tmp'), '陈旧 tmp 残骸应清理');
+		assert.ok(!names.includes('page-5_live-write.json.tmp'), '新鲜 tmp 可能是进行中的写,必须保留');
 	}
 	finally {
 		io.teardown();

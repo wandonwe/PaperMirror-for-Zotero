@@ -82,14 +82,39 @@ let edgeDisabledUntil = 0;
  *  single test-connection screenshot always tells the whole story. */
 let lastEdgeError: string | null = null;
 
+/**
+ * 共享 in-flight promise 与调用方信号解耦 (2.0.6, 审核 P3): 认证/会话这类
+ * 共享请求此前把**第一个到达者**的 AbortSignal 绑进了底层请求 —— 第一个
+ * 标签页取消(关页/翻页)会把同刻等待的所有其他标签页一起打断
+ * (CANCELLED 串扰)。现在共享请求自身只受 timeoutMs 约束;每个调用者用
+ * 自己的 signal 与共享 promise 赛跑: 自己取消只影响自己,共享结果继续
+ * 供别人使用。
+ */
+export function raceSignal<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+	if (!signal) {
+		return promise;
+	}
+	if (signal.aborted) {
+		return Promise.reject(new PaperMirrorError('CANCELLED', 'Cancelled.'));
+	}
+	return new Promise<T>((resolve, reject) => {
+		const onAbort = (): void => reject(new PaperMirrorError('CANCELLED', 'Cancelled.'));
+		signal.addEventListener('abort', onAbort, { once: true } as AddEventListenerOptions);
+		promise.then(
+			(v) => { signal.removeEventListener('abort', onAbort); resolve(v); },
+			(e) => { signal.removeEventListener('abort', onAbort); reject(e); }
+		);
+	});
+}
+
 async function getEdgeToken(timeoutMs: number, signal?: AbortSignal, force = false): Promise<string> {
 	if (!force && edgeToken && Date.now() - edgeTokenAt < EDGE_TOKEN_TTL_MS) {
 		return edgeToken;
 	}
 	if (!edgeTokenPromise) {
+		// 不带调用方 signal (P3): 见 raceSignal 注释。
 		edgeTokenPromise = requestText(EDGE_AUTH_URL, {
 			timeoutMs,
-			signal,
 			headers: { 'User-Agent': EDGE_UA, Accept: '*/*' }
 		})
 			.catch((e) => {
@@ -114,7 +139,7 @@ async function getEdgeToken(timeoutMs: number, signal?: AbortSignal, force = fal
 				edgeTokenPromise = null;
 			});
 	}
-	return edgeTokenPromise;
+	return raceSignal(edgeTokenPromise, signal);
 }
 
 async function translateViaEdge(
@@ -206,7 +231,8 @@ async function getSession(timeoutMs: number, signal?: AbortSignal, forceRefresh 
 		return cachedSession;
 	}
 	if (!sessionPromise) {
-		sessionPromise = fetchSession(timeoutMs, signal)
+		// 不带调用方 signal (P3): 共享请求只受 timeoutMs 约束,见 raceSignal。
+		sessionPromise = fetchSession(timeoutMs, undefined)
 			.then((session) => {
 				cachedSession = session;
 				cachedAt = Date.now();
@@ -216,7 +242,7 @@ async function getSession(timeoutMs: number, signal?: AbortSignal, forceRefresh 
 				sessionPromise = null;
 			});
 	}
-	return sessionPromise;
+	return raceSignal(sessionPromise, signal);
 }
 
 /** Exposed for tests/shutdown hygiene. */

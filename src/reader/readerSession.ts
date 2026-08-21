@@ -671,8 +671,27 @@ export class ReaderSession {
 			// 自定义提示词 / 术语表 / 不译词都是译文身份的一部分 (v3):
 			// 改了其中任何一个,旧译文都不该再命中。
 			...this.configIdentity(),
+			// 端点/高级参数/useContext 同为译文身份 (v5, 审核 P3)。
+			settingsHash: this.settingsIdentityHash(settings),
 			sourceTextHash: hashSourceTexts(texts)
 		};
+	}
+
+	/**
+	 * 会改变译文的**服务商配置**的折叠哈希 (v5, 审核 P3): 不同端点/代理后面
+	 * 可能是完全不同的模型,温度与推理强度直接改变输出,maxOutputTokens 影响
+	 * 截断,useContext 改变请求携带的上文 —— 任何一项变了,旧译文都不该再命中。
+	 * 页面键与段落 context 共用,读写必然一致。
+	 */
+	private settingsIdentityHash(settings: { apiBaseURL?: string; apiPath?: string; reasoning?: string; maxOutputTokens?: number; temperature?: number }): string {
+		return hashSourceTexts([
+			settings.apiBaseURL ?? '',
+			settings.apiPath ?? '',
+			settings.reasoning ?? '',
+			String(settings.maxOutputTokens ?? ''),
+			String(settings.temperature ?? ''),
+			String(getPref<boolean>('useContext', true))
+		]);
 	}
 
 	private loadGlossary(): GlossaryRule[] {
@@ -708,7 +727,8 @@ export class ReaderSession {
 			provider: settings.providerId,
 			model: settings.model,
 			promptVersion: PROMPT_VERSION,
-			...this.configIdentity()
+			...this.configIdentity(),
+			settingsHash: this.settingsIdentityHash(settings)
 		};
 	}
 
@@ -958,6 +978,13 @@ export class ReaderSession {
 		this.pollTimer = setInterval(() => {
 			if (this.destroyed) {
 				return;
+			}
+			// lastPartial 滞留释放 (2.0.6, 审核 P3): 页面重渲染/卸载后其 strict
+			// 元素(带整页位图 canvas,约 26 MB)已脱离文档,却被 lastPartial
+			// 一直引用而无法回收。已断开就放手 ——「查看保留原文」对断开元素
+			// 本来就会走 pane 回退路径,不损失功能。
+			if (this.lastPartial && !this.lastPartial.element.isConnected) {
+				this.lastPartial = null;
 			}
 			// Sidebar opened/closed/resized → re-balance the split.
 			this.split?.refreshLayout();
@@ -1476,8 +1503,27 @@ export class ReaderSession {
 				if (!data) {
 					return;
 				}
-				const tmp = PathUtils.join((PathUtils as unknown as { tempDir: string }).tempDir, `${stem}.${suffix}.pdf`);
+				// 临时文件加固 (2.0.6, 审核 P3): 旧路径 `${stem}.${suffix}.pdf` 在
+				// 共享 /tmp 里完全可预测 —— 共享主机上他人可预先占位/符号链接,
+				// 或在删除前的窗口读取。文件名混入密码学随机成分;写入后立即
+				// 收紧权限到 0600(尽力而为: 平台不支持时忽略,随机名仍是主防线)。
+				const rand = (() => {
+					try {
+						const buf = new Uint8Array(12);
+						(globalThis as { crypto?: { getRandomValues(b: Uint8Array): Uint8Array } }).crypto!.getRandomValues(buf);
+						return Array.from(buf, b => b.toString(16).padStart(2, '0')).join('');
+					}
+					catch {
+						// crypto 不可用的兜底: 仍强于旧的完全固定名。
+						return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+					}
+				})();
+				const tmp = PathUtils.join((PathUtils as unknown as { tempDir: string }).tempDir, `${stem}.${suffix}.${rand}.pdf`);
 				await IOUtils.write(tmp, data);
+				try {
+					await (IOUtils as unknown as { setPermissions?(path: string, permissions: number): Promise<void> }).setPermissions?.(tmp, 0o600);
+				}
+				catch { /* 权限收紧尽力而为 */ }
 				await (Zotero as unknown as {
 					Attachments: { importFromFile(options: { file: string; parentItemID?: number; title?: string }): Promise<unknown> };
 				}).Attachments.importFromFile({

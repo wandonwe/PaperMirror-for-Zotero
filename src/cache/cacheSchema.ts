@@ -27,9 +27,17 @@
  *   新公式把字符本身与位置一起混入第二条 lane。所有旧哈希值随之改变,
  *   文件名布局不同,故必须提升 schemaVersion 让 sweepStaleCacheFiles
  *   清走旧文件(代价: 每个文档一次全量重译)。
+ *
+ * SCHEMA v5 (2.0.6, 审核 P3):
+ * - settingsHash 进入页面键与段落 context: apiBaseURL / apiPath / reasoning /
+ *   maxOutputTokens / temperature / useContext 折叠为一个哈希。这些配置都会
+ *   改变译文(不同端点/代理后面可能是不同模型,温度与推理强度直接改变输出,
+ *   useContext 改变请求携带的上文),却都不在缓存身份里 —— 改了配置仍命中
+ *   改前的译文。文件名布局随之改变,schemaVersion 提升让旧文件被清理
+ *   (代价: 每个文档一次全量重译)。
  */
 
-export const CACHE_SCHEMA_VERSION = 4;
+export const CACHE_SCHEMA_VERSION = 5;
 
 export interface CacheKeyParts {
 	attachmentKey: string;
@@ -47,6 +55,9 @@ export interface CacheKeyParts {
 	 *  一部分。段落 context 早就带 glossaryHash,页面键此前漏了。 */
 	glossaryHash: string;
 	noTranslateHash: string;
+	/** apiBaseURL/apiPath/reasoning/maxOutputTokens/temperature/useContext 的
+	 *  折叠哈希 (v5): 这些配置都会改变译文,同为译文身份的一部分。 */
+	settingsHash: string;
 	sourceTextHash: string;
 }
 
@@ -107,7 +118,8 @@ export function pageFileName(parts: CacheKeyParts): string {
 		`v${parts.promptVersion}`,
 		`p${parts.customPromptHash}`,
 		`g${parts.glossaryHash}`,
-		`n${parts.noTranslateHash}`
+		`n${parts.noTranslateHash}`,
+		`s${parts.settingsHash}`
 	].map(sanitizeComponent).join('_');
 	return `page-${parts.pageIndex}_${config}_${sanitizeComponent(parts.sourceTextHash)}.json`;
 }
@@ -133,6 +145,7 @@ export function isValidCachedPage(data: unknown, expected: CacheKeyParts): data 
 		|| k.customPromptHash !== expected.customPromptHash
 		|| k.glossaryHash !== expected.glossaryHash
 		|| k.noTranslateHash !== expected.noTranslateHash
+		|| k.settingsHash !== expected.settingsHash
 		|| k.sourceTextHash !== expected.sourceTextHash
 	) {
 		return false;
@@ -157,6 +170,8 @@ export interface SegmentContextParts {
 	glossaryHash: string;
 	/** 不译词列表改变占位符掩蔽,从而改变译文 (v3)。 */
 	noTranslateHash: string;
+	/** 端点/温度/推理强度/输出上限/useContext 折叠哈希 (v5)。 */
+	settingsHash: string;
 }
 
 export interface CachedSegments {
@@ -172,7 +187,8 @@ export function segmentContextHash(parts: SegmentContextParts): string {
 		`v${parts.promptVersion}`,
 		parts.customPromptHash,
 		parts.glossaryHash,
-		parts.noTranslateHash
+		parts.noTranslateHash,
+		parts.settingsHash
 	].join('\u0000'));
 }
 

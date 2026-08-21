@@ -177,3 +177,28 @@ test('runPool propagates the first failure', async () => {
 		/boom/
 	);
 });
+
+// ---- P3 (2.0.6): 共享 in-flight promise 与调用方信号解耦 --------------------
+
+test('raceSignal: 一个调用者取消只影响自己,共享结果继续供别人使用', async () => {
+	const { raceSignal } = await import('../../src/translation/providers/bingFree');
+	let resolveShared!: (v: string) => void;
+	const shared = new Promise<string>(r => { resolveShared = r; });
+	const ctrlA = new AbortController();
+	const waiterA = raceSignal(shared, ctrlA.signal);
+	const waiterB = raceSignal(shared, new AbortController().signal);
+	ctrlA.abort(); // 标签页 A 取消(关页/翻页)
+	await assert.rejects(waiterA, (e: unknown) =>
+		e instanceof PaperMirrorError && e.code === 'CANCELLED');
+	resolveShared('session-token'); // 共享请求没有被 A 的取消打断
+	assert.equal(await waiterB, 'session-token', 'B 必须照常拿到共享结果');
+});
+
+test('raceSignal: 预先已取消 → 立即 CANCELLED;无 signal → 原样透传', async () => {
+	const { raceSignal } = await import('../../src/translation/providers/bingFree');
+	const aborted = new AbortController();
+	aborted.abort();
+	await assert.rejects(raceSignal(Promise.resolve('x'), aborted.signal), (e: unknown) =>
+		e instanceof PaperMirrorError && e.code === 'CANCELLED');
+	assert.equal(await raceSignal(Promise.resolve('y'), undefined), 'y');
+});

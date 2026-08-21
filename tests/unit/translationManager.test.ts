@@ -1535,3 +1535,125 @@ test('翻译进行中点「刷新本页」: 必须真的重翻, 而不是两头�
 	await first;
 	manager.dispose();
 });
+
+// ---- P3 (2.0.6): 止损记忆并发轮次 / resetAll / 孤儿错误 / 不完整页缓存 ------
+
+test('止损: 并发页面同一段只算一轮;此后的新运行才叠加;resetAll 清记忆', async () => {
+	const { segmentHash } = await import('../../src/translation/translationManager');
+	const DOOMED = 'This doomed paragraph never translates properly at all.';
+	const seenPages = new Set<number>();
+	let releaseBarrier!: () => void;
+	const barrier = new Promise<void>(r => { releaseBarrier = r; });
+	const { deps } = makeDeps({
+		pageCount: () => 10,
+		// 每页一好一坏: 全部失败会直接进 error 分支,不会走 keep-origin 记账。
+		extractPage: async (p) => [
+			{ id: `page-${p}-good`, pageIndex: p, order: 0, type: 'paragraph' as const, sourceText: 'A perfectly fine paragraph with words.' },
+			{ id: `page-${p}-block-0`, pageIndex: p, order: 1, type: 'paragraph' as const, sourceText: DOOMED }
+		],
+		translateRequest: async (req) => {
+			// 并发屏障: 两页的首个请求都在飞之前谁也不返回 —— 确保两轮真正重叠
+			// (瞬时 mock 下 Promise.all 也可能实际串行,那样"计 2"反而是对的)。
+			if (typeof req.pageIndex === 'number' && req.pageIndex <= 1) {
+				seenPages.add(req.pageIndex);
+				if (seenPages.size >= 2) {
+					releaseBarrier();
+				}
+				await barrier;
+			}
+			return {
+				// 引擎永远丢弃 DOOMED 的 id,好段照常翻。
+				translations: req.blocks.filter(b => !b.id.endsWith('block-0'))
+					.map(b => ({ id: b.id, translatedText: '好段落的中文译文内容。' }))
+			};
+		}
+	});
+	// maxConcurrent 4: 默认 2 减去 1 个前台保留位只剩 1 个后台槽,两页会被迫串行。
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve(), maxConcurrent: 4 });
+	const h = segmentHash(DOOMED, 'en', 'zh-CN');
+	const fs = (manager as any).failedSegments as Map<string, { count: number; at: number }>;
+
+	// 一轮并发: 两页同一段同时失败 → 只能算一轮。
+	await Promise.all([manager.ensurePage(0, 10), manager.ensurePage(1, 10)]);
+	assert.equal(fs.get(h)?.count, 1, '并发轮次必须去重 (旧实现这里是 2,一轮打满阈值)');
+
+	// 失败记录之后新发起的运行 → 第二轮,照常尝试 (unrecovered 而非 skipped)。
+	await manager.ensurePage(2, 10);
+	assert.equal(manager.getPageState(2)!.keepOrigin?.get('page-2-block-0'), 'unrecovered', '第二轮仍要真正尝试');
+	assert.equal(fs.get(h)?.count, 2);
+
+	// 阈值已到 → 第三轮被止损跳过。
+	await manager.ensurePage(3, 10);
+	assert.equal(manager.getPageState(3)!.keepOrigin?.get('page-3-block-0'), 'repeated-failure', '两轮后止损生效');
+
+	// resetAll (刷新全部/换配置) 必须清止损记忆 —— 它比 force 重译意图更强。
+	manager.resetAll();
+	assert.equal(fs.size, 0, 'resetAll 后止损记忆必须为空');
+	await manager.ensurePage(4, 10);
+	assert.equal(manager.getPageState(4)!.keepOrigin?.get('page-4-block-0'), 'unrecovered', '重置后重新尝试');
+	manager.dispose();
+});
+
+test('孤儿 state 的迟到错误不得推给 UI (身份校验闸)', async () => {
+	const { PaperMirrorError } = await import('../../src/types/models');
+	let releaseExtract!: () => void;
+	const gate = new Promise<void>(r => { releaseExtract = r; });
+	const states: PageTranslationState[] = [];
+	const { deps } = makeDeps({
+		extractPage: async () => {
+			await gate;
+			throw new PaperMirrorError('NO_TEXT_LAYER', 'no text layer', { retryable: false });
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: s => states.push({ ...s }) }, { prefetch: false, delayFn: () => Promise.resolve() });
+	const running = manager.ensurePage(0, 10);
+	await new Promise(r => setTimeout(r, 10));
+	// 模拟 supersession: 新运行已接管该页 (retranslatePage 删旧建新)。
+	const fresh = { pageIndex: 0, status: 'translating', blocks: [], translations: new Map() };
+	(manager as any).pages.set(0, fresh);
+	releaseExtract();
+	await running;
+	assert.ok(!states.some(s => s.pageIndex === 0 && (s.status === 'no-text-layer' || s.status === 'error')),
+		'旧任务迟到的失败不得把错误胶囊推给正在正常运行的新页面');
+	assert.equal((manager as any).pages.get(0), fresh, '新状态不受影响');
+	manager.dispose();
+});
+
+test('全段落缓存分支: keepOrigin 非空时不写页面缓存(否则跳过的段永远无法重试)', async () => {
+	const { segmentHash } = await import('../../src/translation/translationManager');
+	const DOOMED = 'Another doomed sentence that keeps failing everywhere still.';
+	const GOOD = 'A perfectly ordinary paragraph with plenty of words in it.';
+	const pageCacheWrites: number[] = [];
+	const { deps } = makeDeps({
+		pageCount: () => 10,
+		extractPage: async (p) => [
+			{ id: `page-${p}-block-0`, pageIndex: p, order: 0, type: 'paragraph' as const, sourceText: GOOD },
+			{ id: `page-${p}-block-1`, pageIndex: p, order: 1, type: 'paragraph' as const, sourceText: DOOMED }
+		],
+		translateRequest: async (req) => ({
+			// DOOMED 的 id 永远被丢弃,GOOD 照常翻 (全失败会走 error 分支)。
+			translations: req.blocks.filter(b => !b.text.includes('doomed'))
+				.map(b => ({ id: b.id, translatedText: '正常段落的中文译文内容。' }))
+		}),
+		writeCache: async (pageIndex) => { pageCacheWrites.push(pageIndex); },
+		readSegments: async (_p, hashes) => {
+			// 段落缓存命中 GOOD,不命中 DOOMED。
+			const doomedHash = segmentHash(DOOMED, 'en', 'zh-CN');
+			return new Map(hashes.filter(x => x !== doomedHash).map(x => [x, '来自段落缓存的译文。']));
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	// 先把 DOOMED 打满两轮止损 (顺序运行,轮次真实)。
+	await manager.ensurePage(0, 10);
+	(manager as any).pages.delete(0);
+	await manager.ensurePage(0, 10);
+	pageCacheWrites.length = 0;
+	// 页面 1: GOOD 全部由段落缓存服务,DOOMED 被止损 keep-origin → toTranslate 空。
+	await manager.ensurePage(1, 10);
+	const s1 = manager.getPageState(1)!;
+	assert.equal(s1.status, 'done');
+	assert.equal(s1.keepOrigin?.get('page-1-block-1'), 'repeated-failure', '场景成立: 确实走了止损');
+	assert.equal(s1.translations.get('page-1-block-0'), '来自段落缓存的译文。', '场景成立: 确实全由段落缓存服务');
+	assert.ok(!pageCacheWrites.includes(1), 'keepOrigin 非空的页绝不能写页面缓存');
+	manager.dispose();
+});

@@ -453,8 +453,17 @@ export class TranslationManager {
 	 * many whole-page runs left it untranslated. At ≥2 the segment is skipped
 	 * (keep-origin) instead of re-buying the same doomed requests on every
 	 * revisit. 强制重译 clears the map.
+	 *
+	 * `seq` 是计数时**已发起的最新运行序号** (2.0.6, 审核 P3): 并发页面此前
+	 * 把同一段(页眉/重复题注跨页出现)一轮并发就打满阈值 2 —— 但那些运行
+	 * **开始**于第一次失败被记下之前,不是「明知失败仍再试」的独立轮次。
+	 * 序号不大于 `seq` 的运行(与记录时已在飞的运行同轮)不再叠加计数;
+	 * 只有失败记录之后新发起的运行 (runId > seq) 才算下一轮。用单调序号
+	 * 而非时间戳: 同一毫秒内先后发起的运行时间戳无法区分先后。
 	 */
-	private failedSegments = new Map<string, number>();
+	private failedSegments = new Map<string, { count: number; seq: number }>();
+	/** 单调递增的 translatePage 运行序号 (P3): 供止损轮次判定。 */
+	private runSeq = 0;
 	/**
 	 * 文档术语记忆: abbreviation → 中文术语 pairs the accepted translations
 	 * themselves established, re-injected as SUGGESTED rules on later requests
@@ -888,6 +897,11 @@ export class TranslationManager {
 		this.unstableFired.clear();
 		// Language/provider switch: remembered pairs are in the wrong language.
 		this.docMemory.clear();
+		// 止损与提取僵尸一并清 (2.0.6, 审核 P3): 刷新全部/换配置是比
+		// retranslatePage('force') 更强的用户意图,曾经反而不清 —— 被止损
+		// 跳过的段落在「全部重来」之后仍被跳过。
+		this.failedSegments.clear();
+		this.extractZombies.clear();
 	}
 
 	/**
@@ -901,6 +915,9 @@ export class TranslationManager {
 		this.pages.clear();
 		this.unstableFired.clear();
 		this.docMemory.clear();
+		// 同 resetAll (P3): 全量重置必须包含止损记忆。
+		this.failedSegments.clear();
+		this.extractZombies.clear();
 	}
 
 	cancelAll(): void {
@@ -1208,6 +1225,14 @@ export class TranslationManager {
 				}
 				return;
 			}
+			// 孤儿状态闸 (2.0.6, 审核 P3): retranslatePage 已经 delete 了这个
+			// state 并发起新运行时,旧任务迟到的失败不得把错误推给 UI —— 否则
+			// 正在正常重译的页面会闪出过期的错误胶囊。CANCELLED 分支早就有这个
+			// 身份校验,错误分支此前没有。
+			if (this.pages.get(pageIndex) !== state) {
+				logger.debug(MODULE, `Page ${pageIndex + 1}: stale run failed after supersession; suppressed`, error.code);
+				return;
+			}
 			state.status = error.code === 'NO_TEXT_LAYER' ? 'no-text-layer' : 'error';
 			state.error = error;
 			this.notify(state);
@@ -1305,6 +1330,8 @@ export class TranslationManager {
 		// and how many were salvage. High salvage counts point at fragment-heavy
 		// grouping or an id-dropping provider — the log tells which.
 		const metrics = { requestCount: 0, salvageCount: 0, rateLimited: 0, timeouts: 0, startedAt: Date.now() };
+		// 止损轮次序号 (P3): 本运行的发起顺序,见 failedSegments 注释。
+		const runId = ++this.runSeq;
 		const countedTranslate = async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
 			metrics.requestCount++;
 			// Request-level retry (network/rate-limit; TIMEOUT retried ONCE — a
@@ -1457,7 +1484,7 @@ export class TranslationManager {
 			if (state.translations.has(b.id)) {
 				return false;
 			}
-			if ((this.failedSegments.get(segHash(b)) ?? 0) >= 2) {
+			if ((this.failedSegments.get(segHash(b))?.count ?? 0) >= 2) {
 				keepOrigin.set(b.id, 'repeated-failure');
 				return false;
 			}
@@ -1474,9 +1501,15 @@ export class TranslationManager {
 			if (pageIndex === this.currentPage) {
 				this.prefetchNeighbours();
 			}
-			await this.deps.writeCache(pageIndex, blocks, activeBlocks
-				.filter(b => state.translations.has(b.id))
-				.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })));
+			// 不完整页不落页面缓存 (2.0.6, 审核 P3): keepOrigin 非空意味着有段落
+			// 被止损跳过 —— 把这样的页写进页面缓存,下次打开会当作完整命中直接
+			// 采用,被跳过的段落即使止损记忆早已清空也永远不再重试。与主路径
+			// 「a page with unrecovered blocks is NOT cached」同一条规则。
+			if (keepOrigin.size === 0) {
+				await this.deps.writeCache(pageIndex, blocks, activeBlocks
+					.filter(b => state.translations.has(b.id))
+					.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })));
+			}
 			return;
 		}
 
@@ -1942,7 +1975,13 @@ export class TranslationManager {
 		for (const block of toTranslate) {
 			if (!state.translations.has(block.id)) {
 				const h = segHash(block);
-				this.failedSegments.set(h, (this.failedSegments.get(h) ?? 0) + 1);
+				const rec = this.failedSegments.get(h);
+				// 并发轮次去重 (2.0.6, 审核 P3): 本次运行发起于上一次计数之前
+				// (与记录时已在飞的运行同轮,同一段跨页并发失败)→ 不叠加。
+				// 只有失败记录之后新发起的运行 (runId > rec.seq) 才算下一轮。
+				if (!rec || runId > rec.seq) {
+					this.failedSegments.set(h, { count: (rec?.count ?? 0) + 1, seq: this.runSeq });
+				}
 				keepOrigin.set(block.id, 'unrecovered');
 			}
 		}

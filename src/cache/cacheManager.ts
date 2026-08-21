@@ -34,7 +34,16 @@ const writeQueues = new Map<string, Promise<void>>();
 function enqueueWrite(path: string, job: () => Promise<void>): Promise<void> {
 	const prev = writeQueues.get(path) ?? Promise.resolve();
 	const next = prev.then(job, job); // 前一次失败也不能卡死队列
-	writeQueues.set(path, next.then(() => undefined, () => undefined));
+	const tail = next.then(() => undefined, () => undefined);
+	writeQueues.set(path, tail);
+	// Map 收缩 (2.0.6, 审核 P3): 此前表项只增不减 —— 长会话里每个写过的缓存
+	// 文件路径都占一条已 settled 的 promise。队列排空后把自己的表项删掉;
+	// 只有自己仍是队尾时才删,期间有新写入接上则交由新队尾负责。
+	void tail.then(() => {
+		if (writeQueues.get(path) === tail) {
+			writeQueues.delete(path);
+		}
+	});
 	return next;
 }
 
@@ -234,6 +243,22 @@ export async function sweepStaleCacheFiles(): Promise<number> {
 				continue; // a file at root level, or unreadable — skip
 			}
 			for (const file of children) {
+				// `.json.tmp` 残留 (2.0.6, 审核 P3): 原子写崩溃在 rename 之前会
+				// 留下 tmp 文件 —— 永远不会被读取,却一直计入缓存体积。只清
+				// 「明显是残骸」的 (≥5 分钟未动): sweep 虽在启动后运行,但用户
+				// 可能已经打开文档开始翻译,新鲜的 tmp 可能是正在进行的原子写。
+				if (file.endsWith('.json.tmp')) {
+					try {
+						const stat = await IOUtils.stat(file);
+						const age = Date.now() - (stat.lastModified ?? 0);
+						if (age > 5 * 60 * 1000) {
+							await IOUtils.remove(file, { ignoreAbsent: true });
+							removed++;
+						}
+					}
+					catch { /* stat/remove 失败: 留给下次 */ }
+					continue;
+				}
 				if (!file.endsWith('.json')) {
 					continue;
 				}

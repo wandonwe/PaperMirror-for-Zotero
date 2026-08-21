@@ -803,6 +803,11 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		let adjusted = 0;
 		let reverted = 0;
 		const detail: string[] = [];
+		// 每轮处置**全部**违例 (2.0.6, 审核 P3): 旧实现每轮只处置 violations[0]
+		// 且硬上限 4 轮 —— 一页超过 4 个违例时,其余的既没被修也没进诊断,
+		// 系统性低报。处置只会收缩/回退盒子(不会制造新重叠),整轮处置后
+		// 再复审仍然单调收敛;4 轮上限保留为病态防线(同轮内每个 offender
+		// 只处置一次)。
 		for (let round = 0; round < 4; round++) {
 			const placed: AuditBox[] = items
 				.filter(i => i.committed && !i.abandoned)
@@ -814,35 +819,41 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			if (round === 0) {
 				firstCount = violations.length;
 			}
-			const v = violations[0]!;
-			detail.push(`${v.kind}:${v.id}${v.otherId ? '→' + v.otherId : ''}(${Math.round(v.area)}px²)`);
-			const item = byId.get(violations[0]!.id);
-			if (!item) {
-				break;
-			}
-			applyBox(item, item.originalBox.width, item.originalBox.height);
-			let fits = ladderFits(item);
-			if (!fits) {
-				for (const factor of SHRINK_STEPS) {
-					const px = Math.max(SHRINK_FLOOR_PX, item.fontPx * factor);
-					item.node.style.fontSize = `${px.toFixed(2)}px`;
-					fits = ladderFits(item);
-					if (fits || px <= SHRINK_FLOOR_PX) {
-						break;
+			const handledThisRound = new Set<string>();
+			for (const v of violations) {
+				if (handledThisRound.has(v.id)) {
+					continue; // 同一 offender 在多条违例里出现: 一轮只处置一次
+				}
+				handledThisRound.add(v.id);
+				detail.push(`${v.kind}:${v.id}${v.otherId ? '→' + v.otherId : ''}(${Math.round(v.area)}px²)`);
+				const item = byId.get(v.id);
+				if (!item || !item.committed || item.abandoned) {
+					continue;
+				}
+				applyBox(item, item.originalBox.width, item.originalBox.height);
+				let fits = ladderFits(item);
+				if (!fits) {
+					for (const factor of SHRINK_STEPS) {
+						const px = Math.max(SHRINK_FLOOR_PX, item.fontPx * factor);
+						item.node.style.fontSize = `${px.toFixed(2)}px`;
+						fits = ladderFits(item);
+						if (fits || px <= SHRINK_FLOOR_PX) {
+							break;
+						}
 					}
 				}
-			}
-			if (fits) {
-				adjusted++;
-			}
-			else {
-				clearMask(item.id);
-				item.committed = false;
-				item.abandoned = true;
-				item.node.style.visibility = 'hidden';
-				item.node.setAttribute('data-pm-unfit', 'true');
-				item.node.style.fontSize = `${item.fontPx.toFixed(2)}px`;
-				reverted++;
+				if (fits) {
+					adjusted++;
+				}
+				else {
+					clearMask(item.id);
+					item.committed = false;
+					item.abandoned = true;
+					item.node.style.visibility = 'hidden';
+					item.node.setAttribute('data-pm-unfit', 'true');
+					item.node.style.fontSize = `${item.fontPx.toFixed(2)}px`;
+					reverted++;
+				}
 			}
 		}
 		return { violations: firstCount, adjusted, reverted, detail };
