@@ -731,22 +731,68 @@ interface PaperMirrorPublicAPI {
 
 		// ---- API key (credential store, never a plain pref) -----------------
 
+		/**
+		 * 密钥框当前显示的值属于哪个服务商 —— 竞态与错存的判据 (2.0.3)。
+		 * null = 还没载入 / 不适用(免费引擎)。
+		 */
+		let apiKeyOwner: string | null = null;
+		/** 载入代次: 只有最后一次发起的载入允许写回输入框。 */
+		let apiKeyLoadToken = 0;
+
+		/** 免费引擎(bing-free/google-free)与 Ollama 不需要密钥 —— 整节隐藏。 */
+		function syncApiKeyVisibility(): boolean {
+			const needsKey = currentProviderInfo()?.requiresApiKey ?? true;
+			const section = byId<HTMLElement>('papermirror-apikey-section');
+			if (section) {
+				section.style.display = needsKey ? '' : 'none';
+			}
+			return needsKey;
+		}
+
 		async function loadApiKey(): Promise<void> {
 			if (!apiKeyInput) {
 				return;
 			}
+			const needsKey = syncApiKeyVisibility();
+			const provider = currentProviderId();
+			if (!needsKey) {
+				// 不适用: 清空并解除归属,避免上一家的密钥留在框里被后续提交写错人
+				apiKeyOwner = null;
+				apiKeyInput.value = '';
+				return;
+			}
+			const token = ++apiKeyLoadToken;
+			let value = '';
 			try {
-				apiKeyInput.value = (await api()?.getApiKey(currentProviderId())) ?? '';
+				value = (await api()?.getApiKey(provider)) ?? '';
 			}
 			catch {
-				apiKeyInput.value = '';
+				value = '';
 			}
+			// 陈旧写入闸 (2.0.3): getApiKey 查登录管理器最长可等 4 秒
+			// (LOGIN_LOOKUP_TIMEOUT_MS)。用户在这 4 秒内换了服务商时,先前那次
+			// 查询会**后**返回并把上一家的密钥写进现在这一家的输入框 —— 这正是
+			// 「微软翻译里出现了 Gemini 的 API Key」。更糟的是随后的 change/blur
+			// 会把它 setApiKey 到当前服务商名下,造成真正的凭据错存。
+			if (token !== apiKeyLoadToken || provider !== currentProviderId()) {
+				return;
+			}
+			apiKeyOwner = provider;
+			apiKeyInput.value = value;
 		}
 
 		const commitApiKey = (): void => {
-			if (apiKeyInput) {
-				void api()?.setApiKey(currentProviderId(), apiKeyInput.value);
+			if (!apiKeyInput) {
+				return;
 			}
+			const provider = currentProviderId();
+			// 只有「框里的值确实属于当前服务商」时才允许保存 (2.0.3)。
+			// 免费引擎(owner 为 null)或归属不符时一律不写,宁可不保存也绝不
+			// 把 A 的密钥存到 B 名下。
+			if (apiKeyOwner !== provider) {
+				return;
+			}
+			void api()?.setApiKey(provider, apiKeyInput.value);
 		};
 		apiKeyInput?.addEventListener('change', commitApiKey);
 		apiKeyInput?.addEventListener('blur', commitApiKey);
