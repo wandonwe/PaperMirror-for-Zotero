@@ -7,6 +7,15 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Build / CI（仅工具链,不影响已发布插件包）
+
+- **[P3-E] 打包门禁加固**。`verify-xpi` 从「黑名单几类垃圾文件」改为**白名单**:
+  任何不在允许清单上的条目都拒绝发布 —— 防止源码映射(`.map`)、未编译源码
+  (`.ts`)、`.env`、密钥文件或 `node_modules` 残留悄悄混入已发布 XPI。同时修正
+  默认版本选取: 原 `.sort().at(-1)` 按**字典序**会把 `2.0.9` 排在 `2.0.10` 之上、
+  去校验陈旧构建,现改为按 semver 数值比较,并优先选与 `package.json` 版本相符
+  的包。纯判定逻辑抽到 `scripts/xpi-checks.mjs`,+5 单测覆盖。
+
 ## [2.1.1] — 2026-08-22
 
 安全专项审核第二批(密钥卫生与纵深防御): 缓存文件权限、会话内密钥缓存的失效
