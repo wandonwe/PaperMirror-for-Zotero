@@ -1657,3 +1657,75 @@ test('全段落缓存分支: keepOrigin 非空时不写页面缓存(否则跳过
 	assert.ok(!pageCacheWrites.includes(1), 'keepOrigin 非空的页绝不能写页面缓存');
 	manager.dispose();
 });
+
+// ---- P2-2 (2.0.7): 孤儿 compress 不落盘 -------------------------------------
+
+test('压缩请求飞行期间页面被刷新接管 → 旧 compress 结果不再写缓存', async () => {
+	let releaseCompress!: () => void;
+	const gate = new Promise<void>(r => { releaseCompress = r; });
+	const pageCacheWrites: number[] = [];
+	const { deps } = makeDeps({
+		extractPage: async (p) => [{
+			id: `page-${p}-block-0`, pageIndex: p, order: 0, type: 'paragraph' as const,
+			sourceText: 'A paragraph long enough to be compressed properly here.'
+		}],
+		translateRequest: async (req) => {
+			if (req.blocks.some(b => typeof b.charBudget === 'number')) {
+				await gate; // compress 请求悬停,模拟 120s 飞行窗口
+				return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '短译' })) };
+			}
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是一个比较长的初始译文内容。' })) };
+		},
+		writeCache: async (pageIndex) => { pageCacheWrites.push(pageIndex); }
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const baseline = pageCacheWrites.length;
+	const compressing = manager.compressBlocks(0, [{ id: 'page-0-block-0', maxChars: 4 }]);
+	await new Promise(r => setTimeout(r, 10));
+	// 模拟「刷新本页」接管: 新 state 已就位。
+	const fresh = { pageIndex: 0, status: 'done', blocks: [], translations: new Map() };
+	(manager as any).pages.set(0, fresh);
+	releaseCompress();
+	await compressing;
+	assert.equal(pageCacheWrites.length, baseline, '被接管后旧 compress 绝不能再写页面缓存');
+	manager.dispose();
+});
+
+// ---- P2-3 (2.0.7): 取消路径的部分落盘必须在任务解绕前完成 -------------------
+
+test('resetAllAndWait 返回时,被取消任务的 persistPartial 已经落盘完成', async () => {
+	const { PaperMirrorError } = await import('../../src/types/models');
+	let segWriteDone = false;
+	let sawSalvageHang = false;
+	const { deps } = makeDeps({
+		// 两个超长段各占一个 chunk: chunk 1 完整完成 (results 已收录),
+		// chunk 2 悬停到被 abort —— persistPartial 应把 chunk 1 落盘。
+		extractPage: async (p) => [0, 1].map(i => ({
+			id: `page-${p}-block-${i}`, pageIndex: p, order: i, type: 'paragraph' as const,
+			sourceText: `Paragraph ${i}. ` + 'Plenty of English words here. '.repeat(300)
+		})),
+		translateRequest: async (req, signal) => {
+			if (req.blocks.some(b => b.id === 'page-0-block-1')) {
+				sawSalvageHang = true; // 第二个 chunk 悬停直到 abort
+				return new Promise((_resolve, reject) => {
+					signal?.addEventListener?.('abort', () => reject(new PaperMirrorError('CANCELLED', 'aborted')));
+				});
+			}
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这里是足够长的完整中文译文内容。'.repeat(200) })) };
+		},
+		writeSegments: async () => {
+			await new Promise(r => setTimeout(r, 20)); // 模拟慢磁盘
+			segWriteDone = true;
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	const running = manager.ensurePage(0, 10);
+	await new Promise(r => setTimeout(r, 30));
+	assert.equal(sawSalvageHang, true, '场景成立: 救回请求确实在飞');
+	await manager.resetAllAndWait();
+	assert.equal(segWriteDone, true,
+		'resetAllAndWait 返回即意味着没有写还悬在队列里 —— 否则「刷新全部」的清盘会与它竞态,被丢弃的译文复活');
+	await running.catch(() => { /* cancelled */ });
+	manager.dispose();
+});

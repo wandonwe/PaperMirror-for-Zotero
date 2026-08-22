@@ -333,11 +333,26 @@ export class ReaderSession {
 		catch {
 			this.fileHash = '';
 		}
+		// open()×destroy 竞态闸 (2.0.7, 审核 P1-1): 上面的 await(以及下面的
+		// prime,可达数秒)期间用户关标签/关窗口/禁用插件都会 destroy()。
+		// 此前 open() 继续执行: 在销毁**之后**注册 disposePdfEvents 与
+		// startPolling —— eventBus 监听与 350ms 轮询永不解除(tick 首行的
+		// destroyed 检查只让它空转,不停止),每次「打开后迅速关闭」泄漏一条;
+		// 隐私未接受分支还会对已置 null 的 split/pane 直接调用抛 TypeError。
+		if (this.destroyed) {
+			return;
+		}
 
 		await this.extractor.prime();
+		if (this.destroyed) {
+			return; // 同上: prime 期间被销毁,后续注册一律不做
+		}
 
 		if (!getPref<boolean>('privacyNoticeAccepted', false)) {
 			const settings = await this.providerSettings();
+			if (this.destroyed) {
+				return; // P1-1: providerSettings 查密钥库最长 4s,期间可被销毁
+			}
 			const provider = getProvider(getPref<string>('provider', 'bing-free'));
 			// The notice lives in the pane, so it must be on screen to be read.
 			this.split.setPaneVisible(true);
@@ -1835,7 +1850,15 @@ export class ReaderSession {
 		this.compressRounds.clear();
 		this.compressPending.clear();
 		this.pageProviderOffset.clear();
-		this.manager.resetAll();
+		// 先等所有在飞任务真正解绕再清盘 (2.0.7, 审核 P2-3): resetAll() 只发
+		// abort 不等待,被 abort 的任务要到下一个检查点才退出,其 persistPartial
+		// 会把已完成段落 enqueue 落盘 —— 落在 clearAttachmentAllVersions 之后时,
+		// 用户明确要求丢弃的译文复活,并被紧接着的 normal 运行当段落命中复用,
+		// 「强制全量」不成立。resetAllAndWait 与 quiesceThenReconfigure 同构。
+		await this.manager.resetAllAndWait();
+		if (this.destroyed) {
+			return;
+		}
 		const item = adapter.getReaderItem(this.reader);
 		if (item) {
 			try {

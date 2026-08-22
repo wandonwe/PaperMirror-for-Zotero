@@ -124,3 +124,31 @@ test('空密钥 = 删除 → removed', async () => {
 	}
 	finally { p.teardown(); }
 });
+
+test('P2-7 (2.0.7): 凭据库恢复后删除密钥,明文回退副本必须一并清除', async () => {
+	// 第一阶段: 凭据库坏 → 密钥明文落进 prefs。
+	const p1 = installPlatform({ loginWriteFails: true });
+	let prefs: Map<string, unknown>;
+	try {
+		const { setApiKey } = await import('../../src/security/credentialStore');
+		assert.equal(await setApiKey('deepl', 'dl-key-fallback'), 'plaintext');
+		prefs = p1.prefs;
+		assert.ok(String(prefs.get('bilingualReader.apiKeyFallback')).includes('dl-key-fallback'));
+	}
+	finally { p1.teardown(); }
+	// 第二阶段: 凭据库恢复(登录管理器无该项)→ 用户清空密钥。
+	const p2 = installPlatform({});
+	try {
+		// 延续第一阶段的 prefs 内容。
+		for (const [k, v] of prefs!) {
+			p2.prefs.set(k, v);
+		}
+		const { setApiKey, getApiKey } = await import('../../src/security/credentialStore');
+		assert.equal(await setApiKey('deepl', ''), 'removed');
+		const raw = String(p2.prefs.get('bilingualReader.apiKeyFallback') ?? '');
+		assert.ok(!raw.includes('dl-key-fallback'),
+			'被删除的密钥绝不能留在 prefs.js 明文回退里 —— 它会随备份/同步外流且继续被请求使用');
+		assert.equal(await getApiKey('deepl'), '', '删除后任何路径都不得再返回该密钥');
+	}
+	finally { p2.teardown(); }
+});

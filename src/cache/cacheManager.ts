@@ -164,7 +164,24 @@ export async function writeSegments(parts: SegmentContextParts, entries: { hash:
 		try {
 			let segments: Record<string, string> = {};
 			if (await IOUtils.exists(path)) {
-				const data = await IOUtils.readJSON(path).catch(() => null);
+				// 合并基底的读取失败分类 (2.0.7, 审核 P2-1): 此前任何读失败都被
+				// 当作「库不存在」,以 {} 为基底,原子写把只含本次新增几条的
+				// 文件 rename 覆盖过去 —— 该 attachment+context 积累的全部段落
+				// 译文一次瞬时 I/O 失败(文件被占用/权限抖动/网盘同步)即静默
+				// 清空。与读路径/清扫的 P2-13 同一条规则: 只有内容确认损坏
+				// (SyntaxError)或 context 不符才允许以空库重建;瞬时失败直接
+				// 放弃本次合并 —— 少写几条段落远好过丢掉整库。
+				let data: unknown;
+				try {
+					data = await IOUtils.readJSON(path);
+				}
+				catch (readError) {
+					if ((readError as Error)?.name !== 'SyntaxError') {
+						logger.warn(MODULE, 'Segment merge base read failed transiently; skipping this write to protect the store', readError);
+						return;
+					}
+					data = null; // 内容确认损坏: 允许重建
+				}
 				if (isValidCachedSegments(data, context)) {
 					segments = data.segments;
 				}

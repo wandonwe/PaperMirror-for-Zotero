@@ -683,6 +683,15 @@ export class TranslationManager {
 					accepted.set(t.id, restored);
 				}
 				if (accepted.size) {
+					// 孤儿 compress 不落盘 (2.0.7, 审核 P2-2): 压缩请求可飞 120s,
+					// 期间用户可能已「刷新本页」—— 新运行接管该页并写入了新缓存。
+					// 此闭包捕获的是**旧** state: 若它已不是当前状态,写盘会用旧
+					// 译文覆写刷新后的页面缓存与段落库(写队列串行、后写者胜),
+					// 表现为「反复刷新反复回退」。
+					if (this.pages.get(pageIndex) !== state) {
+						logger.debug(MODULE, `Page ${pageIndex + 1}: compress finished after supersession; not persisted`);
+						return;
+					}
 					logger.info(MODULE, `Page ${pageIndex + 1}: ${accepted.size} block(s) re-translated shorter under budget`);
 					const all: TranslatedBlock[] = state.blocks
 						.filter(b => state.translations.has(b.id))
@@ -757,6 +766,9 @@ export class TranslationManager {
 		// 页面状态已删、新任务没入队,该页彻底不翻译(用户表现: 点了圆环什么
 		// 都没发生,必须再点一次)。
 		await this.scheduler.cancelAndWait(`page-${pageIndex}`);
+		// 同时取消在飞的 compress (2.0.7, 审核 P2-2): 它不在主键下,漏掉时其
+		// 完成回调会用旧 state 覆写刷新后的缓存(写盘处另有身份校验兜底)。
+		await this.scheduler.cancelAndWait(`page-${pageIndex}-compress`);
 		if (this.disposed) {
 			return;
 		}
@@ -1862,11 +1874,14 @@ export class TranslationManager {
 		// 增量持久化: whatever this page has ALREADY translated survives a
 		// cancel/idle-timeout — the old behavior threw everything away, so page
 		// flipping kept re-buying the same translations (audit item).
-		const persistPartial = (): void => {
+		// 返回写盘 promise 并在取消路径 await (2.0.7, 审核 P2-3): 此前
+		// fire-and-forget —— 任务解绕后这笔写仍悬在队列里,resetAllAndWait
+		// 等不到它,「刷新全部」的清盘与它竞态,被丢弃的译文复活。
+		const persistPartial = (): Promise<void> => {
 			if (!this.deps.writeSegments || !results.length) {
-				return;
+				return Promise.resolve();
 			}
-			void this.deps.writeSegments(pageIndex, results.map(r => ({
+			return this.deps.writeSegments(pageIndex, results.map(r => ({
 				hash: segmentHash(sourceById.get(r.id) ?? '', source, target),
 				translatedText: r.translatedText
 			}))).catch(() => { /* best-effort */ });
@@ -1966,7 +1981,7 @@ export class TranslationManager {
 		}
 		}
 		catch (e) {
-			persistPartial();
+			await persistPartial(); // P2-3: 任务解绕前落盘完成,取消等待才等得到
 			throw e;
 		}
 

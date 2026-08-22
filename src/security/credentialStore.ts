@@ -127,6 +127,11 @@ export async function setApiKey(providerId: string, apiKey: string): Promise<Api
 			if (existing) {
 				Services.logins.removeLogin(existing);
 			}
+			// 明文回退副本一并清 (2.0.7, 审核 P2-7): 密钥曾因凭据库不可用落进
+			// apiKeyFallback,凭据库恢复后用户清空密钥走到这里 —— 此前直接
+			// return,明文留在 prefs.js 随备份/同步外流,且 getApiKey 回退读
+			// 它,被「删除」的密钥继续被请求使用,UI 却显示删除成功。
+			clearFallbackKey(providerId);
 			return 'removed';
 		}
 		if (existing) {

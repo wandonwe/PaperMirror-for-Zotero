@@ -82,3 +82,63 @@ test('高并发 8 路写全部存活', async () => {
 	}
 	finally { io.teardown(); }
 });
+
+// ---- P2-1 (2.0.7): 合并基底读失败不得以空库覆盖 -----------------------------
+
+test('合并基底瞬时读失败 → 放弃本次写,已有段落库不被截断', async () => {
+	const io = installIO();
+	try {
+		const { writeSegments, readSegments } = await import('../../src/cache/cacheManager');
+		const parts = {
+			attachmentKey: 'K9', fileHash: 'H9', provider: 'openai', model: 'm',
+			promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n', settingsHash: 's'
+		};
+		// 建立既有库: 两条段落。
+		await writeSegments(parts, [
+			{ hash: 'old-1', translatedText: '既有译文一' },
+			{ hash: 'old-2', translatedText: '既有译文二' }
+		]);
+		// 下一次合并写的基底读取瞬时失败 (文件被占用/网盘同步)。
+		(globalThis as Record<string, any>).IOUtils.readJSON = async () => {
+			throw new Error('NS_ERROR_FILE_IS_LOCKED');
+		};
+		await writeSegments(parts, [{ hash: 'new-3', translatedText: '新增译文三' }]);
+		// 恢复读取,检查库内容。
+		const files = io.files as Map<string, unknown>;
+		(globalThis as Record<string, any>).IOUtils.readJSON = async (p: string) => {
+			if (!files.has(p)) {
+				throw new Error('ENOENT');
+			}
+			return JSON.parse(JSON.stringify(files.get(p)));
+		};
+		const out = await readSegments(parts, ['old-1', 'old-2', 'new-3']);
+		assert.equal(out.get('old-1'), '既有译文一', '既有段落必须存活 —— 旧实现在这里被截断清空');
+		assert.equal(out.get('old-2'), '既有译文二');
+		assert.equal(out.has('new-3'), false, '本次合并被放弃 (少写几条好过丢整库)');
+	}
+	finally { io.teardown(); }
+});
+
+test('合并基底 JSON 确认损坏 (SyntaxError) → 允许以空库重建', async () => {
+	const io = installIO();
+	try {
+		const { writeSegments, readSegments } = await import('../../src/cache/cacheManager');
+		const parts = {
+			attachmentKey: 'K10', fileHash: 'H10', provider: 'openai', model: 'm',
+			promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n', settingsHash: 's'
+		};
+		await writeSegments(parts, [{ hash: 'a', translatedText: '旧' }]);
+		const files = io.files as Map<string, unknown>;
+		const restore = (globalThis as Record<string, any>).IOUtils.readJSON;
+		(globalThis as Record<string, any>).IOUtils.readJSON = async () => {
+			throw new SyntaxError('Unexpected end of JSON input');
+		};
+		await writeSegments(parts, [{ hash: 'b', translatedText: '重建' }]);
+		(globalThis as Record<string, any>).IOUtils.readJSON = restore;
+		void files;
+		const out = await readSegments(parts, ['a', 'b']);
+		assert.equal(out.has('a'), false, '损坏库被重建,旧条目不复存在');
+		assert.equal(out.get('b'), '重建', '重建后的写入生效');
+	}
+	finally { io.teardown(); }
+});
