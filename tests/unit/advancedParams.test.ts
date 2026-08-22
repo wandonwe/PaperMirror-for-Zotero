@@ -134,3 +134,20 @@ test('reasoningEffortUnsupported 注册表: 按 (供应商, 端点, 模型) 记�
 	assert.equal(reasoningEffortUnsupported('openai', 'https://proxy.example.com/v1/chat/completions', 'gpt-4o-unique-a'), false);
 	assert.equal(reasoningEffortUnsupported('openai', EP.toUpperCase() + '/', 'gpt-4o-unique-a'), true);
 });
+
+// ---- P2-13 (2.0.9): Gemini 禁思考 400 自愈的判定 ----------------------------
+
+test('isThinkingRejection: 只认 400 且提及 thinking/budget 的拒绝', async () => {
+	const { isThinkingRejection } = await import('../../src/translation/providers/geminiNative');
+	const { PaperMirrorError } = await import('../../src/types/models');
+	assert.equal(isThinkingRejection(new PaperMirrorError('UNKNOWN',
+		'The API rejected a request parameter (HTTP 400): Budget is not supported for this model.',
+		{ httpStatus: 400, retryable: false })), true, 'gemini-2.5-pro 的 budget 拒绝必须命中');
+	assert.equal(isThinkingRejection(new PaperMirrorError('UNKNOWN',
+		'HTTP 400: thinking is not enabled for this model', { httpStatus: 400 })), true);
+	assert.equal(isThinkingRejection(new PaperMirrorError('UNKNOWN',
+		'HTTP 400: temperature out of range', { httpStatus: 400 })), false, '别的 400 不得触发剥参');
+	assert.equal(isThinkingRejection(new PaperMirrorError('RATE_LIMITED',
+		'budget mention but 429', { httpStatus: 429 })), false);
+	assert.equal(isThinkingRejection(new Error('budget')), false, '非 PaperMirrorError 不命中');
+});

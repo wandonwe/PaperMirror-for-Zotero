@@ -1542,7 +1542,11 @@ export class TranslationPane {
 				best = best === null ? pageIndex : Math.min(best, pageIndex);
 			}
 		}
-		if (best !== null) {
+		// 仅页号变化时回调 (2.0.9, 审核 P2-15),与 page 分支同规则: 此前文章流
+		// 的每个 scroll 事件都无条件回调 → 同步滚动链路对 PDF 连发 navigate,
+		// 即使页号没变 —— 左侧被反复钉回该页起始位置,滚动面板时持续抖动回跳。
+		if (best !== null && best !== this.currentPage) {
+			this.currentPage = best;
 			this.callbacks.onScrolledToPage(best);
 		}
 	}

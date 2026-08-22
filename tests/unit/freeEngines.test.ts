@@ -232,3 +232,22 @@ test('combineChannelError: 非 PaperMirrorError 主通道错误退回 BAD_RESPON
 	assert.equal(fallback.code, 'BAD_RESPONSE');
 	assert.equal(fallback.retryable, true);
 });
+
+// ---- P2-14 (2.0.9): 硬切不劈代理对 ------------------------------------------
+
+test('splitLongText: 星面数学字符不被劈成孤立代理 (encodeURIComponent 不再抛)', () => {
+	// 无句读的长串,充满占两个 UTF-16 单元的数学字母 —— 旧实现按固定步长
+	// 硬切,奇数位切点必然落在代理对中间。
+	const math = '𝑥𝛽𝛾𝛿𝜀'.repeat(40); // length = 400 (200 个星面字符)
+	for (const maxLen of [7, 30, 33, 101]) {
+		const parts = splitLongText(math, maxLen);
+		assert.equal(parts.join(''), math, `maxLen=${maxLen}: 内容无损`);
+		for (const p of parts) {
+			assert.doesNotThrow(() => encodeURIComponent(p),
+				`maxLen=${maxLen}: 任何分片都不得含孤立代理 (URIError → 整页不可重试地失败)`);
+		}
+	}
+	// 纯 ASCII 行为不变。
+	const ascii = 'x'.repeat(50);
+	assert.deepEqual(splitLongText(ascii, 20).map(p => p.length), [20, 20, 10]);
+});

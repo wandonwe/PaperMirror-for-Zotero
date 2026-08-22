@@ -29,7 +29,7 @@ import { translateFullPdf, bytesToBase64, type TranslateSubmission } from '../tr
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
 import * as logger from '../utils/logger';
-import { getPref, setPref } from '../utils/prefs';
+import { getPref, setPref, registerPrefObserver, unregisterPrefObserver } from '../utils/prefs';
 import { detectLanguage, defaultTargetFor, sourceCodeFor } from '../utils/languageDetector';
 import { createSyncController, type SyncController } from './scrollSynchronizer';
 import { PdfOverlay, type OverlayDisplayMode, type OverlayProgress } from './pdfOverlay';
@@ -112,6 +112,11 @@ export class ReaderSession {
 	private onViewModeChanged: ((mode: ViewMode) => void) | null = null;
 	private disposePdfEvents: (() => void) | null = null;
 	private pageRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+	/** 缓存身份 pref 观察者 (2.0.9, 审核 P2-4) 与其去抖定时器。 */
+	private identityPrefObservers: (symbol | string)[] = [];
+	private identityRestartTimer: ReturnType<typeof setTimeout> | null = null;
+	/** 菜单驱动的 quiesce 正在 apply() 时置位,阻止观察者二次重启。 */
+	private applyingConfigChange = false;
 	/** Provider pool (primary first). Rebuilt when translation (re)starts. */
 	private pool: string[] = [];
 	/** Real image rects per page (operator list), fetched once per document. */
@@ -130,6 +135,15 @@ export class ReaderSession {
 	 * reverted to English ("译文显示后又消失").
 	 */
 	private compressPending = new Set<number>();
+	/**
+	 * 被 compressPending 挡回的最近一次 settle (2.0.9, 审核 P2-10)。压缩请求
+	 * 可飞 120s,期间页面因缩放/更新重渲染 —— 新渲染的 resolveStrictUnfit 被
+	 * 入口闸挡回后此前**无人接力**: 不 shrink、不 revert、不 reportPlacement,
+	 * 未适配块永远保持英文且不计 kept,胶囊停在「正在适配排版」。现在挡回时
+	 * 记下待办,在飞压缩的 finally 里续跑(只保留最新一次;旧 token 由 live()
+	 * 自然拦截)。
+	 */
+	private compressBlocked = new Map<number, { element: HTMLElement; unfit: UnfitBlock[]; token: number }>();
 	/** 扫描/纯图页每页只提示一次。 */
 	private scannedNoticeShown = new Set<number>();
 	/** 几何安全复核结果按页留档(进诊断导出;只计数,无文本)。 */
@@ -392,8 +406,67 @@ export class ReaderSession {
 			}
 		});
 
+		this.installIdentityPrefObservers();
 		this.startPolling();
 		logger.info(MODULE, `Session opened for tab ${this.reader.tabID}`);
+	}
+
+	/**
+	 * 设置窗口的配置变更也走静默重启 (2.0.9, 审核 P2-4)。
+	 *
+	 * 缓存身份(settingsHash 六成分、customPrompt、glossary、noTranslate、
+	 * provider/模型/语言)在**落盘时**现读 pref —— quiesceThenReconfigure 只
+	 * 覆盖菜单栏换语言/换引擎两条路径,Preferences 窗口写 providerProfiles
+	 * (温度/端点/推理强度)、术语表、不译词等时没有任何会话通知: 翻译中改
+	 * 温度 → 该页后续请求用新配置、已完成 chunk 是旧配置产物 → 页面结束时
+	 * 按**新** settingsHash 落盘,旧配置译文永久占据新身份,v5「改配置旧译文
+	 * 失效」的意图被反向绕过。现在对每个参与身份的 pref 注册观察者,去抖后
+	 * 走与菜单路径相同的 quiesce+restart(观察者只在 pref 已变之后收敛,变更
+	 * 与收敛之间的窗口从「无限」缩到毫秒级)。
+	 */
+	private installIdentityPrefObservers(): void {
+		const IDENTITY_PREFS = [
+			'providerProfiles', 'customPrompt', 'glossaryGlobal', 'noTranslateList',
+			'useContext', 'parallelProviders', 'provider', 'apiBaseURL', 'model',
+			'sourceLanguage', 'targetLanguage'
+		] as const;
+		for (const key of IDENTITY_PREFS) {
+			try {
+				this.identityPrefObservers.push(registerPrefObserver(key, () => {
+					// 菜单路径的 apply() 自己会 restart —— 它设 pref 触发的观察
+					// 事件必须忽略,否则双重启。
+					if (this.destroyed || this.applyingConfigChange) {
+						return;
+					}
+					if (this.identityRestartTimer !== null) {
+						clearTimeout(this.identityRestartTimer);
+					}
+					// 去抖: 关闭设置窗口常一次性落多个 pref,合并成一次重启。
+					this.identityRestartTimer = setTimeout(() => {
+						this.identityRestartTimer = null;
+						if (this.destroyed) {
+							return;
+						}
+						logger.info(MODULE, 'Cache-identity pref changed outside the menu; quiescing and restarting');
+						void this.quiesceThenReconfigure(() => {
+							// pref 已经变了,这里只把面板头部同步到新配置。
+							const pid = getPref<string>('provider', 'bing-free');
+							try {
+								this.pane?.setProviderInfo(getProvider(pid).displayName, pid);
+							}
+							catch { /* 未知 provider id: 面板标签保持原样 */ }
+							const src = getPref<string>('sourceLanguage', 'auto');
+							const tgt = getPref<string>('targetLanguage', 'auto');
+							this.pane?.setLanguageCodes(src, tgt);
+							this.pane?.setLanguagePair(languageLabel(src), languageLabel(tgt));
+						});
+					}, 400);
+				}));
+			}
+			catch (e) {
+				logger.warn(MODULE, `identity pref observer failed for ${key}`, e);
+			}
+		}
 	}
 
 	private startTranslating(): void {
@@ -1277,6 +1350,11 @@ export class ReaderSession {
 			if (!plan.compress.length && !this.compressPending.has(pageIndex)) {
 				this.reportPlacement(pageIndex, element);
 			}
+			// 丢失唤醒补接力 (2.0.9, 审核 P2-10): 被在飞压缩挡回的渲染记下
+			// 待办,压缩 finally 里续跑 —— 否则这次渲染的未适配块永远无人处理。
+			else if (plan.compress.length && this.compressPending.has(pageIndex)) {
+				this.compressBlocked.set(pageIndex, { element, unfit, token });
+			}
 			return;
 		}
 		this.compressPending.add(pageIndex);
@@ -1328,6 +1406,15 @@ export class ReaderSession {
 				// 这个标记都必须落地清除。Set.delete 幂等,与上面 then 里那次
 				// 提前清除并存无害。
 				this.compressPending.delete(pageIndex);
+				// P2-10 (2.0.9): 压缩期间被挡回的最新渲染在这里接力 —— 旧 token
+				// 由 resolveStrictUnfit 自己的 live() 拦截,无需在此判活。
+				const blocked = this.compressBlocked.get(pageIndex);
+				if (blocked) {
+					this.compressBlocked.delete(pageIndex);
+					if (!this.destroyed) {
+						this.resolveStrictUnfit(pageIndex, blocked.element, blocked.unfit, blocked.token);
+					}
+				}
 			});
 	}
 
@@ -1369,8 +1456,8 @@ export class ReaderSession {
 			+ `${s.tableFailed} table-failed, ${s.tableIntentional} table-kept, `
 			+ `${s.imageExcluded} on images, ${s.tooSmall} too small`
 		);
-		if (this.destroyed || pageIndex !== adapter.getCurrentPageIndex(this.reader)) {
-			return; // only annotate the page the reader is actually on
+		if (this.destroyed) {
+			return;
 		}
 		// ONE consistent 口径, no double counting: `committed` ALREADY includes the
 		// table text cells that were placed (they are items like any block), so
@@ -1380,6 +1467,11 @@ export class ReaderSession {
 		// (tableFailed). Intentionally-original content (data cells, figures,
 		// metadata, tiny fragments) is neither placed nor a failure.
 		const { placed, kept, segTotal, phase } = placementTally(s);
+		// 记账先于「仅当前页」早退 (2.0.9, 审核 P2-11): 预取页(±1~2 页)在
+		// 视口缓冲内 settle 时通常不是当前页 —— 旧实现连 translatedPages 与
+		// lastPartial 一起跳过: 用户随后滚到该页,槽位已渲染不再触发 settle,
+		// 常驻圆环显示「点击翻译本页」而该页实际已翻完;「查看保留原文」的
+		// 直达定位也失效。胶囊推送(下方)仍只对当前页。
 		// This page has now been translated → the idle ring shows ✓ (not ↻) for it.
 		this.translatedPages.add(pageIndex);
 		// Remember where the kept-original segments live so 「查看保留原文」can
@@ -1389,6 +1481,9 @@ export class ReaderSession {
 		}
 		else if (this.lastPartial?.pageIndex === pageIndex) {
 			this.lastPartial = null;
+		}
+		if (pageIndex !== adapter.getCurrentPageIndex(this.reader)) {
+			return; // only annotate (capsule) the page the reader is actually on
 		}
 		this.pushOverlayProgress({
 			phase,
@@ -1761,7 +1856,15 @@ export class ReaderSession {
 				return;
 			}
 		}
-		apply();
+		// P2-4 (2.0.9): apply() 里的 setPref 会触发身份 pref 观察者 —— 本路径
+		// 自己就要 restart,置闸避免观察者再排一次。
+		this.applyingConfigChange = true;
+		try {
+			apply();
+		}
+		finally {
+			this.applyingConfigChange = false;
+		}
 		this.restartAfterConfigChange();
 	}
 
@@ -1769,6 +1872,7 @@ export class ReaderSession {
 		void this.rebuildPool();
 		this.compressRounds.clear();
 		this.compressPending.clear();
+		this.compressBlocked.clear();
 		this.pageProviderOffset.clear();
 		this.detectedSource = null;
 		// 必须等 in-flight 真正结束再排新任务 (审核 P1-8): resetAll 只发 abort,
@@ -1803,6 +1907,7 @@ export class ReaderSession {
 			}
 		}
 		this.compressPending.delete(page);
+		this.compressBlocked.delete(page);
 		// Pool active → deal this page to the next engine before re-translating.
 		const rotated = this.pool.length > 1;
 		if (rotated) {
@@ -1828,6 +1933,7 @@ export class ReaderSession {
 		const page = adapter.getCurrentPageIndex(this.reader);
 		this.manager?.cancelPage(page);
 		this.compressPending.delete(page);
+		this.compressBlocked.delete(page);
 		this.pushOverlayProgress({
 			phase: 'cancelled',
 			currentPage: page + 1,
@@ -1851,6 +1957,7 @@ export class ReaderSession {
 		}
 		this.compressRounds.clear();
 		this.compressPending.clear();
+		this.compressBlocked.clear();
 		this.pageProviderOffset.clear();
 		// 先等所有在飞任务真正解绕再清盘 (2.0.7, 审核 P2-3): resetAll() 只发
 		// abort 不等待,被 abort 的任务要到下一个检查点才退出,其 persistPartial
@@ -2195,6 +2302,17 @@ export class ReaderSession {
 			clearTimeout(this.pageRefreshTimer);
 			this.pageRefreshTimer = null;
 		}
+		if (this.identityRestartTimer !== null) {
+			clearTimeout(this.identityRestartTimer);
+			this.identityRestartTimer = null;
+		}
+		for (const id of this.identityPrefObservers) {
+			try {
+				unregisterPrefObserver(id);
+			}
+			catch { /* already gone */ }
+		}
+		this.identityPrefObservers = [];
 		for (const timer of this.taskHideTimers.values()) {
 			clearTimeout(timer);
 		}
@@ -2202,6 +2320,7 @@ export class ReaderSession {
 		this.tasks.clear();
 		this.translatedPages.clear();
 		this.lastPartial = null;
+		this.compressBlocked.clear(); // P2-10: 不再持有已卸载页元素
 		this.disposePdfEvents?.();
 		this.disposePdfEvents = null;
 		this.overlay?.destroy();

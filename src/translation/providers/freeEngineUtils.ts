@@ -162,8 +162,19 @@ export function splitLongText(text: string, maxLen: number): string[] {
 				chunks.push(current);
 				current = '';
 			}
-			for (let i = 0; i < sentence.length; i += maxLen) {
-				chunks.push(sentence.slice(i, i + maxLen));
+			// 硬切不劈代理对 (2.0.9, 审核 P2-14): 数学正文常含星面字符
+			// (U+1D400 起的 𝑥、𝛽 等,占两个 UTF-16 单元)。按单元硬切落在
+			// 代理对中间会产生孤立代理 —— encodeURIComponent 对它直接抛
+			// URIError(非 PaperMirrorError),整页被包成不可重试的 UNKNOWN
+			// 永久失败。切点前一位是高位代理 (0xD800–0xDBFF) 时退一位。
+			for (let i = 0; i < sentence.length;) {
+				let end = Math.min(i + maxLen, sentence.length);
+				const beforeCut = sentence.charCodeAt(end - 1);
+				if (end < sentence.length && beforeCut >= 0xd800 && beforeCut <= 0xdbff) {
+					end--;
+				}
+				chunks.push(sentence.slice(i, end));
+				i = end;
 			}
 			continue;
 		}
