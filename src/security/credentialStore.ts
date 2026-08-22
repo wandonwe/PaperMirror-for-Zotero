@@ -36,6 +36,16 @@ const LOGIN_LOOKUP_TIMEOUT_MS = 4000;
  */
 const keyCache = new Map<string, string>();
 
+/**
+ * keyCache 失效代次 (2.1.1, 审核 P2): getApiKey 是「查库(可等 4 秒)→ 写缓存」
+ * 两步,其间不持锁。若用户/设置面板在这 4 秒里对**同一** providerId 存了新
+ * 密钥(setApiKey 先 keyCache.delete),那次删除会先发生、随后 getApiKey 姗姗
+ * 用**旧**值回填缓存 —— 陈旧密钥就此驻留整场会话,后续请求全用错。用一个
+ * 单调代次戳: getApiKey 进入时抓当前代次,setApiKey/deleteApiKey/clearKeyCache
+ * 递增它;仅当写回时代次未变才允许落缓存,否则丢弃这次(可能已陈旧的)结果。
+ */
+let cacheGeneration = 0;
+
 class LoginLookupTimeout extends Error {}
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -86,6 +96,8 @@ export async function getApiKey(providerId: string): Promise<string> {
 	if (cached !== undefined) {
 		return cached;
 	}
+	// 抓取本次查询开始时的代次 (2.1.1, 审核 P2): 见 cacheGeneration 说明。
+	const generationAtStart = cacheGeneration;
 	let key = '';
 	try {
 		const login = await findLogin(providerId);
@@ -101,9 +113,24 @@ export async function getApiKey(providerId: string): Promise<string> {
 		key = fallbackKey(providerId);
 	}
 	// Cache even an empty result: a locked credential store should cost one
-	// 4-second wait per provider, not one per translated page.
-	keyCache.set(providerId, key);
+	// 4-second wait per provider, not one per translated page. —— 但仅当查询
+	// 期间没有发生过写/清(代次未变)才落缓存: 否则这个 key 可能已被 setApiKey
+	// 更新为新值,回填会把旧值钉死。代次已变则直接返回本次读到的值,不缓存,
+	// 下次调用会重新查库拿到最新值。
+	if (cacheGeneration === generationAtStart) {
+		keyCache.set(providerId, key);
+	}
 	return key;
+}
+
+/**
+ * 清空会话内明文密钥缓存 (2.1.1, 审核 P3-B): shutdown() 调用,连同 logSanitizer
+ * 的 clearSecrets 一起,确保停用/卸载(不重启 Zotero)后内存里不残留明文密钥。
+ * 同时递增代次,让任何在途的 getApiKey 不会把清空前读到的值回填进来。
+ */
+export function clearKeyCache(): void {
+	cacheGeneration++;
+	keyCache.clear();
 }
 
 /**
@@ -119,7 +146,9 @@ export type ApiKeyStoreResult = 'secure' | 'plaintext' | 'failed' | 'removed';
 
 export async function setApiKey(providerId: string, apiKey: string): Promise<ApiKeyStoreResult> {
 	registerSecret(apiKey);
-	// The session cache must never serve a stale key after a change.
+	// The session cache must never serve a stale key after a change. 递增代次
+	// (2.1.1): 使任何在途的 getApiKey 读到的旧值不会在此删除之后被回填。
+	cacheGeneration++;
 	keyCache.delete(providerId);
 	try {
 		const existing = await findLogin(providerId);
@@ -193,6 +222,7 @@ function clearFallbackKey(providerId: string): void {
 }
 
 export async function deleteApiKey(providerId: string): Promise<void> {
+	cacheGeneration++;
 	keyCache.delete(providerId);
 	await setApiKey(providerId, '');
 	clearFallbackKey(providerId);

@@ -36,7 +36,22 @@ version and a hash of the source text — so changing any of them produces a fre
 translation rather than a stale one. Clear the cache from **Settings →
 PaperMirror → 缓存**.
 
+Cache files hold the full translated text, so they are written with owner-only
+permissions (files `0600`, their directories `0700`) to keep other local
+accounts on a shared machine from reading them. This is best-effort: on Windows,
+where POSIX permission bits do not apply, the operating system's own file
+permissions govern instead.
+
 Full paper text and full translations are not written to logs by default.
+
+## Uninstalling
+
+Removing the plugin deletes the private data it created: the local cache
+directory (translated text), the API key stored in the Mozilla Login Manager,
+and all of the plugin's preferences — including the plain-text fallback key, if
+the credential store was ever unavailable and one had to be written. This
+cleanup runs only on an actual uninstall, not when the plugin is merely disabled
+or upgraded, and it is best-effort — it never blocks the uninstall itself.
 
 ## Model output
 

@@ -152,3 +152,82 @@ test('P2-7 (2.0.7): 凭据库恢复后删除密钥,明文回退副本必须一�
 	}
 	finally { p2.teardown(); }
 });
+
+test('P3-B (2.1.1): clearKeyCache 清空会话缓存,下次 getApiKey 重新查库', async () => {
+	const p = installPlatform({});
+	try {
+		const { setApiKey, getApiKey, clearKeyCache } = await import('../../src/security/credentialStore');
+		await setApiKey('cc-openai', 'sk-first');
+		assert.equal(await getApiKey('cc-openai'), 'sk-first'); // 落缓存
+		// 绕过公共 API 直接改动底层登录管理器,模拟缓存与库不一致。
+		const stored = p.logins.find(l => l.username === 'cc-openai');
+		assert.ok(stored, '密钥应已在登录管理器中');
+		stored.password = 'sk-second';
+		assert.equal(await getApiKey('cc-openai'), 'sk-first', '仍应命中会话缓存');
+		clearKeyCache();
+		assert.equal(await getApiKey('cc-openai'), 'sk-second', 'clearKeyCache 后必须重新查库');
+	}
+	finally { p.teardown(); }
+});
+
+test('P2 (2.1.1): getApiKey 查库期间被 setApiKey 抢先,旧值不得回填缓存(TOCTOU 代次防护)', async () => {
+	// 专用平台: 第一次 searchLoginsAsync 挂起,由测试手动 resolve,精确复现
+	// 「getApiKey 读旧值 → 期间 setApiKey 写新值 → getApiKey 才返回」的竞态。
+	const logins: { username: string; password: string }[] = [{ username: 'toctou-x', password: 'old' }];
+	let callCount = 0;
+	let resolveFirst: (() => void) | null = null;
+	(globalThis as Record<string, any>).Zotero = {
+		Prefs: { get: () => undefined, set: () => {}, clear: () => {} }
+	};
+	(globalThis as Record<string, any>).Services = {
+		logins: {
+			searchLoginsAsync: () => {
+				callCount++;
+				if (callCount === 1) {
+					return new Promise<any[]>((res) => {
+						resolveFirst = () => res([{ username: 'toctou-x', password: 'old' }]);
+					});
+				}
+				return Promise.resolve(logins.slice());
+			},
+			addLoginAsync: async (login: any) => { logins.push({ username: login.username, password: login.password }); },
+			modifyLogin: (_old: any, updated: any) => {
+				const i = logins.findIndex(l => l.username === updated.username);
+				if (i >= 0) { logins[i] = { username: updated.username, password: updated.password }; }
+			},
+			removeLogin: (login: any) => {
+				const i = logins.findIndex(l => l.username === login.username);
+				if (i >= 0) { logins.splice(i, 1); }
+			}
+		}
+	};
+	(globalThis as Record<string, any>).Components = {
+		classes: {
+			'@mozilla.org/login-manager/loginInfo;1': {
+				createInstance: () => ({
+					init(_o: string, _f: unknown, _r: string, username: string, password: string) {
+						(this as any).username = username;
+						(this as any).password = password;
+					}
+				})
+			}
+		},
+		interfaces: { nsILoginInfo: {} }
+	};
+	try {
+		const { setApiKey, getApiKey, clearKeyCache } = await import('../../src/security/credentialStore');
+		clearKeyCache(); // 隔离此前用例可能遗留的 toctou-x 缓存(此处无)与代次基线
+		const inflight = getApiKey('toctou-x');   // call#1: 挂起在旧值上
+		await setApiKey('toctou-x', 'new');        // 抢先写新值: 代次++、缓存删除
+		resolveFirst!();                            // 现在放行 call#1,让它带着旧值返回
+		const v1 = await inflight;
+		assert.equal(v1, 'old', '在途调用返回它开始时读到的旧值(可接受)');
+		const v2 = await getApiKey('toctou-x');    // call#3: 缓存应为空 → 重新查库
+		assert.equal(v2, 'new', '旧值绝不能被回填缓存,否则整场会话都用错密钥');
+	}
+	finally {
+		delete (globalThis as Record<string, any>).Zotero;
+		delete (globalThis as Record<string, any>).Services;
+		delete (globalThis as Record<string, any>).Components;
+	}
+});

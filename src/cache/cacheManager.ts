@@ -47,6 +47,23 @@ function enqueueWrite(path: string, job: () => Promise<void>): Promise<void> {
 	return next;
 }
 
+/**
+ * 收紧缓存权限 (2.1.1, 审核 P2-A): 缓存文件里是**整篇论文的译文**明文。默认
+ * umask 下文件是 0644、目录 0755 —— 同一台机器上的其他本地账户可直接读走
+ * 用户在读什么、译文全文。写文件后收到 0600、建目录后收到 0700。纯尽力而为:
+ * Windows 上 IOUtils.setPermissions 是 no-op / 抛错(NTFS ACL 非 POSIX 位),
+ * 任何失败都吞掉 —— 权限收不紧不该让缓存写入失败(缓存本就是可失败的旁路)。
+ */
+async function chmodBestEffort(path: string, mode: number): Promise<void> {
+	try {
+		await (IOUtils as unknown as { setPermissions?(p: string, permissions: number): Promise<void> })
+			.setPermissions?.(path, mode);
+	}
+	catch {
+		// 权限收紧尽力而为
+	}
+}
+
 export function cacheRootDir(): string {
 	return PathUtils.join(Zotero.DataDirectory.dir, 'bilingual-reader', 'cache');
 }
@@ -103,9 +120,11 @@ export async function writePage(parts: CacheKeyParts, translations: TranslatedBl
 		try {
 			if (dir) {
 				await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
+				await chmodBestEffort(dir, 0o700);
 			}
 			// Atomic: write to tmp file, then rename over the target.
 			await IOUtils.writeJSON(path, entry, { tmpPath: path + '.tmp' });
+			await chmodBestEffort(path, 0o600);
 		}
 		catch (e) {
 			logger.warn(MODULE, 'Cache write failed (continuing without cache)', e);
@@ -199,8 +218,10 @@ export async function writeSegments(parts: SegmentContextParts, entries: { hash:
 			const entry: CachedSegments = { schemaVersion: CACHE_SCHEMA_VERSION, context, segments };
 			if (dir) {
 				await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
+				await chmodBestEffort(dir, 0o700);
 			}
 			await IOUtils.writeJSON(path, entry, { tmpPath: path + '.tmp' });
+			await chmodBestEffort(path, 0o600);
 		}
 		catch (e) {
 			logger.warn(MODULE, 'Segment cache write failed (continuing without cache)', e);
