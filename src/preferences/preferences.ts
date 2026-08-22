@@ -41,6 +41,7 @@ import {
 	type CatalogModel
 } from '../translation/providers/modelCatalog';
 import { supportsReasoningControl } from '../translation/providers/advancedParams';
+import { sanitize } from '../security/logSanitizer';
 
 interface ProviderInfo {
 	id: string;
@@ -89,7 +90,15 @@ interface PaperMirrorPublicAPI {
 				init(root);
 			}
 			catch (e) {
-				Zotero.logError(e as Error);
+				// 纵深防御 (2.0.10, 审核 P3): 该出口此前直通、不经 sanitizer。
+				// init 同步阶段目前接触不到密钥值,但统一纪律: 任何日志出口
+				// 都过脱敏。
+				try {
+					Zotero.logError(new Error(sanitize(e instanceof Error ? `${e.message}\n${e.stack ?? ''}` : String(e))));
+				}
+				catch {
+					Zotero.logError(new Error('PaperMirror preferences init failed (details withheld: sanitizer unavailable)'));
+				}
 			}
 			return;
 		}

@@ -46,6 +46,9 @@ export function ensureStyleInjected(doc: Document): void {
 
 export function removeInjectedStyle(doc: Document): void {
 	doc.getElementById(STYLE_ID)?.remove();
+	// P3 (2.0.10): 胶囊样式表 (translationPane 注入到同一主窗口文档) 一并
+	// 移除 —— 此前任何路径都不清,disable-without-restart 后残留。
+	doc.getElementById('pm-capsule-style')?.remove();
 }
 
 /**

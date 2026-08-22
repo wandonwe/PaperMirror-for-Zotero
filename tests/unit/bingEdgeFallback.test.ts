@@ -17,14 +17,16 @@ test('自定义第三方 Base URL 被识别为覆盖', () => {
 	assert.equal(hasCustomBingBase('http://192.168.1.10:8080'), true);
 });
 
-test('空值 / bing.com / 解析失败都不算覆盖(仍走官方通道)', () => {
+test('空值 / bing.com 不算覆盖;解析失败 fail-closed 算覆盖 (P3, 2.0.10)', () => {
 	assert.equal(hasCustomBingBase(undefined), false);
 	assert.equal(hasCustomBingBase(''), false);
 	assert.equal(hasCustomBingBase('   '), false);
 	assert.equal(hasCustomBingBase('https://www.bing.com'), false);
 	assert.equal(hasCustomBingBase('https://cn.bing.com/'), false);
 	assert.equal(hasCustomBingBase('https://bing.com'), false);
-	assert.equal(hasCustomBingBase('not a url'), false);
+	// 2.0.10: 非空但解析失败(漏 scheme 的内网代理)= 用户想覆盖但写错了 ——
+	// 按「未覆盖」处理会静默出网微软,必须 fail-closed。
+	assert.equal(hasCustomBingBase('not a url'), true);
 });
 
 test('判据与 resolveBingApiBase 严格一致(防两处漂移)', () => {

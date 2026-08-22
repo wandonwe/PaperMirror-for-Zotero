@@ -17,6 +17,7 @@ import {
 	calcGoogleTk,
 	cleanGoogleAnnotatedText,
 	escapeHTML,
+	joinTranslatedParts,
 	mapGoogleLang,
 	runPool,
 	splitLongText
@@ -194,8 +195,8 @@ export const googleFreeProvider: TranslationProvider = {
 				.filter(b => merged.has(b.id))
 				.map(b => ({
 					id: b.id,
-					translatedText: (merged.get(b.id) ?? [])
-						.join(' ')
+					// P3 (2.0.10): CJK 目标语言空串拼接,切点不再留句中空格。
+					translatedText: joinTranslatedParts(merged.get(b.id) ?? [], tl)
 						.replace(/\s*\n\n\s*/g, '\n\n')
 						.trim()
 				}))

@@ -115,6 +115,16 @@ export function getMainWindowForReader(reader: ReaderLike): Window {
 	return win;
 }
 
+/**
+ * 归属判定专用 (2.0.10, 审核 P3): 不经 getMainWindow() 兜底。缺 _window 的
+ * reader 被兜底归到「碰巧的窗口」时,disposeWindow 可能误杀在用会话或漏杀
+ * 该杀的 —— 注释承诺的「归属不明保守保留」只对抛异常成立,对静默兜底不
+ * 成立。判归属就必须诚实: 不知道就是 null。
+ */
+export function getOwnerWindowForReader(reader: ReaderLike): Window | null {
+	return reader._window ?? null;
+}
+
 /** Current 0-based page index, best effort. */
 export function getCurrentPageIndex(reader: ReaderLike): number {
 	try {

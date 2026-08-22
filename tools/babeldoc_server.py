@@ -34,6 +34,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -65,12 +66,17 @@ def build_command(engine, pdf_path, out_dir, req):
             cmd.append("--no-dual")
         if not req.get("mono", True):
             cmd.append("--no-mono")
+        env = {}
         if provider:
             cmd += ["--openai",
                     "--openai-model", provider.get("model") or "gpt-4o-mini",
-                    "--openai-base-url", provider.get("baseURL") or "https://api.openai.com/v1",
-                    "--openai-api-key", provider.get("apiKey") or ""]
-        return cmd, {}
+                    "--openai-base-url", provider.get("baseURL") or "https://api.openai.com/v1"]
+            # 密钥经环境变量而非命令行 (2.0.10, 审核 P3): argv 对同机所有用户
+            # 经 ps / /proc/<pid>/cmdline 可见,整个导出任务期间(数分钟)持续
+            # 暴露。openai SDK 默认读 OPENAI_API_KEY,babeldoc 未显式传参时
+            # 走该回退;与 pdf2zh 分支同一纪律。
+            env = {"OPENAI_API_KEY": provider.get("apiKey") or ""}
+        return cmd, env
     # pdf2zh
     cmd = ["pdf2zh", pdf_path, "-li", lang_in, "-lo", lang_out, "-o", out_dir]
     env = {}
@@ -118,8 +124,12 @@ def run_task(task_id, req):
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               timeout=60 * 40)
         if proc.returncode != 0:
-            tail = proc.stdout.decode("utf-8", "replace")[-1500:]
-            raise RuntimeError(f"{engine} 退出码 {proc.returncode}: {tail}")
+            # 只回传退出码 + 末行摘要 (2.0.10, 审核 P3): 完整 stdout 尾部可能
+            # 含引擎回显的论文文本,经 task.message 进插件日志会违反「原文不
+            # 进日志」的不变量。末行截 200 字符。
+            lines = proc.stdout.decode("utf-8", "replace").strip().splitlines()
+            last = (lines[-1] if lines else "")[:200]
+            raise RuntimeError(f"{engine} 退出码 {proc.returncode}: {last}")
 
         mono = newest(["*mono*.pdf"], out_dir) or newest(["*mono*.pdf"], work)
         dual = newest(["*dual*.pdf"], out_dir) or newest(["*dual*.pdf"], work)
@@ -140,6 +150,29 @@ def run_task(task_id, req):
         with LOCK:
             task["state"] = "error"
             task["message"] = str(exc)[:2000]
+    finally:
+        with LOCK:
+            task["finished_at"] = time.time()
+
+
+REAP_TTL_SECONDS = 30 * 60
+
+
+def reap_stale_tasks():
+    # 临时目录回收 (2.0.10, 审核 P3): mkdtemp 的原文/译文 PDF 此前永不清理,
+    # 论文长期落盘。终态 30 分钟后连目录带登记一并删除。
+    while True:
+        time.sleep(600)
+        now = time.time()
+        with LOCK:
+            stale = [tid for tid, t in TASKS.items()
+                     if t.get("finished_at") and now - t["finished_at"] > REAP_TTL_SECONDS]
+            entries = [(tid, TASKS[tid].get("dir")) for tid in stale]
+            for tid in stale:
+                TASKS.pop(tid, None)
+        for _tid, work in entries:
+            if work:
+                shutil.rmtree(work, ignore_errors=True)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -201,6 +234,7 @@ def main():
     engine = which_engine()
     print(f"PaperMirror 桥接服务  http://{HOST}:{PORT}")
     print(f"翻译引擎: {engine or '未安装!  pip install babeldoc'}")
+    threading.Thread(target=reap_stale_tasks, daemon=True).start()
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
 
 

@@ -7,6 +7,67 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.10] — 2026-08-22
+
+2.0.6 审核第四批(P3 收尾): 几何审计过度回退、保留原文覆盖模式兜底、
+生命周期清理口径、池空窗与 quiesce 封口、传输层四项、占位符边界、
+桥接与诊断隐私、诊断口径。**至此 2.0.6 审核报告全部清零。**
+缓存格式不变(v5),不触发重译。
+
+### Fixed
+
+- **[P3] 几何审计不再按陈旧快照过度回退**。整轮处置基于处置前的违例
+  清单 —— 同轮内先处置的 offender 收缩后,归责给后处置者的重叠可能已经
+  消失,但它仍被处置: 只有靠扩展才放得下的块被**永久**回退成英文。现在
+  处置每个 offender 前用当前几何重算该条违例(纯函数 violationStillPresent,
+  单测覆盖 overlap/occludes-preserved/out-of-page 三型),已低于容差则跳过。
+- **[P3] 「查看保留原文」在覆盖模式下真正可见**。flashKeptIndicator 去掉
+  `?? parentElement` 兜底 —— display:none 面板里 offsetParent 为 null 时
+  它曾画出 0 几何的隐形标记并返回非 null,把回退路径屏蔽(P2-19 修复的
+  残余症状)。现在定位不了如实返回 null;覆盖模式下回退前先切到左右对照,
+  面板高亮才看得见(构造处注释承诺的行为首次真正实现)。
+- **[P3] 生命周期清理口径统一**。disposeWindow 的窗口归属判定不再经
+  Zotero.getMainWindow() 兜底 —— 缺 _window 的 reader 不会再被归到「碰巧
+  的窗口」而误杀/漏杀,「归属不明保守保留」名副其实;tab-close notifier
+  与 dispose() 补齐 lastTranslatedMode/busy 清理(三条销毁路径一致);
+  胶囊样式表 pm-capsule-style 随窗口关闭/插件关停一并移除。
+- **[P3] 池空窗与 quiesce 封口**。startTranslating/重启现在等 rebuildPool
+  完成(内含密钥查询,可达秒级)再排任务 —— 多服务商池的首屏页缓存键与
+  lane 不再落在错误引擎白重译;quiesce 等待期间轮询/滚动的 setCurrentPage
+  一律 no-op,配置切换的静默窗口不再有侧门(P1-9 的最后一块)。
+- **[P3] 止损记忆近似 LRU**。500 上限裁剪按插入序删前半,而 Map 更新不
+  刷新序位 —— 正被 count≥2 保护的热点段(页眉/重复题注)若首次失败早会
+  先被淘汰。更新计数时 delete 再 set,最近失败的排到队尾。
+- **[P3] 传输层四项**。mapHTTPError 补 408→TIMEOUT(可重试,此前落进
+  不可重试 UNKNOWN 过早放弃)与 DeepL 456→QUOTA_EXCEEDED(此前报
+  「Unexpected API response」);requestText/requestTextWithURL 与 requestJSON
+  一致地携带 Retry-After、XHR 回退报告 responseURL;**无 scheme 的自定义
+  Bing Base URL fail-closed**(此前解析失败被静默当「未覆盖」照旧出网微软
+  —— 2.0.1 要堵的路径换了个入口,现在按自定义覆盖处理、报错让用户看见);
+  免费引擎长段分片重组对 CJK 目标语言空串拼接,切点不再留句中空格。
+- **[P3] 裸占位符边界不吞 "PM2.5" 类真实文本**。verify/restore 的裸形态
+  边界从 `(?!\d)` 收紧为 `(?![\d.])` —— 环境/医学论文正文的 "PM2.5" 不再
+  满足 ⟦PM2⟧ 的裸形态: 真丢失时校验如实报告(重试不再被抑制),restore
+  的裸回退不再把 "PM2" 前缀替换成公式原文撕坏正文(经回退验证)。
+- **[P3] 桥接与诊断隐私**。babeldoc 桥接的 API 密钥改经环境变量传递
+  (命令行参数对同机用户经 ps 可见,与 pdf2zh 分支同一纪律);引擎失败
+  只回传退出码+末行(完整 stdout 尾部可能含论文文本);任务临时目录在
+  终态 30 分钟后自动清理(原文/译文 PDF 不再长期落盘);pdfService 的
+  HTTP 错误片段与桥接 message 先脱敏再截断;diagnose() 输出整体过脱敏
+  (用户会整段贴进 issue,Base URL 里可能被放了 ?key= 形式凭据);
+  preferences 面板唯一直通的日志出口也改走脱敏。
+- **[P3] 诊断口径补齐**。placement 统计全类目(imageExcluded/tooSmall/
+  tableIntentional 等)进入诊断导出 —— P2-15 阈值收紧后误拒面变大能被
+  发现;页面缓存条目附记实际产出引擎 producedBy(仅诊断,不入键不参与
+  校验)—— 轮换页的 key.provider 是规范引擎,不再误导人工检查,v5 的
+  已知残余(改实际引擎参数不失效这些条目)在代码注释中如实记录。
+
+### Tests
+
+- 723 项(+4 新增,另 3 项随语义更新): 陈旧违例重验三型、display:none
+  兜底、408/456 分类、fail-closed 判定、CJK 拼接、PM2.5 占位符往返。
+  占位符边界经「回退修复 → 测试变红 → 恢复 → 变绿」验证有效。
+
 ## [2.0.9] — 2026-08-22
 
 2.0.6 审核第三批(状态正确性 + 传输): 设置窗口静默重启、compress 丢失唤醒、

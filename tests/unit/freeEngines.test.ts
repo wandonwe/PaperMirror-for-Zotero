@@ -137,8 +137,10 @@ test('a genuine non-bing mirror IS an override', () => {
 	);
 });
 
-test('garbage in the Base URL falls back to the session origin', () => {
-	assert.equal(resolveBingApiBase('not a url', 'https://cn.bing.com'), 'https://cn.bing.com');
+test('garbage in the Base URL fails CLOSED, not open (P3, 2.0.10)', () => {
+	// 旧语义是回落 session origin(fail-open 静默出网)—— 现在保留原样,
+	// 让 checkEndpointURL 报错给用户看。
+	assert.equal(resolveBingApiBase('not a url', 'https://cn.bing.com'), 'not a url');
 });
 
 // ---- the request pool -------------------------------------------------------
@@ -250,4 +252,26 @@ test('splitLongText: 星面数学字符不被劈成孤立代理 (encodeURICompon
 	// 纯 ASCII 行为不变。
 	const ascii = 'x'.repeat(50);
 	assert.deepEqual(splitLongText(ascii, 20).map(p => p.length), [20, 20, 10]);
+});
+
+// ---- P3 (2.0.10): fail-closed 与 CJK 拼接 -----------------------------------
+
+test('无 scheme 的自定义 Bing base fail-closed: 算覆盖、不静默出网', async () => {
+	const { hasCustomBingBase } = await import('../../src/translation/providers/bingFree');
+	// 用户想收进内网代理但漏写 scheme —— 旧行为当「未覆盖」照旧出网微软。
+	assert.equal(hasCustomBingBase('myproxy.internal/bing'), true, '解析失败的非空 base 必须算自定义覆盖');
+	assert.equal(resolveBingApiBase('myproxy.internal/bing', 'https://www.bing.com'), 'myproxy.internal/bing',
+		'保留原样让 checkEndpointURL 报错给用户看,而不是回落官方源');
+	// 既有语义不变: 空串与 bing.com 都不算覆盖。
+	assert.equal(hasCustomBingBase(''), false);
+	assert.equal(hasCustomBingBase('https://www.bing.com'), false);
+	assert.equal(resolveBingApiBase('', 'https://cn.bing.com'), 'https://cn.bing.com');
+});
+
+test('joinTranslatedParts: CJK 目标语言空串拼接,其余保留空格', async () => {
+	const { joinTranslatedParts } = await import('../../src/translation/providers/freeEngineUtils');
+	assert.equal(joinTranslatedParts(['影像组学', '与总生存期'], 'zh-Hans'), '影像组学与总生存期', '切点不得留句中空格');
+	assert.equal(joinTranslatedParts(['翻訳', 'テスト'], 'ja'), '翻訳テスト');
+	assert.equal(joinTranslatedParts(['first part', 'second part'], 'en'), 'first part second part');
+	assert.equal(joinTranslatedParts(['erste', 'zweite'], 'de'), 'erste zweite');
 });

@@ -283,11 +283,12 @@ export function verifyPlaceholders(text: string, placeholders: PlaceholderEntry[
 			if (text.includes(p.token)) {
 				return false;
 			}
-			// Same (?!\d) boundary as restore: "PM1" present must not be satisfied
-			// by "PM10" (审核 P1 — the lost token was wrongly counted present and
-			// the formula silently vanished after restore).
+			// Same (?![\d.]) boundary as restore: "PM1" present must not be
+			// satisfied by "PM10" (审核 P1),也不得被正文里的真实文本 "PM2.5"
+			// 满足 (P3, 2.0.10 — 环境/医学论文常见字面量: 旧边界 (?!\d) 不挡
+			// 小数点,⟦PM2⟧ 真丢失时被 "PM2.5" 误判为在场,重试被抑制)。
 			const bare = p.token.replace(PLACEHOLDER_PREFIX, 'PM').replace(PLACEHOLDER_SUFFIX, '');
-			return !new RegExp(`${bare}(?!\\d)`).test(text);
+			return !new RegExp(`${bare}(?![\\d.])`).test(text);
 		})
 		.map(p => p.token);
 	const issued = new Set(placeholders.map(p => p.token));
@@ -304,7 +305,9 @@ export function restoreFormulas(text: string, placeholders: PlaceholderEntry[]):
 		// old substring replace tore PM10 into original1+"0" whenever a block
 		// carried ≥11 placeholders, which citation masking made routine.
 		const bare = token.replace(PLACEHOLDER_PREFIX, 'PM').replace(PLACEHOLDER_SUFFIX, '');
-		const bareRe = new RegExp(`${bare}(?!\\d)`, 'g');
+		// (?![\d.]) (P3, 2.0.10): 与 verify 同步 —— 裸回退不得把正文 "PM2.5"
+		// 的 "PM2" 前缀替换成被掩蔽的公式原文(静默撕坏正文)。
+		const bareRe = new RegExp(`${bare}(?![\\d.])`, 'g');
 		if (!out.includes(original) && bareRe.test(out)) {
 			out = out.replace(bareRe, () => original);
 		}

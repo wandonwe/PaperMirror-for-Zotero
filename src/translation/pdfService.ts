@@ -20,6 +20,7 @@
  */
 
 import { PaperMirrorError } from '../types/models';
+import { sanitize } from '../security/logSanitizer';
 import * as logger from '../utils/logger';
 
 const MODULE = 'pdfService';
@@ -105,7 +106,9 @@ async function requestJSON(url: string, method: 'GET' | 'POST', body: unknown, t
 			noCache: true
 		});
 		if (response.status < 200 || response.status >= 300) {
-			throw new PaperMirrorError('NETWORK', `本地翻译服务返回 HTTP ${response.status}: ${String(response.responseText ?? '').slice(0, 200)}`, { retryable: false });
+			// 先脱敏后截断 (2.0.10, 审核 P3): 端口被非预期服务占用/回显时,片段
+			// 会进 UI 胶囊与日志 —— 与 errors.ts P1-5 同一条纪律。
+			throw new PaperMirrorError('NETWORK', `本地翻译服务返回 HTTP ${response.status}: ${sanitize(String(response.responseText ?? '')).slice(0, 200)}`, { retryable: false });
 		}
 		return JSON.parse(String(response.responseText ?? '{}'));
 	}
@@ -157,7 +160,9 @@ export async function translateFullPdf(
 		const status = await requestJSON(`${base}/status?id=${encodeURIComponent(taskId)}`, 'GET', undefined, 30000) as TaskStatus;
 		onProgress(status);
 		if (status.state === 'error') {
-			throw new PaperMirrorError('UNKNOWN', `翻译服务出错: ${status.message ?? '未知错误'}`, { retryable: true });
+			// 桥接侧 message 可能带引擎回显 (2.0.10, 审核 P3): 先脱敏再截断,
+			// 桥接自身也已只回传退出码+末行,双保险。
+			throw new PaperMirrorError('UNKNOWN', `翻译服务出错: ${sanitize(String(status.message ?? '未知错误')).slice(0, 300)}`, { retryable: true });
 		}
 		if (status.state === 'done') {
 			break;

@@ -19,6 +19,7 @@ import {
 	mapBingLang,
 	parseBingTranslatorPage,
 	splitLongText,
+	joinTranslatedParts,
 	resolveBingApiBase,
 	runPool,
 	unescapeHTML,
@@ -69,7 +70,11 @@ export function hasCustomBingBase(userBaseURL: string | undefined): boolean {
 		return !(host === 'bing.com' || host.endsWith('.bing.com'));
 	}
 	catch {
-		return false;
+		// fail-closed (2.0.10, 审核 P3): 非空但解析失败 = 用户想覆盖但写错了
+		// (漏 scheme 等)。按「未覆盖」处理会让 Edge 兜底照样把原文发去微软
+		// 官方端点 —— 判定必须与 resolveBingApiBase 一致: 算自定义覆盖,
+		// 禁用 Edge 兜底,报错让用户看见。
+		return true;
 	}
 }
 
@@ -476,7 +481,8 @@ export const bingFreeProvider: TranslationProvider = {
 			});
 			translations.push({
 				id: block.id,
-				translatedText: paragraphs.map(parts => parts.join(' ').trim()).filter(Boolean).join('\n\n').trim()
+				// P3 (2.0.10): CJK 目标语言空串拼接,切点不再留句中空格。
+				translatedText: paragraphs.map(parts => joinTranslatedParts(parts, tl).trim()).filter(Boolean).join('\n\n').trim()
 			});
 		});
 		return { translations };

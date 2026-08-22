@@ -6,6 +6,7 @@
 import * as cacheManager from '../cache/cacheManager';
 import { ReaderToolbarController } from '../reader/readerToolbar';
 import { deleteApiKey, getApiKey, setApiKey } from '../security/credentialStore';
+import { sanitize } from '../security/logSanitizer';
 import { getProvider, listProviders } from '../translation/providers/registry';
 import {
 	parseProviderProfiles,
@@ -248,7 +249,9 @@ export async function startup(params: StartupParams): Promise<void> {
 			catch (e) {
 				lines.push(`Engine self-test: THREW — ${e instanceof Error ? e.message : String(e)}`);
 			}
-			return lines.join('\n');
+			// 整体脱敏 (2.0.10, 审核 P3): 用户会把 diagnose 输出整段贴进 issue,
+			// 而 Base URL/apiPath 里可能被用户放了 ?key=… 形式的凭据。
+			return sanitize(lines.join('\n'));
 		},
 		listProviders: () => listProviders().map(p => ({
 			id: p.id,

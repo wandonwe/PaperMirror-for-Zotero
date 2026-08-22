@@ -97,3 +97,11 @@ test('无法定位 (节点已脱离文档/无宿主) → 返回 null 供调用�
 	const orphan = makeDoc().makeEl('div'); // 无 parent、无 offsetParent
 	assert.equal(flashKeptIndicator(orphan as unknown as HTMLElement, 20), null);
 });
+
+test('P3 (2.0.10): display:none 面板里 (offsetParent null 但 parentElement 在) 必须返回 null 走回退', () => {
+	const { node, host } = makeHiddenUnfitNode();
+	node.offsetParent = null; // display:none 的祖先: 布局不存在
+	assert.equal(node.parentElement, host, '场景成立: parentElement 仍在');
+	assert.equal(flashKeptIndicator(node as unknown as HTMLElement, 20), null,
+		'旧的 parentElement 兜底会画出 0 几何的隐形标记并返回非 null,把回退路径屏蔽');
+});

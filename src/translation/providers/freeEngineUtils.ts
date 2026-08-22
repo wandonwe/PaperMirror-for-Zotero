@@ -149,6 +149,18 @@ export function cleanGoogleAnnotatedText(result: string): string {
  * Split text into chunks of at most maxLen characters, preferring sentence
  * boundaries (., !, ?, 。, !, ?, ;, ;) and falling back to hard cuts.
  */
+/**
+ * 分片重组连接符 (2.0.10, 审核 P3): 长段被 splitLongText 切开分请求后,译回
+ * 的片段此前一律用 ASCII 空格拼回 —— CJK 译文的每个切点都留下一个句中空格。
+ * 目标语言是 CJK(中/日/韩,含各引擎的方言代码)时用空串拼接。
+ */
+export function joinTranslatedParts(parts: string[], targetLang: string): string {
+	const t = (targetLang ?? '').toLowerCase();
+	const cjk = t.startsWith('zh') || t.startsWith('ja') || t.startsWith('ko')
+		|| t.startsWith('jp') || t === 'kor' || t === 'jpn';
+	return parts.join(cjk ? '' : ' ');
+}
+
 export function splitLongText(text: string, maxLen: number): string[] {
 	if (text.length <= maxLen) {
 		return [text];
@@ -275,7 +287,12 @@ export function resolveBingApiBase(userBaseURL: string | undefined, sessionOrigi
 		}
 	}
 	catch {
-		return sessionOrigin.replace(/\/+$/, '');
+		// fail-closed (2.0.10, 审核 P3): 非空但解析失败的 base(常见: 漏写
+		// scheme 的 `myproxy.internal/bing`)此前被静默当「未覆盖」—— 流量
+		// 照旧出网微软,正是 2.0.1「宁可报错也不静默出网」要堵的路径换了个
+		// 入口。按用户意图保留原样返回: 随后的 checkEndpointURL 会给出明确
+		// 报错,用户看得见配置错了,而不是论文被静默发去官方端点。
+		return cleaned;
 	}
 	return cleaned;
 }

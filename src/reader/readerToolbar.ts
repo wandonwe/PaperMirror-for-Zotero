@@ -195,6 +195,10 @@ export class ReaderToolbarController {
 								this.sessions.delete(String(id));
 							}
 							this.modes.delete(String(id));
+							// 清理口径与 disposeWindow 对齐 (2.0.10, 审核 P3):
+							// 长会话反复开关标签,按 tabID 键的登记只增不减。
+							this.lastTranslatedMode.delete(String(id));
+							this.busy.delete(String(id));
 						}
 					}
 				}
@@ -733,6 +737,7 @@ export class ReaderToolbarController {
 		}
 		this.sessions.clear();
 		this.modes.clear();
+		this.lastTranslatedMode.clear(); // P3 (2.0.10): 三条销毁路径清理口径一致
 		this.busy.clear();
 		if (this.notifierID) {
 			Zotero.Notifier.unregisterObserver(this.notifierID);

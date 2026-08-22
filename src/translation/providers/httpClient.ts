@@ -233,6 +233,11 @@ async function send(
 			status: xhr.status,
 			text: xhr.responseText ?? '',
 			retryAfterMs: parseRetryAfter(xhr.getResponseHeader?.('Retry-After')),
+			// P3 (2.0.10): 与 Zotero.HTTP 路径一致,报告重定向落点 —— bing 会话
+			// 页在 XHR 回退下也学得到 cn/www 源。
+			finalURL: typeof (xhr as XMLHttpRequest & { responseURL?: string }).responseURL === 'string'
+				? (xhr as XMLHttpRequest & { responseURL?: string }).responseURL
+				: undefined,
 			elapsedMs: Date.now() - started
 		}));
 		xhr.onerror = () => finish(() => reject(new PaperMirrorError('NETWORK', 'Network error while contacting the translation service.', { retryable: true })));
@@ -298,9 +303,15 @@ export async function requestText(url: string, options: { timeoutMs: number; sig
 /** Like requestText, but also reports where redirects actually landed. */
 export async function requestTextWithURL(url: string, options: { timeoutMs: number; signal?: AbortSignal; headers?: Record<string, string> }): Promise<{ text: string; finalURL: string }> {
 	checkEndpointURL(url, false);
-	const { status, text, finalURL } = await send('GET', url, options.headers ?? {}, null, options.timeoutMs, options.signal);
+	const { status, text, finalURL, retryAfterMs } = await send('GET', url, options.headers ?? {}, null, options.timeoutMs, options.signal);
 	if (status < 200 || status >= 300) {
-		throw mapHTTPError(status, text);
+		const error = mapHTTPError(status, text);
+		// P3 (2.0.10): 与 requestJSON 一致地携带 Retry-After —— bing 会话页
+		// 429 时的 RATE_LIMITED 此前不带 retryAfterMs,退避回到盲猜。
+		if (retryAfterMs !== undefined) {
+			(error as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs = retryAfterMs;
+		}
+		throw error;
 	}
 	return { text, finalURL: finalURL || url };
 }

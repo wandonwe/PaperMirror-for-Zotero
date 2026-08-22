@@ -165,3 +165,15 @@ test('脱敏不影响无密钥的诊断信息可读性', () => {
 	const e = mapHTTPError(400, 'Unsupported value: temperature does not support 0 with this model');
 	assert.ok(/temperature/.test(e.message), '参数名必须保留,自愈匹配依赖它');
 });
+
+// ---- P3 (2.0.10): 覆盖缺口 408/456 ------------------------------------------
+
+test('408 → TIMEOUT 可重试;456 → QUOTA_EXCEEDED (DeepL 配额用尽)', async () => {
+	const { mapHTTPError } = await import('../../src/translation/errors');
+	const t = mapHTTPError(408, 'gateway timeout');
+	assert.equal(t.code, 'TIMEOUT');
+	assert.equal(t.retryable, true, '瞬态超时被判不可重试会过早放弃');
+	const q = mapHTTPError(456, 'Quota exceeded');
+	assert.equal(q.code, 'QUOTA_EXCEEDED');
+	assert.equal(q.retryable, false);
+});

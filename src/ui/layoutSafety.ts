@@ -111,3 +111,55 @@ export function auditPlacedBoxes(
 	}
 	return out.sort((a, b) => b.area - a.area);
 }
+
+/**
+ * 单条违例按**当前**几何重算是否仍然成立 (2.0.10, 审核 P3) — pure。
+ *
+ * 整轮处置基于处置前的违例快照: overlap 归责给扩展更多的一方,同轮内先
+ * 处置的 offender 收缩后,归责给后处置者的那条重叠可能已经消失 —— 但它仍
+ * 按陈旧违例被处置,只有靠扩展才放得下的块被 clearMask+abandoned **永久**
+ * 回退成英文。pmGeometryAudit 在处置每个 offender 前用本函数重验,已低于
+ * 容差的违例跳过。offender 或 counterpart 已不在 placed(本轮被回退)时视
+ * 为不成立。
+ */
+export function violationStillPresent(
+	v: LayoutViolation,
+	placed: AuditBox[],
+	obstacles: AuditObstacles,
+	pageW: number,
+	pageH: number
+): boolean {
+	const tol = (a: PixelBox, b: PixelBox): number =>
+		Math.max(12, 0.02 * Math.min(a.width * a.height, b.width * b.height));
+	const self = placed.find(p => p.id === v.id);
+	if (!self) {
+		return false; // offender 本轮已被回退/放弃
+	}
+	switch (v.kind) {
+		case 'overlap': {
+			const other = placed.find(p => p.id === v.otherId);
+			if (!other) {
+				return false;
+			}
+			const added = inter(self.box, other.box) - inter(self.originalBox, other.originalBox);
+			return added > tol(self.box, other.box);
+		}
+		case 'occludes-image':
+			return obstacles.images.some((img) => {
+				const added = inter(self.box, img) - inter(self.originalBox, img);
+				return added > tol(self.box, img);
+			});
+		case 'occludes-preserved': {
+			const keep = obstacles.preserved.find(k => k.id === v.otherId);
+			if (!keep) {
+				return false;
+			}
+			const added = inter(self.box, keep.box) - inter(self.originalBox, keep.box);
+			return added > tol(self.box, keep.box);
+		}
+		case 'out-of-page': {
+			const added = outOfPageArea(self.box, pageW, pageH) - outOfPageArea(self.originalBox, pageW, pageH);
+			return added > 12;
+		}
+	}
+}

@@ -160,3 +160,26 @@ test('round-bracket numeric citations masked; overlapping neighbours block expan
 		600, 800, 40);
 	assert.equal(grow.down, 0, JSON.stringify(grow));
 });
+
+// ---- P3 (2.0.10): 裸占位符边界不吞 "PM2.5" 类真实文本 -----------------------
+
+test('正文 "PM2.5" 不得满足 ⟦PM2⟧ 的裸形态: 丢失照实报告,restore 不撕正文', async () => {
+	const { verifyPlaceholders, restoreFormulas } = await import('../../src/reader/formulaGuard');
+	const placeholders = [
+		{ token: '⟦PM1⟧', original: '$x^2$' },
+		{ token: '⟦PM2⟧', original: '$\\beta_1$' }
+	];
+	// 模型把 ⟦PM2⟧ 弄丢了,但译文正文里有环境学常见字面量 "PM2.5"。
+	const text = '空气中 PM2.5 浓度与 ⟦PM1⟧ 相关。';
+	const verdict = verifyPlaceholders(text, placeholders as never);
+	assert.ok(verdict.missing.includes('⟦PM2⟧'),
+		'旧边界 (?!\\d) 不挡小数点 → "PM2.5" 误判 ⟦PM2⟧ 在场,重试被抑制');
+	// restore 的裸回退不得把 "PM2.5" 的 "PM2" 前缀换成公式原文。
+	const restored = restoreFormulas(text, placeholders as never);
+	assert.ok(restored.includes('PM2.5'), `正文 PM2.5 必须原样存活,实际: ${restored}`);
+	assert.ok(!restored.includes('$\\beta_1$.5'), '不得出现公式原文+".5" 的撕裂产物');
+	// 真正的裸形态 (模型丢了括号) 照常回填。
+	const bareText = '公式 PM2 出现在此。';
+	const bareRestored = restoreFormulas(bareText, [placeholders[1]] as never);
+	assert.ok(bareRestored.includes('$\\beta_1$'), '真实裸形态照常回填');
+});

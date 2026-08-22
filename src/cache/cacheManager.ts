@@ -85,13 +85,18 @@ export async function readPage(parts: CacheKeyParts): Promise<TranslatedBlock[] 
 	}
 }
 
-export async function writePage(parts: CacheKeyParts, translations: TranslatedBlock[]): Promise<void> {
+export async function writePage(parts: CacheKeyParts, translations: TranslatedBlock[], producedBy?: string): Promise<void> {
 	const path = pagePath(parts);
 	const dir = PathUtils.parent(path);
-	const entry: CachedPage = {
+	const entry: CachedPage & { producedBy?: string } = {
 		schemaVersion: CACHE_SCHEMA_VERSION,
 		key: parts,
 		createdAt: new Date().toISOString(),
+		// 实际产出引擎 (2.0.10, 审核 P3, 仅诊断): 熔断/轮换页的译文以规范引擎
+		// 的键落盘(读写恒等,正确)—— key.provider 因此可能不是真正产出译文
+		// 的引擎。v5 的已知残余: 改**实际**引擎的参数不会使这些条目失效。
+		// producedBy 不入键、不参与校验,只为人工检查与诊断诚实。
+		...(producedBy ? { producedBy } : {}),
 		translations
 	};
 	await enqueueWrite(path, async () => {

@@ -2001,6 +2001,11 @@ export class TranslationManager {
 				// (与记录时已在飞的运行同轮,同一段跨页并发失败)→ 不叠加。
 				// 只有失败记录之后新发起的运行 (runId > rec.seq) 才算下一轮。
 				if (!rec || runId > rec.seq) {
+					// 近似 LRU (2.0.10, 审核 P3): Map.set 更新既有键不刷新插入序,
+					// 500 上限裁剪按插入序删前半 —— 刚二次失败、正靠 count≥2 保护
+					// 的热点段(页眉/重复题注)若首次失败发生得早会先被淘汰,止损
+					// 归零重买注定失败的请求。先 delete 再 set 让最近失败的排到队尾。
+					this.failedSegments.delete(h);
 					this.failedSegments.set(h, { count: (rec?.count ?? 0) + 1, seq: this.runSeq });
 				}
 				keepOrigin.set(block.id, 'unrecovered');

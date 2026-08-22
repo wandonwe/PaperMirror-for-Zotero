@@ -47,6 +47,15 @@ export function mapHTTPError(status: number, bodySnippet?: string): PaperMirrorE
 	if (status === 402) {
 		return new PaperMirrorError('QUOTA_EXCEEDED', 'The API reports insufficient balance (HTTP 402).', { httpStatus: status, retryable: false });
 	}
+	// P3 (2.0.10): 覆盖缺口补齐。408 是代理/网关的请求超时(瞬态),此前落进
+	// 不可重试的 UNKNOWN 兜底 —— 与同语义的传输层超时分类不一致,过早放弃。
+	if (status === 408) {
+		return new PaperMirrorError('TIMEOUT', 'The server/gateway timed out the request (HTTP 408).', { httpStatus: status, retryable: true });
+	}
+	// DeepL 文档化的 456「配额用尽」,此前报「Unexpected API response」。
+	if (status === 456) {
+		return new PaperMirrorError('QUOTA_EXCEEDED', 'The API reports the quota has been exhausted (HTTP 456).', { httpStatus: status, retryable: false });
+	}
 	if (status >= 500) {
 		return new PaperMirrorError('NETWORK', `The API server returned an error (HTTP ${status}).`, { httpStatus: status, retryable: true });
 	}

@@ -31,7 +31,7 @@ import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
 import { detectTableRegions } from '../reader/tableGuard';
 import { buildTableModel, type CellMember } from '../reader/tableStructure';
-import { auditPlacedBoxes, type AuditBox } from './layoutSafety';
+import { auditPlacedBoxes, violationStillPresent, type AuditBox } from './layoutSafety';
 import { parseStyledSegments } from '../reader/styleRuns';
 import {
 	inkFor,
@@ -824,6 +824,16 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				if (handledThisRound.has(v.id)) {
 					continue; // 同一 offender 在多条违例里出现: 一轮只处置一次
 				}
+				// 陈旧违例重验 (2.0.10, 审核 P3): 违例清单是处置前的快照 ——
+				// 同轮内先处置的 offender 收缩后,归责给后处置者的重叠可能已经
+				// 消失;不重验就会把只有靠扩展才放得下的块无谓地**永久**回退成
+				// 英文。用当前盒重算该条违例,已低于容差则跳过。
+				const currentPlaced: AuditBox[] = items
+					.filter(i => i.committed && !i.abandoned)
+					.map(i => ({ id: i.id, box: i.box, originalBox: i.originalBox }));
+				if (!violationStillPresent(v, currentPlaced, { images: imageBoxes, preserved }, pageW, pageH)) {
+					continue;
+				}
 				handledThisRound.add(v.id);
 				detail.push(`${v.kind}:${v.id}${v.otherId ? '→' + v.otherId : ''}(${Math.round(v.area)}px²)`);
 				const item = byId.get(v.id);
@@ -1068,7 +1078,11 @@ export function revertStrictBlocks(element: HTMLElement, ids: string[]): void {
  */
 export function flashKeptIndicator(node: HTMLElement, durationMs = 2000): HTMLElement | null {
 	const doc = node.ownerDocument;
-	const host = (node.offsetParent as HTMLElement | null) ?? node.parentElement;
+	// 只认 offsetParent (2.0.10, 审核 P3): 旧的 `?? parentElement` 兜底在
+	// display:none 的面板里伪造「闪成功」—— offsetParent 为 null 但 parentElement
+	// 在,0 几何 marker 照建、返回非 null,调用方以为闪到了就不走回退路径,
+	// 覆盖模式点「查看保留原文」依旧什么也看不见。定位不了就如实返回 null。
+	const host = node.offsetParent as HTMLElement | null;
 	if (!doc || !host || !node.isConnected) {
 		return null;
 	}

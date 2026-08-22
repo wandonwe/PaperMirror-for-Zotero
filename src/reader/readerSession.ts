@@ -117,6 +117,13 @@ export class ReaderSession {
 	private identityRestartTimer: ReturnType<typeof setTimeout> | null = null;
 	/** 菜单驱动的 quiesce 正在 apply() 时置位,阻止观察者二次重启。 */
 	private applyingConfigChange = false;
+	/**
+	 * quiesce 窗口封口 (2.0.10, 审核 P3): resetAllAndWait 等待期间轮询/滚动
+	 * 仍可 setCurrentPage 入队**新**任务 —— apply() 随后改 pref,该任务的
+	 * persistPartial 会按新身份落盘旧配置段落(P1-9 的侧门)。置位期间
+	 * 会话侧的 setCurrentPage 转发一律 no-op,restart 完成后放行。
+	 */
+	private quiescing = false;
 	/** Provider pool (primary first). Rebuilt when translation (re)starts. */
 	private pool: string[] = [];
 	/** Real image rects per page (operator list), fetched once per document. */
@@ -148,6 +155,9 @@ export class ReaderSession {
 	private scannedNoticeShown = new Set<number>();
 	/** 几何安全复核结果按页留档(进诊断导出;只计数,无文本)。 */
 	private geometryAudits = new Map<number, import('../ui/strictPageReplacement').GeometryAuditResult>();
+	/** 每页最近一次 placement 统计 (2.0.10, 审核 P3): imageExcluded 等
+	 *  「有意保留」类目此前不进任何诊断 —— 阈值收紧后该类目变大也无从发现。 */
+	private placementStats = new Map<number, import('../ui/strictPageReplacement').StrictPageStats>();
 	/**
 	 * Per-page render generation. Bumped at the start of every renderDocPage;
 	 * an async render (or its settle/compress callbacks) that discovers a newer
@@ -225,10 +235,12 @@ export class ReaderSession {
 		return this.reader.tabID;
 	}
 
-	/** 本会话所属的主窗口 (2.0.4, 审核 P2-17) — 供按窗口维度销毁会话。 */
+	/** 本会话所属的主窗口 (2.0.4, 审核 P2-17) — 供按窗口维度销毁会话。
+	 *  2.0.10 (审核 P3): 改用不带 getMainWindow 兜底的归属判定 —— 缺 _window
+	 *  时如实返回 null,disposeWindow 的「保守保留」才名副其实。 */
 	getMainWindow(): Window | null {
 		try {
-			return adapter.getMainWindowForReader(this.reader);
+			return adapter.getOwnerWindowForReader(this.reader);
 		}
 		catch {
 			return null;
@@ -470,7 +482,21 @@ export class ReaderSession {
 	}
 
 	private startTranslating(): void {
-		void this.rebuildPool();
+		// 先等池就绪再排任务 (2.0.10, 审核 P3): rebuildPool 内含 getApiKey,
+		// 慢密钥库/首次解锁可达秒级 —— 此前 fire-and-forget,空窗内 pool 为
+		// 空,canonicalProviderForPage/providerForPage 都退化为主引擎: 多服务
+		// 商池的首屏页 readCache/writeCache 键与 lane 都落在错误引擎(上一
+		// 会话写的是池内规范键 → 必然 miss 白重译)。
+		void this.rebuildPool()
+			.catch(() => { /* 池判定尽力而为 */ })
+			.then(() => {
+				if (!this.destroyed) {
+					this.startTranslatingWithPool();
+				}
+			});
+	}
+
+	private startTranslatingWithPool(): void {
 		if (this.manager || this.destroyed) {
 			if (this.manager) {
 				this.manager.setCurrentPage(adapter.getCurrentPageIndex(this.reader));
@@ -489,7 +515,8 @@ export class ReaderSession {
 				writeCache: async (pageIndex, blocks, translations) => {
 					const parts = await this.cacheKey(pageIndex, blocks.map(b => b.sourceText));
 					if (parts) {
-						await cacheManager.writePage(parts, translations);
+						// producedBy = 运行时引擎 (P3, 2.0.10, 仅诊断): 键是规范引擎的。
+						await cacheManager.writePage(parts, translations, this.providerForPage(pageIndex));
 					}
 				},
 				// 段落级缓存: per-segment store scoped by provider/model/prompt/
@@ -549,7 +576,9 @@ export class ReaderSession {
 		const page = adapter.getCurrentPageIndex(this.reader);
 		this.lastPageIndex = page;
 		this.pane?.setCurrentPage(page);
-		this.manager.setCurrentPage(page);
+		if (!this.quiescing) { // P3 (2.0.10): quiesce 封口
+			this.manager.setCurrentPage(page);
+		}
 	}
 
 	/**
@@ -1059,6 +1088,12 @@ export class ReaderSession {
 			}
 		}
 		// Overlay element gone or empty → let the pane locate them.
+		// 覆盖模式下面板 display:none (2.0.10, 审核 P3): pane 的高亮同样不可见,
+		// 构造处注释承诺的 "switch to pane + locate" 此前从未实现 —— 先切到
+		// 左右对照再定位,用户才真的看得到保留原文在哪。
+		if (this.viewMode === 'overlay') {
+			this.setViewMode('split');
+		}
 		this.pane?.revealKeptOriginal(pageIndex);
 	}
 
@@ -1081,7 +1116,8 @@ export class ReaderSession {
 				this.lastPageIndex = page;
 				// In 原文 mode nothing is displayed, so don't spend requests
 				// translating pages the reader scrolls past.
-				if (this.viewMode !== 'original') {
+				// quiescing 期间不入队 (P3, 2.0.10): 见 quiescing 字段注释。
+				if (this.viewMode !== 'original' && !this.quiescing) {
 					this.manager?.setCurrentPage(page);
 				}
 				this.pane?.setCurrentPage(page);
@@ -1449,6 +1485,7 @@ export class ReaderSession {
 		if (!s) {
 			return;
 		}
+		this.placementStats.set(pageIndex, s); // P3 (2.0.10): 供诊断导出
 		logger.info(
 			MODULE,
 			`page ${pageIndex + 1} placement: ${s.committed}/${s.replaceable} shown, `
@@ -1848,28 +1885,34 @@ export class ReaderSession {
 	 * 各归各的键,切回去还能命中。
 	 */
 	private async quiesceThenReconfigure(apply: () => void): Promise<void> {
-		const manager = this.manager;
-		if (manager) {
-			// 等所有 in-flight(含它们的 persistPartial 落盘)在**旧身份**下结束
-			await manager.resetAllAndWait().catch(() => { /* 尽力而为 */ });
-			if (this.destroyed || this.manager !== manager) {
-				return;
-			}
-		}
-		// P2-4 (2.0.9): apply() 里的 setPref 会触发身份 pref 观察者 —— 本路径
-		// 自己就要 restart,置闸避免观察者再排一次。
-		this.applyingConfigChange = true;
+		// P3 (2.0.10): 封口 —— 等待期间轮询不得再入队新任务。
+		this.quiescing = true;
 		try {
-			apply();
+			const manager = this.manager;
+			if (manager) {
+				// 等所有 in-flight(含它们的 persistPartial 落盘)在**旧身份**下结束
+				await manager.resetAllAndWait().catch(() => { /* 尽力而为 */ });
+				if (this.destroyed || this.manager !== manager) {
+					return;
+				}
+			}
+			// P2-4 (2.0.9): apply() 里的 setPref 会触发身份 pref 观察者 —— 本路径
+			// 自己就要 restart,置闸避免观察者再排一次。
+			this.applyingConfigChange = true;
+			try {
+				apply();
+			}
+			finally {
+				this.applyingConfigChange = false;
+			}
+			this.restartAfterConfigChange();
 		}
 		finally {
-			this.applyingConfigChange = false;
+			this.quiescing = false;
 		}
-		this.restartAfterConfigChange();
 	}
 
 	private restartAfterConfigChange(): void {
-		void this.rebuildPool();
 		this.compressRounds.clear();
 		this.compressPending.clear();
 		this.compressBlocked.clear();
@@ -1879,11 +1922,17 @@ export class ReaderSession {
 		// 旧任务要等 run() reject 后才离开 scheduler 的 active,紧跟其后的
 		// setCurrentPage 会被 isScheduled 挡回 —— 换了服务商/语言之后当前页
 		// 不会自动重翻,用户得手动点圆环。
+		// P3 (2.0.10): rebuildPool 一并等 —— 池空窗内首个任务的缓存键/lane
+		// 会落错引擎。
 		const manager = this.manager;
 		if (!manager) {
+			void this.rebuildPool();
 			return;
 		}
-		void manager.resetAllAndWait().then(() => {
+		void Promise.all([
+			this.rebuildPool().catch(() => { /* 尽力而为 */ }),
+			manager.resetAllAndWait()
+		]).then(() => {
 			if (this.destroyed || this.manager !== manager) {
 				return;
 			}
@@ -2137,7 +2186,13 @@ export class ReaderSession {
 				// 几何安全复核结果 (1.1.2 诊断闭环): 页号 → 违例/调整/保留计数。
 				geometryAudits: [...this.geometryAudits.entries()]
 					.sort((a, b) => a[0] - b[0])
-					.map(([page, r]) => ({ page: page + 1, ...r }))
+					.map(([page, r]) => ({ page: page + 1, ...r })),
+				// 放置统计全类目 (P3, 2.0.10): committed 之外的「有意保留」口径
+				// (imageExcluded/tooSmall/tableIntentional) 显式可见 —— 图像准入
+				// 阈值收紧 (P2-15) 后误拒面变大能在这里被发现。纯计数,无文本。
+				placement: [...this.placementStats.entries()]
+					.sort((a, b) => a[0] - b[0])
+					.map(([page, p]) => ({ page: page + 1, ...p }))
 			};
 			Components.classes['@mozilla.org/widget/clipboardhelper;1']
 				.getService(Components.interfaces.nsIClipboardHelper)
@@ -2321,6 +2376,7 @@ export class ReaderSession {
 		this.translatedPages.clear();
 		this.lastPartial = null;
 		this.compressBlocked.clear(); // P2-10: 不再持有已卸载页元素
+		this.placementStats.clear();
 		this.disposePdfEvents?.();
 		this.disposePdfEvents = null;
 		this.overlay?.destroy();
