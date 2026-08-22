@@ -6,7 +6,7 @@
 import * as cacheManager from '../cache/cacheManager';
 import { ReaderToolbarController } from '../reader/readerToolbar';
 import { deleteApiKey, getApiKey, setApiKey } from '../security/credentialStore';
-import { sanitize } from '../security/logSanitizer';
+import { sanitize, registerUrlCredentials } from '../security/logSanitizer';
 import { getProvider, listProviders } from '../translation/providers/registry';
 import {
 	parseProviderProfiles,
@@ -222,6 +222,8 @@ export async function startup(params: StartupParams): Promise<void> {
 			const apiKey = await getApiKey(providerId);
 			const profiles = parseProviderProfiles(getPref<string>('providerProfiles', '{}'));
 			const cfg = effectiveProviderConfig(profiles, providerId);
+			// S1 (2.1.0): 注册 URL 内凭据,末尾整体 sanitize 才能命中 ?key=…。
+			registerUrlCredentials(cfg.apiBaseURL);
 			lines.push(`Provider: ${providerId} (${provider.displayName})`);
 			lines.push(`  base URL: ${cfg.apiBaseURL || '(default) ' + (provider.displayBaseURL || provider.defaultBaseURL)}`);
 			lines.push(`  model: ${cfg.model || '(default) ' + (provider.defaultModel || 'n/a')}`);
@@ -313,6 +315,9 @@ export async function startup(params: StartupParams): Promise<void> {
 				maxOutputTokens: overrides?.maxOutputTokens ?? profile.maxOutputTokens,
 				temperature: overrides?.temperature ?? profile.temperature
 			};
+			// S1 (2.1.0): 注册端点内凭据(测试连接常用带 ?key= 的自定义地址)。
+			registerUrlCredentials(settings.apiBaseURL);
+			registerUrlCredentials(settings.apiPath);
 			return provider.validateConfiguration(settings);
 		},
 		cache: {

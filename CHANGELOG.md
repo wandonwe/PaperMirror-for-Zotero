@@ -7,6 +7,48 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-08-22
+
+安全专项审核第一批(隐私与密钥): 日志脱敏器覆盖缺口、本地桥接无认证攻击面。
+缓存格式不变(v5),不触发重译。**完整 PDF 服务模式(高级)的用户需同步升级
+`babeldoc_server.py` —— 插件与桥接之间新增了握手鉴权,旧桥接会被拒绝。**
+
+### Security
+
+- **[S1] 日志脱敏器对 URL 内密钥与几类密钥形状失明**。Gemini 官方 REST 用法
+  是 `?key=AIza…`,这类密钥只存在于 Base URL 字符串里、从不经过 registerSecret,
+  精确替换救不了;而 AIza / Groq `gsk_` / 智谱 `hex.suffix` 形状又不在正则清单里
+  —— 2.0.10 新加的「diagnose 输出整体脱敏」对它们**完全失效**,用户一贴诊断即
+  泄密。现在补齐四条模式(通用 URL 凭据参数、AIza、gsk_、智谱),并在组装
+  provider 设置/诊断/测试连接时解析 Base URL 与 apiPath 里的查询参数值注册进
+  脱敏器(结构性兜底,即使密钥以裸形态被网关回显也能命中)。
+- **[S5] 脱敏器重叠密钥部分泄露**。先注册短密钥再注册长密钥(用户先粘错/截断
+  再存完整)时,按插入序会先命中短的,把长密钥替换成 `[REDACTED]+残余后缀`
+  —— 后半段裸露。现在按长度降序替换,先吞最长的。
+- **[S6] 非 Bearer 的 Authorization scheme 值不被脱敏**。`Authorization:
+  DeepL-Auth-Key <key>` / `Api-Key: <key>` 此前只吞掉 scheme 名,密钥本体存活。
+  模式改为消费任意 scheme 词后的整个凭据。
+- **[S2/S3/S4] 本地桥接 `babeldoc_server.py` 无认证攻击面加固**。完整 PDF 服务
+  模式下,插件把 API 密钥 + 整篇 PDF POST 到本机 11017 端口的桥接。此前桥接:
+  (a) 用请求体的 `filename` 字段直接拼路径 —— `../` 或绝对路径可**任意文件
+  写入**(以桥接进程身份覆盖 `~/.zshrc` → 本地代码执行);(b) 不校验 Host/Origin
+  —— 恶意网页可发简单请求远程触发上面那个写(CSRF/DNS-rebinding);(c) 无认证
+  —— 同机其他用户抢占端口即可窃取密钥。现在: filename 强制取 basename;每个
+  请求校验 Host 头必须为 loopback;桥接启动生成一次性会话令牌写入 0600 令牌
+  文件,所有请求必须携带匹配令牌(网页与其他用户读不到该文件);插件在**发送
+  密钥之前**先经 `/handshake` 用 HMAC 验证服务端确实是本尊(抢占端口的冒名者
+  不知令牌、产不出正确 HMAC → 插件中止,密钥永不出手);请求体加 300MB 上限
+  防 DoS。桥接退出时清除令牌文件。
+- **[附带] registerSecret 下限 4→8**: 短串(如 "test")不再被当密钥,避免把
+  所有含该子串的日志打成碎片(诊断自毁)。
+
+### Tests
+
+- 729 项(+6): URL 内密钥/AIza/gsk_/智谱脱敏、registerUrlCredentials 裸形态命中、
+  重叠密钥长度降序、非 Bearer scheme、下限 8。桥接侧以独立脚本实测: safe_basename
+  路径遍历中和、Host/令牌 403 门、handshake HMAC 正确且冒名者无法伪造、体积
+  413、令牌文件 0600;插件 WebCrypto HMAC 与 Python hmac 逐位一致。
+
 ## [2.0.10] — 2026-08-22
 
 2.0.6 审核第四批(P3 收尾): 几何审计过度回退、保留原文覆盖模式兜底、

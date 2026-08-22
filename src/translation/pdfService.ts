@@ -89,14 +89,92 @@ export function base64ToBytes(b64: string): Uint8Array {
 	return out;
 }
 
-async function requestJSON(url: string, method: 'GET' | 'POST', body: unknown, timeoutMs: number): Promise<any> {
+/**
+ * 桥接会话令牌与服务端鉴权 (2.1.0, 审核 S2/S3/S4)。
+ *
+ * 桥接每次启动把随机令牌写进 `<系统临时目录>/papermirror-bridge.token`
+ * (0600,仅本用户可读)。插件在**发送密钥之前**必须:
+ *  1. 读令牌(读不到 = 桥接没在跑,或不是本用户 → 直接失败,绝不裸发);
+ *  2. 用一次性 nonce 向 /handshake 要 HMAC(token, nonce),本地校验 ——
+ *     抢占了端口的其他用户进程不知道 token,产不出正确 HMAC,插件据此
+ *     判定「对面不是本尊」并中止,密钥永不出手;
+ *  3. 之后每个请求都带 X-PaperMirror-Token 头,桥接逐一核验。
+ */
+const TOKEN_HEADER = 'X-PaperMirror-Token';
+
+async function readBridgeToken(): Promise<string> {
+	const tempDir = (PathUtils as unknown as { tempDir: string }).tempDir;
+	const path = PathUtils.join(tempDir, 'papermirror-bridge.token');
+	try {
+		const token = (await IOUtils.readUTF8(path)).trim();
+		if (!token) {
+			throw new Error('empty token file');
+		}
+		return token;
+	}
+	catch {
+		throw new PaperMirrorError(
+			'UNKNOWN',
+			'未找到本地翻译服务的会话令牌。请确认 babeldoc_server.py 正在运行(它会在启动时生成令牌文件)。',
+			{ retryable: false }
+		);
+	}
+}
+
+async function hmacSha256Hex(key: string, message: string): Promise<string> {
+	const enc = new TextEncoder();
+	const subtle = (globalThis as Record<string, any>).crypto?.subtle;
+	if (!subtle) {
+		throw new PaperMirrorError('UNKNOWN', 'Web Crypto 不可用,无法验证本地服务身份。', { retryable: false });
+	}
+	const cryptoKey = await subtle.importKey('raw', enc.encode(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+	const sig = await subtle.sign('HMAC', cryptoKey, enc.encode(message));
+	return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** 常量时间比较十六进制字符串,防时序侧信道。 */
+function timingSafeEqualHex(a: string, b: string): boolean {
+	if (a.length !== b.length) {
+		return false;
+	}
+	let diff = 0;
+	for (let i = 0; i < a.length; i++) {
+		diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+	}
+	return diff === 0;
+}
+
+/**
+ * 发送密钥前验证服务端确实是本尊。冒名者返回错误 HMAC(或 /handshake 缺失)
+ * → 抛错,调用方绝不继续提交带密钥的 /translate。
+ */
+async function verifyBridge(base: string, token: string): Promise<void> {
+	const nonceBytes = (globalThis as Record<string, any>).crypto.getRandomValues(new Uint8Array(16)) as Uint8Array;
+	const nonce = Array.from(nonceBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+	const resp = await requestJSON(`${base}/handshake?nonce=${nonce}`, 'GET', undefined, 15000);
+	const got = String(resp?.mac ?? '');
+	const expected = await hmacSha256Hex(token, nonce);
+	if (!got || !timingSafeEqualHex(got, expected)) {
+		throw new PaperMirrorError(
+			'UNKNOWN',
+			'本地翻译服务身份验证失败:握手响应不匹配。可能有其他进程占用了该端口 —— 已中止,未发送任何密钥。',
+			{ retryable: false }
+		);
+	}
+}
+
+async function requestJSON(url: string, method: 'GET' | 'POST', body: unknown, timeoutMs: number, token?: string): Promise<any> {
 	const http = (globalThis as Record<string, any>).Zotero?.HTTP;
 	if (!http?.request) {
 		throw new PaperMirrorError('UNKNOWN', 'Zotero.HTTP unavailable.', { retryable: false });
 	}
 	try {
+		const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+		if (token) {
+			headers[TOKEN_HEADER] = token;
+		}
 		const response = await http.request(method, url, {
-			headers: { 'Content-Type': 'application/json' },
+			headers,
 			body: body !== undefined ? JSON.stringify(body) : undefined,
 			responseType: 'text',
 			timeout: timeoutMs,
@@ -145,7 +223,11 @@ export async function translateFullPdf(
 	const pollMs = options?.pollMs ?? 2000;
 	const deadline = Date.now() + (options?.overallTimeoutMs ?? 45 * 60 * 1000);
 
-	const submitted = await requestJSON(`${base}/translate`, 'POST', submission, 120000);
+	// S2/S3/S4 (2.1.0): 读令牌 → 握手验证服务端身份 → 之后才带密钥提交。
+	const token = await readBridgeToken();
+	await verifyBridge(base, token);
+
+	const submitted = await requestJSON(`${base}/translate`, 'POST', submission, 120000, token);
 	const taskId = String(submitted?.task_id ?? '');
 	if (!taskId) {
 		throw new PaperMirrorError('BAD_RESPONSE', '本地翻译服务未返回任务 ID。', { retryable: false });
@@ -157,7 +239,7 @@ export async function translateFullPdf(
 			throw new PaperMirrorError('TIMEOUT', '完整 PDF 翻译超时。长文档可提高超时或检查服务日志。', { retryable: true });
 		}
 		await new Promise(resolve => setTimeout(resolve, pollMs));
-		const status = await requestJSON(`${base}/status?id=${encodeURIComponent(taskId)}`, 'GET', undefined, 30000) as TaskStatus;
+		const status = await requestJSON(`${base}/status?id=${encodeURIComponent(taskId)}`, 'GET', undefined, 30000, token) as TaskStatus;
 		onProgress(status);
 		if (status.state === 'error') {
 			// 桥接侧 message 可能带引擎回显 (2.0.10, 审核 P3): 先脱敏再截断,
@@ -171,7 +253,7 @@ export async function translateFullPdf(
 
 	const fetchKind = async (kind: 'mono' | 'dual'): Promise<Uint8Array | null> => {
 		try {
-			const result = await requestJSON(`${base}/result?id=${encodeURIComponent(taskId)}&kind=${kind}`, 'GET', undefined, 300000);
+			const result = await requestJSON(`${base}/result?id=${encodeURIComponent(taskId)}&kind=${kind}`, 'GET', undefined, 300000, token);
 			const b64 = String(result?.pdf_base64 ?? '');
 			return b64 ? base64ToBytes(b64) : null;
 		}

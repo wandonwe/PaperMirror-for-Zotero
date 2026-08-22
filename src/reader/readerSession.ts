@@ -12,6 +12,7 @@ import {
 	saveTranslationNote
 } from '../notes/noteService';
 import { getApiKey } from '../security/credentialStore';
+import { registerUrlCredentials } from '../security/logSanitizer';
 import { getProvider, listProviders } from '../translation/providers/registry';
 import { buildPool, pickProviderForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
 import { endpointHost, supportsCharBudget } from '../translation/providers/types';
@@ -688,6 +689,10 @@ export class ReaderSession {
 		const profiles = parseProviderProfiles(getPref<string>('providerProfiles', '{}'));
 		const { apiBaseURL, model } = effectiveProviderConfig(profiles, providerId);
 		const profile = profiles[providerId] ?? {};
+		// 注册 URL 内凭据 (2.1.0, 审核 S1): ?key=… 形式的密钥不经 getApiKey,
+		// 在这里入库让 sanitizer 精确替换能命中它(诊断/日志/回显)。
+		registerUrlCredentials(apiBaseURL);
+		registerUrlCredentials((profile.apiPath ?? '').trim());
 		const apiKey = await getApiKey(providerId);
 		return {
 			providerId,
