@@ -1729,3 +1729,42 @@ test('resetAllAndWait 返回时,被取消任务的 persistPartial 已经落盘�
 	await running.catch(() => { /* cancelled */ });
 	manager.dispose();
 });
+
+// ---- P2-6 (2.0.8): 轮换刷新必须真正重译 (bypassSegments),且不清全局止损 ----
+
+test("retranslatePage('rotate') 绕过段落库真正重译;'normal' 仍复用段落", async () => {
+	const { segmentHash } = await import('./../../src/translation/translationManager');
+	let translateCalls = 0;
+	const TEXT = 'A paragraph with plenty of English words to translate here.';
+	const { deps } = makeDeps({
+		extractPage: async (p) => [{
+			id: `page-${p}-block-0`, pageIndex: p, order: 0, type: 'paragraph' as const,
+			sourceText: TEXT
+		}],
+		translateRequest: async (req) => {
+			translateCalls++;
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '新引擎的完整中文译文内容。' })) };
+		},
+		readSegments: async (_p, hashes) =>
+			new Map(hashes.map(h => [h, '旧引擎存进段落库的译文。'])),
+		writeSegments: async () => {}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	assert.equal(translateCalls, 0, '场景成立: 首次由段落库整页服务');
+	assert.equal(manager.getPageState(0)!.translations.get('page-0-block-0'), '旧引擎存进段落库的译文。');
+
+	// 'normal' 刷新: 段落库照旧命中,零请求 —— 这正是轮换后「刷新没反应」的机制。
+	await manager.retranslatePage(0, 'normal');
+	assert.equal(translateCalls, 0);
+	assert.equal(manager.getPageState(0)!.translations.get('page-0-block-0'), '旧引擎存进段落库的译文。');
+
+	// 'rotate' 刷新: 绕过段落库,新引擎真正重译。
+	const seeded = segmentHash('unrelated doomed segment elsewhere', 'en', 'zh-CN');
+	(manager as any).failedSegments.set(seeded, { count: 2, seq: 1 });
+	await manager.retranslatePage(0, 'rotate');
+	assert.ok(translateCalls > 0, '轮换刷新必须发出真实请求');
+	assert.equal(manager.getPageState(0)!.translations.get('page-0-block-0'), '新引擎的完整中文译文内容。');
+	assert.ok((manager as any).failedSegments.has(seeded), "'rotate' 不得像 'force' 那样清掉别处的全局止损记忆");
+	manager.dispose();
+});

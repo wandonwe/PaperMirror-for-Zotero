@@ -61,7 +61,7 @@ test('buildParagraphs merges wrapped lines into one paragraph', () => {
 	assert.match(paras[0]!.text, /The study/);
 });
 
-test('buildBlocks marks a References heading and stops emitting entries', () => {
+test('buildBlocks: 不译参考文献时条目保留为 preserve 块(墨迹几何进遮挡物)(P2-5, 2.0.8)', async () => {
 	const cs = chars([
 		{ text: 'Body paragraph text that is long enough to be a paragraph here.', x: 10, y: 200, size: 10, br: 'para' },
 		{ text: 'References', x: 10, y: 150, size: 10, br: 'para' },
@@ -69,8 +69,19 @@ test('buildBlocks marks a References heading and stops emitting entries', () => 
 	]);
 	const result = buildBlocks(cs, { pageIndex: 0, pageWidth: 600, pageHeight: 800, includeReferences: false });
 	assert.equal(result.referencesStarted, true);
-	// The reference entry must be excluded; the heading may remain
-	assert.ok(!result.blocks.some(b => b.sourceText.includes('Smith J')));
+	// 旧行为是整块丢弃 —— inkObstacles 拿不到几何,扩展照样长进参考文献叠印。
+	const entry = result.blocks.find(b => b.sourceText.includes('Smith J'));
+	assert.ok(entry, '条目必须保留在 blocks 里(以纯几何身份)');
+	assert.equal(entry!.translationMode, 'preserve', '绝不进入翻译');
+	assert.equal(entry!.isReference, true);
+	assert.ok(entry!.lineRectsPdf?.length, '有行矩形几何可作遮挡物');
+	// 集成链: 默认配置下 selectInkObstacleBlocks 现在必须选得到它。
+	const { selectInkObstacleBlocks } = await import('../../src/ui/strictPageReplacement');
+	assert.ok(selectInkObstacleBlocks(result.blocks).some(b => b.sourceText.includes('Smith J')),
+		'参考文献墨迹进入扩展遮挡物与几何审计的视野');
+	// 正文段不受影响。
+	const body = result.blocks.find(b => b.sourceText.includes('Body paragraph'));
+	assert.ok(body && body.translationMode === undefined, '正文照常可译');
 });
 
 test('buildBlocks includes references when enabled', () => {

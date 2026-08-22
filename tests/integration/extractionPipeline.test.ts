@@ -101,11 +101,14 @@ test('Captions/tables classified', async () => {
 	assert.ok(blocks.some(b => b.type === 'table'));
 });
 
-test('References excluded by default, included when enabled', async () => {
-	const excluded = blocksFor(fixtures.withReferences, false);
-	assert.ok(!excluded.some(b => /Smith J/.test(b.sourceText)));
+test('References 默认保留为 preserve 几何块,打开开关则可译 (P2-5, 2.0.8)', async () => {
+	const preserved = blocksFor(fixtures.withReferences, false);
+	const ref = preserved.find(b => /Smith J/.test(b.sourceText));
+	assert.ok(ref, '条目保留在 blocks 里 (纯几何身份,供 inkObstacles 避让)');
+	assert.equal(ref!.translationMode, 'preserve', '默认绝不进入翻译');
 	const included = blocksFor(fixtures.withReferences, true);
-	assert.ok(included.some(b => /Smith J/.test(b.sourceText)));
+	const translatable = included.find(b => /Smith J/.test(b.sourceText));
+	assert.ok(translatable && translatable.translationMode === undefined);
 });
 
 test('Scanned page (no chars) yields no blocks (caller surfaces OCR notice)', async () => {

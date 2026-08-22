@@ -731,13 +731,19 @@ export class TranslationManager {
 	}
 
 	/**
-	 * Re-translate a page. Two strategies (刷新分级):
+	 * Re-translate a page. Three strategies (刷新分级):
 	 *  - 'normal' (圆环刷新本页): bypass the PAGE cache but reuse the segment
 	 *    store — qualified segment translations come back instantly and only
 	 *    untranslated / previously-invalid segments cost new requests.
-	 *  - 'force' (强制重译): bypass both caches — every segment re-requests.
+	 *  - 'rotate' (2.0.8, 审核 P2-6 — 引擎轮换后的刷新): bypass the segment
+	 *    store too, but keep the global 止损 memory. P2-16 之后段落 context 用
+	 *    规范引擎(不含轮换偏移),轮换不再改变 context —— 'normal' 刷新会把
+	 *    旧引擎的全部合格段落原样读回,零请求发向新引擎,「换一家重译」实质
+	 *    失效。'rotate' 让新引擎真正重译本页,又不像 'force' 那样清全局止损。
+	 *  - 'force' (强制重译): bypass both caches — every segment re-requests,
+	 *    全局止损记忆一并清零。
 	 */
-	async retranslatePage(pageIndex: number, mode: 'normal' | 'force' = 'normal'): Promise<void> {
+	async retranslatePage(pageIndex: number, mode: 'normal' | 'rotate' | 'force' = 'normal'): Promise<void> {
 		// 审核 P1: an EXPLICIT refresh of this page clears its blocks' 止损 memory
 		// — the user asked for a retry, so the skipped segments get one. Cross-page
 		// duplicates of the same hash on OTHER pages keep their memory.
@@ -774,7 +780,7 @@ export class TranslationManager {
 		}
 		await this.ensurePage(pageIndex, PRIORITY.CURRENT_RETRANSLATE, {
 			bypassCache: true,
-			bypassSegments: mode === 'force',
+			bypassSegments: mode === 'force' || mode === 'rotate',
 			foreground: true
 		});
 	}

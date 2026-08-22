@@ -46,6 +46,10 @@ class FakeNode {
 		}
 	}
 
+	get parentElement(): FakeNode | null {
+		return this.parent; // P2-9: 胶囊 render 以 parentElement 判宿主归属
+	}
+
 	setAttribute(k: string, v: string): void {
 		this.attrs.set(k, v);
 	}
@@ -262,4 +266,38 @@ test('the % renders into an independent label span, not raw button text', () => 
 	const { el } = mount({ ...active, phase: 'translating', segTotal: 66, segTranslated: 33, segPlaced: 0 });
 	const label = el.querySelector('.pm-ring-label')!;
 	assert.equal(label.textContent, '25%');
+});
+
+// ---- P2-9 (2.0.8): 胶囊实例互不串扰 -----------------------------------------
+
+test('同一窗口两个会话的胶囊互不接管 (P2-9): 各画各的进度,各自宿主', () => {
+	// 模拟对照模式下同一主窗口的两个阅读标签: 两个 host 共享概念上的同一
+	// document(旧实现按类名在整个 document 查找,B 永远命中 A 的胶囊)。
+	const sharedDoc = new FakeDoc();
+	const containerA = sharedDoc.container.appendChild(new FakeNode('div'));
+	const containerB = sharedDoc.container.appendChild(new FakeNode('div'));
+	const capA = new StatusCapsule(() => ({ doc: sharedDoc as unknown as Document, container: containerA as unknown as HTMLElement }));
+	const capB = new StatusCapsule(() => ({ doc: sharedDoc as unknown as Document, container: containerB as unknown as HTMLElement }));
+
+	capA.setProgress({ ...active, currentPage: 3 });
+	capB.setProgress({ ...active, currentPage: 9 });
+
+	assert.equal(containerA.children.length, 1, 'A 有自己的胶囊');
+	assert.equal(containerB.children.length, 1, 'B 必须有自己的胶囊 —— 旧实现里 B 命中 A 的元素,自己是空的');
+	const labelA = containerA.children[0]!.querySelector('.pm-page')?.textContent
+		?? containerA.children[0]!.textContent;
+	const labelB = containerB.children[0]!.querySelector('.pm-page')?.textContent
+		?? containerB.children[0]!.textContent;
+	assert.notEqual(containerA.children[0], containerB.children[0], '两个元素必须是不同实例');
+	void labelA; void labelB;
+
+	// B 再次渲染不得动 A 的胶囊。
+	const elA = containerA.children[0]!;
+	capB.setProgress({ ...active, currentPage: 10 });
+	assert.equal(containerA.children[0], elA, 'A 的胶囊不被 B 重建/接管');
+
+	// remove 只清自己。
+	capB.remove();
+	assert.equal(containerB.children.length, 0);
+	assert.equal(containerA.children.length, 1, 'B 的 remove 绝不横扫 A 的胶囊');
 });

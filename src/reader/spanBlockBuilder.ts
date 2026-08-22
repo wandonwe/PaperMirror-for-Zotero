@@ -601,10 +601,11 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			if ((p.type === 'heading' || p.type === 'title') && REFERENCES_HEADINGS.test(p.text)) {
 				referencesStarted = true;
 			}
-			if (referencesStarted && !options.includeReferences && !REFERENCES_HEADINGS.test(p.text)) {
-				continue;
-			}
 		}
+		// 不译参考文献时保留为 preserve 块 (2.0.8, 审核 P2-5),与 blockBuilder
+		// 同规则: 墨迹几何要进 inkObstacles,丢弃即失明。
+		const isRef = p.isTableLine ? false : referencesStarted;
+		const preserveReference = isRef && !options.includeReferences && !REFERENCES_HEADINGS.test(p.text);
 		blocks.push({
 			id: `page-${options.pageIndex}-block-${order}`,
 			pageIndex: options.pageIndex,
@@ -620,7 +621,8 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			lineRectsPdf: p.group.map(l => [...l.rect] as Rect),
 			fontSize: p.fontSize,
 			column: columnOf(p.rect, columnBands, pageWidth),
-			isReference: p.isTableLine ? false : referencesStarted
+			isReference: isRef,
+			...(preserveReference ? { translationMode: 'preserve' as const } : {})
 		});
 		order++;
 	}

@@ -211,21 +211,27 @@ test('figure and table captions are classified, not treated as body text', () =>
 	assert.equal(blocks[1]!.type, 'table');
 });
 
-test('references are dropped by default and kept when requested', () => {
+test('references 默认保留为 preserve 块(纯几何,不译),打开开关则可译 (P2-5, 2.0.8)', () => {
 	const heading = lines(['References'], 50, 700, 11);
 	const entry = lines(['[1] Vaswani et al. Attention is all you need. 2017.'], 50, 676, 9);
 	const items = [...heading, ...entry];
 
-	const dropped = buildBlocksFromSpans(items, { pageIndex: 0, pageHeight: PAGE_HEIGHT });
-	assert.equal(dropped.referencesStarted, true);
-	assert.ok(!dropped.blocks.some(b => b.sourceText.includes('Vaswani')));
+	const preserved = buildBlocksFromSpans(items, { pageIndex: 0, pageHeight: PAGE_HEIGHT });
+	assert.equal(preserved.referencesStarted, true);
+	// 旧行为是整块丢弃 —— inkObstacles 在默认配置下失明 (P2-5)。
+	const ref = preserved.blocks.find(b => b.sourceText.includes('Vaswani'));
+	assert.ok(ref, '条目保留为几何块');
+	assert.equal(ref!.translationMode, 'preserve');
+	assert.equal(ref!.isReference, true);
+	assert.ok(ref!.lineRectsPdf?.length);
 
 	const kept = buildBlocksFromSpans(items, {
 		pageIndex: 0,
 		pageHeight: PAGE_HEIGHT,
 		includeReferences: true
 	});
-	assert.ok(kept.blocks.some(b => b.sourceText.includes('Vaswani')));
+	const keptRef = kept.blocks.find(b => b.sourceText.includes('Vaswani'));
+	assert.ok(keptRef && keptRef.translationMode === undefined, '打开开关时照常可译');
 	assert.ok(kept.blocks.every(b => b.isReference));
 });
 
@@ -236,7 +242,10 @@ test('referencesAlreadyStarted carries across pages', () => {
 		pageHeight: PAGE_HEIGHT,
 		referencesAlreadyStarted: true
 	});
-	assert.deepEqual(result.blocks, []);
+	// P2-5 (2.0.8): 后续页的条目同样保留为 preserve 几何块,不再是空数组。
+	assert.equal(result.blocks.length, 1);
+	assert.equal(result.blocks[0]!.translationMode, 'preserve');
+	assert.equal(result.blocks[0]!.isReference, true);
 	assert.equal(result.referencesStarted, true);
 });
 

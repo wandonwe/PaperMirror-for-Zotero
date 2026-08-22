@@ -385,6 +385,14 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 export class StatusCapsule {
 	private collapsed = false;
 	private last: CapsuleState | null = null;
+	/**
+	 * 本实例拥有的胶囊元素 (2.0.8, 审核 P2-9)。此前按类名在**整个主窗口
+	 * document** 里查找 —— 对照模式下同窗口两个阅读标签的 pane 共享同一
+	 * document,会话 B 的 render() 永远命中会话 A 先建的胶囊,把 B 的进度
+	 * 画进 A 的视图,B 自己没有胶囊,重试/取消按钮作用错文档。每个实例
+	 * 现在持有自己的元素引用,查找不再越出宿主。
+	 */
+	private el: HTMLElement | null = null;
 
 	constructor(
 		private getHost: () => { doc: Document; container: HTMLElement } | null,
@@ -410,7 +418,7 @@ export class StatusCapsule {
 	hide(): void {
 		this.last = null;
 		try {
-			this.getHost()?.doc.querySelector(`.${CAPSULE_CLASS}`)?.setAttribute('data-pm-hidden', 'true');
+			this.el?.setAttribute('data-pm-hidden', 'true'); // P2-9: 只动自己的胶囊
 		}
 		catch {
 			// host gone
@@ -420,7 +428,8 @@ export class StatusCapsule {
 	remove(): void {
 		this.last = null;
 		try {
-			this.getHost()?.doc.querySelectorAll(`.${CAPSULE_CLASS}`).forEach(n => n.remove());
+			this.el?.remove(); // P2-9: 绝不按类名横扫整个 document
+			this.el = null;
 		}
 		catch {
 			// host gone
@@ -436,11 +445,15 @@ export class StatusCapsule {
 		const { doc, container } = host;
 		try {
 			this.ensureStyle?.(doc);
-			let el = doc.querySelector(`.${CAPSULE_CLASS}`) as HTMLElement | null;
-			if (!el || el.ownerDocument !== doc) {
+			// P2-9: 复用**本实例**的元素,不按类名查 document。宿主切换(覆盖层
+			// ↔ 面板,parentElement 随之不同)或元素被外部清走时重建并挂到当前
+			// 宿主 —— parentElement !== container 同时覆盖「换文档」与「被移除」。
+			let el = this.el;
+			if (!el || el.parentElement !== container) {
 				el?.remove();
 				el = this.build(doc);
 				container.appendChild(el);
+				this.el = el;
 			}
 			el.removeAttribute('data-pm-hidden');
 			el.setAttribute('data-pm-phase', state.phase);
@@ -591,12 +604,7 @@ export class StatusCapsule {
 	}
 
 	private currentEl(): HTMLElement | null {
-		try {
-			return (this.getHost()?.doc.querySelector(`.${CAPSULE_CLASS}`) as HTMLElement | null) ?? null;
-		}
-		catch {
-			return null;
-		}
+		return this.el; // P2-9: 本实例的元素,绝不越出宿主查别的会话的胶囊
 	}
 
 	/** DOM-only: reflect collapsed state + keep the ring shell tooltip honest. */

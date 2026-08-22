@@ -1804,17 +1804,19 @@ export class ReaderSession {
 		}
 		this.compressPending.delete(page);
 		// Pool active → deal this page to the next engine before re-translating.
-		if (this.pool.length > 1) {
+		const rotated = this.pool.length > 1;
+		if (rotated) {
 			this.pageProviderOffset.set(page, ((this.pageProviderOffset.get(page) ?? 0) + 1) % this.pool.length);
 			logger.info(MODULE, `刷新 page ${page + 1} → provider ${this.providerForPage(page)}`);
 		}
 		this.pane?.setBusy(true);
 		try {
-			// 普通刷新 (normal): bypass the PAGE cache but reuse qualified segments —
-			// only untranslated / invalid / unfit segments re-request. The provider
-			// rotation above means a pooled setup still gets a genuinely different
-			// engine (different segment context ⇒ a real re-translation).
-			await this.manager.retranslatePage(page, 'normal');
+			// 轮换刷新走 'rotate' (2.0.8, 审核 P2-6): P2-16 之后段落 context 用
+			// 规范引擎(不含轮换偏移),轮换不再改变 context —— 'normal' 会把旧
+			// 引擎的全部合格段落原样从段落库读回,零请求发向新引擎,页面逐字节
+			// 不变,「换一家重译」实质失效。'rotate' 绕过段落库让新引擎真正重译;
+			// 单引擎时仍是 'normal'(复用合格段落,只补缺)。
+			await this.manager.retranslatePage(page, rotated ? 'rotate' : 'normal');
 		}
 		finally {
 			this.pane?.setBusy(false);

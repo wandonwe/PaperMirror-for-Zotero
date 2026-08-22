@@ -90,6 +90,27 @@ let lastEdgeError: string | null = null;
  * 自己的 signal 与共享 promise 赛跑: 自己取消只影响自己,共享结果继续
  * 供别人使用。
  */
+/**
+ * 双通道组合错误的分类继承 (2.0.8, 审核 P2-12) — pure, unit-tested。
+ * 最终错误继承主通道 (scrape) 的 code/httpStatus/retryAfterMs/retryable,
+ * 双通道摘要只进 message;主通道错误不是 PaperMirrorError 时退回
+ * BAD_RESPONSE{retryable:true}(旧行为)。
+ */
+export function combineChannelError(scrapeErr: PaperMirrorError | null, message: string): PaperMirrorError {
+	if (scrapeErr) {
+		const err = new PaperMirrorError(scrapeErr.code, message, {
+			httpStatus: scrapeErr.httpStatus,
+			retryable: scrapeErr.retryable
+		});
+		const retryAfter = (scrapeErr as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs;
+		if (retryAfter !== undefined) {
+			(err as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs = retryAfter;
+		}
+		return err;
+	}
+	return new PaperMirrorError('BAD_RESPONSE', message, { retryable: true });
+}
+
 export function raceSignal<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
 	if (!signal) {
 		return promise;
@@ -277,6 +298,15 @@ async function translateOne(
 	// Edge anonymous auth (observed returning 404) is the fallback, behind a
 	// 5-minute breaker so a dead endpoint costs one probe, not one per block.
 	let scrapeError: string | null = null;
+	let scrapeErrObj: PaperMirrorError | null = null;
+	// 组合错误保留底层分类 (2.0.8, 审核 P2-12): 此前双通道摘要被统一包成
+	// BAD_RESPONSE{retryable:true} —— 抓取通道真实的 429 (RATE_LIMITED +
+	// retryAfterMs)、TIMEOUT、NETWORK 全部被洗掉: laneFeedback 收不到
+	// 'rate'/'timeout',bing-free 车道的自适应限流失明;429 走 400ms 快速
+	// 重试而非 Retry-After 路径,真实限流下继续锤打;TIMEOUT「只试一次」
+	// 的止损也被绕过。现在最终错误继承主通道 (scrape) 的 code/httpStatus/
+	// retryAfterMs/retryable,双通道摘要只进 message。
+	const combined = (message: string): PaperMirrorError => combineChannelError(scrapeErrObj, message);
 	try {
 		return await translateViaScrape(text, sl, tl, settings, signal, allowRetry);
 	}
@@ -284,6 +314,7 @@ async function translateOne(
 		if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
 			throw e;
 		}
+		scrapeErrObj = e instanceof PaperMirrorError ? e : null;
 		scrapeError = e instanceof Error ? e.message : String(e);
 		logger.debug(MODULE, 'Bing web channel failed; trying Edge auth fallback', e);
 	}
@@ -295,10 +326,9 @@ async function translateOne(
 	// 内网代理正是为了让论文不出网,代理返回一次 502 就会让同一段原文被 POST
 	// 到微软端点,且 UI 上毫无提示。宁可报错让用户看见,也不能静默出网。
 	if (hasCustomBingBase(settings.apiBaseURL)) {
-		throw new PaperMirrorError('BAD_RESPONSE',
+		throw combined(
 			`Bing通道: ${scrapeError} ｜ Edge通道: 已跳过(你配置了自定义 Base URL,`
-			+ `不会回退到微软官方端点;如需回退请清空该设置)`,
-			{ retryable: true });
+			+ `不会回退到微软官方端点;如需回退请清空该设置)`);
 	}
 	if (Date.now() >= edgeDisabledUntil) {
 		try {
@@ -318,7 +348,7 @@ async function translateOne(
 	else {
 		edgeNote = lastEdgeError ? `熔断中, 上次: ${lastEdgeError}` : '熔断中';
 	}
-	throw new PaperMirrorError('BAD_RESPONSE', `Bing通道: ${scrapeError} ｜ Edge通道: ${edgeNote}`, { retryable: true });
+	throw combined(`Bing通道: ${scrapeError} ｜ Edge通道: ${edgeNote}`);
 }
 
 async function translateViaScrape(

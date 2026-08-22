@@ -1372,6 +1372,13 @@ export class TranslationPane {
 			}
 		}
 		for (const block of state.blocks) {
+			// preserve 块 (2.0.8, 审核 P2-5): 不译参考文献/表格数据单元格是
+			// **有意保留原文**的块 —— 它们永远没有译文,渲染出来只会是一张
+			// 永远转圈的「翻译中」卡片。文章流里直接跳过(strict 页面视图里
+			// 它们以原文墨迹形式自然存在,不经过这里)。
+			if (block.translationMode === 'preserve') {
+				continue;
+			}
 			// 样式标记只在 strict 渲染器里成为 <b>/<i>;文本面板剥掉 (styleRuns.ts)。
 			const raw = state.translations.get(block.id);
 			const translated = raw === undefined ? undefined : stripStyleMarkers(raw);

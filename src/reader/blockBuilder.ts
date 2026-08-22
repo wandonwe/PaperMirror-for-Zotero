@@ -513,13 +513,12 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 			referencesStarted = true;
 		}
 		const isReference = referencesStarted;
-		if (isReference && !options.includeReferences) {
-			// Keep the References heading itself so the panel can show a marker,
-			// skip individual reference entries.
-			if (!REFERENCES_HEADINGS.test(text)) {
-				continue;
-			}
-		}
+		// 不译参考文献时**保留块**而非丢弃 (2.0.8, 审核 P2-5): 这些条目的原文
+		// 墨迹仍在位图上 —— 丢弃它们让 strict 渲染器的 inkObstacles(P2-14 的
+		// 扩展遮挡物与几何审计)在默认配置下拿不到任何几何,译文照样长进
+		// 参考文献叠印。translationMode:'preserve' 使它们不进翻译、不计进度、
+		// 不参与替换,只作为几何存在。
+		const preserveReference = isReference && !options.includeReferences && !REFERENCES_HEADINGS.test(text);
 		// 字形级公式判定 (pdf2zh vflag / BabelDOC formular_helper 移植,见
 		// glyphFormula.ts): 段落的字符序列直接给出应保护的公式字面量 —
 		// formulaGuard 掩蔽时优先于文本正则。
@@ -546,6 +545,7 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 			fontSize: p.fontSize,
 			column: columnOf(p.rect as Rect, columnBands, pageWidth),
 			isReference,
+			...(preserveReference ? { translationMode: 'preserve' as const } : {}),
 			...(formulaRuns.length ? { formulaRuns } : {}),
 			...(styleRuns.length ? { styleRuns } : {})
 		});

@@ -202,3 +202,33 @@ test('raceSignal: 预先已取消 → 立即 CANCELLED;无 signal → 原样透�
 		e instanceof PaperMirrorError && e.code === 'CANCELLED');
 	assert.equal(await raceSignal(Promise.resolve('y'), undefined), 'y');
 });
+
+// ---- P2-12 (2.0.8): 双通道组合错误继承主通道分类 ----------------------------
+
+test('combineChannelError: 429 的 RATE_LIMITED + retryAfterMs 必须存活到组合错误', async () => {
+	const { combineChannelError } = await import('../../src/translation/providers/bingFree');
+	const scrape = new PaperMirrorError('RATE_LIMITED', 'too many requests', { httpStatus: 429, retryable: true });
+	(scrape as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs = 7000;
+	const combined = combineChannelError(scrape, 'Bing通道: 429 ｜ Edge通道: 熔断中');
+	assert.equal(combined.code, 'RATE_LIMITED', '洗成 BAD_RESPONSE 会让 lane 自适应限流失明');
+	assert.equal(combined.httpStatus, 429);
+	assert.equal(combined.retryable, true);
+	assert.equal((combined as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs, 7000,
+		'Retry-After 丢失会退回 400ms 盲重试,真实限流下继续锤打');
+	assert.match(combined.message, /Bing通道/);
+});
+
+test('combineChannelError: TIMEOUT 保留 (「只试一次」止损才生效);不可重试属性不被洗掉', async () => {
+	const { combineChannelError } = await import('../../src/translation/providers/bingFree');
+	const timeout = combineChannelError(new PaperMirrorError('TIMEOUT', 't', { retryable: true }), 'msg');
+	assert.equal(timeout.code, 'TIMEOUT');
+	const invalid = combineChannelError(new PaperMirrorError('INVALID_API_KEY', 'k', { retryable: false }), 'msg');
+	assert.equal(invalid.retryable, false, '不可重试错误被洗成可重试会白烧请求');
+});
+
+test('combineChannelError: 非 PaperMirrorError 主通道错误退回 BAD_RESPONSE 可重试', async () => {
+	const { combineChannelError } = await import('../../src/translation/providers/bingFree');
+	const fallback = combineChannelError(null, 'Bing通道: weird ｜ Edge通道: down');
+	assert.equal(fallback.code, 'BAD_RESPONSE');
+	assert.equal(fallback.retryable, true);
+});
