@@ -7,6 +7,36 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.2.2] — 2026-08-23
+
+优化计划**第三批 item 3·排版失败处理顺序 + charBudget 含空白**(Codex 排版P1 +
+本审计 LO-6/API)。把「缩写译文」这步从**第一手段**降为**扩边之后**才动用,既保真
+又省 API。
+
+### Changed
+
+- **排版失败处理顺序重排为:原字号实际矩形算容量 → 本地行距/字距(梯子)→ 模块内
+  安全空白扩边 → 仍溢出才压缩译文一次 → 最后小幅缩字 → 仍不适配保留原文并标记
+  可修复**。此前预算型引擎的溢出块**直接送去压缩**(让模型缩写、牺牲信息、还费一次
+  API),无损的空白扩边被埋在缩字流程里、要到两轮压缩用尽才轮到。现在新增
+  `pmExpandFit`:压缩/缩字之前先只靠邻近安全空白(算法3,原字号、原文一字不动)
+  把能救回的块无损救回——"图1→Figure 1"式越译越长的标签/标题正是这样放下,不牺牲
+  译文、不费 API。仍不适配的块才进入压缩→缩字→保留原文。
+  (`strictPageReplacement.pmExpandFit` / `expandStrictBlocks`;`readerSession.resolveStrictUnfit`)
+
+### Fixed
+
+- **压缩预算计入可用空白,模型不再一上来过度缩写**。`budgetFor` 此前按**仅原盒**算
+  容量交给模型,框偏小 → 模型狠缩、信息流失,而这页本可先无损扩边。现在预算按
+  「原盒 + 可安全扩进的邻近空白」(`estimateCjkCapacity(box + expansionAllowance)`)
+  算容量:模型只需缩到「盒+空白」放得下,不必更狠。(`strictPageReplacement.budgetFor`)
+
+### Notes
+
+- 扩边幂等(已提交块跳过),压缩后递归回来会对更短文本再扩一次;扩边不适配即回退
+  原盒,后续压缩/缩字预算仍从真实盒起算。几何安全复核与既有 `pmShrinkFit`(扩边+缩字
+  +底线组合)全部不变——本次只是把无损扩边**提前**成独立的一手,不改其数学与避让。
+
 ## [2.2.1] — 2026-08-23
 
 优化计划**第三批 item 1·服务商稳定映射 + 发送前查全服务商缓存**(Codex API-P1)。

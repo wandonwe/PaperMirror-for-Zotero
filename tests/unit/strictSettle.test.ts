@@ -164,7 +164,20 @@ test('ladderFor never crushes lines below the source leading', async () => {
 // 1.0.5 批次2: BabelDOC 算法3 —— 缩字前先扩边界(空白测量,纯函数)
 // ---------------------------------------------------------------------------
 
-import { computeExpansionAllowance } from '../../src/ui/strictPageReplacement';
+import { computeExpansionAllowance, estimateCjkCapacity } from '../../src/ui/strictPageReplacement';
+
+// 2.2.2, 第三批 item3 · 「压缩预算计入可用空白」的方向不变量: budgetFor 把
+// (原盒 + expansionAllowance) 交给 estimateCjkCapacity,因此更大的框 → 更宽的
+// 预算 → 模型不会一上来就过度缩写。这里锁住容量随框单调增长的纯函数性质。
+test('estimateCjkCapacity grows when whitespace is folded into the box (item3 预算含空白)', () => {
+	const base = estimateCjkCapacity(200, 100, 12);
+	const withRight = estimateCjkCapacity(200 + 60, 100, 12);
+	const withBoth = estimateCjkCapacity(200 + 60, 100 + 30, 12);
+	assert.ok(withRight > base, `右扩后预算应更大: ${withRight} > ${base}`);
+	assert.ok(withBoth > withRight, `双向扩后预算应更大: ${withBoth} > ${withRight}`);
+	// 退化护栏:非法尺寸仍给最小 8,不会把预算算成 0/负。
+	assert.equal(estimateCjkCapacity(0, 100, 12), 8);
+});
 
 test('expansion is clipped by the nearest right/below blocker with margin (算法3)', () => {
 	const box = { left: 100, top: 100, width: 100, height: 40 };

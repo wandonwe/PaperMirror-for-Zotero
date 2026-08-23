@@ -25,7 +25,7 @@ import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationRes
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
-import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, auditStrictGeometry, probeStrictPlacement, flashKeptIndicator, type UnfitBlock } from '../ui/strictPageReplacement';
+import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, expandStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, auditStrictGeometry, probeStrictPlacement, flashKeptIndicator, type UnfitBlock } from '../ui/strictPageReplacement';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
 import * as logger from '../utils/logger';
@@ -1409,8 +1409,18 @@ export class ReaderSession {
 		if (!live() || !unfit.length) {
 			return;
 		}
+		// (0) 无损空白扩边优先 (2.2.2, 计划 第三批 item3): 在缩写/缩字之前,先把靠
+		// 邻近安全空白就能放下的块无损救回 —— 不牺牲译文、不费一次 API。仍不适配
+		// 的块才进入后续的「压缩→缩字→保留原文」。扩边幂等(已提交块跳过),
+		// 递归回来时会对压缩后的更短文本再扩一次。
+		const stillAfterExpand = new Set(expandStrictBlocks(element, unfit.map(u => u.id)));
+		const remaining = unfit.filter(u => stillAfterExpand.has(u.id));
+		if (!remaining.length) {
+			this.reportPlacement(pageIndex, element);
+			return;
+		}
 		const budgetCapable = supportsCharBudget(getProvider(this.providerForPage(pageIndex)));
-		const plan = planStrictRetry(unfit, {
+		const plan = planStrictRetry(remaining, {
 			roundsFor: id => this.compressRounds.get(id) ?? 0,
 			maxRounds: 2,
 			budgetCapable
@@ -1436,7 +1446,7 @@ export class ReaderSession {
 			// 丢失唤醒补接力 (2.0.9, 审核 P2-10): 被在飞压缩挡回的渲染记下
 			// 待办,压缩 finally 里续跑 —— 否则这次渲染的未适配块永远无人处理。
 			else if (plan.compress.length && this.compressPending.has(pageIndex)) {
-				this.compressBlocked.set(pageIndex, { element, unfit, token });
+				this.compressBlocked.set(pageIndex, { element, unfit: remaining, token });
 			}
 			return;
 		}
@@ -1444,7 +1454,7 @@ export class ReaderSession {
 		for (const id of plan.compress) {
 			this.compressRounds.set(id, (this.compressRounds.get(id) ?? 0) + 1);
 		}
-		const entries = unfit.filter(u => plan.compress.includes(u.id));
+		const entries = remaining.filter(u => plan.compress.includes(u.id));
 		void this.manager.compressBlocks(pageIndex, entries)
 			.then((accepted) => {
 				if (!live()) {

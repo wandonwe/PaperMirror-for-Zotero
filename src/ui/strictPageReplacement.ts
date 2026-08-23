@@ -707,11 +707,20 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	};
 
 	const budgetFor = (item: StrictItem): number => {
-		const estimate = estimateCjkCapacity(item.box.width, item.box.height, item.fontPx);
+		// 计入可用空白 (2.2.2, 计划 第三批 item3 · LO-6/API): 压缩预算按「原盒 +
+		// 可安全扩进的邻近空白」算容量,而非仅原盒。否则模型被告知偏小的框、一
+		// 上来就过度缩写(信息流失),而这页本可先无损扩边救回。扩边无损,预算据
+		// 此放宽 —— 模型只需缩到「盒+空白」放得下,不必更狠。
+		const grow = expansionAllowance(item);
+		const capW = item.box.width + grow.right;
+		const capH = item.box.height + grow.down;
+		const estimate = estimateCjkCapacity(capW, capH, item.fontPx);
 		const textLen = (item.node.textContent ?? '').length;
 		const sh = item.node.scrollHeight;
-		const measured = sh > item.box.height && textLen > 0
-			? Math.floor(textLen * (item.box.height / sh) * 0.92)
+		// sh 在当前(较窄)盒宽下测得,对 capH 是保守高估 → 预算偏宽不偏窄,与
+		// 「别过度缩写」同向;Math.min(estimate,…) 仍封顶。
+		const measured = sh > capH && textLen > 0
+			? Math.floor(textLen * (capH / sh) * 0.92)
 			: estimate;
 		return Math.max(8, Math.min(estimate, measured));
 	};
@@ -779,6 +788,49 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		item.box = { ...item.box, width, height };
 		item.node.style.width = `${width}px`;
 		item.node.style.height = `${height}px`;
+	};
+
+	// ---- 无损扩边优先 (2.2.2, 计划 第三批 item3): 在**压缩/缩字之前**,只靠邻近
+	// 安全空白(算法3,原字号、原文一字不动)把能救回的块救回 —— "图1→Figure 1"
+	// 式越译越长的标签/标题正是这样无损放下,既不牺牲译文、也不费一次 API。
+	// 适配即提交;不适配则**回退原盒**(让后续压缩/缩字从真实盒起算),返回仍未
+	// 适配的 id。与 pmShrinkFit 的区别: 这里绝不缩字、绝不动到最小字号组合。
+	(page as HTMLElement & { pmExpandFit?: (ids: string[]) => string[] }).pmExpandFit = (ids: string[]): string[] => {
+		const still: string[] = [];
+		for (const id of ids) {
+			const item = byId.get(id);
+			if (!item || item.committed || item.abandoned) {
+				continue;
+			}
+			const original = { width: item.box.width, height: item.box.height };
+			const grow = expansionAllowance(item);
+			const expansions: [number, number][] = [];
+			if (grow.right > 4) {
+				expansions.push([original.width + grow.right, original.height]);
+			}
+			if (grow.down > 4) {
+				expansions.push([original.width, original.height + grow.down]);
+			}
+			if (grow.right > 4 && grow.down > 4) {
+				expansions.push([original.width + grow.right, original.height + grow.down]);
+			}
+			let fits = false;
+			for (const [w, h] of expansions) {
+				applyBox(item, w, h);
+				if (ladderFits(item)) {
+					fits = true;
+					break;
+				}
+			}
+			if (fits) {
+				commit(item);
+			}
+			else {
+				applyBox(item, original.width, original.height); // 回退,预算/后续从原盒起算
+				still.push(id);
+			}
+		}
+		return still;
 	};
 
 	// ---- last-resort fit: 先扩边界(算法3),再缩字号(SHRINK_STEPS),最后
@@ -1314,4 +1366,14 @@ export function computeExpansionAllowance(
 export function shrinkStrictBlocks(element: HTMLElement, ids: string[]): string[] {
 	const shrink = (element as HTMLElement & { pmShrinkFit?: (ids: string[]) => string[] }).pmShrinkFit;
 	return shrink ? shrink(ids) : ids;
+}
+
+/**
+ * 无损扩边优先 (2.2.2, 计划 第三批 item3): 压缩/缩字之前先只靠邻近安全空白
+ * (原字号、原文不动)救回能救的块。返回仍未适配的 id —— 只有这些才需要进入
+ * 后续的压缩→缩字→保留原文流程。找不到 hook(理论上不会)时保守返回全部。
+ */
+export function expandStrictBlocks(element: HTMLElement, ids: string[]): string[] {
+	const expand = (element as HTMLElement & { pmExpandFit?: (ids: string[]) => string[] }).pmExpandFit;
+	return expand ? expand(ids) : ids;
 }
