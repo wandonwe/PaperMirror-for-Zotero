@@ -32,6 +32,7 @@ import {
 import { matchRules, mergeGlossaries } from './glossary';
 import { DocumentMemory, extractTermPairs } from './docMemory';
 import { RequestScheduler } from './requestScheduler';
+import { RequestGate } from './requestGate';
 import { planChunks, trailingContext, type PlannedChunk } from './segmenter';
 import { buildLayoutModules } from '../reader/layoutModules';
 import { fnv1a64 } from '../cache/cacheSchema';
@@ -439,6 +440,10 @@ export class TranslationManager {
 	private deps: TranslationDeps;
 	private events: ManagerEvents;
 	private scheduler: RequestScheduler;
+	/** 每服务商「真实在途 HTTP 请求」闸 (2.1.8): 页面 lane 只限并发页数,页内
+	 *  CHUNK_CONCURRENCY/补救仍会放大成 2N~4N 个请求打向同一服务商;此闸把每
+	 *  服务商在途请求收到 ≈ 其页面并发上限,当前页请求优先出手。 */
+	private requestGate = new RequestGate();
 	private pages = new Map<number, PageTranslationState>();
 	private disposed = false;
 	private currentPage = 0;
@@ -540,6 +545,17 @@ export class TranslationManager {
 	/** Per-provider page caps/bands (host: from each provider's mode profile). */
 	setLaneCaps(caps: Record<string, number | { min: number; initial: number; max: number }>): void {
 		this.scheduler.configureLanes(caps);
+		// 请求闸同步 (2.1.8): 每服务商真实在途请求上限 ≈ 其页面并发上限(而非
+		// 被页内 chunk/补救放大成 ×2~×4)。下限 2 以便单页的两个 chunk 仍能并行。
+		for (const [lane, spec] of Object.entries(caps)) {
+			const pageCap = typeof spec === 'number' ? spec : spec.max;
+			this.requestGate.setCap(lane, Math.max(2, Math.floor(pageCap)));
+		}
+	}
+
+	/** 诊断:某 lane 见过的真实在途请求峰值(第二批 请求级调度可观测性)。 */
+	requestPeak(lane: string): number {
+		return this.requestGate.peakOf(lane);
 	}
 
 	/** Prefetch window: forward = min(2×poolSize, 12), backward = 1 (host-set). */
@@ -666,7 +682,7 @@ export class TranslationManager {
 					})),
 					glossary: this.glossaryFor(blocks.map(b => b.sourceText))
 				};
-				const response = await this.deps.translateRequest(request, signal);
+				const response = await this.requestGate.run(this.laneFor(pageIndex), true, () => this.deps.translateRequest(request, signal));
 				for (const t of response.translations) {
 					const pb = protectedBlocks.find(p => p.block.id === t.id);
 					if (!pb || !t.translatedText.trim()) {
@@ -803,7 +819,7 @@ export class TranslationManager {
 		this.failedSegments.delete(segmentHash(block.sourceText, source, target));
 		try {
 			return await this.scheduler.enqueue(`page-${pageIndex}-seg-${blockId}`, PRIORITY.CURRENT_RETRANSLATE, async (signal) => {
-				const resp = await this.deps.translateRequest({
+				const resp = await this.requestGate.run(this.laneFor(pageIndex), true, () => this.deps.translateRequest({
 					pageIndex,
 					sourceLanguage: source,
 					targetLanguage: target,
@@ -811,7 +827,7 @@ export class TranslationManager {
 					previousContext: '',
 					blocks: [{ id: block.id, type: block.type, text }],
 					glossary: this.glossaryFor([block.sourceText])
-				}, signal);
+				}, signal));
 				const hit = resp.translations.find(t =>
 					looksTranslated(block.sourceText, t.translatedText, target)
 					&& reg.ok(t.translatedText));
@@ -1367,7 +1383,8 @@ export class TranslationManager {
 				// 也是按请求时刻解析引擎的,两者现在同刻同源,必然一致。
 				const lane = this.laneFor(pageIndex);
 				try {
-					const response = await this.deps.translateRequest(request, sig);
+					const response = await this.requestGate.run(
+						lane, pageIndex === this.currentPage, () => this.deps.translateRequest(request, sig));
 					beat(); // progress: a request finished → re-arm the idle watchdog
 					this.scheduler.laneFeedback(lane, 'success');
 					return response;
