@@ -56,6 +56,34 @@ test('one-line fragments of a paragraph coalesce into a single region', () => {
 		'Background—Computed tomographic coronary angiography is a noninvasive imaging modality that permits identification and characterization of coronary plaques.'
 	);
 	assert.equal(regions[0]!.lineRectsPdf!.length, 3, 'every source line rect is kept for masking');
+	// One continuous paragraph → ONE paragraph group (nothing to split later).
+	assert.equal(regions[0]!.regionParagraphs?.length, 1, 'a continuous paragraph is a single group');
+});
+
+// ---- regionParagraphs: per-paragraph geometry for split-back placement ------
+
+test('structured region records one paragraph group per \\n\\n break, with its own line rects', () => {
+	// Two sentence-final body blocks with a blank line between them = a paragraph
+	// boundary (separatorBetween → "\n\n"). They still merge into one region for
+	// translation, but each paragraph's geometry is kept so the renderer can
+	// place the translated paragraphs back into their OWN boxes.
+	const a = block('a', 'First paragraph ends here.', { topY: 700, lines: 2 });
+	const b = block('b', 'Second paragraph begins now.', { topY: 671, lines: 2 });
+	const regions = coalesceRegions([a, b]);
+	assert.equal(regions.length, 1, 'both paragraphs are one region for translation');
+	assert.equal(regions[0]!.sourceText, 'First paragraph ends here.\n\nSecond paragraph begins now.');
+	const groups = regions[0]!.regionParagraphs;
+	assert.equal(groups?.length, 2, 'two paragraph groups');
+	assert.equal(groups![0]!.lineRectsPdf.length, 2, 'group 0 keeps paragraph a’s two line rects');
+	assert.equal(groups![1]!.lineRectsPdf.length, 2, 'group 1 keeps paragraph b’s two line rects');
+	// The groups partition the region’s rects exactly — no rect lost or shared.
+	assert.equal(
+		groups![0]!.lineRectsPdf.length + groups![1]!.lineRectsPdf.length,
+		regions[0]!.lineRectsPdf!.length,
+		'groups partition the region’s line rects'
+	);
+	assert.deepEqual(groups![0]!.lineRectsPdf, a.lineRectsPdf, 'group 0 = paragraph a geometry');
+	assert.deepEqual(groups![1]!.lineRectsPdf, b.lineRectsPdf, 'group 1 = paragraph b geometry');
 });
 
 test('paragraph roles survive as paragraph breaks', () => {

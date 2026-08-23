@@ -199,6 +199,38 @@ test('auditStrictGeometry: null on a non-strict element, passthrough on the hook
 	assert.deepEqual(auditStrictGeometry(el), { violations: 2, adjusted: 1, reverted: 1 });
 });
 
+test('splitRegionForPlacement: splits translation across paragraph groups, falls back on mismatch (审核 摘要塌顶)', async () => {
+	const { splitRegionForPlacement } = await import('../../src/ui/strictPageReplacement');
+	const region = {
+		id: 'page-0-region-13',
+		pageIndex: 0,
+		order: 0,
+		type: 'paragraph' as const,
+		sourceText: 'A.\n\nB.\n\nC.',
+		lineRectsPdf: [[0, 90, 100, 100], [0, 70, 100, 80], [0, 50, 100, 60]] as [number, number, number, number][],
+		regionParagraphs: [
+			{ lineRectsPdf: [[0, 90, 100, 100]] as [number, number, number, number][], fontSize: 8 },
+			{ lineRectsPdf: [[0, 70, 100, 80]] as [number, number, number, number][], fontSize: 8 },
+			{ lineRectsPdf: [[0, 50, 100, 60]] as [number, number, number, number][], fontSize: 8 }
+		]
+	};
+	// Aligned: 3 groups, translation splits on blank lines into 3 → one block each.
+	const ok = splitRegionForPlacement(region, '甲。\n\n乙。\n\n丙。');
+	assert.ok(ok, 'aligned translation splits');
+	assert.equal(ok!.length, 3);
+	assert.deepEqual(ok!.map(p => p.id), ['page-0-region-13::p0', 'page-0-region-13::p1', 'page-0-region-13::p2']);
+	assert.deepEqual(ok!.map(p => p.text), ['甲。', '乙。', '丙。']);
+	assert.deepEqual(ok![1]!.lineRectsPdf, [[0, 70, 100, 80]], 'paragraph placed in its OWN group box');
+	// Extra blank lines are tolerated (engines vary): still 3 parts.
+	assert.equal(splitRegionForPlacement(region, '甲。\n\n\n乙。\n\n丙。')?.length, 3);
+	// Mismatch → null (fall back to whole-region union-box placement, never worse).
+	assert.equal(splitRegionForPlacement(region, '甲。乙。丙。'), null, 'engine dropped breaks → fall back');
+	assert.equal(splitRegionForPlacement(region, '甲。\n\n乙。'), null, 'too few paragraphs → fall back');
+	// A single-group (or no) region never splits.
+	assert.equal(splitRegionForPlacement({ ...region, regionParagraphs: [region.regionParagraphs[0]!] }, '甲。'), null);
+	assert.equal(splitRegionForPlacement({ ...region, regionParagraphs: undefined }, '甲。\n\n乙。'), null);
+});
+
 test('probeStrictPlacement: null on a non-strict element, passthrough on the hook (审核 标题空洞)', async () => {
 	const { probeStrictPlacement } = await import('../../src/ui/strictPageReplacement');
 	assert.equal(probeStrictPlacement({} as unknown as HTMLElement), null);

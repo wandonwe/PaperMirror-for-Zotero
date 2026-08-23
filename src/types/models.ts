@@ -58,6 +58,17 @@ export interface SourceBlock {
 	 * preserves the provenance instead of losing it in the merge.
 	 */
 	memberIds?: string[];
+	/**
+	 * When this block is a coalesced multi-paragraph region, the geometry of
+	 * each SOURCE paragraph group in reading order (a group = members joined
+	 * without a `\n\n` break). Lets the renderer split the region's translated
+	 * text on `\n\n` and place each paragraph back into its own box instead of
+	 * cramming the whole translation into the region's tall union box — which
+	 * collapses a structured abstract (Purpose/Methods/Results/Conclusion) into
+	 * one top-anchored blob and blanks the section bodies. Absent for a
+	 * single-paragraph region (nothing to split).
+	 */
+	regionParagraphs?: { lineRectsPdf: [number, number, number, number][]; fontSize?: number }[];
 	/** Preserve this geometry/text in the original page bitmap and never send it
 	 * to a translation provider (numeric table cells, symbols, etc.). */
 	translationMode?: 'translate' | 'preserve';

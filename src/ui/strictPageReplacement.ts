@@ -207,6 +207,49 @@ function containedFraction(box: PixelBox, region: { left: number; top: number; w
  *   pmRevert(ids): void             — clear masks + hide translations, so the
  *                                     original text shows for those blocks
  */
+/**
+ * Split a coalesced region's translated text back onto its source paragraph
+ * groups, so each paragraph is placed in its OWN box rather than the region's
+ * tall union box (which collapses a structured abstract to the top). Returns
+ * one synthetic placement block per paragraph, or null to fall back to the
+ * whole-region placement — the STRICT rule being: only split when the region
+ * has ≥2 paragraph groups AND the translation splits on blank lines into
+ * exactly that many non-empty parts. Any mismatch (the engine dropped the
+ * `\n\n` breaks, merged, or split paragraphs) falls back, so this can only
+ * ever improve placement, never regress it.
+ */
+export interface RegionParagraphPlacement {
+	id: string;
+	lineRectsPdf: [number, number, number, number][];
+	fontSize?: number;
+	text: string;
+}
+
+export function splitRegionForPlacement(
+	block: SourceBlock,
+	translation: string | undefined
+): RegionParagraphPlacement[] | null {
+	const groups = block.regionParagraphs;
+	if (!groups || groups.length < 2 || !translation) {
+		return null;
+	}
+	const paras = translation.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+	if (paras.length !== groups.length) {
+		return null; // engine didn't preserve the paragraph structure — fall back
+	}
+	// A group with no line rects can't be placed — bail rather than emit a
+	// zero-area box that would silently swallow its paragraph.
+	if (groups.some(g => !g.lineRectsPdf?.length)) {
+		return null;
+	}
+	return groups.map((g, i) => ({
+		id: `${block.id}::p${i}`,
+		lineRectsPdf: g.lineRectsPdf,
+		fontSize: g.fontSize,
+		text: paras[i]!
+	}));
+}
+
 /** Parse an `rgb(r,g,b)` / `rgba(...)` string into [r,g,b]; white on failure. */
 function parseRgb(colour: string): [number, number, number] {
 	const m = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(colour);
@@ -368,8 +411,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		}
 	});
 
+	// 段落拆分译文 (regionParagraphs): 每个合成段落块 id → 该段译文。
+	const paraTranslations = new Map<string, string>();
 	const translationOf = (id: string): string | undefined =>
-		cellTranslations.get(id) ?? input.translations.get(id);
+		paraTranslations.get(id) ?? cellTranslations.get(id) ?? input.translations.get(id);
 
 	const replaceable: SourceBlock[] = [];
 	// Placement accounting (#6): every translatable block is classified so the
@@ -416,6 +461,26 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// cells) stays original — never stamped in Chinese across the table.
 		if (area > 0 && guard.regions.some(r => intersectArea(box, r as unknown as PixelBox) > area * 0.15)) {
 			tableIntentional++;
+			continue;
+		}
+		// 结构化区域按段落拆回各自的盒子 (审核: 封面摘要塌顶 / 标题空洞根因):
+		// 合并后的区域(如整段四节摘要)若原是多个段落组,就把译文按 `\n\n` 拆开、
+		// 每段放回自己的组盒;拆不齐(引擎丢了段落分隔)则整体回退到联合盒(旧行为)。
+		const split = splitRegionForPlacement(block, text);
+		if (split) {
+			for (const p of split) {
+				paraTranslations.set(p.id, p.text);
+				replaceable.push({
+					id: p.id,
+					pageIndex: block.pageIndex,
+					order: block.order,
+					type: block.type,
+					sourceText: block.sourceText,
+					lineRectsPdf: p.lineRectsPdf,
+					fontSize: p.fontSize ?? block.fontSize,
+					column: block.column
+				});
+			}
 			continue;
 		}
 		replaceable.push(block);

@@ -1319,7 +1319,7 @@ export class ReaderSession {
 					node.addEventListener('click', focusBlock);
 					node.addEventListener('dblclick', () => {
 						focusBlock();
-						const id = node.getAttribute('data-pm-block');
+						const id = node.getAttribute('data-pm-block')?.split('::')[0];  // 段落拆分块 id 形如 <region>::pN,取区域 id
 						if (id) {
 							void this.explainSelection(
 								state.blocks.find(b => b.id === id)?.sourceText ?? ''
@@ -1333,7 +1333,7 @@ export class ReaderSession {
 						event.preventDefault();
 						event.stopPropagation();
 						focusBlock();
-						const id = node.getAttribute('data-pm-block');
+						const id = node.getAttribute('data-pm-block')?.split('::')[0];  // 段落拆分块 id 形如 <region>::pN,取区域 id
 						if (!id || !this.manager) {
 							return;
 						}

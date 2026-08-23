@@ -141,9 +141,28 @@ function mergeTwo(a: SourceBlock, b: SourceBlock): SourceBlock {
 	const joined = sep === '' && endsHyphenated(a.sourceText)
 		? a.sourceText.trim().replace(/-$/, '') + b.sourceText.trim()
 		: `${a.sourceText.trim()}${sep}${b.sourceText.trim()}`;
+	// 段落组几何 (regionParagraphs): 记录每个**源段落组**的行盒,好在排版时按
+	// `\n\n` 把译文拆回各段自己的盒子,而不是把整段译文塞进区域的高联合盒
+	// (那会把 Purpose/Methods/Results/Conclusion 式结构化摘要塌成顶部一坨、
+	// 下方分节留空)。组的边界 = `\n\n` 分隔:sep==='\n\n' 时 b 另起一组,否则
+	// b 续到上一组。b 恒为单块(coalesce 逐块累积),故 b 的行盒即其自身行盒。
+	const aGroups: NonNullable<SourceBlock['regionParagraphs']> = a.regionParagraphs
+		?? [{ lineRectsPdf: [...((a.lineRectsPdf ?? []) as Rect[])], fontSize: a.fontSize }];
+	const bLines = [...((b.lineRectsPdf ?? []) as Rect[])];
+	let regionParagraphs: NonNullable<SourceBlock['regionParagraphs']>;
+	if (sep === '\n\n') {
+		regionParagraphs = [...aGroups, { lineRectsPdf: bLines, fontSize: b.fontSize }];
+	}
+	else {
+		const lastIdx = aGroups.length - 1;
+		regionParagraphs = aGroups.map((g, i) => i === lastIdx
+			? { lineRectsPdf: [...g.lineRectsPdf, ...bLines], fontSize: g.fontSize }
+			: g);
+	}
 	return {
 		...a,
 		sourceText: joined,
+		regionParagraphs,
 		// Provenance: the group keeps the ids of every fragment it absorbed —
 		// merging must not lose the source relationship.
 		memberIds: [...(a.memberIds ?? [a.id]), ...(b.memberIds ?? [b.id])],
