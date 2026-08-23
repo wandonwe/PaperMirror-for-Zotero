@@ -318,9 +318,12 @@ export class ReaderSession {
 			onDismiss: () => this.dismissTopTask(), // 胶囊 × = 关闭当前通知
 			onCollapsedChange: (c) => this.setCapsuleCollapsed(c), // 折叠状态由会话统一管理
 			onSaveNote: () => void this.saveSelectionToNote(),
-			onShowDiagnostics: () => this.copyDiagnostics(),
+			onShowDiagnostics: () => void this.copyDiagnostics(),
 			onCopyCorpus: () => this.copyLayoutCorpus(),
 			onCopyTerms: () => this.copyLearnedTerms(),
+			// 「更多」菜单 (2.3.0, 第四批 item2 · WF-1): 导出/清缓存从控制台 API 搬上界面。
+			onExportPdf: () => void this.exportTranslatedPdf(),
+			onClearDocCache: () => this.confirmClearDocCache(),
 			onOpenSettings: () => this.openSettings(),
 			onToggleViewKind: kind => setPref('paneView', kind),
 			onPickLanguages: (source, target) => this.applyLanguagePick(source, target),
@@ -2140,6 +2143,38 @@ export class ReaderSession {
 		}
 	}
 
+	/**
+	 * 「更多」菜单「清除本文缓存」(2.3.0, 第四批 item2 · WF-1): 清本文档全部
+	 * 页面+段落缓存但**不重译**(隐私/磁盘用途)—— 屏幕上已显示的译文保留在
+	 * 内存,下次打开才重新翻译。与「重译…」菜单里的「清缓存重译全文」互补,
+	 * 同样破坏性、同样先确认。
+	 */
+	private confirmClearDocCache(): void {
+		let ok = true;
+		try {
+			const prompt = (Services as unknown as { prompt?: { confirm(parent: unknown, title: string, text: string): boolean } }).prompt;
+			const win = (Zotero as unknown as { getMainWindow?(): unknown }).getMainWindow?.() ?? null;
+			ok = prompt ? prompt.confirm(win, getString('papermirror-clear-cache'),
+				'将删除本文档已缓存的全部译文(不影响当前屏幕显示;下次打开需重新翻译)。确定继续?') : true;
+		}
+		catch {
+			ok = true;
+		}
+		if (!ok) {
+			return;
+		}
+		const item = adapter.getReaderItem(this.reader);
+		if (!item) {
+			return;
+		}
+		void cacheManager.clearAttachmentAllVersions(item.key)
+			.then(() => this.flashNotice(getString('papermirror-toast-cache-cleared')))
+			.catch((e) => {
+				logger.warn(MODULE, 'clearDocCache failed', e);
+				this.pushFailure(getString('papermirror-status-error'));
+			});
+	}
+
 	/** Capsule 取消: stop the current page's translation and mark it cancelled. */
 	private cancelCurrentTranslation(): void {
 		const page = adapter.getCurrentPageIndex(this.reader);
@@ -2337,14 +2372,44 @@ export class ReaderSession {
 	 * 等于公开了未发表稿件。语料已拆回独立的「语料」按钮 (copyLayoutCorpus),
 	 * 那个按钮的名字与提示都明说含原文,导出动作本身即知情授权。
 	 */
-	private copyDiagnostics(): void {
+	private async copyDiagnostics(): Promise<void> {
 		if (!this.manager) {
 			return;
 		}
 		try {
+			// 引擎自检 (2.3.0, 第四批 item2 · WF-2): 随诊断产出每个已启用引擎的
+			// 配置健康度 —— 纯本地检查(密钥是否已配、端点主机、模型、熔断轮换
+			// 次数),**不发任何网络请求**,也绝不含密钥本体。
+			const engines: Record<string, unknown>[] = [];
+			const ids = this.pool.length ? this.pool : [getPref<string>('provider', 'bing-free')];
+			for (const id of ids) {
+				try {
+					const s = await this.providerSettingsFor(id);
+					let host = '';
+					try {
+						host = s.apiBaseURL ? new URL(s.apiBaseURL).host : '';
+					}
+					catch {
+						host = '(invalid URL)';
+					}
+					engines.push({
+						id,
+						model: s.model || '(default)',
+						endpointHost: host,
+						keyConfigured: !!s.apiKey,
+						requiresKey: !!getProvider(id)?.requiresApiKey
+					});
+				}
+				catch (e) {
+					engines.push({ id, selfCheckError: e instanceof Error ? e.message : String(e) });
+				}
+			}
 			const payload = {
 				plugin: 'PaperMirror',
 				generatedAt: new Date().toISOString(),
+				engines,
+				// 会话内熔断/手动轮换过的页数(>0 说明有引擎不稳被换过)。
+				engineRotations: this.pageProviderOffset.size,
 				...(this.manager.exportDiagnostics() as Record<string, unknown>),
 				// 几何安全复核结果 (1.1.2 诊断闭环): 页号 → 违例/调整/保留计数。
 				geometryAudits: [...this.geometryAudits.entries()]

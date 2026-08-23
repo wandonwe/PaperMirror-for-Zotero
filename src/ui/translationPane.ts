@@ -18,7 +18,7 @@
 import { isFormulaRun } from '../reader/formulaGuard';
 import { stripStyleMarkers } from '../reader/styleRuns';
 import * as logger from '../utils/logger';
-import { observeBoolPref } from '../utils/prefs';
+import { getPref } from '../utils/prefs';
 import type { ExplanationSection } from '../translation/explainer';
 import type { PageTranslationState } from '../translation/translationManager';
 import type { SourceBlock } from '../types/models';
@@ -132,12 +132,16 @@ export interface PaneCallbacks {
 	/** 状态胶囊折叠/展开 — the session owns the shared collapsed state. */
 	onCollapsedChange(collapsed: boolean): void;
 	onSaveNote(): void;
-	/** 菜单栏「诊断」— copy the sanitized per-page diagnostics JSON (NO source text). */
+	/** 「更多」菜单「诊断」— copy the sanitized per-page diagnostics JSON (NO source text). */
 	onShowDiagnostics(): void;
-	/** 菜单栏「语料」— copy the current page's text-layer spans (CONTAINS source text). */
+	/** 「更多」菜单「语料」(仅 debugLogging) — copy the current page's text-layer spans (CONTAINS source text). */
 	onCopyCorpus(): void;
-	/** 菜单栏「术语」— copy 本篇学得的术语对 (TSV,自动抽取入口 1.1.2)。 */
+	/** 「更多」菜单「术语」— copy 本篇学得的术语对 (TSV,自动抽取入口 1.1.2)。 */
 	onCopyTerms(): void;
+	/** 「更多」菜单「导出译文 PDF」(2.3.0, 计划 第四批 item2 · WF-1)。 */
+	onExportPdf(): void;
+	/** 「更多」菜单「清除本文缓存」(2.3.0, WF-1) — 清缓存但不重译,带确认。 */
+	onClearDocCache(): void;
 	onToggleViewKind(kind: 'page' | 'article'): void;
 	/** 菜单栏直接切换 — no round-trip through the settings pane. */
 	onPickLanguages(source: string, target: string): void;
@@ -170,8 +174,6 @@ export class TranslationPane {
 	private syncSwitch!: HTMLElement;
 	// 「诊断」是排障工具,默认对普通用户隐藏 (1.1.10);仅在开启调试日志时出现,
 	// 随该偏好实时显隐。存显隐观察者的清理函数,destroy 时调用。
-	private diagnosticsButton: HTMLElement | null = null;
-	private debugGateCleanup: (() => void) | null = null;
 
 	private pages = new Map<number, PageSection>();
 	private selectedBlockId: string | null = null;
@@ -315,27 +317,30 @@ export class TranslationPane {
 	 * 诊断时在设置里勾选「开启调试日志」即可。按钮始终建出来(便于反应式显隐),
 	 * 初始与后续可见性都由 debugLogging 决定。
 	 */
-	private buildDiagnosticsButton(): HTMLElement {
-		// 诊断与语料拆成两个动作 (审核 P0-2): 1.1.7 曾把语料并进「诊断」,于是
-		// 一个叫「诊断」的按钮会把整页原文放进剪贴板 —— 用户在「提交诊断」的
-		// 心智下不会预期这一点,粘进 issue 就等于公开了未发表稿件。现在诊断
-		// 只含脱敏指标;要原文请点旁边的「语料」,它的名字和提示都明说含原文。
-		const wrap = this.el('span', 'pm-bar-actions-group');
-		const diag = this.textButton(
-			'pm-bar-action', '诊断',
-			'复制诊断 JSON:全文档脱敏指标(不含原文、译文与密钥)',
-			() => this.callbacks.onShowDiagnostics()
-		);
-		const corpus = this.textButton(
-			'pm-bar-action', '语料',
-			'复制当前页布局语料 JSON —— 含本页原文文本与坐标(回归测试用);不含译文与密钥',
-			() => this.callbacks.onCopyCorpus()
-		);
-		wrap.append(diag, corpus);
-		this.diagnosticsButton = wrap;
-		this.debugGateCleanup?.();
-		this.debugGateCleanup = observeBoolPref('debugLogging', on => { wrap.style.display = on ? '' : 'none'; });
-		return wrap;
+	/**
+	 * 「更多 ⋯」菜单 (2.3.0, 计划 第四批 item2 · WF-1/WF-2): 把只能从开发者
+	 * 控制台调用的导出译文 PDF / 清本文缓存搬上界面,并把工具条上零散的
+	 * 术语/诊断/语料收进同一个菜单(工具条减负)。
+	 *   - 「诊断」不再要求 debugLogging (WF-2) —— 它只含脱敏指标,任何用户报
+	 *     问题都需要它;引擎自检段随诊断 JSON 一起产出。
+	 *   - 「语料」仍随 debugLogging 显隐 (P0-2 隐私姿态不变): 它含整页原文,
+	 *     不该在普通用户一层可见。菜单每次点开时现读 pref,无需常驻观察者。
+	 */
+	private buildMoreButton(): HTMLElement {
+		let moreChip: HTMLElement;
+		moreChip = this.textButton('pm-bar-action', '更多 ⋯', '导出译文 PDF、清缓存、术语表、诊断', () => {
+			const items: { label: string; checked: boolean; onPick(): void }[] = [
+				{ label: '导出译文 PDF(单语 + 对照两份)', checked: false, onPick: () => this.callbacks.onExportPdf() },
+				{ label: '清除本文缓存…(不重译,下次打开重新翻译)', checked: false, onPick: () => this.callbacks.onClearDocCache() },
+				{ label: '术语:复制术语对照表 (TSV)', checked: false, onPick: () => this.callbacks.onCopyTerms() },
+				{ label: '诊断:复制脱敏指标 + 引擎自检(不含原文/密钥)', checked: false, onPick: () => this.callbacks.onShowDiagnostics() }
+			];
+			if (getPref<boolean>('debugLogging', false)) {
+				items.push({ label: '语料:复制本页布局语料(含本页原文)', checked: false, onPick: () => this.callbacks.onCopyCorpus() });
+			}
+			this.openBarMenu(moreChip, [{ items }]);
+		});
+		return moreChip;
 	}
 
 	/** demo .switch-label — label + iOS-style toggle */
@@ -707,8 +712,7 @@ export class TranslationPane {
 			this.syncSwitch,
 			this.textButton('pm-bar-action', `✦ ${this.strings.explain}`, this.strings.explainTip, () => this.callbacks.onExplainSelection()),
 			this.textButton('pm-bar-action', this.strings.saveNote, this.strings.saveNote, () => this.callbacks.onSaveNote()),
-			this.buildDiagnosticsButton(),
-			this.textButton('pm-bar-action', '术语', '复制本篇自动学得的术语对照表 (TSV,可粘贴进词汇表)', () => this.callbacks.onCopyTerms()),
+			this.buildMoreButton(),
 			this.el('span', 'pm-bar-sep'),
 			this.makeSideButton(),
 			this.iconButton(ICON_PATHS.settings, this.strings.settings, () => this.callbacks.onOpenSettings()),
@@ -1606,9 +1610,6 @@ export class TranslationPane {
 			clearTimeout(this.ensureTimer);
 			this.ensureTimer = null;
 		}
-		this.debugGateCleanup?.();
-		this.debugGateCleanup = null;
-		this.diagnosticsButton = null;
 		this.closeBarMenu();
 		this.resizeObserver?.disconnect();
 		this.resizeObserver = null;
