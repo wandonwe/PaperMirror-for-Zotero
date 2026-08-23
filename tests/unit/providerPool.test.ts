@@ -1,24 +1,80 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPool, pickProviderForPage, laneBandFor, poolLanePlan, prefetchWindowFor, normalizeGlobalMax, normalizePerfMode, customLaneRange, customBandFor } from '../../src/translation/providerPool';
+import { buildPool, pickProviderForPage, rankProvidersForPage, laneBandFor, poolLanePlan, prefetchWindowFor, normalizeGlobalMax, normalizePerfMode, customLaneRange, customBandFor } from '../../src/translation/providerPool';
 
-test('pages deal round-robin across the pool, deterministically', () => {
+test('page→provider is deterministic and every provider gets some pages', () => {
 	const pool = ['openai', 'deepseek', 'moonshot'];
-	assert.equal(pickProviderForPage(pool, 0), 'openai');
-	assert.equal(pickProviderForPage(pool, 1), 'deepseek');
-	assert.equal(pickProviderForPage(pool, 2), 'moonshot');
-	assert.equal(pickProviderForPage(pool, 3), 'openai');
-	// Determinism is what keeps the cache aligned per page.
-	assert.equal(pickProviderForPage(pool, 4), pickProviderForPage(pool, 4));
+	// Deterministic per page — this is what keeps a page's cache aligned.
+	for (let p = 0; p < 5; p++) {
+		assert.equal(pickProviderForPage(pool, p), pickProviderForPage(pool, p));
+	}
+	// Coverage: across many pages every provider owns at least one.
+	const owners = new Set(Array.from({ length: 60 }, (_, p) => pickProviderForPage(pool, p)));
+	assert.deepEqual([...owners].sort(), [...pool].sort());
 });
 
 test('a single-provider pool always answers the primary', () => {
 	assert.equal(pickProviderForPage(['openai'], 7), 'openai');
 });
 
-test('an unknown page index falls back to the primary', () => {
-	assert.equal(pickProviderForPage(['a', 'b'], -1), 'a');
-	assert.equal(pickProviderForPage(['a', 'b'], Number.NaN), 'a');
+test('an invalid page index is deterministic (normalised to page 0)', () => {
+	assert.equal(pickProviderForPage(['a', 'b'], -1), pickProviderForPage(['a', 'b'], 0));
+	assert.equal(pickProviderForPage(['a', 'b'], Number.NaN), pickProviderForPage(['a', 'b'], 0));
+});
+
+// ---- 一致性哈希稳定映射 (2.2.1, 第三批 item1) --------------------------------
+
+test('reordering the pool changes no page assignment (order-independent)', () => {
+	for (let p = 0; p < 50; p++) {
+		assert.equal(
+			pickProviderForPage(['a', 'b', 'c'], p),
+			pickProviderForPage(['c', 'a', 'b'], p),
+			`page ${p} must not move when only the pool order changes`
+		);
+	}
+});
+
+test('adding a provider only ever moves a page ONTO the new provider', () => {
+	const before = ['a', 'b', 'c'];
+	const after = ['a', 'b', 'c', 'd'];
+	let moved = 0;
+	for (let p = 0; p < 300; p++) {
+		const o = pickProviderForPage(before, p);
+		const n = pickProviderForPage(after, p);
+		if (o !== n) {
+			moved++;
+			// HRW invariant: a page can only migrate to the newcomer, never between
+			// two incumbents.
+			assert.equal(n, 'd', `page ${p} moved ${o}→${n}, not onto the new provider`);
+		}
+	}
+	// And roughly 1/N migrate — nowhere near the near-total churn of modulo.
+	assert.ok(moved > 0 && moved < 300 * 0.5, `expected ~1/4 to move, got ${moved}/300`);
+});
+
+test('removing a provider only remaps pages that belonged to it', () => {
+	const before = ['a', 'b', 'c'];
+	const after = ['a', 'b'];
+	for (let p = 0; p < 300; p++) {
+		const o = pickProviderForPage(before, p);
+		const n = pickProviderForPage(after, p);
+		if (o !== 'c') {
+			assert.equal(n, o, `page ${p} owned by ${o} must not move when 'c' is removed`);
+		}
+		else {
+			assert.ok(n === 'a' || n === 'b', `orphaned page ${p} must fall to a surviving provider`);
+		}
+	}
+});
+
+test('rankProvidersForPage is a best-first permutation of the pool', () => {
+	const pool = ['a', 'b', 'c', 'd'];
+	for (let p = 0; p < 10; p++) {
+		const rank = rankProvidersForPage(pool, p);
+		assert.equal(rank.length, pool.length);
+		assert.deepEqual([...rank].sort(), [...pool].sort(), 'no dups, no drops');
+		assert.equal(rank[0], pickProviderForPage(pool, p), 'head of the rank is the owner');
+	}
 });
 
 test('buildPool keeps the primary first and dedupes', () => {

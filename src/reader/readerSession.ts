@@ -14,7 +14,7 @@ import {
 import { getApiKey } from '../security/credentialStore';
 import { registerUrlCredentials } from '../security/logSanitizer';
 import { getProvider, listProviders } from '../translation/providers/registry';
-import { buildPool, pickProviderForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
+import { buildPool, pickProviderForPage, rankProvidersForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
 import { endpointHost, supportsCharBudget } from '../translation/providers/types';
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
 import { TranslationManager, type PageTranslationState } from '../translation/translationManager';
@@ -197,11 +197,16 @@ export class ReaderSession {
 	 */
 	private lastPartial: { pageIndex: number; element: HTMLElement } | null = null;
 
-	/** The engine responsible for a page, honouring the 刷新 rotation. */
+	/** The engine responsible for a page, honouring the 刷新 rotation.
+	 *  2.2.1 (计划 第三批 item1): 轮换取该页 HRW 降序榜的第 `offset` 名,而非
+	 *  旧的 `pickProviderForPage(pool, pageIndex+offset)`——后者是为取模量身的
+	 *  hack,一致性哈希下「页号+1」只是跳到另一个伪随机服务商、偶尔还转回原点。
+	 *  按榜退让则确定:offset0=规范拥有者,offset1=次高分,依次熔断退让。 */
 	private providerForPage(pageIndex: number): string {
 		if (this.pool.length > 1) {
 			const offset = this.pageProviderOffset.get(pageIndex) ?? 0;
-			return pickProviderForPage(this.pool, pageIndex + offset);
+			const rank = rankProvidersForPage(this.pool, pageIndex);
+			return rank[offset % rank.length]!;
 		}
 		return getPref<string>('provider', 'bing-free');
 	}
@@ -513,8 +518,35 @@ export class ReaderSession {
 				extractRenderedPage: pageIndex => this.extractor.extractRenderedPage(pageIndex),
 				translateRequest: (request, signal) => this.translateRequest(request, signal),
 				readCache: async (pageIndex, blocks) => {
-					const parts = await this.cacheKey(pageIndex, blocks.map(b => b.sourceText));
-					return parts ? cacheManager.readPage(parts) : null;
+					const texts = blocks.map(b => b.sourceText);
+					const parts = await this.cacheKey(pageIndex, texts);
+					if (parts) {
+						const hit = await cacheManager.readPage(parts);
+						if (hit) {
+							return hit;
+						}
+					}
+					// 发送前查全服务商缓存 (2.2.1, 计划 第三批 item1 · Codex API-P1):
+					// 规范键 miss 后,遍历池内其余已启用服务商各自的完整页缓存 ——
+					// 只要**任一**服务商曾译过这页(上个会话主译的引擎、池变动前的
+					// 拥有者、熔断换过的引擎),就直接复用、绝不重付费。跨会话/增删
+					// 服务商后最常见的「白重译一整篇」由此根治。命中键与规范键不同
+					// 不回写(读写键仍恒等,下次仍靠这层探测,成本只是几次文件存在性
+					// 检查;getApiKey 已 memoize,构键几乎零开销)。
+					if (this.pool.length > 1) {
+						const canonical = parts?.provider;
+						for (const pid of this.pool) {
+							const alt = await this.cacheKey(pageIndex, texts, pid);
+							if (!alt || alt.provider === canonical) {
+								continue;
+							}
+							const hit = await cacheManager.readPage(alt);
+							if (hit) {
+								return hit;
+							}
+						}
+					}
+					return null;
 				},
 				writeCache: async (pageIndex, blocks, translations) => {
 					const parts = await this.cacheKey(pageIndex, blocks.map(b => b.sourceText));
@@ -773,13 +805,15 @@ export class ReaderSession {
 		return provider.translate(request, { ...settings, timeoutMs: scaled }, { signal });
 	}
 
-	private async cacheKey(pageIndex: number, texts: string[]): Promise<CacheKeyParts | null> {
+	private async cacheKey(pageIndex: number, texts: string[], providerId?: string): Promise<CacheKeyParts | null> {
 		const item = adapter.getReaderItem(this.reader);
 		if (!item) {
 			return null;
 		}
 		// 规范引擎,不是运行时引擎 (P2-16): 读写键必须恒等,见 canonicalProviderForPage。
-		const chosen = this.canonicalProviderForPage(pageIndex);
+		// providerId 省略 = 规范引擎(读写恒等);显式传入用于「发送前查全服务商缓存」
+		// (2.2.1, item1)—— 用池内其它服务商各自的键探测同一页是否已被译过。
+		const chosen = providerId ?? this.canonicalProviderForPage(pageIndex);
 		const settings = await this.providerSettingsFor(chosen);
 		const { source, target } = this.resolveLanguages(texts.join('\n').slice(0, 2000));
 		return {
