@@ -25,7 +25,7 @@ import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationRes
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
-import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, auditStrictGeometry, flashKeptIndicator, type UnfitBlock } from '../ui/strictPageReplacement';
+import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, auditStrictGeometry, probeStrictPlacement, flashKeptIndicator, type UnfitBlock } from '../ui/strictPageReplacement';
 import { translateFullPdf, bytesToBase64, type TranslateSubmission } from '../translation/pdfService';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
@@ -159,6 +159,9 @@ export class ReaderSession {
 	/** 每页最近一次 placement 统计 (2.0.10, 审核 P3): imageExcluded 等
 	 *  「有意保留」类目此前不进任何诊断 —— 阈值收紧后该类目变大也无从发现。 */
 	private placementStats = new Map<number, import('../ui/strictPageReplacement').StrictPageStats>();
+	/** 每页 placement 探针 (审核: 封面标题空洞定位): 每块的 base 位图/遮罩取样
+	 *  (baseInk/maskOpaque),分辨「底图缺字」与「遮罩误盖」。只几何+布尔,无文本。 */
+	private placementProbe = new Map<number, import('../ui/strictPageReplacement').StrictProbeRow[]>();
 	/**
 	 * Per-page render generation. Bumped at the start of every renderDocPage;
 	 * an async render (or its settle/compress callbacks) that discovers a newer
@@ -1491,6 +1494,16 @@ export class ReaderSession {
 			return;
 		}
 		this.placementStats.set(pageIndex, s); // P3 (2.0.10): 供诊断导出
+		// Placement 探针 (审核: 封面标题空洞): 采样底图/遮罩,供诊断导出定位病因。
+		try {
+			const probe = probeStrictPlacement(element);
+			if (probe) {
+				this.placementProbe.set(pageIndex, probe);
+			}
+		}
+		catch (e) {
+			logger.debug(MODULE, `placement probe failed on page ${pageIndex + 1} (ignored)`, e);
+		}
 		logger.info(
 			MODULE,
 			`page ${pageIndex + 1} placement: ${s.committed}/${s.replaceable} shown, `
@@ -2197,7 +2210,14 @@ export class ReaderSession {
 				// 阈值收紧 (P2-15) 后误拒面变大能在这里被发现。纯计数,无文本。
 				placement: [...this.placementStats.entries()]
 					.sort((a, b) => a[0] - b[0])
-					.map(([page, p]) => ({ page: page + 1, ...p }))
+					.map(([page, p]) => ({ page: page + 1, ...p })),
+				// Placement 探针 (审核: 封面标题空洞): 每块 base 位图/遮罩取样。
+				// baseInk=false → 底图就没画这些字 (独立 page.render 的字形/时序缺口,
+				// 放弃兜底无原文可露); baseInk=true & maskOpaque 且非 committed →
+				// 遮罩误盖真原文。只几何+布尔,无文本。
+				placementProbe: [...this.placementProbe.entries()]
+					.sort((a, b) => a[0] - b[0])
+					.map(([page, rows]) => ({ page: page + 1, blocks: rows }))
 			};
 			Components.classes['@mozilla.org/widget/clipboardhelper;1']
 				.getService(Components.interfaces.nsIClipboardHelper)

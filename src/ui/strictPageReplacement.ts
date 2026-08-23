@@ -207,6 +207,12 @@ function containedFraction(box: PixelBox, region: { left: number; top: number; w
  *   pmRevert(ids): void             — clear masks + hide translations, so the
  *                                     original text shows for those blocks
  */
+/** Parse an `rgb(r,g,b)` / `rgba(...)` string into [r,g,b]; white on failure. */
+function parseRgb(colour: string): [number, number, number] {
+	const m = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(colour);
+	return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : [255, 255, 255];
+}
+
 export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPageResult | null {
 	const render = input.render;
 	const { viewportWidth, viewportHeight, scale } = render;
@@ -869,6 +875,53 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		return { violations: firstCount, adjusted, reverted, detail };
 	};
 
+	// ---- placement probe: localise a blank-where-text-should-be -------------
+	// Samples the base bitmap + mask under each block. Diagnostic only (guarded,
+	// geometry/booleans, never text). See probeStrictPlacement() for the 口径.
+	(page as HTMLElement & { pmProbe?: () => StrictProbeRow[] }).pmProbe = (): StrictProbeRow[] => {
+		const [pr, pg, pb] = parseRgb(paper);
+		const w = ctx?.canvas.width ?? 1;
+		const h = ctx?.canvas.height ?? 1;
+		const rows: StrictProbeRow[] = [];
+		for (const item of items) {
+			const state: StrictProbeRow['state'] = item.committed ? 'committed' : item.abandoned ? 'abandoned' : 'pending';
+			let baseInk = false;
+			let maskOpaque = false;
+			try {
+				for (const line of lineBoxesFor.get(item.id) ?? []) {
+					const pts: [number, number][] = [
+						[line.left + line.width * 0.5, line.top + line.height * 0.5],
+						[line.left + line.width * 0.2, line.top + line.height * 0.5],
+						[line.left + line.width * 0.8, line.top + line.height * 0.5]
+					];
+					for (const [px, py] of pts) {
+						const bx = Math.max(0, Math.min(w - 1, Math.round(px * BITMAP_SCALE)));
+						const by = Math.max(0, Math.min(h - 1, Math.round(py * BITMAP_SCALE)));
+						if (ctx) {
+							const d = ctx.getImageData(bx, by, 1, 1).data;
+							if (Math.abs((d[0] ?? 0) - pr) + Math.abs((d[1] ?? 0) - pg) + Math.abs((d[2] ?? 0) - pb) > 48) {
+								baseInk = true;
+							}
+						}
+						if (maskCtx && (maskCtx.getImageData(bx, by, 1, 1).data[3] ?? 0) > 12) {
+							maskOpaque = true;
+						}
+					}
+				}
+			}
+			catch { /* 探针纯诊断: 取样失败留默认值 */ }
+			rows.push({
+				id: item.id,
+				type: item.node.getAttribute('data-pm-type') ?? '',
+				state,
+				left: Math.round(item.box.left), top: Math.round(item.box.top),
+				width: Math.round(item.box.width), height: Math.round(item.box.height),
+				baseInk, maskOpaque
+			});
+		}
+		return rows;
+	};
+
 	// ---- live placement stats (#6): never a silent English block -----------
 	(page as HTMLElement & { pmStats?: () => StrictPageStats }).pmStats = (): StrictPageStats => {
 		let committed = 0;
@@ -925,6 +978,39 @@ export function auditStrictGeometry(element: HTMLElement): GeometryAuditResult |
 
 export function strictPageStats(element: HTMLElement): StrictPageStats | null {
 	const fn = (element as HTMLElement & { pmStats?: () => StrictPageStats }).pmStats;
+	return fn ? fn() : null;
+}
+
+/**
+ * Per-block placement probe (审核: 封面「标题空洞」定位). For each replaceable
+ * block it reports whether the BASE page bitmap still shows ink under the block
+ * and whether the mask is opaque there — separating two causes of a blank where
+ * text should be:
+ *   baseInk=false                → the independent page.render() never drew those
+ *                                  glyphs; the abandon fallback (show-original-
+ *                                  through) has nothing to reveal. A base-bitmap
+ *                                  render/font/timing gap, NOT a placement bug.
+ *   baseInk=true & maskOpaque=true (but not committed) → a mask is covering the
+ *                                  original that should be showing — a real mask
+ *                                  leak / mis-placed line rects.
+ * Geometry + booleans only, never text. Returns null on a non-strict element.
+ */
+export interface StrictProbeRow {
+	id: string;
+	type: string;
+	state: 'committed' | 'abandoned' | 'pending';
+	left: number;
+	top: number;
+	width: number;
+	height: number;
+	/** Base page bitmap still has ink under the block (original would show if unmasked). */
+	baseInk: boolean;
+	/** The mask is opaque over the block (original covered). */
+	maskOpaque: boolean;
+}
+
+export function probeStrictPlacement(element: HTMLElement): StrictProbeRow[] | null {
+	const fn = (element as HTMLElement & { pmProbe?: () => StrictProbeRow[] }).pmProbe;
 	return fn ? fn() : null;
 }
 

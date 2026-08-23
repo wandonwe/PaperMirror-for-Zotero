@@ -199,6 +199,17 @@ test('auditStrictGeometry: null on a non-strict element, passthrough on the hook
 	assert.deepEqual(auditStrictGeometry(el), { violations: 2, adjusted: 1, reverted: 1 });
 });
 
+test('probeStrictPlacement: null on a non-strict element, passthrough on the hook (审核 标题空洞)', async () => {
+	const { probeStrictPlacement } = await import('../../src/ui/strictPageReplacement');
+	assert.equal(probeStrictPlacement({} as unknown as HTMLElement), null);
+	const rows = [
+		{ id: 'page-0-region-0', type: 'heading', state: 'abandoned' as const, left: 217, top: 60, width: 300, height: 26, baseInk: false, maskOpaque: false },
+		{ id: 'page-0-region-13', type: 'paragraph', state: 'committed' as const, left: 302, top: 90, width: 231, height: 400, baseInk: true, maskOpaque: true }
+	];
+	const el = { pmProbe: () => rows } as unknown as HTMLElement;
+	assert.deepEqual(probeStrictPlacement(el), rows);
+});
+
 // ---- 1.2.2 审核项: fonts.ready 永不 resolve 时的超时保险 --------------------
 
 test('fonts.ready 永不 resolve → 超时后仍有且只有一次 final 测量', async () => {

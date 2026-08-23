@@ -7,6 +7,23 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.2] — 2026-08-23
+
+诊断专项:封面「大标题整块空白」定位仪。不改翻译/排版行为,缓存不变(v5)。
+
+### Diagnostics
+
+- **封面标题空洞定位探针**。某些封面(如 Radiology 期刊首页)译后大标题整块
+  既无中文也无英文、只剩空白。排查确认 strictPageReplacement 的「放弃即保留
+  原文」契约本身正确(pmRevert 与几何复核两条 un-commit 路径都会 clearMask 并
+  隐藏译文节点,底图是含原文的整页位图 —— 同页旋转的「MEDICAL PHYSICS」正常
+  透出即为证),故空白不是放弃逻辑所致。新增 `probeStrictPlacement`:对每个可
+  替换块采样**底图**与**遮罩**,报告 `baseInk`(底图此处是否有墨)与
+  `maskOpaque`(遮罩是否不透明),写入诊断导出的 `placementProbe` 字段。据此可
+  一举分辨两种病因 —— `baseInk=false` 说明独立的 `page.render()` 根本没画出这些
+  字形(底图渲染/字体/时序缺口,放弃兜底无原文可露);`baseInk=true` 且
+  `maskOpaque` 而该块并未 committed,则是遮罩误盖真原文。纯几何+布尔,不含文本。
+
 ### Build / CI（仅工具链,不影响已发布插件包）
 
 - **[P3-E] 打包门禁加固**。`verify-xpi` 从「黑名单几类垃圾文件」改为**白名单**:
