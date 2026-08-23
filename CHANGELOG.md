@@ -7,6 +7,31 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.2.9] — 2026-08-23
+
+优化计划**第四批 item 1·事件驱动替代 350ms 轮询 + 不可见即停**(Codex 性能P2 +
+本审计 PF-8)。后台/静止时接近零开销,翻页响应反而更快。
+
+### Performance
+
+- **页变化改为事件驱动,350ms 轮询降级为 1.5s 兜底**。此前每 350ms 一次
+  tick(读当前页、比较、布局看门狗)常驻运行——绝大多数 tick 什么都没发生。现在
+  `syncCurrentPage`(廉价比较、幂等)挂在既有 PDF.js eventBus 订阅上,`updateviewarea`
+  每滚动帧触发——**翻页当帧即被捕捉**(此前最坏延迟 350ms);轮询只兜事件失效的底
+  (eventBus 不可得/事件被吞),间隔 350ms → 1500ms。分栏漂移看门狗(refreshLayout)
+  与内存回收(lastPartial)随兜底 tick 走;分栏尺寸另有 ResizeObserver 实时兜住。
+- **窗口不可见即停**。主窗口 `document.hidden` 时:兜底 tick 直接跳过(不做布局
+  看门狗、不做页同步——不触发 `setCurrentPage` 就不会产生新的翻译/预取请求),
+  事件驱动的页同步同样跳过;`visibilitychange` 恢复可见时**立即补一拍**,不必等
+  下一次兜底 tick。内存回收(lastPartial 断开释放)保留在 hidden 检查之前——后台
+  窗口更该回收 26MB 级的位图引用。监听器随会话 destroy 解除。
+
+### Notes
+
+- 语义零变化:同一套页同步逻辑,只是触发源从定时器变为事件 + 慢兜底;
+  quiescing/原文模式的既有闸不动。765 测试全过。
+
+
 ## [2.2.8] — 2026-08-23
 
 优化计划**第四批·导出 PDF 正确性 LO-1(放不下保留原文,不涂白截断丢正文)**。

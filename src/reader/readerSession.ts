@@ -41,7 +41,10 @@ import type { ReaderLike, PageRender } from './zoteroReaderAdapter';
 import { LruCache } from '../util/lru';
 
 const MODULE = 'readerSession';
-const PAGE_POLL_MS = 350;
+// 兜底轮询间隔 (2.2.9, 计划 第四批 item1 · PF-8): 页变化改为事件驱动
+// (updateviewarea 每滚动帧触发 syncCurrentPage),轮询只兜事件失效的底
+// (eventBus 不可得/事件被吞),350ms → 1500ms;窗口不可见时 tick 直接跳过。
+const PAGE_POLL_MS = 1500;
 
 /**
  * The three reader states behind the toolbar switcher
@@ -112,6 +115,8 @@ export class ReaderSession {
 	private viewMode: ViewMode = 'split';
 	private onViewModeChanged: ((mode: ViewMode) => void) | null = null;
 	private disposePdfEvents: (() => void) | null = null;
+	/** visibilitychange 监听的解除器 (2.2.9, item1 不可见即停)。 */
+	private disposeVisibility: (() => void) | null = null;
 	private pageRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 	/** 缓存身份 pref 观察者 (2.0.9, 审核 P2-4) 与其去抖定时器。 */
 	private identityPrefObservers: (symbol | string)[] = [];
@@ -382,7 +387,7 @@ export class ReaderSession {
 		// open()×destroy 竞态闸 (2.0.7, 审核 P1-1): 上面的 await(以及下面的
 		// prime,可达数秒)期间用户关标签/关窗口/禁用插件都会 destroy()。
 		// 此前 open() 继续执行: 在销毁**之后**注册 disposePdfEvents 与
-		// startPolling —— eventBus 监听与 350ms 轮询永不解除(tick 首行的
+		// startPolling —— eventBus 监听与兜底轮询永不解除(tick 首行的
 		// destroyed 检查只让它空转,不停止),每次「打开后迅速关闭」泄漏一条;
 		// 隐私未接受分支还会对已置 null 的 split/pane 直接调用抛 TypeError。
 		if (this.destroyed) {
@@ -419,12 +424,18 @@ export class ReaderSession {
 		}
 
 		// PDF.js events: the pane renders its pages itself now, so left-side
-		// re-renders and zooms no longer force a rebuild. The only thing the
-		// stream drives is 同步滚动 — following the reader's position (page AND
-		// fraction within it) continuously, which is what keeps 原文第 2 页
-		// from sitting beside 译文第 1 页.
+		// re-renders and zooms no longer force a rebuild. The stream drives
+		// 同步滚动 (following the reader's position continuously) AND — 2.2.9,
+		// item1 — 事件驱动的页同步: updateviewarea 每滚动帧触发 syncCurrentPage
+		// (廉价比较、幂等),翻页当帧即被捕捉,350ms 轮询从此只是兜底。
 		this.disposePdfEvents = adapter.onPdfRenderEvents(this.reader, (pageIndex) => {
-			if (this.destroyed || pageIndex !== null) {
+			if (this.destroyed) {
+				return;
+			}
+			if (!this.isWindowHidden()) {
+				this.syncCurrentPage();
+			}
+			if (pageIndex !== null) {
 				return;
 			}
 			// Zoom on the left → the right pages match the new glyph size.
@@ -1155,51 +1166,99 @@ export class ReaderSession {
 		this.pane?.revealKeptOriginal(pageIndex);
 	}
 
+	/** 主窗口不可见(最小化/被遮挡切走)—— 不可见即停 (2.2.9, item1)。 */
+	private isWindowHidden(): boolean {
+		try {
+			return this.getMainWindow()?.document?.hidden === true;
+		}
+		catch {
+			return false;
+		}
+	}
+
+	/**
+	 * 当前页同步:页变化 → 翻译优先级/面板/胶囊跟进。事件驱动为主
+	 * (updateviewarea 每滚动帧调用,比较廉价、幂等),兜底轮询为辅。
+	 */
+	private syncCurrentPage(): void {
+		const page = adapter.getCurrentPageIndex(this.reader);
+		if (page === this.lastPageIndex) {
+			return;
+		}
+		this.lastPageIndex = page;
+		// In 原文 mode nothing is displayed, so don't spend requests
+		// translating pages the reader scrolls past.
+		// quiescing 期间不入队 (P3, 2.0.10): 见 quiescing 字段注释。
+		if (this.viewMode !== 'original' && !this.quiescing) {
+			this.manager?.setCurrentPage(page);
+		}
+		this.pane?.setCurrentPage(page);
+		// NO forced scrollToPage on a page change: the continuous
+		// updateviewarea → setPdfScrollFraction anchor sync already keeps
+		// the pane aligned to the reader's exact position. Snapping the
+		// pane to the new page's TOP here is what made the right side jump
+		// to the page start mid-scroll; page-change only updates the label
+		// and translation priority now.
+		// A translation task pinned to the page we just LEFT must not keep
+		// the capsule frozen on that page's state ("正在适配排版 50%" forever
+		// — the audit's stale laying-out item). Drop it; the new page's own
+		// updates repopulate the capsule within one notify.
+		const stale = this.tasks.get('translation');
+		if (stale && stale.currentPage !== page + 1) {
+			this.setTask('translation', null);
+		}
+		// If nothing is actively running, the resting ring must retarget
+		// the new page (✓ vs ↻) instead of showing the old page's state.
+		if (!this.tasks.size) {
+			this.renderTopTask();
+		}
+	}
+
+	/** 兜底 tick(1.5s): 内存回收 + 分栏漂移看门狗 + 页同步兜底。 */
+	private pollTick(): void {
+		if (this.destroyed) {
+			return;
+		}
+		// lastPartial 滞留释放 (2.0.6, 审核 P3): 页面重渲染/卸载后其 strict
+		// 元素(带整页位图 canvas,约 26 MB)已脱离文档,却被 lastPartial
+		// 一直引用而无法回收。已断开就放手 ——「查看保留原文」对断开元素
+		// 本来就会走 pane 回退路径,不损失功能。(放在 hidden 检查之前:
+		// 后台窗口更该回收内存。)
+		if (this.lastPartial && !this.lastPartial.element.isConnected) {
+			this.lastPartial = null;
+		}
+		// 不可见即停 (2.2.9, item1): 窗口不可见时不做布局看门狗、不做页同步 ——
+		// 不触发 setCurrentPage 就不会产生新的翻译/预取请求;恢复可见由
+		// visibilitychange 监听立即补一拍,轮询照常兜底。
+		if (this.isWindowHidden()) {
+			return;
+		}
+		// Sidebar opened/closed/resized → re-balance the split.
+		this.split?.refreshLayout();
+		this.syncCurrentPage();
+	}
+
 	private startPolling(): void {
-		this.pollTimer = setInterval(() => {
-			if (this.destroyed) {
-				return;
+		this.pollTimer = setInterval(() => this.pollTick(), PAGE_POLL_MS);
+		// 恢复可见立即补一拍(不然要等最长 1.5s 的下一次兜底 tick)。
+		try {
+			const doc = this.getMainWindow()?.document;
+			if (doc) {
+				const onVisibility = (): void => {
+					if (!this.destroyed && !doc.hidden) {
+						this.pollTick();
+					}
+				};
+				doc.addEventListener('visibilitychange', onVisibility);
+				this.disposeVisibility = () => {
+					try {
+						doc.removeEventListener('visibilitychange', onVisibility);
+					}
+					catch { /* window may be gone */ }
+				};
 			}
-			// lastPartial 滞留释放 (2.0.6, 审核 P3): 页面重渲染/卸载后其 strict
-			// 元素(带整页位图 canvas,约 26 MB)已脱离文档,却被 lastPartial
-			// 一直引用而无法回收。已断开就放手 ——「查看保留原文」对断开元素
-			// 本来就会走 pane 回退路径,不损失功能。
-			if (this.lastPartial && !this.lastPartial.element.isConnected) {
-				this.lastPartial = null;
-			}
-			// Sidebar opened/closed/resized → re-balance the split.
-			this.split?.refreshLayout();
-			const page = adapter.getCurrentPageIndex(this.reader);
-			if (page !== this.lastPageIndex) {
-				this.lastPageIndex = page;
-				// In 原文 mode nothing is displayed, so don't spend requests
-				// translating pages the reader scrolls past.
-				// quiescing 期间不入队 (P3, 2.0.10): 见 quiescing 字段注释。
-				if (this.viewMode !== 'original' && !this.quiescing) {
-					this.manager?.setCurrentPage(page);
-				}
-				this.pane?.setCurrentPage(page);
-				// NO forced scrollToPage on a page change: the continuous
-				// updateviewarea → setPdfScrollFraction anchor sync already keeps
-				// the pane aligned to the reader's exact position. Snapping the
-				// pane to the new page's TOP here is what made the right side jump
-				// to the page start mid-scroll; page-change only updates the label
-				// and translation priority now.
-				// A translation task pinned to the page we just LEFT must not keep
-				// the capsule frozen on that page's state ("正在适配排版 50%" forever
-				// — the audit's stale laying-out item). Drop it; the new page's own
-				// updates repopulate the capsule within one notify.
-				const stale = this.tasks.get('translation');
-				if (stale && stale.currentPage !== page + 1) {
-					this.setTask('translation', null);
-				}
-				// If nothing is actively running, the resting ring must retarget
-				// the new page (✓ vs ↻) instead of showing the old page's state.
-				if (!this.tasks.size) {
-					this.renderTopTask();
-				}
-			}
-		}, PAGE_POLL_MS);
+		}
+		catch { /* visibility tracking is best-effort */ }
 	}
 
 	/**
@@ -2491,6 +2550,8 @@ export class ReaderSession {
 		this.baseBitmaps.clear(); // 释放缓存的底图 canvas
 		this.disposePdfEvents?.();
 		this.disposePdfEvents = null;
+		this.disposeVisibility?.();
+		this.disposeVisibility = null;
 		this.overlay?.destroy();
 		this.overlay = null;
 		this.manager?.dispose();
