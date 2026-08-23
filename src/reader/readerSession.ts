@@ -313,8 +313,7 @@ export class ReaderSession {
 			// highlighted 译文 block, or asks the reader to select text first.
 			onExplainSelection: () => void this.explainSelection(),
 			onToggleSync: enabled => this.setSyncEnabled(enabled),
-			onRetranslate: () => this.confirmClearCacheRetranslate(), // 菜单「清缓存重译全文」= 破坏性,先确认
-			onRotateEngine: () => void this.rotateCurrentEngine(), // 菜单「换引擎重译本页」= 有池时轮换引擎真正重译
+			onRetranslate: () => this.confirmClearCacheRetranslate(), // 菜单栏刷新按钮「清缓存重译全文」= 破坏性,先确认
 			onRefreshPage: () => void this.retranslateCurrent(), // 胶囊圆环 = 修复本页 (只补缺,不换引擎不清合格缓存)
 			onCancelPage: () => this.cancelCurrentTranslation(), // 胶囊取消 = 停止翻译
 			onViewPartial: () => this.viewKeptOriginal(), // 胶囊「查看保留原文」= 定位保留段落
@@ -324,9 +323,7 @@ export class ReaderSession {
 			onShowDiagnostics: () => void this.copyDiagnostics(),
 			onCopyCorpus: () => this.copyLayoutCorpus(),
 			onSaveTerms: () => this.previewSaveLearnedTerms(), // 2.3.1 item3: 预览并保存到词汇表(不再只复制 TSV)
-			// 「更多」菜单 (2.3.0, 第四批 item2 · WF-1): 导出/清缓存从控制台 API 搬上界面。
-			onExportPdf: () => void this.exportTranslatedPdf(),
-			onClearDocCache: () => this.confirmClearDocCache(),
+			onExportPdf: () => void this.exportTranslatedPdf(), // 菜单栏「导出」(2.3.8 从「更多」搬回工具条)
 			onOpenSettings: () => this.openSettings(),
 			onToggleViewKind: kind => setPref('paneView', kind),
 			onPickLanguages: (source, target) => this.applyLanguagePick(source, target),
@@ -1775,17 +1772,17 @@ export class ReaderSession {
 	 * open as the instant preview while this runs in the background.
 	 */
 	async exportTranslatedPdf(): Promise<void> {
+		// 点击必须立刻可见 (2.3.8, 修「点击后没反应」): 状态胶囊在每页翻完后会
+		// 自动折叠成 56px 圆环,而胶囊尊重折叠状态 —— 导出进度乃至失败信息全部
+		// 渲染进一个折叠的小环里,用户看起来就是「没反应」。导出是用户显式点击
+		// 的动作,启动时强制展开胶囊,并在任何 await 之前先推一条 0% 进度。
+		this.setCapsuleCollapsed(false);
 		if (this.exportingPdf) {
 			this.pushExport('translating', { message: getString('papermirror-export-running').replace('%n%', '…') });
 			return;
 		}
-		const item = adapter.getReaderItem(this.reader);
-		const filePath = item ? await (item as unknown as { getFilePathAsync(): Promise<string | false> }).getFilePathAsync() : null;
-		if (!item || !filePath) {
-			this.pushExport('failed', { message: getString('papermirror-export-failed') });
-			return;
-		}
 		this.exportingPdf = true;
+		this.pushExport('translating', { pct: 0, message: getString('papermirror-export-running').replace('%n%', '0') });
 		const report = (pct: number): void => {
 			this.pushExport('translating', {
 				pct,
@@ -1793,6 +1790,14 @@ export class ReaderSession {
 			});
 		};
 		try {
+			// 条目/路径解析也在 try 里 (2.3.8): 旧版这两个 await 在 try 之外,
+			// 一旦抛错整个 void 调用被静默吞掉 —— 正是「点击后没反应」的另一个洞。
+			const item = adapter.getReaderItem(this.reader);
+			const filePath = item ? await (item as unknown as { getFilePathAsync(): Promise<string | false> }).getFilePathAsync() : null;
+			if (!item || !filePath) {
+				this.pushExport('failed', { message: `${getString('papermirror-export-failed')}: 找不到 PDF 附件文件` });
+				return;
+			}
 			const bytes = new Uint8Array(await IOUtils.read(String(filePath)));
 			// 导出恒走内置生成 (2.1.6): 零配置、无外部依赖、无网络面。此前的
 			// 「完整 PDF 服务模式」(BabelDOC 本地 HTTP 桥接)连同其令牌/握手安全面
@@ -1847,6 +1852,7 @@ export class ReaderSession {
 		catch (e) {
 			const message = e instanceof PaperMirrorError ? e.message : String(e);
 			logger.warn(MODULE, 'exportTranslatedPdf failed', e);
+			this.setCapsuleCollapsed(false); // 失败必须可见,即使用户中途又把胶囊折叠了
 			this.pushExport('failed', { message: `${getString('papermirror-export-failed')}: ${message}` });
 		}
 		finally {
@@ -2077,8 +2083,9 @@ export class ReaderSession {
 	/**
 	 * 修复本页 (2.1.10, 计划 item 4): 圆环默认动作。**只补缺失/无效/排版失败的
 	 * 段**,复用段落库里合格的译文,**不轮换服务商、不清合格缓存**——一次点击
-	 * 只为「把这页补齐」,不再像旧版那样在有池时默默换引擎+整页重付费。换引擎
-	 * 重译是另一个显式动作(rotateCurrentEngine)。
+	 * 只为「把这页补齐」,不再像旧版那样在有池时默默换引擎+整页重付费。
+	 * (2.3.8: 手动「换引擎重译本页」入口随菜单精简移除;引擎不稳时的自动换家
+	 * 仍在 onProviderUnstable 熔断里。)
 	 */
 	private async retranslateCurrent(): Promise<void> {
 		if (!this.manager) {
@@ -2090,36 +2097,6 @@ export class ReaderSession {
 		this.pane?.setBusy(true);
 		try {
 			await this.manager.retranslatePage(page, 'normal');
-		}
-		finally {
-			this.pane?.setBusy(false);
-		}
-	}
-
-	/**
-	 * 换引擎重译本页 (2.1.10, 计划 item 4): 显式动作(菜单)。有池时把本页发给
-	 * 下一家服务商并绕过段落库让新引擎**真正重译**(段落 context 用规范引擎、不含
-	 * 轮换偏移,故 'normal' 会零请求读回旧译文——必须走 'rotate' 才真正换家)。
-	 * 单引擎时无从换,退化为修复本页并提示。
-	 */
-	private async rotateCurrentEngine(): Promise<void> {
-		if (!this.manager) {
-			this.startTranslating();
-			return;
-		}
-		const page = adapter.getCurrentPageIndex(this.reader);
-		this.clearPageRounds(page);
-		const rotated = this.pool.length > 1;
-		if (rotated) {
-			this.pageProviderOffset.set(page, ((this.pageProviderOffset.get(page) ?? 0) + 1) % this.pool.length);
-			logger.info(MODULE, `换引擎重译 page ${page + 1} → provider ${this.providerForPage(page)}`);
-		}
-		else {
-			this.flashNotice('只配置了一个翻译服务商,无法换引擎;已按「修复本页」重译');
-		}
-		this.pane?.setBusy(true);
-		try {
-			await this.manager.retranslatePage(page, rotated ? 'rotate' : 'normal');
 		}
 		finally {
 			this.pane?.setBusy(false);
@@ -2144,39 +2121,6 @@ export class ReaderSession {
 		if (ok) {
 			void this.retranslateAll();
 		}
-	}
-
-	/**
-	 * 「更多」菜单「清除本文缓存」(2.3.0, 第四批 item2 · WF-1): 清本文档全部
-	 * 页面+段落缓存但**不重译**(隐私/磁盘用途)—— 屏幕上已显示的译文保留在
-	 * 内存,下次打开才重新翻译。与「重译…」菜单里的「清缓存重译全文」互补,
-	 * 同样破坏性、同样先确认。
-	 */
-	private confirmClearDocCache(): void {
-		let ok = true;
-		try {
-			const prompt = (Services as unknown as { prompt?: { confirm(parent: unknown, title: string, text: string): boolean } }).prompt;
-			const win = (Zotero as unknown as { getMainWindow?(): unknown }).getMainWindow?.() ?? null;
-			ok = prompt ? prompt.confirm(win, getString('papermirror-clear-cache'),
-				'将删除本文档已缓存的全部译文(不影响当前屏幕显示;下次打开需重新翻译)。'
-				+ '跨文档共享的段落库不在此列——如需彻底清空请在设置中「清除全部缓存」。确定继续?') : true;
-		}
-		catch {
-			ok = true;
-		}
-		if (!ok) {
-			return;
-		}
-		const item = adapter.getReaderItem(this.reader);
-		if (!item) {
-			return;
-		}
-		void cacheManager.clearAttachmentAllVersions(item.key)
-			.then(() => this.flashNotice(getString('papermirror-toast-cache-cleared')))
-			.catch((e) => {
-				logger.warn(MODULE, 'clearDocCache failed', e);
-				this.pushFailure(getString('papermirror-status-error'));
-			});
 	}
 
 	/** Capsule 取消: stop the current page's translation and mark it cancelled. */

@@ -50,16 +50,37 @@ async function loadFontBytes(): Promise<Uint8Array> {
 	if (!fontURL) {
 		throw new PaperMirrorError('UNKNOWN', '内置字体未初始化。', { retryable: false });
 	}
-	const http = (globalThis as Record<string, any>).Zotero?.HTTP;
-	const response = await http.request('GET', fontURL, {
-		responseType: 'arraybuffer',
-		timeout: 30000,
-		successCodes: false,
-		logBodyLength: 0
-	});
-	const buffer = response?.response as ArrayBuffer;
+	// 双通道加载 (2.3.8): rootURI 可能是 file:// 或 jar:file://…!/ —— Zotero.HTTP
+	// 对非 http(s) URL 的行为随版本有差异,失败就换 fetch 再试一条,两条都失败
+	// 才报错(错误会显示在导出胶囊里,不再静默)。
+	let buffer: ArrayBuffer | null = null;
+	let lastError = '';
+	try {
+		const http = (globalThis as Record<string, any>).Zotero?.HTTP;
+		const response = await http.request('GET', fontURL, {
+			responseType: 'arraybuffer',
+			timeout: 30000,
+			successCodes: false,
+			logBodyLength: 0
+		});
+		buffer = (response?.response as ArrayBuffer) ?? null;
+	}
+	catch (e) {
+		lastError = String(e);
+	}
 	if (!buffer || buffer.byteLength < 1000) {
-		throw new PaperMirrorError('UNKNOWN', `内置字体加载失败 (${fontURL})。`, { retryable: false });
+		try {
+			const fetchFn = (globalThis as Record<string, any>).fetch as ((url: string) => Promise<{ arrayBuffer(): Promise<ArrayBuffer> }>) | undefined;
+			if (fetchFn) {
+				buffer = await (await fetchFn(fontURL)).arrayBuffer();
+			}
+		}
+		catch (e) {
+			lastError = String(e);
+		}
+	}
+	if (!buffer || buffer.byteLength < 1000) {
+		throw new PaperMirrorError('UNKNOWN', `内置字体加载失败 (${fontURL})${lastError ? ` — ${lastError}` : ''}。`, { retryable: false });
 	}
 	fontBytesCache = new Uint8Array(buffer);
 	return fontBytesCache;
