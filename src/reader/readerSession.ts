@@ -19,7 +19,7 @@ import { endpointHost, supportsCharBudget } from '../translation/providers/types
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
 import { TranslationManager, type PageTranslationState } from '../translation/translationManager';
 import { PROMPT_VERSION } from '../translation/promptBuilder';
-import { parseGlossaryJSON } from '../translation/glossary';
+import { parseGlossaryJSON, serializeGlossary, dedupeLearnedTerms } from '../translation/glossary';
 import { parseProviderProfiles, effectiveProviderConfig } from '../translation/providerProfiles';
 import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationResponse } from '../types/models';
 import { PaperMirrorError } from '../types/models';
@@ -61,6 +61,7 @@ function paneStrings(): PaneStrings {
 		eyebrow: 'PAPERMIRROR',
 		title: getString('papermirror-pane-title'),
 		explain: getString('papermirror-explain'),
+		explainSelection: getString('papermirror-explain-selection'),
 		explainTip: getString('papermirror-explain-tip'),
 		explainTitle: getString('papermirror-explain-title'),
 		explainSubtitle: getString('papermirror-explain-subtitle'),
@@ -320,7 +321,7 @@ export class ReaderSession {
 			onSaveNote: () => void this.saveSelectionToNote(),
 			onShowDiagnostics: () => void this.copyDiagnostics(),
 			onCopyCorpus: () => this.copyLayoutCorpus(),
-			onCopyTerms: () => this.copyLearnedTerms(),
+			onSaveTerms: () => this.previewSaveLearnedTerms(), // 2.3.1 item3: 预览并保存到词汇表(不再只复制 TSV)
 			// 「更多」菜单 (2.3.0, 第四批 item2 · WF-1): 导出/清缓存从控制台 API 搬上界面。
 			onExportPdf: () => void this.exportTranslatedPdf(),
 			onClearDocCache: () => this.confirmClearDocCache(),
@@ -2475,12 +2476,10 @@ export class ReaderSession {
 	 * 增量形态): docMemory 边翻边学的「术语(ABBR)」对 → TSV 进剪贴板,
 	 * 用户可直接粘贴进词汇表或表格里编辑。
 	 */
-	private copyLearnedTerms(): void {
-		const terms = this.manager?.learnedTerms() ?? [];
-		if (!terms.length) {
-			this.flashNotice('本篇尚未学得术语对(翻译几页后再试)');
-			return;
-		}
+	/** 上次「保存术语到词汇表」前的快照 —— 一键撤销 (2.3.1, item3 · WF-8)。 */
+	private glossaryUndo: { json: string; added: number } | null = null;
+
+	private copyTermsTsv(terms: { source: string; target: string }[]): void {
 		try {
 			const tsv = terms.map(t => `${t.source}\t${t.target}`).join('\n');
 			Components.classes['@mozilla.org/widget/clipboardhelper;1']
@@ -2491,6 +2490,87 @@ export class ReaderSession {
 		catch (e) {
 			logger.warn(MODULE, 'term table copy failed', e);
 		}
+	}
+
+	/**
+	 * 「术语」名称与行为统一 (2.3.1, 计划 第四批 item3 · WF-8): 不再只复制 TSV,
+	 * 而是**预览并保存到词汇表** —— 与既有词汇表去重、确认框预览、保存为
+	 * 'suggested'(参考,不强制模型)、支持一键撤销;「编辑」在设置页词汇表
+	 * 编辑器闭环。确认框如实提示: 词汇表是译文身份的一部分(glossaryHash 入
+	 * 缓存键),保存会使本篇已缓存译文在下次打开时按新术语重译。
+	 * 「仅复制 TSV」保留为确认框第二按钮(旧行为不丢)。
+	 */
+	private previewSaveLearnedTerms(): void {
+		const terms = this.manager?.learnedTerms() ?? [];
+		if (!terms.length) {
+			this.flashNotice('本篇尚未学得术语对(翻译几页后再试)');
+			return;
+		}
+		const existingJson = getPref<string>('glossaryGlobal', '[]');
+		const existing = parseGlossaryJSON(existingJson);
+		// 去重: 先对既有词汇表,再对本篇自身(纯函数,单测覆盖)。
+		const fresh = dedupeLearnedTerms(existing, terms);
+		const prompt = (Services as unknown as {
+			prompt?: {
+				confirm(parent: unknown, title: string, text: string): boolean;
+				confirmEx?(parent: unknown, title: string, text: string, flags: number,
+					b0: string | null, b1: string | null, b2: string | null,
+					check: string | null, state: { value: boolean }): number;
+			};
+		}).prompt;
+		const win = (Zotero as unknown as { getMainWindow?(): unknown }).getMainWindow?.() ?? null;
+		if (!fresh.length) {
+			// 全部已在词汇表 → 提供撤销上次保存(若有)。
+			if (this.glossaryUndo && prompt?.confirm) {
+				const undo = this.glossaryUndo;
+				if (prompt.confirm(win, '术语已全部在词汇表中',
+					`本篇学得的 ${terms.length} 条术语已全部在词汇表中。撤销上次保存的 ${undo.added} 条?`)) {
+					setPref('glossaryGlobal', undo.json);
+					this.glossaryUndo = null;
+					this.flashNotice(`已撤销上次保存的 ${undo.added} 条术语`);
+				}
+			}
+			else {
+				this.flashNotice(`本篇学得的 ${terms.length} 条术语已全部在词汇表中(设置 → 词汇表可编辑)`);
+			}
+			return;
+		}
+		const PREVIEW_MAX = 12;
+		const previewLines = fresh.slice(0, PREVIEW_MAX).map(t => `${t.source} → ${t.target}`);
+		if (fresh.length > PREVIEW_MAX) {
+			previewLines.push(`…等共 ${fresh.length} 条`);
+		}
+		const text = `本篇新学得 ${fresh.length} 条术语(已与词汇表现有 ${existing.length} 条去重):\n\n`
+			+ previewLines.join('\n')
+			+ '\n\n保存为「参考」术语(不强制模型);可在设置 → 词汇表中编辑,再点一次「术语」可撤销。'
+			+ '\n注意:词汇表变化会使本篇已缓存译文在下次打开时按新术语重译。';
+		let choice = 0; // 0=保存 1=仅复制TSV 2=取消
+		try {
+			if (prompt?.confirmEx) {
+				// STD flags: (BUTTON_TITLE_IS_STRING=127) 每键位 <<0/8/16。
+				const IS_STRING = 127;
+				choice = prompt.confirmEx(win, '保存术语到词汇表', text,
+					IS_STRING | (IS_STRING << 8) | (IS_STRING << 16),
+					'保存到词汇表', '仅复制 TSV', '取消', null, { value: false });
+			}
+			else if (prompt?.confirm) {
+				choice = prompt.confirm(win, '保存术语到词汇表', text) ? 0 : 2;
+			}
+		}
+		catch {
+			choice = 2; // 无法弹框时不做破坏性动作
+		}
+		if (choice === 1) {
+			this.copyTermsTsv(terms);
+			return;
+		}
+		if (choice !== 0) {
+			return;
+		}
+		this.glossaryUndo = { json: existingJson, added: fresh.length };
+		const merged = [...existing, ...fresh.map(t => ({ source: t.source, target: t.target, mode: 'suggested' as const }))];
+		setPref('glossaryGlobal', serializeGlossary(merged));
+		this.flashNotice(`已保存 ${fresh.length} 条术语到词汇表(设置中可编辑;再点「术语」可撤销)`);
 	}
 
 	/**

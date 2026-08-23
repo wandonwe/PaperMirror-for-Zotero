@@ -84,6 +84,32 @@ export function matchRules(rules: GlossaryRule[], texts: string[]): GlossaryRule
 	return matched;
 }
 
+/**
+ * 学得术语与词汇表去重 (2.3.1, 第四批 item3 · WF-8) — pure。
+ * 返回**尚不在**词汇表里的学得术语(source 大小写不敏感比较);对学得列表自身
+ * 也去重(同 source 学得多次取首个)。空 target/source 的脏条目被丢弃。
+ */
+export function dedupeLearnedTerms(
+	existing: GlossaryRule[],
+	learned: { source: string; target: string }[]
+): { source: string; target: string }[] {
+	const known = new Set(existing.map(r => r.source.toLowerCase()));
+	const fresh: { source: string; target: string }[] = [];
+	for (const t of learned) {
+		const source = t.source?.trim();
+		const target = t.target?.trim();
+		if (!source || !target) {
+			continue;
+		}
+		const key = source.toLowerCase();
+		if (!known.has(key)) {
+			known.add(key);
+			fresh.push({ source, target });
+		}
+	}
+	return fresh;
+}
+
 /** Merge glossaries with precedence: per-item > per-collection > global. */
 export function mergeGlossaries(...layers: GlossaryRule[][]): GlossaryRule[] {
 	const seen = new Map<string, GlossaryRule>();

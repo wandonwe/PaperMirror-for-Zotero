@@ -1,6 +1,8 @@
 papermirror-prefpane-label = PaperMirror 文镜
 papermirror-toolbar-toggle = 中英对照阅读
 papermirror-explain = 解析
+# 名称与行为统一 (2.3.1, 第四批 item3 · WF-8): 工具条按钮只解析**选中内容**,名称如实。
+papermirror-explain-selection = 解析选中内容
 papermirror-explain-tip = 解析 PDF 中选中的文字(先选中,再点这里)
 papermirror-explain-title = 深度解析
 papermirror-explain-no-selection = 请先在 PDF 中选中要解析的文字,或双击一个译文段落。

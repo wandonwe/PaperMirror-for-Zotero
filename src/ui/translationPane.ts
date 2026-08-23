@@ -77,6 +77,8 @@ export interface PaneStrings {
 	eyebrow: string;
 	title: string;
 	explain: string;
+	/** 工具条按钮全名「解析选中内容」(2.3.1 item3); `explain` 留给块级 mini 按钮。 */
+	explainSelection: string;
 	explainTip: string;
 	explainTitle: string;
 	explainSubtitle: string;
@@ -136,8 +138,9 @@ export interface PaneCallbacks {
 	onShowDiagnostics(): void;
 	/** 「更多」菜单「语料」(仅 debugLogging) — copy the current page's text-layer spans (CONTAINS source text). */
 	onCopyCorpus(): void;
-	/** 「更多」菜单「术语」— copy 本篇学得的术语对 (TSV,自动抽取入口 1.1.2)。 */
-	onCopyTerms(): void;
+	/** 「更多」菜单「术语」(2.3.1, item3 · WF-8) — 预览本篇学得的术语并保存到词汇表
+	 *  (去重/确认/可撤销;「仅复制 TSV」保留为确认框第二按钮)。 */
+	onSaveTerms(): void;
 	/** 「更多」菜单「导出译文 PDF」(2.3.0, 计划 第四批 item2 · WF-1)。 */
 	onExportPdf(): void;
 	/** 「更多」菜单「清除本文缓存」(2.3.0, WF-1) — 清缓存但不重译,带确认。 */
@@ -332,7 +335,7 @@ export class TranslationPane {
 			const items: { label: string; checked: boolean; onPick(): void }[] = [
 				{ label: '导出译文 PDF(单语 + 对照两份)', checked: false, onPick: () => this.callbacks.onExportPdf() },
 				{ label: '清除本文缓存…(不重译,下次打开重新翻译)', checked: false, onPick: () => this.callbacks.onClearDocCache() },
-				{ label: '术语:复制术语对照表 (TSV)', checked: false, onPick: () => this.callbacks.onCopyTerms() },
+				{ label: '术语:预览并保存到词汇表(可撤销)', checked: false, onPick: () => this.callbacks.onSaveTerms() },
 				{ label: '诊断:复制脱敏指标 + 引擎自检(不含原文/密钥)', checked: false, onPick: () => this.callbacks.onShowDiagnostics() }
 			];
 			if (getPref<boolean>('debugLogging', false)) {
@@ -710,7 +713,7 @@ export class TranslationPane {
 			refreshChip,
 			this.el('span', 'pm-bar-spacer'),
 			this.syncSwitch,
-			this.textButton('pm-bar-action', `✦ ${this.strings.explain}`, this.strings.explainTip, () => this.callbacks.onExplainSelection()),
+			this.textButton('pm-bar-action', `✦ ${this.strings.explainSelection}`, this.strings.explainTip, () => this.callbacks.onExplainSelection()),
 			this.textButton('pm-bar-action', this.strings.saveNote, this.strings.saveNote, () => this.callbacks.onSaveNote()),
 			this.buildMoreButton(),
 			this.el('span', 'pm-bar-sep'),
