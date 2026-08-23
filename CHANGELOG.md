@@ -7,6 +7,28 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-08-23
+
+优化计划**第二批 item 3·表格单元格语义**。补上「第二批」架构核心的最后一块:
+文本型表格单元格从此走**表格分组**、绝不与正文段落同请求。快照兼容(不改
+`block.type`、不动渲染路径),故次版本号 minor bump。
+
+### Fixed
+
+- **文本单元格不再与正文段落打进同一个请求**。结构化后的单元格是合成块——`type`
+  仍是 `'paragraph'`(渲染需要),但成对携带 `tableRow`/`tableCol`。此前 `layoutModules`
+  与 `planChunks` 只认 `type === 'table'`,于是文本单元格被当普通正文,和上下文段落
+  塞进同一次翻译请求:表头/数据行译文互相污染、块 id 漂移、错位补救。现在通过
+  `isTableCellBlock`(凭 `tableRow`+`tableCol` 标记,不改 `type`)把连续单元格锚定为
+  **table 模块**,`planChunks` 在单元格与正文之间设**硬边界**——一个请求要么全是
+  单元格、要么全是正文,绝不混装。单元格之间仍按字符预算**批量**打包(不逐格请求)。
+  数字/统计单元格另由结构化时设的 `translationMode: 'preserve'` 保护,根本不进翻译。
+
+### Notes
+
+- 零渲染风险:`buildLayoutModules` 仅在 `translationManager` 翻译分组处调用;不改
+  `block.type`,其余所有 `paragraph` 消费点(覆盖层、严格替换、诊断)行为不变。
+
 ## [2.1.10] — 2026-08-23
 
 优化计划**第二批 item 4·「刷新本页」拆三档**。默认动作变轻(省 API),破坏性动作
