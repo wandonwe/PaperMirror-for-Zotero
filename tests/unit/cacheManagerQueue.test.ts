@@ -190,3 +190,27 @@ test('合并基底 JSON 确认损坏 (SyntaxError) → 允许以空库重建', a
 	}
 	finally { io.teardown(); }
 });
+
+// ---- 2.3.5 (第四批 item7 · API-3): 跨文档共享段落库 -------------------------
+
+test('段落库跨文档共享: A 文档写入的段落, B 文档同 context 直接命中', async () => {
+	const io = installIO();
+	try {
+		const mod = await import('../../src/cache/cacheManager');
+		mod.setSegmentFlushDelayMs(0);
+		const ctx = {
+			provider: 'openai', model: 'm', promptVersion: 2,
+			customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n', settingsHash: 's'
+		};
+		const docA = { attachmentKey: 'DOC-A', fileHash: 'HA', ...ctx };
+		const docB = { attachmentKey: 'DOC-B', fileHash: 'HB', ...ctx };
+		await mod.writeSegments(docA, [{ hash: 'boilerplate-1', translatedText: '样板句译文' }]);
+		const hit = await mod.readSegments(docB, ['boilerplate-1']);
+		assert.equal(hit.get('boilerplate-1'), '样板句译文', '跨文档同 context 命中,0 请求');
+		// context 不同(换模型)则隔离不串。
+		const docC = { attachmentKey: 'DOC-B', fileHash: 'HB', ...ctx, model: 'other-model' };
+		const miss = await mod.readSegments(docC, ['boilerplate-1']);
+		assert.equal(miss.has('boilerplate-1'), false, '不同 context 不得串库');
+	}
+	finally { io.teardown(); }
+});

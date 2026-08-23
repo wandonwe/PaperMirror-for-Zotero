@@ -145,6 +145,8 @@ export class ReaderSession {
 	 * ~50MB,dispose 全释放。
 	 */
 	private baseBitmaps = new LruCache<PageRender>(4);
+	/** 讲解结果缓存 (2.3.5, item7 · API-8): 段落+引擎/模型/语言 → 解析节。 */
+	private explainCache = new LruCache<ExplanationSection[]>(20);
 	/**
 	 * Compress-and-retry rounds already spent, keyed by BLOCK id (max 2 each).
 	 * Per-block, not per-page: two long paragraphs at the top of a page must not
@@ -2156,7 +2158,8 @@ export class ReaderSession {
 			const prompt = (Services as unknown as { prompt?: { confirm(parent: unknown, title: string, text: string): boolean } }).prompt;
 			const win = (Zotero as unknown as { getMainWindow?(): unknown }).getMainWindow?.() ?? null;
 			ok = prompt ? prompt.confirm(win, getString('papermirror-clear-cache'),
-				'将删除本文档已缓存的全部译文(不影响当前屏幕显示;下次打开需重新翻译)。确定继续?') : true;
+				'将删除本文档已缓存的全部译文(不影响当前屏幕显示;下次打开需重新翻译)。'
+				+ '跨文档共享的段落库不在此列——如需彻底清空请在设置中「清除全部缓存」。确定继续?') : true;
 		}
 		catch {
 			ok = true;
@@ -2315,10 +2318,18 @@ export class ReaderSession {
 			this.pane.showExplanation({ passage: text, error: getString('papermirror-explain-needs-llm') });
 			return;
 		}
-		// 3. Run
+		// 3. Run — 讲解缓存 (2.3.5, 第四批 item7 · API-8): 同段落+同引擎/模型/语言
+		// 的解析在会话内缓存,重复选中/误触零请求(重读一段是常态,按次计费)。
 		this.pane.showExplanation({ passage: text, loading: true });
 		try {
 			const { target } = this.resolveLanguages(text);
+			const cacheKey = hashSourceTexts([text, settings.providerId, settings.model ?? '', target]);
+			const cached = this.explainCache.get(cacheKey);
+			if (cached) {
+				this.lastExplanation = { passage: text, sections: cached, pageNumber: page + 1 };
+				this.pane.showExplanation({ passage: text, sections: cached });
+				return;
+			}
 			const item = adapter.getReaderItem(this.reader);
 			const result = await explainText(provider, settings, {
 				text,
@@ -2327,6 +2338,7 @@ export class ReaderSession {
 				context
 			});
 			const sections = parseExplanationSections(result);
+			this.explainCache.set(cacheKey, sections);
 			this.lastExplanation = { passage: text, sections, pageNumber: page + 1 };
 			this.pane.showExplanation({ passage: text, sections });
 		}

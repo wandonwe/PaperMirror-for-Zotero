@@ -745,13 +745,15 @@ test('优先翻译当前页: the current page translates before any neighbour is
 
 test('chunks of one page run concurrently (2-way), and every block still lands', async () => {
 	// Two big blocks (5000 chars each) → planChunks(8000 budget) → 2 chunks.
+	// 文本必须互不相同 (2.3.5, API-2): 同页同文块现在会被去重成一个请求 —— 本
+	// 测试考的是 chunk 并发,不是去重,夹具改为两段不同文本。
 	let active = 0;
 	let maxActive = 0;
 	const { deps } = makeDeps({
 		extractPage: async (pageIndex) => [0, 1].map(i => ({
 			id: `page-${pageIndex}-block-${i}`,
 			pageIndex, order: i, type: 'paragraph' as const,
-			sourceText: 'x'.repeat(5000)
+			sourceText: (i === 0 ? 'x' : 'y').repeat(5000)
 		})),
 		translateRequest: async (request) => {
 			active++;
@@ -1791,5 +1793,31 @@ test("retranslatePage('rotate') 绕过段落库真正重译;'normal' 仍复用�
 	assert.ok(translateCalls > 0, '轮换刷新必须发出真实请求');
 	assert.equal(manager.getPageState(0)!.translations.get('page-0-block-0'), '新引擎的完整中文译文内容。');
 	assert.ok((manager as any).failedSegments.has(seeded), "'rotate' 不得像 'force' 那样清掉别处的全局止损记忆");
+	manager.dispose();
+});
+
+// ---- 2.3.5 (第四批 item7 · API-2): 同页相同内容去重 -------------------------
+
+test('同页同文块只翻译一次,其余镜像共享译文', async () => {
+	const requested: string[][] = [];
+	const { deps } = makeDeps({
+		extractPage: async (pageIndex) => [
+			{ id: `page-${pageIndex}-block-0`, pageIndex, order: 0, type: 'paragraph' as const, sourceText: 'Repeated boilerplate sentence here.' },
+			{ id: `page-${pageIndex}-block-1`, pageIndex, order: 1, type: 'paragraph' as const, sourceText: 'A different body paragraph entirely.' },
+			{ id: `page-${pageIndex}-block-2`, pageIndex, order: 2, type: 'paragraph' as const, sourceText: 'Repeated boilerplate sentence here.' }
+		],
+		translateRequest: async (request) => {
+			requested.push(request.blocks.map(b => b.id));
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '译文:' + b.id })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const state = manager.getPageState(0)!;
+	assert.equal(state.status, 'done');
+	const sent = requested.flat();
+	assert.ok(!sent.includes('page-0-block-2'), '重复块不进请求(只送代表块)');
+	assert.equal(state.translations.size, 3, '三个块全部拿到译文');
+	assert.equal(state.translations.get('page-0-block-2'), state.translations.get('page-0-block-0'), '重复块镜像代表块的译文');
 	manager.dispose();
 });

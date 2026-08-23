@@ -1573,6 +1573,27 @@ export class TranslationManager {
 			}
 			return true;
 		});
+		// 同页相同内容去重 (2.3.5, 第四批 item7 · API-2): 同一页里 sourceText 完全
+		// 相同的块(模板化表头/重复短语/密集表格)只把**代表块**送去翻译,其余
+		// 同文块在代表译文到达时镜像共享 —— 省下重复块的输入+输出 token,零风险
+		// (segHash = 内容+语言,与段落缓存同一把键)。代表失败时同文块同样保留
+		// 原文,诚实计入 untranslated。
+		const dupOf = new Map<string, string[]>();
+		const uniqueToTranslate: SourceBlock[] = [];
+		{
+			const repByHash = new Map<string, string>();
+			for (const b of toTranslate) {
+				const h = segHash(b);
+				const rep = repByHash.get(h);
+				if (rep === undefined) {
+					repByHash.set(h, b.id);
+					uniqueToTranslate.push(b);
+				}
+				else {
+					dupOf.set(rep, [...(dupOf.get(rep) ?? []), b.id]);
+				}
+			}
+		}
 		if (!toTranslate.length) {
 			state.status = 'done';
 			state.diagnostics = {
@@ -1598,7 +1619,7 @@ export class TranslationManager {
 
 		// Protect formulas / citations / statistics per block (+ 不译词列表) —
 		// 占位符注册表 (1.1.0): 掩蔽/校验/还原共用同一实例,清单不可能串块。
-		const protectedBlocks = toTranslate.map((block) => {
+		const protectedBlocks = uniqueToTranslate.map((block) => {
 			const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block), block.styleRuns);
 			return { block, reg, text: reg.text };
 		});
@@ -1650,7 +1671,7 @@ export class TranslationManager {
 				// 前置的组合比单纯计数更早识别高风险块。
 				|| isFormulaDenseRisk(maskedById.get(b.id) ?? b.sourceText, ph);
 		};
-		const chunks = planChunks(toTranslate, buildLayoutModules(toTranslate), { riskOf });
+		const chunks = planChunks(uniqueToTranslate, buildLayoutModules(uniqueToTranslate), { riskOf });
 		// Hard ceiling on requests for this page so a misbehaving engine can never
 		// turn one page into a request storm: 2× the planned chunks, plus 2. Once
 		// hit, salvage stops and the remaining blocks are left for 「刷新本页」.
@@ -1668,6 +1689,24 @@ export class TranslationManager {
 		const canSpendFinal = (): boolean => metrics.requestCount < pageRequestCap + FINAL_RECOVERY_MAX;
 		const results: TranslatedBlock[] = [];
 		let untranslatedCount = 0;
+		// API-2 镜像: 代表块的译文一到,同文重复块立即共享(渐进渲染同帧可见);
+		// 结尾还有一次全量 sweep 兜住 salvage/纯文本兜底等晚到路径。
+		const mirrorDuplicates = (repId: string): void => {
+			const dups = dupOf.get(repId);
+			if (!dups) {
+				return;
+			}
+			const t = state.translations.get(repId);
+			if (t === undefined) {
+				return;
+			}
+			for (const d of dups) {
+				if (!state.translations.has(d)) {
+					state.translations.set(d, t);
+					results.push({ id: d, translatedText: t });
+				}
+			}
+		};
 
 		// Context is derived from SOURCE text only (audit-verified: nothing in a
 		// request reads a prior chunk's RESPONSE), so it is precomputable and the
@@ -1709,7 +1748,8 @@ export class TranslationManager {
 				const w2 = first.boundingBox?.width;
 				const similarWidth = !w1 || !w2 || Math.abs(w1 - w2) < Math.min(w1, w2);
 				if ((unfinished || continuing) && lastLineFull && similarWidth) {
-					contexts[0] = tail.length <= 600 ? tail : tail.slice(-600);
+					// API-7: 跨页尾同样收窄 600→300。
+					contexts[0] = tail.length <= 300 ? tail : tail.slice(-300);
 				}
 			}
 		}
@@ -1936,6 +1976,7 @@ export class TranslationManager {
 				const restored = pb.reg.restore(raw);
 				results.push({ id: block.id, translatedText: restored });
 				state.translations.set(block.id, restored);
+				mirrorDuplicates(block.id); // API-2: 同文块同帧共享
 				// 术语记忆: harvest 「中文术语(ABBR)」 pairs this page established.
 				this.docMemory.learn(extractTermPairs(block.sourceText, restored));
 			}
@@ -2082,6 +2123,11 @@ export class TranslationManager {
 			for (const k of keys) {
 				this.failedSegments.delete(k);
 			}
+		}
+		// API-2 收尾 sweep: salvage/纯文本兜底/残留修复等晚到路径接住的代表译文,
+		// 在这里统一镜像给同文块 —— 然后才如实清点 untranslated。
+		for (const rep of dupOf.keys()) {
+			mirrorDuplicates(rep);
 		}
 		untranslatedCount = toTranslate.filter(b => !state.translations.has(b.id)).length;
 

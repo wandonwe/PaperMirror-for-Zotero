@@ -24,16 +24,25 @@ export function languageDisplayName(code: string): string {
 
 export function buildSystemPrompt(request: TranslationRequest, customPrompt?: string): string {
 	const target = languageDisplayName(request.targetLanguage);
+	// 按请求内容条件化规则行 (2.3.5, 第四批 item7 · API-4): 载荷里根本没有占位符/
+	// 样式标记/上下文的请求,不再携带对应规则 —— 大多数请求省 ~50–120 输入 token,
+	// 且对确实携带这些标记的请求一字不变(无需 bump PROMPT_VERSION、不作废缓存)。
+	const hasPlaceholders = request.blocks.some(b => b.text.includes('⟦PM'));
+	const hasStyleTags = request.blocks.some(b => b.text.includes('⟦b⟧') || b.text.includes('⟦i⟧'));
 	if (request.plain) {
 		// 纯文本兜底 (修复链路最后一环): the block failed the JSON path repeatedly —
 		// strip every structural demand so nothing but translation can go wrong.
 		const lines = [
 			`Translate the academic text the user sends into ${target}.`,
 			'Output ONLY the translation itself — no explanations, no quotes, no JSON, no markdown.',
-			'Never alter numbers, statistics, citation markers, URLs, or math.',
-			'Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation unchanged.',
-			'Paired tags like ⟦b⟧…⟦/b⟧ or ⟦i⟧…⟦/i⟧ mark bold/italic spans; keep each pair wrapping the corresponding translated words, or omit the pair entirely.'
+			'Never alter numbers, statistics, citation markers, URLs, or math.'
 		];
+		if (hasPlaceholders) {
+			lines.push('Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation unchanged.');
+		}
+		if (hasStyleTags) {
+			lines.push('Paired tags like ⟦b⟧…⟦/b⟧ or ⟦i⟧…⟦/i⟧ mark bold/italic spans; keep each pair wrapping the corresponding translated words, or omit the pair entirely.');
+		}
 		if (request.glossary?.length) {
 			lines.push('Terminology: ' + request.glossary.map(r => `"${r.source}" → "${r.target}"`).join('; ') + '.');
 		}
@@ -49,14 +58,22 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 		'- Translate each block faithfully. Do NOT add conclusions, summaries or facts that are not in the source.',
 		'- Use standard academic terminology in the target language.',
 		'- On first occurrence of a technical abbreviation, keep the original abbreviation in parentheses.',
-		'- Never alter numbers, P values, confidence intervals, units, DOIs, URLs, citation markers (e.g. [12], (Smith et al., 2020)), gene names, chemical formulas, variable names, or math.',
-		'- Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation UNCHANGED and in a natural position.',
-		'- Paired tags like ⟦b⟧…⟦/b⟧ or ⟦i⟧…⟦/i⟧ mark bold/italic spans: keep each pair wrapping the corresponding translated words (open AND close), or omit the pair entirely. Never emit an unmatched tag.',
-		'- The previousContext and moduleContext fields are for understanding only — do NOT translate or repeat them in the output.',
+		'- Never alter numbers, P values, confidence intervals, units, DOIs, URLs, citation markers (e.g. [12], (Smith et al., 2020)), gene names, chemical formulas, variable names, or math.'
+	];
+	if (hasPlaceholders) {
+		lines.push('- Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation UNCHANGED and in a natural position.');
+	}
+	if (hasStyleTags) {
+		lines.push('- Paired tags like ⟦b⟧…⟦/b⟧ or ⟦i⟧…⟦/i⟧ mark bold/italic spans: keep each pair wrapping the corresponding translated words (open AND close), or omit the pair entirely. Never emit an unmatched tag.');
+	}
+	if (request.previousContext || request.moduleContext) {
+		lines.push('- The previousContext and moduleContext fields are for understanding only — do NOT translate or repeat them in the output.');
+	}
+	lines.push(
 		'- Respond with ONLY a JSON object of this exact shape, no markdown fences, no commentary:',
 		'  {"translations":[{"id":"<block id>","translatedText":"<translation>"}]}',
 		'- Include every input block id exactly once.'
-	];
+	);
 	if (request.blocks.some(b => typeof b.charBudget === 'number')) {
 		lines.push(
 			'',

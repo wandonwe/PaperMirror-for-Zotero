@@ -255,8 +255,10 @@ export function planChunks(
 	return chunks;
 }
 
-/** Trailing context (last N chars of the previous chunk/page) for coherence. */
-export function trailingContext(blocks: SourceBlock[], maxChars = 600): string {
+/** Trailing context (last N chars of the previous chunk/page) for coherence.
+ *  上下文收窄 (2.3.5, 第四批 item7 · API-7): 600→300 —— 术语/语气衔接靠最后
+ *  一两句就够,600 字的边际收益递减,每 chunk 白付 ~150 输入 token。 */
+export function trailingContext(blocks: SourceBlock[], maxChars = 300): string {
 	if (!blocks.length) {
 		return '';
 	}

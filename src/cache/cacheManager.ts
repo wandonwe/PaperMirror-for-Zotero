@@ -132,7 +132,21 @@ export async function writePage(parts: CacheKeyParts, translations: TranslatedBl
 	});
 }
 
+/**
+ * 跨文档共享段落库 (2.3.5, 第四批 item7 · API-3): 段落 store 从「每 attachment
+ * 一份」改为**全局共享**目录 —— 段落身份本就是 内容+语言(segmentHash)×
+ * 引擎/模型/提示词/术语表(context),与文档无关;同领域批量读论文时样板句
+ * (资助声明/伦理声明/方法套话)可占 5–15%,跨文档命中即 0 请求。
+ * 写入只写共享库;读取先共享、后旧 per-attachment 路径(存量平滑迁移,旧库
+ * 由 schema 清扫/清全部缓存自然退场)。「清除本文缓存」不再涉及共享段落库
+ * (确认框如实说明);「清除全部缓存」照常全清(共享目录在缓存根下)。
+ */
 function segmentsPath(parts: SegmentContextParts): string {
+	return PathUtils.join(cacheRootDir(), 'shared-segments', segmentsFileName(parts));
+}
+
+/** 旧 per-attachment 段落库路径 —— 只读回退(迁移期命中存量)。 */
+function legacySegmentsPath(parts: SegmentContextParts): string {
 	return PathUtils.join(cacheRootDir(), attachmentDirName(parts.attachmentKey, parts.fileHash), segmentsFileName(parts));
 }
 
@@ -265,27 +279,37 @@ export async function readSegments(parts: SegmentContextParts, hashes: string[])
 	if (!remaining.length) {
 		return out;
 	}
-	try {
-		if (!(await IOUtils.exists(path))) {
-			return out;
-		}
-		const data = await IOUtils.readJSON(path);
-		if (!isValidCachedSegments(data, segmentContextHash(parts))) {
-			await IOUtils.remove(path, { ignoreAbsent: true });
-			return out;
-		}
-		for (const h of remaining) {
-			const text = data.segments[h];
-			if (typeof text === 'string' && text) {
-				out.set(h, text);
+	const context = segmentContextHash(parts);
+	// 依次读: 共享库 → 旧 per-attachment 库(API-3 迁移回退)。命中即从 remaining
+	// 摘除;任何读失败都只是 miss。
+	const readStore = async (storePath: string, removeInvalid: boolean): Promise<void> => {
+		try {
+			if (!remaining.length || !(await IOUtils.exists(storePath))) {
+				return;
+			}
+			const data = await IOUtils.readJSON(storePath);
+			if (!isValidCachedSegments(data, context)) {
+				if (removeInvalid) {
+					await IOUtils.remove(storePath, { ignoreAbsent: true });
+				}
+				return;
+			}
+			for (let i = remaining.length - 1; i >= 0; i--) {
+				const h = remaining[i]!;
+				const text = data.segments[h];
+				if (typeof text === 'string' && text) {
+					out.set(h, text);
+					remaining.splice(i, 1);
+				}
 			}
 		}
-		return out;
-	}
-	catch (e) {
-		logger.warn(MODULE, 'Segment cache read failed; treating as miss', e);
-		return out;
-	}
+		catch (e) {
+			logger.warn(MODULE, 'Segment cache read failed; treating as miss', e);
+		}
+	};
+	await readStore(path, true);
+	await readStore(legacySegmentsPath(parts), false); // 旧库只读不删,清扫另有机制
+	return out;
 }
 
 /**
