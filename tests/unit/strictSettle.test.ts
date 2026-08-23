@@ -12,7 +12,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, type UnfitBlock } from '../../src/ui/strictPageReplacement';
+import { settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, allowsFontShrink, type UnfitBlock } from '../../src/ui/strictPageReplacement';
 import { supportsCharBudget } from '../../src/translation/providers/types';
 import { getProvider } from '../../src/translation/providers/registry';
 
@@ -90,6 +90,17 @@ test('shrinkStrictBlocks delegates to pmShrinkFit and returns the leftovers', ()
 		['b-stubborn'],
 		'only blocks that fail even the shrink stage remain revert candidates'
 	);
+});
+
+test('allowsFontShrink: 正文不缩字(按页统一), 独立元素可缩字 (item7b LO-3)', () => {
+	// 正文 paragraph/list 绝不单独缩字致发花 —— 页内统一字号,放不下保留原文。
+	assert.equal(allowsFontShrink('paragraph'), false, '正文段落不单独缩字');
+	assert.equal(allowsFontShrink('list'), false, '列表项同为正文流');
+	// 独立元素缩它自己不会与正文比出大小差,仍可末位缩字保住译文。
+	assert.equal(allowsFontShrink('caption'), true, '图题可缩字');
+	assert.equal(allowsFontShrink('heading'), true, '小标题可缩字');
+	assert.equal(allowsFontShrink('title'), true, '大标题可缩字');
+	assert.equal(allowsFontShrink(''), true, '未知类型保守放行缩字(不误伤正文)');
 });
 
 test('shrinkStrictBlocks without the hook falls back to reverting everything', () => {

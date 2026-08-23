@@ -96,6 +96,20 @@ export function ladderFor(minLineHeight: number): { lineHeight: number; letterSp
 const SHRINK_STEPS = [0.94, 0.88];
 const SHRINK_FLOOR_PX = 8.5;
 
+/**
+ * 末位缩字是否允许作用于该块类型 (2.2.7, 计划 第三批 item7(b) · LO-3) — pure。
+ *
+ * 正文(paragraph/list)**不**参与单块末位缩字: 一段正文缩到 88% 而上下相邻段
+ * 仍 100%,读起来就是「发花」(同栏正文忽大忽小)。正文只在**页内统一字号**下
+ * 排版 —— 靠行距/字距梯子、无损扩边、压缩把它放进原字号盒,放不下就保留原文
+ * (诚实计数,可「查看保留原文」),绝不单独缩它一块。独立元素(图题 caption、
+ * 标题 heading/title)是孤立的,缩它自己不会与正文比出大小差,仍可末位缩字保住
+ * 译文。表格单元格由独立表格模型渲染、根本不进这条 items 流水线,不受影响。
+ */
+export function allowsFontShrink(blockType: string): boolean {
+	return blockType !== 'paragraph' && blockType !== 'list';
+}
+
 export interface StrictPageInput {
 	blocks: SourceBlock[];
 	translations: Map<string, string>;
@@ -932,7 +946,11 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 					break;
 				}
 			}
-			if (!fits) {
+			// 正文不单独缩字 (2.2.7, item7(b)): paragraph/list 只靠扩边(上面已试)放置,
+			// 放不下就保留原文,绝不缩它一块致「发花」。缩字梯+组合仅对独立元素
+			// (图题/标题)执行。type 取自节点 data-pm-type(表格单元格不在此流水线)。
+			const canShrink = allowsFontShrink(item.node.getAttribute('data-pm-type') ?? '');
+			if (!fits && canShrink) {
 				applyBox(item, original.width, original.height);
 				// 2. 既有缩字梯子(原盒)。
 				for (const factor of SHRINK_STEPS) {
