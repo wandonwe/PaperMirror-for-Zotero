@@ -163,3 +163,55 @@ export function violationStillPresent(
 		}
 	}
 }
+
+/**
+ * 提交前的单块几何闸 (2.2.3, 计划 第三批 item4 · 页面级原子提交) — pure。
+ *
+ * 与 `auditPlacedBoxes` **同一套**「新增侵入 > 容差」判据,但在一个块被**揭示
+ * 之前**核验:它当前盒(可能已扩展)相对**已提交**的其它翻译块、真实图形、
+ * preserve 区、页界,是否新增违例。true = 会违例、不该揭示。
+ *
+ * 为什么需要它:扩展避让(computeExpansionAllowance)只看遮挡物近边启发式,
+ * 挡不住「两个相邻块先后扩进同一片空白而互相压盖」——旧流程靠末端审计事后
+ * 回退,于是那个块**显示了又被抽走**(闪烁/发花)。把同一判据前移到提交前,
+ * 揭示出去的块都是预先校验过的,末端审计退化为几乎无事可做的安全网。
+ *
+ * 非扩展块(box === originalBox)对每一项的「新增侵入」恒为 0 → 恒通过,所以
+ * 首屏原字号揭示不受影响,只有扩展盒才会被这道闸拦下。
+ */
+export function boxNewlyViolates(
+	self: AuditBox,
+	committedOthers: AuditBox[],
+	obstacles: AuditObstacles,
+	pageW: number,
+	pageH: number
+): boolean {
+	const tol = (a: PixelBox, b: PixelBox): number =>
+		Math.max(12, 0.02 * Math.min(a.width * a.height, b.width * b.height));
+	for (const o of committedOthers) {
+		if (o.id === self.id) {
+			continue;
+		}
+		const added = inter(self.box, o.box) - inter(self.originalBox, o.originalBox);
+		if (added > tol(self.box, o.box)) {
+			return true;
+		}
+	}
+	for (const img of obstacles.images) {
+		const added = inter(self.box, img) - inter(self.originalBox, img);
+		if (added > tol(self.box, img)) {
+			return true;
+		}
+	}
+	for (const keep of obstacles.preserved) {
+		if (keep.id === self.id) {
+			continue;
+		}
+		const added = inter(self.box, keep.box) - inter(self.originalBox, keep.box);
+		if (added > tol(self.box, keep.box)) {
+			return true;
+		}
+	}
+	const addedOut = outOfPageArea(self.box, pageW, pageH) - outOfPageArea(self.originalBox, pageW, pageH);
+	return addedOut > 12;
+}

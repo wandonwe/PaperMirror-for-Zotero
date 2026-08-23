@@ -31,7 +31,7 @@ import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
 import { detectTableRegions } from '../reader/tableGuard';
 import { buildTableModel, type CellMember } from '../reader/tableStructure';
-import { auditPlacedBoxes, violationStillPresent, type AuditBox } from './layoutSafety';
+import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, type AuditBox, type AuditObstacles } from './layoutSafety';
 import { parseStyledSegments } from '../reader/styleRuns';
 import {
 	inkFor,
@@ -790,6 +790,29 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		item.node.style.height = `${height}px`;
 	};
 
+	// ---- 提交前几何预校验 (2.2.3, 计划 第三批 item4 · 页面级原子提交) ----------
+	// 与末端 pmGeometryAudit 同一套「新增侵入>容差」判据(boxNewlyViolates),但在
+	// **揭示之前**核验:扩展后的块只有既适配、又不新压盖已提交块/图形/preserve/
+	// 出界时才 commit。杜绝「显示了又被审计回退」的闪烁。非扩展块(盒==原盒)恒
+	// 通过,首屏原字号揭示不受影响。preserve/图形遮挡物与审计、扩展避让共用一份。
+	const geometryObstacles = (): AuditObstacles => ({
+		images: imageBoxes,
+		preserved: geometric
+			.filter(b => !byId.has(b.id))
+			.map(b => ({ id: b.id, box: pxOf.get(b.id)! }))
+			.filter(p => !!p.box)
+			.concat(inkObstacles)
+	});
+	const violatesGeometry = (item: StrictItem): boolean => boxNewlyViolates(
+		{ id: item.id, box: item.box, originalBox: item.originalBox },
+		items
+			.filter(i => i.committed && !i.abandoned && i.id !== item.id)
+			.map(i => ({ id: i.id, box: i.box, originalBox: i.originalBox })),
+		geometryObstacles(),
+		canvas.width / BITMAP_SCALE,
+		canvas.height / BITMAP_SCALE
+	);
+
 	// ---- 无损扩边优先 (2.2.2, 计划 第三批 item3): 在**压缩/缩字之前**,只靠邻近
 	// 安全空白(算法3,原字号、原文一字不动)把能救回的块救回 —— "图1→Figure 1"
 	// 式越译越长的标签/标题正是这样无损放下,既不牺牲译文、也不费一次 API。
@@ -817,7 +840,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			let fits = false;
 			for (const [w, h] of expansions) {
 				applyBox(item, w, h);
-				if (ladderFits(item)) {
+				// 既适配、又不新压盖邻居/图形/preserve/出界 —— 提交前预校验 (item4)。
+				if (ladderFits(item) && !violatesGeometry(item)) {
 					fits = true;
 					break;
 				}
@@ -858,7 +882,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			}
 			for (const [w, h] of expansions) {
 				applyBox(item, w, h);
-				fits = ladderFits(item);
+				fits = ladderFits(item) && !violatesGeometry(item); // 扩展提交前预校验 (item4)
 				if (fits) {
 					break;
 				}
@@ -878,7 +902,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				if (!fits && expansions.length) {
 					const last = expansions[expansions.length - 1]!;
 					applyBox(item, last[0], last[1]);
-					fits = ladderFits(item);
+					fits = ladderFits(item) && !violatesGeometry(item); // 组合扩展也预校验 (item4)
 				}
 			}
 			if (fits) {
