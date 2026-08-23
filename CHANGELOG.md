@@ -7,6 +7,29 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.2.5] — 2026-08-23
+
+优化计划**第三批 item 6·底图位图 LRU**(本审计 PF-4)。切换页/回看/同宽度重建时
+不再重复做最贵的 pdf.js 整页 rasterize。
+
+### Performance
+
+- **底图位图按 (页, 宽度桶) 小容量 LRU 缓存,复用底图只重建遮罩+文本层**。此前
+  `renderDocPage` 每次都调用 `renderPageBitmap` 把整页重新 rasterize —— 而这类重建
+  频繁发生:翻译完成刷新、对照模式切换、`relayoutSlots`、滚动回看同一页,都会重跑
+  一次整页渲染(pdf.js `page.render`,是整条链路里最贵的一步)。现在把渲染出的独立
+  底图按 `${page}@${宽度}` 存入容量 4 的 LRU:命中即复用,`buildStrictPage` 只重建
+  遮罩+文本层。底图只随 (页, 宽度) 变、与译文/配置无关,无需失效;缩放换宽度自然
+  落到不同键、旧宽度条目由 LRU 淘汰。(`readerSession.baseBitmaps`,新增纯工具
+  `util/lru.ts`)
+
+### Notes
+
+- 只缓存 `renderPageBitmap` 的**独立** raster;`getPageRender` 回退(左视图 live
+  canvas,宽度/缩放都不对)不入缓存,避免错位。单张底图受 oversample 像素预算封顶
+  (~3.2M px ≈ 13MB),容量 4 → 内存上界 ~50MB,会话 dispose 时全部释放。
+- `LruCache` 为纯数据结构(无 DOM/平台依赖),命中顺序与容量淘汰由单元测试覆盖。
+
 ## [2.2.4] — 2026-08-23
 
 优化计划**第三批 item 5·段落缓存分片(内存合并 + 节流落盘)**(本审计 PF-3)。去掉

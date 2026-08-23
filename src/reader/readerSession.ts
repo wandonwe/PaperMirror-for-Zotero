@@ -37,7 +37,8 @@ import { taskPriority } from '../ui/statusCapsule';
 import { createSplitView, type SplitViewHandles } from './splitView';
 import { TextExtractor } from './textExtractor';
 import * as adapter from './zoteroReaderAdapter';
-import type { ReaderLike } from './zoteroReaderAdapter';
+import type { ReaderLike, PageRender } from './zoteroReaderAdapter';
+import { LruCache } from '../util/lru';
 
 const MODULE = 'readerSession';
 const PAGE_POLL_MS = 350;
@@ -128,6 +129,16 @@ export class ReaderSession {
 	private pool: string[] = [];
 	/** Real image rects per page (operator list), fetched once per document. */
 	private imageRects = new Map<number, [number, number, number, number][] | null>();
+	/**
+	 * 底图位图 LRU (2.2.5, 计划 第三批 item6 · PF-4): 缓存 renderPageBitmap 得到的
+	 * 独立底图,键 = `${page}@${宽度桶}`。切换页/回看/在原宽度重渲染时命中即复用
+	 * 底图,buildStrictPage 只重建遮罩+文本层,省掉最贵的 pdf.js 整页 rasterize。
+	 * 底图只随 (页, 宽度) 变,与译文/配置无关 → 无需失效,仅靠容量淘汰与 dispose。
+	 * 容量取小(4):单张底图受 oversample 像素预算封顶(~3.2M px ≈ 13MB),4 张
+	 * 够覆盖可视区+近邻回看(同宽度重建/对照切换/relayout 全部命中),内存上界
+	 * ~50MB,dispose 全释放。
+	 */
+	private baseBitmaps = new LruCache<PageRender>(4);
 	/**
 	 * Compress-and-retry rounds already spent, keyed by BLOCK id (max 2 each).
 	 * Per-block, not per-page: two long paragraphs at the top of a page must not
@@ -1253,18 +1264,29 @@ export class ReaderSession {
 		const token = (this.renderToken.get(pageIndex) ?? 0) + 1;
 		this.renderToken.set(pageIndex, token);
 		const current = (): boolean => !this.destroyed && this.renderToken.get(pageIndex) === token;
-		// Supersample within a fixed pixel budget: sharp text without letting a
-		// tall page allocate an enormous canvas.
-		const oversample = Math.max(1, Math.min(1.8, Math.sqrt(3_200_000 / Math.max(1, width * width * 1.4))));
-		let render = await adapter.renderPageBitmap(this.reader, pageIndex, width, oversample);
-		if (!current()) {
-			return false;
+		// 底图位图 LRU (2.2.5, item6): 同页同宽度已 rasterize 过就直接复用,免去
+		// 最贵的 pdf.js 整页渲染;buildStrictPage 只重建遮罩+文本层。宽度取整分桶,
+		// 缩放换宽度自然落到不同键、旧宽度条目由 LRU 淘汰。
+		const bitmapKey = `${pageIndex}@${Math.round(width)}`;
+		let render = this.baseBitmaps.get(bitmapKey) ?? null;
+		if (!render) {
+			// Supersample within a fixed pixel budget: sharp text without letting a
+			// tall page allocate an enormous canvas.
+			const oversample = Math.max(1, Math.min(1.8, Math.sqrt(3_200_000 / Math.max(1, width * width * 1.4))));
+			render = await adapter.renderPageBitmap(this.reader, pageIndex, width, oversample);
+			if (!current()) {
+				return false;
+			}
+			if (render) {
+				this.baseBitmaps.set(bitmapKey, render); // 只缓存独立 raster
+			}
 		}
 		if (!render) {
 			// Core rendering unavailable (compartment quirk, worker busy):
 			// fall back to copying the LEFT viewer's canvas. It only exists for
 			// pages near the left viewport, and comes at the left zoom rather
-			// than the pane width — the element is scaled to fit below.
+			// than the pane width — the element is scaled to fit below. 不缓存
+			// (它是左视图 live canvas、宽度/缩放都不对,复用会错位)。
 			render = adapter.getPageRender(this.reader, pageIndex);
 		}
 		if (!render || this.destroyed) {
@@ -2464,6 +2486,7 @@ export class ReaderSession {
 		this.lastPartial = null;
 		this.compressBlocked.clear(); // P2-10: 不再持有已卸载页元素
 		this.placementStats.clear();
+		this.baseBitmaps.clear(); // 释放缓存的底图 canvas
 		this.disposePdfEvents?.();
 		this.disposePdfEvents = null;
 		this.overlay?.destroy();
