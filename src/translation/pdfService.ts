@@ -102,6 +102,51 @@ export function base64ToBytes(b64: string): Uint8Array {
  */
 const TOKEN_HEADER = 'X-PaperMirror-Token';
 
+/**
+ * 旧桥接的可执行提示 (2.1.5): 2.1.0 起插件在发密钥前要求 /handshake 握手鉴权;
+ * 升级前的 babeldoc_server.py 既不写令牌文件、也没有 /handshake,于是旧流程
+ * 会先撞上「令牌缺失 → 请确认服务正在运行」——而服务其实**正在**运行,只是旧。
+ * 这条文案把「在跑但旧」和「没在跑」区分开,直接指向升级动作。
+ */
+const LEGACY_BRIDGE_MSG =
+	'检测到本机有服务在监听该端口,但它缺少 PaperMirror 2.1.0 起的握手鉴权 —— '
+	+ '几乎可以确定是**旧版 babeldoc_server.py**。请把它升级到随插件附带的新版'
+	+ '(源码包里的 tools/babeldoc_server.py)并重启该服务后重试。'
+	+ '(为保护你的 API 密钥,插件不会向未通过握手的服务发送任何请求。)';
+
+/**
+ * Map a /handshake probe's HTTP status to a bridge state. Pure (unit-tested):
+ *  - null      连接被拒/超时 → 端口上没有服务在听 ('down')
+ *  - 404/405/501 端口有服务在应答,但没有 /handshake 接口 → 旧版桥接 ('legacy')
+ *  - 其他      有 /handshake(或别的服务占了端口)→ 交由 HMAC 环节判定 ('live')
+ */
+export function classifyBridgeReachability(status: number | null): 'down' | 'legacy' | 'live' {
+	if (status === null) {
+		return 'down';
+	}
+	if (status === 404 || status === 405 || status === 501) {
+		return 'legacy';
+	}
+	return 'live';
+}
+
+/** Raw GET that returns the HTTP status (any code) or null on connection failure. */
+async function rawGet(url: string, timeoutMs: number): Promise<{ status: number; text: string } | null> {
+	const http = (globalThis as Record<string, any>).Zotero?.HTTP;
+	if (!http?.request) {
+		return null;
+	}
+	try {
+		const response = await http.request('GET', url, {
+			responseType: 'text', timeout: timeoutMs, successCodes: false, logBodyLength: 0, noCache: true
+		});
+		return { status: Number(response?.status ?? 0), text: String(response?.responseText ?? '') };
+	}
+	catch {
+		return null; // connection refused / DNS / timeout → nothing listening
+	}
+}
+
 async function readBridgeToken(): Promise<string> {
 	const tempDir = (PathUtils as unknown as { tempDir: string }).tempDir;
 	const path = PathUtils.join(tempDir, 'papermirror-bridge.token');
@@ -151,8 +196,33 @@ function timingSafeEqualHex(a: string, b: string): boolean {
 async function verifyBridge(base: string, token: string): Promise<void> {
 	const nonceBytes = (globalThis as Record<string, any>).crypto.getRandomValues(new Uint8Array(16)) as Uint8Array;
 	const nonce = Array.from(nonceBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-	const resp = await requestJSON(`${base}/handshake?nonce=${nonce}`, 'GET', undefined, 15000);
-	const got = String(resp?.mac ?? '');
+	const probe = await rawGet(`${base}/handshake?nonce=${nonce}`, 15000);
+	const verdict = classifyBridgeReachability(probe ? probe.status : null);
+	if (verdict === 'down') {
+		throw new PaperMirrorError(
+			'NETWORK',
+			`无法连接本地翻译服务 (${base})。请确认已启动 babeldoc_server.py — 见设置页说明。`,
+			{ retryable: true }
+		);
+	}
+	if (verdict === 'legacy') {
+		// 端口有服务在应答,但没有 /handshake → 旧版桥接。给可执行的升级提示。
+		throw new PaperMirrorError('UNKNOWN', LEGACY_BRIDGE_MSG, { retryable: false });
+	}
+	if (!probe || probe.status < 200 || probe.status >= 300) {
+		throw new PaperMirrorError(
+			'NETWORK',
+			`本地翻译服务握手返回 HTTP ${probe?.status ?? 0}: ${sanitize(probe?.text ?? '').slice(0, 200)}`,
+			{ retryable: false }
+		);
+	}
+	let got = '';
+	try {
+		got = String((JSON.parse(probe.text || '{}') as { mac?: unknown })?.mac ?? '');
+	}
+	catch {
+		got = '';
+	}
 	const expected = await hmacSha256Hex(token, nonce);
 	if (!got || !timingSafeEqualHex(got, expected)) {
 		throw new PaperMirrorError(
@@ -224,7 +294,19 @@ export async function translateFullPdf(
 	const deadline = Date.now() + (options?.overallTimeoutMs ?? 45 * 60 * 1000);
 
 	// S2/S3/S4 (2.1.0): 读令牌 → 握手验证服务端身份 → 之后才带密钥提交。
-	const token = await readBridgeToken();
+	// 旧版桥接不写令牌文件,读取会先失败(2.1.5): 此时探一下端口 —— 有服务在应答
+	// 就是「在跑但旧」,给升级提示;真的没在跑才保留「请确认已启动」的原文案。
+	let token: string;
+	try {
+		token = await readBridgeToken();
+	}
+	catch (tokenErr) {
+		const probe = await rawGet(`${base}/handshake?nonce=probe`, 8000);
+		if (classifyBridgeReachability(probe ? probe.status : null) !== 'down') {
+			throw new PaperMirrorError('UNKNOWN', LEGACY_BRIDGE_MSG, { retryable: false });
+		}
+		throw tokenErr; // 端口无人应答 → 确实没启动,保留原提示
+	}
 	await verifyBridge(base, token);
 
 	const submitted = await requestJSON(`${base}/translate`, 'POST', submission, 120000, token);

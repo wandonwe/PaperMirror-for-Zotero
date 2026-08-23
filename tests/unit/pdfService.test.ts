@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assertLocalServiceURL, base64ToBytes, bytesToBase64 } from '../../src/translation/pdfService';
+import { assertLocalServiceURL, base64ToBytes, bytesToBase64, classifyBridgeReachability } from '../../src/translation/pdfService';
 
 test('only loopback service URLs are accepted', () => {
 	assert.ok(assertLocalServiceURL('http://127.0.0.1:11017'));
@@ -11,6 +11,18 @@ test('only loopback service URLs are accepted', () => {
 	assert.throws(() => assertLocalServiceURL('https://api.example.com'));
 	assert.throws(() => assertLocalServiceURL('ftp://127.0.0.1'));
 	assert.throws(() => assertLocalServiceURL('not a url'));
+});
+
+test('classifyBridgeReachability separates not-running / legacy / live (2.1.5)', () => {
+	// Nothing listening → connection failed (null status).
+	assert.equal(classifyBridgeReachability(null), 'down');
+	// A pre-2.1.0 bridge is listening but has no /handshake route.
+	assert.equal(classifyBridgeReachability(404), 'legacy');
+	assert.equal(classifyBridgeReachability(405), 'legacy');
+	assert.equal(classifyBridgeReachability(501), 'legacy');
+	// A 2.1.0+ bridge answers /handshake → let the HMAC step decide.
+	assert.equal(classifyBridgeReachability(200), 'live');
+	assert.equal(classifyBridgeReachability(500), 'live'); // a real error, not a missing route
 });
 
 test('base64 round-trips arbitrary bytes, including chunk boundaries', () => {
