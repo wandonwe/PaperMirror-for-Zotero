@@ -441,11 +441,31 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				tableIntentional += cell.memberIds.length;
 				continue;
 			}
-			// Assemble the cell's translation from its members; if any member is
-			// missing a translation the cell can't be shown whole → keep original.
+			// Assemble the cell's translation from its members. 逐 member 兜底
+			// (2.3.4, 第四批 item6 · LO-8): 任一 member 缺译不再把**整格**回退 ——
+			// 有译文的 member 各自作为独立块放置(用自己的行矩形),只有真正缺译
+			// 的 member 保留原文并计入 tableFailed。整格齐全时仍走整格路径(拼合
+			// 译文进单元格盒,排版最好)。
 			const parts = cell.memberIds.map(mid => input.translations.get(mid));
 			if (parts.some(p => p === undefined || !p.trim())) {
-				tableFailed += cell.memberIds.length; // a cell whose text was not translated
+				for (let mi = 0; mi < cell.memberIds.length; mi++) {
+					const mid = cell.memberIds[mi]!;
+					const text = parts[mi];
+					const mb = blockById.get(mid);
+					if (text === undefined || !text.trim() || !mb?.lineRectsPdf?.length) {
+						tableFailed += 1; // 这个 member 缺译/缺几何 → 保留原文
+						continue;
+					}
+					cellBlocks.push({
+						id: mid, // 真实块 id: translationOf 直接命中 input.translations
+						pageIndex: input.pageIndex,
+						order: 0,
+						type: 'paragraph',
+						sourceText: mb.sourceText,
+						lineRectsPdf: mb.lineRectsPdf,
+						fontSize: mb.fontSize ?? bodyPt
+					});
+				}
 				continue;
 			}
 			const lineRects: [number, number, number, number][] = [];
