@@ -7,6 +7,23 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.6] — 2026-08-23
+
+移除「完整 PDF 服务模式」(BabelDOC 本地桥接)。它没有界面、用者寥寥,却带来
+一整套本地 HTTP 服务的攻击面。默认的**零配置内置导出**保留不变。
+
+### Removed
+
+- **删除完整 PDF 的「服务模式」及其本地桥接。** `pdfExportMode = 'service'` 会把
+  整篇 PDF POST 到本机的 `babeldoc_server.py`(11017 端口)做版面级重排。此模式
+  无界面(只能靠隐藏首选项启用)、依赖用户自建 Python 服务,且引入了本地 HTTP
+  端口、令牌文件、HMAC 握手这一整套需持续维护的安全面(2.0.6 起审了多轮:路径
+  遍历、CSRF/DNS-rebinding、端口抢占窃密等)。现移除:`src/translation/pdfService.ts`、
+  `tools/babeldoc_server.py`、首选项 `pdfServiceURL`/`pdfExportMode`,以及相关握手/
+  令牌客户端代码。**导出译文 PDF 恒走零配置的内置生成**(`Zotero.PaperMirror.
+  exportTranslatedPdf()`,无需任何外部程序);对照阅读主功能不受影响。插件从此
+  不再开启或连接任何本地网络服务。
+
 ## [2.1.5] — 2026-08-23
 
 完整 PDF 服务模式:旧版桥接不再给出误导性的「请确认服务正在运行」,而是明确的

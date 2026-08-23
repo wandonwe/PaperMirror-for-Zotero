@@ -62,9 +62,9 @@ JavaScript in a response are never parsed or executed.
 
 - Custom endpoints must be HTTPS unless you explicitly allow plain HTTP.
 - A local-only mode restricts traffic to your own machine.
-- The optional local PDF service must be a loopback address (`localhost`,
-  `127.0.0.1`, `::1`). This is not overridable, because those requests carry
-  your API key.
+- The plugin does not run or connect to any local network service. (An earlier
+  optional "full-PDF service mode" that talked to a local BabelDOC bridge was
+  removed in 2.1.6; full-PDF export is now done entirely inside the plugin.)
 
 ## Your responsibility
 

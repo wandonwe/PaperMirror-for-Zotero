@@ -26,7 +26,6 @@ import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
 import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, auditStrictGeometry, probeStrictPlacement, flashKeptIndicator, type UnfitBlock } from '../ui/strictPageReplacement';
-import { translateFullPdf, bytesToBase64, type TranslateSubmission } from '../translation/pdfService';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
 import * as logger from '../utils/logger';
@@ -1653,15 +1652,10 @@ export class ReaderSession {
 		};
 		try {
 			const bytes = new Uint8Array(await IOUtils.read(String(filePath)));
-			const mode = getPref<string>('pdfExportMode', 'builtin');
-			let monoBytes: Uint8Array | null = null;
-			let dualBytes: Uint8Array | null = null;
-			if (mode === 'service') {
-				({ monoBytes, dualBytes } = await this.exportViaService(bytes, String(filePath), report));
-			}
-			else {
-				({ monoBytes, dualBytes } = await this.exportBuiltin(bytes, report));
-			}
+			// 导出恒走内置生成 (2.1.6): 零配置、无外部依赖、无网络面。此前的
+			// 「完整 PDF 服务模式」(BabelDOC 本地 HTTP 桥接)连同其令牌/握手安全面
+			// 一并移除 —— 无界面、少人用,且带来一整套本地服务攻击面。
+			const { monoBytes, dualBytes } = await this.exportBuiltin(bytes, report);
 			const parentID = (item as unknown as { parentItemID?: number }).parentItemID ?? undefined;
 			const stem = (String(filePath).split(/[\\/]/).pop() || 'paper').replace(/\.pdf$/i, '');
 			const saveOne = async (data: Uint8Array | null, suffix: string): Promise<void> => {
@@ -1786,42 +1780,6 @@ export class ReaderSession {
 		}
 		return { monoBytes: built.monoBytes, dualBytes: built.dualBytes };
 	}
-
-	/** 可选高级模式: the local BabelDOC bridge (full layout re-flow). */
-	private async exportViaService(
-		bytes: Uint8Array,
-		filePath: string,
-		report: (pct: number) => void
-	): Promise<{ monoBytes: Uint8Array | null; dualBytes: Uint8Array | null }> {
-		const sample = this.manager?.getPageState(adapter.getCurrentPageIndex(this.reader))
-			?.blocks.map(b => b.sourceText).join('\n').slice(0, 2000) ?? '';
-		const { source, target } = this.resolveLanguages(sample);
-		const settings = await this.providerSettings();
-		const provider = getProvider(settings.providerId);
-		const submission: TranslateSubmission = {
-			filename: filePath.split(/[\\/]/).pop() || 'input.pdf',
-			pdf_base64: bytesToBase64(bytes),
-			lang_in: source === 'zh' ? 'zh' : 'en',
-			lang_out: target.startsWith('zh') ? 'zh' : target,
-			mono: true,
-			dual: true,
-			glossary: this.loadGlossary().map(rule => ({ source: rule.source, target: rule.target })),
-			provider: settings.apiKey && provider.defaultBaseURL
-				? {
-					kind: 'openai-compatible',
-					baseURL: settings.apiBaseURL || provider.defaultBaseURL,
-					model: settings.model || provider.defaultModel || '',
-					apiKey: settings.apiKey
-				}
-				: undefined
-		};
-		const serviceURL = getPref<string>('pdfServiceURL', 'http://127.0.0.1:11017');
-		const result = await translateFullPdf(serviceURL, submission, (status) => {
-			report(status.progress ?? 0);
-		});
-		return { monoBytes: result.monoBytes, dualBytes: result.dualBytes };
-	}
-
 
 	/** Per-path text extraction report for the active page (diagnostics). */
 	async diagnoseExtraction(): Promise<string> {

@@ -27,8 +27,6 @@ export type PrefKey
 	| 'showOriginal'
 	| 'viewMode'
 	| 'paneView'
-	| 'pdfServiceURL'
-	| 'pdfExportMode'
 	| 'articleFontSize'
 	| 'fontSizeFactor'
 	| 'lineHeightFactor'

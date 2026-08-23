@@ -104,6 +104,9 @@ subsetting drops glyphs for this font**, verified by rendering. The plugin ships
 a build-time GB2312 subset of Noto Sans SC and embeds it with `subset: false`.
 Characters outside the subset become `〓` rather than vanishing.
 
-An optional local BabelDOC bridge (`tools/babeldoc_server.py`) offers full
-layout re-flow. It binds to `127.0.0.1` only, and the client refuses any
-non-loopback URL without an override, because those requests carry the API key.
+The full-document PDF export (`Zotero.PaperMirror.exportTranslatedPdf()`) uses
+this built-in generator exclusively. An earlier optional "service mode" that
+POSTed the whole PDF to a local BabelDOC bridge (`tools/babeldoc_server.py`) for
+layout re-flow was removed in 2.1.6: it had no UI, few users, and carried a
+local HTTP server plus a token/handshake auth surface disproportionate to its
+value. Nothing in the plugin now opens or talks to a local network service.
