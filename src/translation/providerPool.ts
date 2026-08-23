@@ -180,11 +180,14 @@ export function prefetchWindowFor(mode: PerfMode, poolSize: number): { forward: 
 
 /** Global ceiling setting: 2–24. Two slots are required to guarantee that one
  * background prefetch can never occupy the current page's only slot. */
-export const GLOBAL_MAX_DEFAULT = 12;
+// 2.1.7 (计划 止血): 默认 12→8。两层请求级调度落地前先降并行页峰值,减少
+// 429/浪费(「12 个并行页」≠ 12 个 API 请求,普通阶段可达 ~24)。上限 24 不变,
+// 想拉高的用户仍可自设。
+export const GLOBAL_MAX_DEFAULT = 8;
 export const GLOBAL_MAX_MIN = 2;
 export const GLOBAL_MAX_MAX = 24;
 
-/** Migrate a stored value: 0/absent → 12, clamp to [2,24]. */
+/** Migrate a stored value: 0/absent → default, clamp to [2,24]. */
 export function normalizeGlobalMax(value: unknown): number {
 	const n = Math.round(Number(value));
 	if (!Number.isFinite(n) || n <= 0) {

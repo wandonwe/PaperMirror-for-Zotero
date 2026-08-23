@@ -284,7 +284,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	canvas.width = Math.max(1, Math.round(pageWidthPx * BITMAP_SCALE));
 	canvas.height = Math.max(1, Math.round(pageHeightPx * BITMAP_SCALE));
 	canvas.className = 'pm-repage-canvas';
-	const ctx = canvas.getContext('2d');
+	// willReadFrequently (2.1.7, 计划 PF-1): 底图被 localPaper(每块~12 点)/
+	// samplePaper/pmProbe 高频 getImageData —— 声明后走 CPU 后端,免去每次
+	// GPU→CPU 回读与管线冲刷。
+	const ctx = canvas.getContext('2d', { willReadFrequently: true });
 	let paper = 'rgb(255,255,255)';
 	if (ctx) {
 		ctx.fillStyle = paper;
@@ -516,7 +519,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	mask.width = canvas.width;
 	mask.height = canvas.height;
 	mask.className = 'pm-repage-mask';
-	const maskCtx = mask.getContext('2d');
+	const maskCtx = mask.getContext('2d', { willReadFrequently: true }); // 2.1.7 PF-1: pmProbe 采样
 	const blockPaper = new Map<string, string>();
 	const lineBoxesFor = new Map<string, PixelBox[]>();
 	if (ctx) {

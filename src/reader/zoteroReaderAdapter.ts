@@ -804,7 +804,9 @@ export async function renderPageBitmap(
 		const canvas = doc.createElement('canvas') as HTMLCanvasElement;
 		canvas.width = Math.max(1, Math.ceil(Number(renderViewport.width)));
 		canvas.height = Math.max(1, Math.ceil(Number(renderViewport.height)));
-		const ctx = canvas.getContext('2d');
+		// willReadFrequently (2.1.7, 计划 PF-1): 完成轮询 sample() 反复 getImageData
+		// 探测像素稳定性,声明后免去 GPU 回读。
+		const ctx = canvas.getContext('2d', { willReadFrequently: true });
 		if (!ctx) {
 			return null;
 		}

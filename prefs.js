@@ -18,7 +18,7 @@ pref('extensions.zotero.bilingualReader.providerConfigMigrated', false);
 pref('extensions.zotero.bilingualReader.sourceLanguage', 'auto');
 pref('extensions.zotero.bilingualReader.targetLanguage', 'auto');
 pref('extensions.zotero.bilingualReader.timeoutMs', 60000);
-pref('extensions.zotero.bilingualReader.maxConcurrentRequests', 12); // global page ceiling 2-24
+pref('extensions.zotero.bilingualReader.maxConcurrentRequests', 8); // global page ceiling 2-24 (2.1.7: 12→8 止血,两层请求级调度落地前先降峰,减少 429/浪费)
 pref('extensions.zotero.bilingualReader.perfMode', 'auto'); // stable | auto | high | custom
 pref('extensions.zotero.bilingualReader.providerConcurrency', '{}'); // custom mode: {providerId: pages}
 pref('extensions.zotero.bilingualReader.customPrompt', '');

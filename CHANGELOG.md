@@ -7,6 +7,41 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.7] — 2026-08-23
+
+优化计划**第一批·止血速赢**(全低风险):降并发峰值、诊断探针下热路径、
+高频画布免 GPU 回读、修缓存失效粒度。缓存 schema 不变;`maxOutputTokens`
+一项因移出缓存身份,会让**该项曾不同的旧缓存**不再命中(等价一次性重译),
+其余照旧。
+
+### Changed / Performance
+
+- **默认全局并行页 12 → 8(止血)**。当前限制的是「并行页面任务」而非真实
+  HTTP 请求数——每页内部还能并发普通批次、补救阶段更高,「12 个并行页」普通
+  阶段可达约 24 个请求,是卡顿/429/浪费的主因。两层「请求级并发调度」落地前
+  先把默认峰值降到 8(上限 24 不变,可自设)。`prefs.js`、`providerPool.ts`
+  GLOBAL_MAX_DEFAULT。
+- **诊断探针 `pmProbe` 下排版热路径**。此前每页 FINAL 无条件对每块每行做
+  getImageData 采样底图/遮罩(仅供诊断导出),普通用户白付数百次逐像素读取、
+  拖长译文显现。现在仅在开启「调试日志」时对该页采样;默认零成本。
+- **三处高频采样画布声明 `willReadFrequently`**。strict 底图 ctx、遮罩 maskCtx
+  与 renderPageBitmap 的 ctx 被 localPaper/samplePaper/稳定性轮询/pmProbe 高频
+  getImageData;声明后走 CPU 后端,免去每次 GPU→CPU 回读与管线冲刷。
+
+### Fixed（API 浪费）
+
+- **`maxOutputTokens` 移出缓存身份哈希**。它只是输出安全上限、不决定已完整
+  译文的内容,而截断译文本就被拦下不入缓存。此前把它计入 → 用户为解决个别
+  截断把上限 4k 调到 8k,会作废整篇页面+段落缓存全量重译。移出后调高上限只让
+  个别曾截断的段重译。`readerSession.ts` settingsIdentityHash。
+
+### Verified（无需改动）
+
+- 请求级重试策略复核**已合规**:仅网络/5xx/408/429-ratelimit/超时可重试且超时
+  至多一次、429 遵守 Retry-After;密钥错(401/403)、模型不存在(404)、额度耗尽
+  (402/429-quota/456)均 `retryable:false` 立即不重试(`errors.ts` +
+  `translationManager.ts:1359-1391`)。
+
 ## [2.1.6] — 2026-08-23
 
 移除「完整 PDF 服务模式」(BabelDOC 本地桥接)。它没有界面、用者寥寥,却带来

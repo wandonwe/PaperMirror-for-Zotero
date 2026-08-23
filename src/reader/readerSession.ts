@@ -803,16 +803,21 @@ export class ReaderSession {
 
 	/**
 	 * 会改变译文的**服务商配置**的折叠哈希 (v5, 审核 P3): 不同端点/代理后面
-	 * 可能是完全不同的模型,温度与推理强度直接改变输出,maxOutputTokens 影响
-	 * 截断,useContext 改变请求携带的上文 —— 任何一项变了,旧译文都不该再命中。
-	 * 页面键与段落 context 共用,读写必然一致。
+	 * 可能是完全不同的模型,温度与推理强度直接改变输出,useContext 改变请求
+	 * 携带的上文 —— 任何一项变了,旧译文都不该再命中。页面键与段落 context 共用,
+	 * 读写必然一致。
+	 *
+	 * maxOutputTokens **不**计入 (2.1.7, 计划 API-1): 它只是输出的安全上限、不
+	 * 决定已完整译文的内容;而截断的译文本就被 isTruncatedTranslation 拦下、不
+	 * 入缓存。此前把它计入 → 用户为解决个别截断把上限 4k 调到 8k,会作废整篇
+	 * 页面+段落缓存全量重译一遍(数万 token 白烧)。移出后:调高上限只让个别
+	 * 曾截断的段重译,其余照旧命中;调低的极端情形至多个别长段重译。
 	 */
 	private settingsIdentityHash(settings: { apiBaseURL?: string; apiPath?: string; reasoning?: string; maxOutputTokens?: number; temperature?: number }): string {
 		return hashSourceTexts([
 			settings.apiBaseURL ?? '',
 			settings.apiPath ?? '',
 			settings.reasoning ?? '',
-			String(settings.maxOutputTokens ?? ''),
 			String(settings.temperature ?? ''),
 			String(getPref<boolean>('useContext', true))
 		]);
@@ -1493,15 +1498,20 @@ export class ReaderSession {
 			return;
 		}
 		this.placementStats.set(pageIndex, s); // P3 (2.0.10): 供诊断导出
-		// Placement 探针 (审核: 封面标题空洞): 采样底图/遮罩,供诊断导出定位病因。
-		try {
-			const probe = probeStrictPlacement(element);
-			if (probe) {
-				this.placementProbe.set(pageIndex, probe);
+		// Placement 探针下热路径 (2.1.7, 计划 PF-2): 探针对每块每行做 getImageData
+		// 采样底图/遮罩,只为诊断导出定位病因。此前每页 FINAL 无条件跑,普通用户
+		// 从不导出诊断却白付数百次逐像素读取、拖长译文显现。现在仅在开启「调试
+		// 日志」时对该页采样;关闭时零成本。
+		if (getPref<boolean>('debugLogging', false)) {
+			try {
+				const probe = probeStrictPlacement(element);
+				if (probe) {
+					this.placementProbe.set(pageIndex, probe);
+				}
 			}
-		}
-		catch (e) {
-			logger.debug(MODULE, `placement probe failed on page ${pageIndex + 1} (ignored)`, e);
+			catch (e) {
+				logger.debug(MODULE, `placement probe failed on page ${pageIndex + 1} (ignored)`, e);
+			}
 		}
 		logger.info(
 			MODULE,
