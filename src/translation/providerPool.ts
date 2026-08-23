@@ -167,15 +167,23 @@ export function poolLanePlan(caps: ProviderCapability[], mode: PerfMode, customV
 	return { laneBands, initialSum: Math.max(1, initialSum) };
 }
 
-/** Prefetch window per mode: stable 2/1, auto min(2N,10)/1, high 12/2. */
+/**
+ * Prefetch window per mode (2.1.9, 优化计划 item 2 自适应预取): 大幅收窄,只提前
+ * 翻**很可能被读到**的页,减少用户从不浏览的页产生的请求。
+ *   - stable(省流): forward 1 —— 只当前页 + 下一页。
+ *   - auto: 顺读渐扩,单引擎 1、随池到 3(此前 min(2N,10) 过激,一进页就抢译
+ *     多达 10 页,快速跳页时几乎全是无效请求)。
+ *   - high(高速): forward 5(此前固定 12,远超实际阅读需要)。
+ * backward 一律 1(上一页便宜,顺手)。
+ */
 export function prefetchWindowFor(mode: PerfMode, poolSize: number): { forward: number; backward: number } {
 	if (mode === 'stable') {
-		return { forward: 2, backward: 1 };
+		return { forward: 1, backward: 1 };
 	}
 	if (mode === 'high') {
-		return { forward: 12, backward: 2 };
+		return { forward: 5, backward: 1 };
 	}
-	return { forward: Math.max(1, Math.min(2 * poolSize, 10)), backward: 1 };
+	return { forward: Math.max(1, Math.min(poolSize, 3)), backward: 1 };
 }
 
 /** Global ceiling setting: 2–24. Two slots are required to guarantee that one

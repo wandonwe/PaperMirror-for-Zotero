@@ -511,11 +511,16 @@ export class TranslationManager {
 	/** Raw PDF extractions that outlived the manager timeout. One per page. */
 	private extractZombies = new Map<number, Promise<SourceBlock[]>>();
 
-	constructor(deps: TranslationDeps, events: ManagerEvents, options?: { maxConcurrent?: number; reservedForeground?: number; prefetch?: boolean; delayFn?: (ms: number) => Promise<void>; extractTimeoutMs?: number }) {
+	/** 预取去抖 (2.1.9, item 2): 快速跳页时不立刻发邻页预取,等用户停下再发。 */
+	private prefetchDebounceMs: number;
+	private prefetchTimer: ReturnType<typeof setTimeout> | null = null;
+
+	constructor(deps: TranslationDeps, events: ManagerEvents, options?: { maxConcurrent?: number; reservedForeground?: number; prefetch?: boolean; delayFn?: (ms: number) => Promise<void>; extractTimeoutMs?: number; prefetchDebounceMs?: number }) {
 		this.deps = deps;
 		this.events = events;
 		this.extractTimeoutMs = options?.extractTimeoutMs ?? EXTRACT_TIMEOUT_MS;
 		this.prefetchEnabled = options?.prefetch ?? true;
+		this.prefetchDebounceMs = Math.max(0, options?.prefetchDebounceMs ?? 500);
 		this.delay = options?.delayFn ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
 		this.scheduler = new RequestScheduler({
 			// The GLOBAL cap; the host (session) reconfigures it from the live
@@ -612,7 +617,34 @@ export class TranslationManager {
 		//    providers' pages translate in parallel while the current page runs,
 		//    and same-lane prefetch only ever uses that provider's spare capacity.
 		//    That is what actually makes a provider pool multiply throughput.
-		this.prefetchNeighbours();
+		//    去抖 (2.1.9): 快速跳页时不立刻发,停下才对最终页预取。
+		this.schedulePrefetch();
+	}
+
+	/**
+	 * 去抖预取 (2.1.9, item 2 自适应预取): 快速跳页/改向时,每次 setCurrentPage
+	 * 先 cancelExcept 撤掉过期预取,再重置这个定时器 —— 用户还在翻页就不发邻页
+	 * 请求,停下 ~500ms 才对**最终停留页**发预取。当前页本身仍立即翻译(不在这里
+	 * 去抖)。debounce=0 时同步执行(测试/兼容)。
+	 */
+	private schedulePrefetch(): void {
+		if (this.disposed || !this.prefetchEnabled) {
+			return;
+		}
+		if (this.prefetchTimer !== null) {
+			clearTimeout(this.prefetchTimer);
+			this.prefetchTimer = null;
+		}
+		if (this.prefetchDebounceMs === 0) {
+			this.prefetchNeighbours();
+			return;
+		}
+		this.prefetchTimer = setTimeout(() => {
+			this.prefetchTimer = null;
+			if (!this.disposed) {
+				this.prefetchNeighbours();
+			}
+		}, this.prefetchDebounceMs);
 	}
 
 	/** Prefetch the pages around the current one — only once it is itself done. */
@@ -960,6 +992,10 @@ export class TranslationManager {
 
 	dispose(): void {
 		this.disposed = true;
+		if (this.prefetchTimer !== null) {
+			clearTimeout(this.prefetchTimer);
+			this.prefetchTimer = null;
+		}
 		for (const waiter of this.extractWaiters.splice(0)) {
 			waiter.reject(new PaperMirrorError('CANCELLED', 'Manager disposed.'));
 		}
@@ -1534,7 +1570,7 @@ export class TranslationManager {
 			this.notify(state);
 			logger.info(MODULE, `Page ${pageIndex + 1}: fully served from the segment cache (${segmentHits} segment(s), 0 requests)`);
 			if (pageIndex === this.currentPage) {
-				this.prefetchNeighbours();
+				this.schedulePrefetch();
 			}
 			// 不完整页不落页面缓存 (2.0.6, 审核 P3): keepOrigin 非空意味着有段落
 			// 被止损跳过 —— 把这样的页写进页面缓存,下次打开会当作完整命中直接
@@ -2062,7 +2098,7 @@ export class TranslationManager {
 		// The visible page is done → now it is safe to prefetch its neighbours
 		// (they were held back so they could not starve the current page).
 		if (pageIndex === this.currentPage) {
-			this.prefetchNeighbours();
+			this.schedulePrefetch();
 		}
 		// Newly translated segments enter the segment store regardless of page
 		// completeness — a good segment is a good segment; only the PAGE index

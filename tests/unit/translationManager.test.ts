@@ -644,7 +644,7 @@ test('provider pool: another lane prefetches WHILE the current page (its lane) i
 			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '译文内容' })) };
 		}
 	});
-	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: true, delayFn: () => Promise.resolve() });
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: true, delayFn: () => Promise.resolve(), prefetchDebounceMs: 0 });
 	manager.setLaneCaps({ A: 1, B: 1 });
 	manager.setGlobalConcurrency(4);
 	manager.setPrefetchWindow(2, 1);
@@ -684,7 +684,7 @@ test('navigating to a QUEUED prefetch page promotes it to run now (not stuck)', 
 			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '译文内容' })) };
 		}
 	});
-	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: true, maxConcurrent: 1, delayFn: () => Promise.resolve() });
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: true, maxConcurrent: 1, delayFn: () => Promise.resolve(), prefetchDebounceMs: 0 });
 	manager.setCurrentPage(5);
 	await new Promise(r => setTimeout(r, 20));
 	assert.ok(order.includes(5), 'the current page 5 translated');
@@ -709,7 +709,7 @@ test('优先翻译当前页: the current page translates before any neighbour is
 		}
 	});
 	// prefetch ON so neighbours are eligible; the current page must still win.
-	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: true, delayFn: () => Promise.resolve() });
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: true, delayFn: () => Promise.resolve(), prefetchDebounceMs: 0 });
 	manager.setCurrentPage(3);
 	await new Promise(r => setTimeout(r, 30));
 	assert.equal(order[0], 3, 'the current page is translated first');

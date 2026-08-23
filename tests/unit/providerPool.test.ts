@@ -59,11 +59,15 @@ test('poolLanePlan: bands per provider + sum of initial caps', () => {
 	], 'stable').initialSum, 5);
 });
 
-test('prefetchWindowFor: per-mode windows', () => {
-	assert.deepEqual(prefetchWindowFor('stable', 3), { forward: 2, backward: 1 });
-	assert.deepEqual(prefetchWindowFor('high', 3), { forward: 12, backward: 2 });
-	assert.deepEqual(prefetchWindowFor('auto', 3), { forward: 6, backward: 1 }); // 2N
-	assert.deepEqual(prefetchWindowFor('auto', 9), { forward: 10, backward: 1 }); // clamp 10
+test('prefetchWindowFor: per-mode windows (2.1.9 收窄)', () => {
+	// 省流: 只当前 + 下一页。
+	assert.deepEqual(prefetchWindowFor('stable', 3), { forward: 1, backward: 1 });
+	// 高速: ≤5,不再固定 12。
+	assert.deepEqual(prefetchWindowFor('high', 3), { forward: 5, backward: 1 });
+	// auto: 顺读渐扩,单引擎 1、随池到 3。
+	assert.deepEqual(prefetchWindowFor('auto', 1), { forward: 1, backward: 1 });
+	assert.deepEqual(prefetchWindowFor('auto', 3), { forward: 3, backward: 1 });
+	assert.deepEqual(prefetchWindowFor('auto', 9), { forward: 3, backward: 1 }); // clamp 3
 });
 
 test('normalizeGlobalMax: 0/legacy → 8 (2.1.7 默认降峰), clamp [2,24]', () => {

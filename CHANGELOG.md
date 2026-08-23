@@ -7,6 +7,22 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.9] — 2026-08-23
+
+优化计划**第二批 item 2·自适应预取**。减少用户从不浏览的页产生的请求,尤其
+快速跳页场景。不改译文正确性。
+
+### Performance
+
+- **预取窗口大幅收窄**。此前 auto 一进页就抢译多达 `min(2N,10)` 页、high 固定 12
+  页——快速跳页时几乎全是无效请求。现在:省流(stable)只当前+下一页;auto 顺读
+  渐扩(单引擎 1、随服务商池到 3);高速(high)≤5(不再固定 12)。backward 一律 1。
+  (`providerPool.prefetchWindowFor`)
+- **邻页预取去抖(默认 500ms)**。每次翻页先 `cancelExcept` 撤掉过期预取,再重置
+  去抖定时器——用户还在连续翻页就不发邻页请求,停下约半秒才对**最终停留页**发
+  预取;快速掠过的页不再产生请求。**当前页本身仍立即翻译**(不在去抖内)。
+  (`translationManager` schedulePrefetch,可注入 `prefetchDebounceMs`)
+
 ## [2.1.8] — 2026-08-23
 
 优化计划**第二批·架构核心**的第一项(全批四项之一):**请求级并发闸**。降低
