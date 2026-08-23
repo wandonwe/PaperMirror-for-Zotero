@@ -264,9 +264,6 @@
 				</menulist>
 			</hbox>
 		</hbox>
-		<!-- 隐藏首选项上界面 (2.3.3, item5 · WF-5): useContext -->
-		<checkbox id="papermirror-use-context" preference="extensions.zotero.bilingualReader.useContext" label="携带上下文翻译(把邻近段落作为上文一起发送,译文衔接更连贯)" native="true"/>
-		<html:div class="pm-desc" style="margin-top: 0;">关闭可少发一些文本(省流量/更私密);改动会使已缓存译文失效、逐步重译。</html:div>
 		<hbox class="pm-line" style="margin-top: 9px;">
 			<label class="pm-title" data-l10n-id="papermirror-prefs-custom-prompt" control="papermirror-custom-prompt"/>
 		</hbox>
@@ -302,12 +299,6 @@
 			<html:input type="number" id="papermirror-concurrency" min="2" max="24" style="width: 4.5em; text-align: right;"/>
 		</hbox>
 		<label class="pm-desc" style="margin-top: 0;" value="限制所有服务商合计同时处理的页面数,范围2–24。至少保留一个当前页槽位;每个服务商仍独立限流。"/>
-		<!-- 隐藏首选项上界面 (2.3.3, item5 · WF-5): timeoutMs(秒显示,毫秒存储) -->
-		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 8px;">
-			<label value="单次请求超时(秒)" control="papermirror-timeout" style="flex: 1;"/>
-			<html:input type="number" id="papermirror-timeout" min="10" max="300" style="width: 4.5em; text-align: right;"/>
-		</hbox>
-		<label class="pm-desc" style="margin-top: 0;" value="慢模型/推理模型可调大;长段请求会按文本量在此基础上自动放宽。范围 10–300 秒,默认 60。"/>
 		<!-- 自定义模式:每个已启用服务商的最大并行页面数 -->
 		<html:div id="papermirror-custom-rows" class="pm-field" style="flex-direction: column; align-items: stretch; gap: 3px; margin-top: 6px; display: none;"></html:div>
 		<!-- 当前配置摘要卡 -->
@@ -340,16 +331,6 @@
 		<html:div class="pm-desc" style="margin-top: 2px;">点击工具栏翻译按钮时进入的模式;工具栏 ▾ 菜单可随时临时切换。</html:div>
 		<checkbox id="papermirror-peek-hover" preference="extensions.zotero.bilingualReader.overlayPeekHover" label="悬停看原文(覆盖模式下,鼠标停在译文段落上时显示该段原文)" native="true"/>
 		<checkbox id="papermirror-dim-original" label="原文淡化(覆盖模式下译文遮罩半透明,原文隐约可见)" native="true"/>
-		<!-- 隐藏首选项上界面 (2.3.3, 第四批 item5 · WF-5): overlayFitMode -->
-		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 4px;">
-			<label value="覆盖模式排版" control="papermirror-overlay-fit"/>
-			<menulist id="papermirror-overlay-fit" preference="extensions.zotero.bilingualReader.overlayFitMode" native="true">
-				<menupopup>
-					<menuitem label="允许扩边(默认;译文放不下时借用邻近空白)" value="expand"/>
-					<menuitem label="严格原框(译文只在原文矩形内,放不下缩字)" value="strict"/>
-				</menupopup>
-			</menulist>
-		</hbox>
 		<checkbox id="papermirror-translate-captions" preference="extensions.zotero.bilingualReader.translateCaptions" label="翻译图表标题" native="true"/>
 		<checkbox id="papermirror-translate-references" preference="extensions.zotero.bilingualReader.translateReferences" label="翻译参考文献部分" native="true"/>
 		<hbox class="pm-line" style="justify-content: flex-start; margin-top: 4px;">

@@ -49,9 +49,7 @@ test('会话侧的诊断载荷不再拼进 currentPageCorpus(结构性回归闸)
 	// copyDiagnostics 需要大量 Zotero 环境才能直调;这里用源码级断言钉住不变量,
 	// 防止有人再次把语料并回「诊断」。
 	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
-	// 2.3.0: copyDiagnostics 变 async(引擎自检需 await 服务商配置),签名两种都认。
-	const sigMatch = /private (?:async )?copyDiagnostics\(/.exec(src);
-	const start = sigMatch ? sigMatch.index : -1;
+	const start = src.indexOf('private copyDiagnostics(');
 	assert.ok(start > 0, '找不到 copyDiagnostics');
 	const end = src.indexOf('private copyLayoutCorpus(', start);
 	assert.ok(end > start, '找不到 copyLayoutCorpus —— 语料必须是独立动作');

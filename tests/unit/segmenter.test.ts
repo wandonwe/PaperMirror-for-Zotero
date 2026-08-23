@@ -174,31 +174,3 @@ test('without riskOf every chunk is a fast chunk (behaviour unchanged)', () => {
 	const chunks = planChunks(blocks, []);
 	assert.ok(chunks.every(c => c.lane === 'fast'));
 });
-
-// ---------------------------------------------------------------------------
-// 2.2.0 item 3: 表格单元格硬边界 —— 单元格绝不与正文段落同请求
-// ---------------------------------------------------------------------------
-
-function cell(id: string, len: number, row: number, col: number): SourceBlock {
-	return { id, pageIndex: 0, order: 0, type: 'paragraph', sourceText: 'x'.repeat(len), tableRow: row, tableCol: col };
-}
-
-test('planChunks never packs table cells into the same request as body prose', () => {
-	const blocks = [
-		typed('h', 'heading', 20),
-		para('p1', 'short body before the table'),
-		cell('c1', 30, 0, 0), cell('c2', 30, 0, 1),
-		cell('c3', 30, 1, 0), cell('c4', 30, 1, 1),
-		para('p2', 'short body after the table')
-	];
-	const chunks = planChunks(blocks, buildLayoutModules(blocks));
-	// No chunk mixes a cell (has tableRow/tableCol) with a non-cell block.
-	for (const c of chunks) {
-		const cells = c.blocks.filter(b => typeof b.tableRow === 'number').length;
-		assert.ok(cells === 0 || cells === c.blocks.length,
-			`chunk ${c.blocks.map(b => b.id)} mixes cells and body`);
-	}
-	// The four cells share a single request (batched, not one-per-cell).
-	const cellChunk = chunks.find(c => c.blocks.some(b => b.id === 'c1'));
-	assert.deepEqual(cellChunk!.blocks.map(b => b.id), ['c1', 'c2', 'c3', 'c4']);
-});

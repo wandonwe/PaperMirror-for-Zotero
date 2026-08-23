@@ -191,17 +191,6 @@ export function planChunks(
 			moduleOf.set(id, mod.id);
 		}
 	}
-	// 表格块硬分隔 (2.2.0, 计划 item 3): 表格模块(单元格)与正文之间是**硬**边界
-	// —— 单元格绝不与正文段落打进同一个请求(否则表头/数据行译文互相污染、id 漂移)。
-	// 单元格之间仍按预算批量,不逐格请求。
-	const tableBlockIds = new Set<string>();
-	for (const mod of modules) {
-		if (mod.anchorType === 'table') {
-			for (const id of mod.memberIds) {
-				tableBlockIds.add(id);
-			}
-		}
-	}
 
 	const contextFor = (chunkBlocks: SourceBlock[]): string => {
 		const first = chunkBlocks[0];
@@ -233,12 +222,6 @@ export function planChunks(
 		const b = blocks[i]!;
 		const bs = b.sourceText.length;
 		const startsNewModule = i > 0 && moduleOf.get(b.id) !== moduleOf.get(blocks[i - 1]!.id);
-		// 表格硬边界 (2.2.0, item 3): 单元格与正文之间无条件断开,无论填充率。
-		// 一个请求要么全是表格单元格、要么全是正文 —— 绝不混装,避免译文互相污染
-		// 与 id 漂移。单元格之间仍受下面的预算/块数上限约束批量打包。
-		if (cur.length && tableBlockIds.has(b.id) !== tableBlockIds.has(cur[cur.length - 1]!.id)) {
-			flush();
-		}
 		// Prefer to keep modules whole: end the chunk at a module boundary once it
 		// is already full enough.
 		if (cur.length && startsNewModule && size >= charBudget * targetFill) {
@@ -255,10 +238,8 @@ export function planChunks(
 	return chunks;
 }
 
-/** Trailing context (last N chars of the previous chunk/page) for coherence.
- *  上下文收窄 (2.3.5, 第四批 item7 · API-7): 600→300 —— 术语/语气衔接靠最后
- *  一两句就够,600 字的边际收益递减,每 chunk 白付 ~150 输入 token。 */
-export function trailingContext(blocks: SourceBlock[], maxChars = 300): string {
+/** Trailing context (last N chars of the previous chunk/page) for coherence. */
+export function trailingContext(blocks: SourceBlock[], maxChars = 600): string {
 	if (!blocks.length) {
 		return '';
 	}

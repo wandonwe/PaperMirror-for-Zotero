@@ -12,7 +12,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, allowsFontShrink, type UnfitBlock } from '../../src/ui/strictPageReplacement';
+import { settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, type UnfitBlock } from '../../src/ui/strictPageReplacement';
 import { supportsCharBudget } from '../../src/translation/providers/types';
 import { getProvider } from '../../src/translation/providers/registry';
 
@@ -92,23 +92,6 @@ test('shrinkStrictBlocks delegates to pmShrinkFit and returns the leftovers', ()
 	);
 });
 
-test('allowsFontShrink: 正文不缩字(按页统一), 独立元素可缩字 (item7b LO-3)', () => {
-	// 正文 paragraph/list 绝不单独缩字致发花 —— 页内统一字号,放不下保留原文。
-	assert.equal(allowsFontShrink('paragraph'), false, '正文段落不单独缩字');
-	assert.equal(allowsFontShrink('list'), false, '列表项同为正文流');
-	// 独立元素缩它自己不会与正文比出大小差,仍可末位缩字保住译文。
-	assert.equal(allowsFontShrink('caption'), true, '图题可缩字');
-	assert.equal(allowsFontShrink('heading'), true, '小标题可缩字');
-	assert.equal(allowsFontShrink('title'), true, '大标题可缩字');
-	assert.equal(allowsFontShrink(''), true, '未知类型保守放行缩字(不误伤正文)');
-	// 2.3.7 豁免(基线 doc3 实证): 表格单元格与微小单行块是孤立小盒,缩字不发花,
-	// 禁缩只会让它们整行放弃(一篇文档 abandoned 曾涨到 56)。
-	assert.equal(allowsFontShrink('paragraph', { isTableCell: true }), true, '表格单元格可缩字');
-	assert.equal(allowsFontShrink('paragraph', { tinyLine: true }), true, '微小单行块可缩字');
-	assert.equal(allowsFontShrink('paragraph', {}), false, '普通正文段仍不缩字');
-	assert.equal(allowsFontShrink('list', { isTableCell: false, tinyLine: false }), false, '列表正文仍不缩字');
-});
-
 test('shrinkStrictBlocks without the hook falls back to reverting everything', () => {
 	const el = {} as HTMLElement;
 	assert.deepEqual(shrinkStrictBlocks(el, ['a', 'b']), ['a', 'b']);
@@ -181,20 +164,7 @@ test('ladderFor never crushes lines below the source leading', async () => {
 // 1.0.5 批次2: BabelDOC 算法3 —— 缩字前先扩边界(空白测量,纯函数)
 // ---------------------------------------------------------------------------
 
-import { computeExpansionAllowance, estimateCjkCapacity } from '../../src/ui/strictPageReplacement';
-
-// 2.2.2, 第三批 item3 · 「压缩预算计入可用空白」的方向不变量: budgetFor 把
-// (原盒 + expansionAllowance) 交给 estimateCjkCapacity,因此更大的框 → 更宽的
-// 预算 → 模型不会一上来就过度缩写。这里锁住容量随框单调增长的纯函数性质。
-test('estimateCjkCapacity grows when whitespace is folded into the box (item3 预算含空白)', () => {
-	const base = estimateCjkCapacity(200, 100, 12);
-	const withRight = estimateCjkCapacity(200 + 60, 100, 12);
-	const withBoth = estimateCjkCapacity(200 + 60, 100 + 30, 12);
-	assert.ok(withRight > base, `右扩后预算应更大: ${withRight} > ${base}`);
-	assert.ok(withBoth > withRight, `双向扩后预算应更大: ${withBoth} > ${withRight}`);
-	// 退化护栏:非法尺寸仍给最小 8,不会把预算算成 0/负。
-	assert.equal(estimateCjkCapacity(0, 100, 12), 8);
-});
+import { computeExpansionAllowance } from '../../src/ui/strictPageReplacement';
 
 test('expansion is clipped by the nearest right/below blocker with margin (算法3)', () => {
 	const box = { left: 100, top: 100, width: 100, height: 40 };
@@ -257,22 +227,9 @@ test('splitRegionForPlacement: splits translation across paragraph groups, falls
 	const single = splitRegionForPlacement(region, '甲。\n乙。\n丙。');
 	assert.equal(single?.length, 3, 'single-newline separators split too');
 	assert.deepEqual(single!.map(p => p.text), ['甲。', '乙。', '丙。']);
-	// 一坨(全部分段被合成一段,无换行)→ null: 无从拆,回退整块(与旧行为一致)。
-	assert.equal(splitRegionForPlacement(region, '甲。乙。丙。'), null, 'engine dropped ALL breaks → fall back');
-	// 尽力对齐 (2.2.6, item7): 段数不等不再回退塌顶 ------------------------------
-	// P<G: 2 段 / 3 组 → 合并组盒到 2 个(前两组并成一盒),每段落地、顺序不变。
-	const fewer = splitRegionForPlacement(region, '甲。\n\n乙。');
-	assert.ok(fewer, '2 段 3 组不再回退,尽力对齐');
-	assert.equal(fewer!.length, 2);
-	assert.deepEqual(fewer!.map(p => p.text), ['甲。', '乙。']);
-	assert.deepEqual(fewer![0]!.lineRectsPdf, [[0, 90, 100, 100], [0, 70, 100, 80]], '前两组盒并集承载第一段');
-	assert.deepEqual(fewer![1]!.lineRectsPdf, [[0, 50, 100, 60]], '第三组盒承载第二段');
-	// P>G: 4 段 / 3 组 → 盒子仍是 3 个组(几何不变),4 段按序均匀并入(桶 2/1/1)。
-	const more = splitRegionForPlacement(region, '甲。\n乙。\n丙。\n丁。');
-	assert.ok(more, '4 段 3 组不再回退,尽力对齐');
-	assert.equal(more!.length, 3);
-	assert.deepEqual(more!.map(p => p.text), ['甲。 乙。', '丙。', '丁。'], '多出的段并入首桶');
-	assert.deepEqual(more![0]!.lineRectsPdf, [[0, 90, 100, 100]], '组盒几何不变');
+	// Mismatch → null (fall back to whole-region union-box placement, never worse).
+	assert.equal(splitRegionForPlacement(region, '甲。乙。丙。'), null, 'engine dropped breaks → fall back');
+	assert.equal(splitRegionForPlacement(region, '甲。\n\n乙。'), null, 'too few paragraphs → fall back');
 	// A single-group (or no) region never splits.
 	assert.equal(splitRegionForPlacement({ ...region, regionParagraphs: [region.regionParagraphs[0]!] }, '甲。'), null);
 	assert.equal(splitRegionForPlacement({ ...region, regionParagraphs: undefined }, '甲。\n\n乙。'), null);
@@ -318,29 +275,4 @@ test('元素已断开 → 超时不再执行测量 (无泄漏测量)', async () 
 	(el as unknown as { isConnected: boolean }).isConnected = false;
 	await new Promise(r => setTimeout(r, 90));
 	assert.deepEqual(calls.map(c => c.final), [false], '断开后 final 测量不发生');
-});
-
-// ---- LO-7 (2.4.0): 大标题「整体另置」候选位置 — pure ----------------------
-
-test('annexCandidateBoxes: 正下方优先、正上方次之,left/width 沿用原盒', async () => {
-	const { annexCandidateBoxes } = await import('../../src/ui/strictPageReplacement');
-	const ob = { left: 50, top: 100, width: 500, height: 60 };
-	const boxes = annexCandidateBoxes(ob, 40, 800, 6);
-	assert.equal(boxes.length, 2);
-	assert.deepEqual(boxes[0], { left: 50, top: 166, width: 500, height: 40 }, '首选正下方 (top+height+gap)');
-	assert.deepEqual(boxes[1], { left: 50, top: 54, width: 500, height: 40 }, '次选正上方 (top-gap-natural)');
-});
-
-test('annexCandidateBoxes: 越出页面安全边 (2%/98%) 的候选不产出', async () => {
-	const { annexCandidateBoxes } = await import('../../src/ui/strictPageReplacement');
-	// 标题贴近页顶: 上方候选 top < 2% 页高 → 只剩下方。
-	const nearTop = annexCandidateBoxes({ left: 0, top: 20, width: 400, height: 50 }, 40, 800, 6);
-	assert.equal(nearTop.length, 1);
-	assert.ok(nearTop[0]!.top > 20, '仅剩下方候选');
-	// 标题贴近页底: 下方候选超 98% 页高 → 只剩上方。
-	const nearBottom = annexCandidateBoxes({ left: 0, top: 740, width: 400, height: 50 }, 40, 800, 6);
-	assert.equal(nearBottom.length, 1);
-	assert.ok(nearBottom[0]!.top < 740, '仅剩上方候选');
-	// 两头都放不下 (页面极矮) → 空数组,调用方落回放弃流程。
-	assert.equal(annexCandidateBoxes({ left: 0, top: 10, width: 400, height: 30 }, 40, 60, 6).length, 0);
 });

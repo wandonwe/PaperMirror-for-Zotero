@@ -451,24 +451,6 @@ export class TranslationManager {
 	/** Prefetch window (scales with the provider pool; set by the host). */
 	private prefetchForward = 1;
 	private prefetchBackward = 1;
-	/** 用户当前的翻页方向 (2.3.2, item4): 1=向前读, -1=向回看。默认向前。 */
-	private readDirection: 1 | -1 = 1;
-	/**
-	 * 用量统计计数器 (2.3.9, 计划 API-P1/WF-4 的观测子集): 只计数、零开销、
-	 * 不进日志 —— 随诊断 JSON 的 usage 段导出,用于回答两个调参问题:
-	 *   1. 缓存到底省了多少 —— 页缓存整页命中/部分命中,段落缓存查询/命中;
-	 *   2. 预取浪费了多少 —— 后台预取翻译的页里,用户最终没读到的有几页。
-	 * prefetchedUnviewed 按页去重;用户滚到该页时移出(不再算浪费)。
-	 */
-	private usage = {
-		pageCacheLookups: 0,
-		pageCacheFullHits: 0,
-		pageCachePartialHits: 0,
-		segmentLookups: 0,
-		segmentHits: 0,
-		prefetchedPages: new Set<number>(),
-		prefetchedUnviewed: new Set<number>()
-	};
 	/** Pages whose provider has already been reported unstable (fire once). */
 	private unstableFired = new Set<number>();
 	/**
@@ -592,15 +574,7 @@ export class TranslationManager {
 		if (this.disposed) {
 			return;
 		}
-		// 按方向备下一页 (2.3.2, 计划 第四批 item4 · Codex 工作流): 记录用户实际的
-		// 翻页方向 —— 向后翻(回看/复查)时预取窗口跟着翻转,大窗口朝行进方向、
-		// 小窗口朝身后。同页不动时保持既有方向。
-		if (pageIndex !== this.currentPage) {
-			this.readDirection = pageIndex > this.currentPage ? 1 : -1;
-		}
 		this.currentPage = pageIndex;
-		// 用户读到了这一页 → 它的预取(如有)没有浪费。
-		this.usage.prefetchedUnviewed.delete(pageIndex);
 		this.navigationGeneration++;
 		const wanted = this.wantedPages();
 		const wantedSet = new Set(wanted);
@@ -685,11 +659,10 @@ export class TranslationManager {
 			if (page === this.currentPage) {
 				continue;
 			}
-			// Nearer pages first; the page AHEAD (行进方向, 2.3.2 item4) beats the
-			// one behind — direction-relative, not fixed page-number order.
+			// Nearer pages first; the next page beats the previous one.
 			const distance = Math.abs(page - this.currentPage);
-			const priority = page === this.currentPage + this.readDirection ? PRIORITY.NEXT_PAGE
-				: page === this.currentPage - this.readDirection ? PRIORITY.PREVIOUS_PAGE
+			const priority = page === this.currentPage + 1 ? PRIORITY.NEXT_PAGE
+				: page === this.currentPage - 1 ? PRIORITY.PREVIOUS_PAGE
 					: Math.max(1, PRIORITY.SECOND_NEXT_PAGE - distance);
 			void this.ensurePage(page, priority, { foreground: false });
 		}
@@ -947,37 +920,15 @@ export class TranslationManager {
 						id: b.id,
 						type: b.type,
 						chars: b.sourceText.length,
-						// 'preserved' (2.3.7, 基线口径修正): preserve 块(数据单元格等)
-						// **有意**不翻译,此前显示 'untranslated' —— 表格密集页看起来
-						// 一片失败,实际全是保护性保留。诊断从此与 placement 的
-						// tableIntentional 对得上号。
 						state: s.translations.has(b.id)
 							? 'translated'
-							: b.translationMode === 'preserve'
-								? 'preserved'
-								: (s.keepOrigin?.get(b.id) ?? 'untranslated'),
+							: (s.keepOrigin?.get(b.id) ?? 'untranslated'),
 						...(s.rejectReasons?.has(b.id) && !s.translations.has(b.id)
 							? { lastReject: s.rejectReasons.get(b.id) }
 							: {})
 					}))
 				})),
-			docMemoryTerms: this.docMemory.size(),
-			// 用量统计 (2.3.9): 纯计数,不含文本。比率现算,分母为 0 时省略。
-			usage: {
-				pageCacheLookups: this.usage.pageCacheLookups,
-				pageCacheFullHits: this.usage.pageCacheFullHits,
-				pageCachePartialHits: this.usage.pageCachePartialHits,
-				...(this.usage.pageCacheLookups
-					? { pageCacheHitRate: Number((this.usage.pageCacheFullHits / this.usage.pageCacheLookups).toFixed(3)) }
-					: {}),
-				segmentLookups: this.usage.segmentLookups,
-				segmentHits: this.usage.segmentHits,
-				...(this.usage.segmentLookups
-					? { segmentHitRate: Number((this.usage.segmentHits / this.usage.segmentLookups).toFixed(3)) }
-					: {}),
-				prefetchedPages: this.usage.prefetchedPages.size,
-				prefetchedUnviewed: this.usage.prefetchedUnviewed.size
-			}
+			docMemoryTerms: this.docMemory.size()
 		};
 	}
 
@@ -1058,18 +1009,15 @@ export class TranslationManager {
 			return [this.currentPage];
 		}
 		const count = this.deps.pageCount();
-		// Window scales with the provider pool (host sets forward/backward, 2.1.9):
-		// more independent providers ⇒ more upcoming pages worth fetching in
-		// parallel. 按方向 (2.3.2, item4): 「forward」是**行进方向**而非固定页号
-		// 增向 —— 向回看时窗口翻转,大窗口朝用户正在去的方向,身后只留小窗口。
-		// Current page first, then ahead (direction), then behind.
-		const dir = this.readDirection;
+		// Window scales with the provider pool (host sets forward = min(2N, 12),
+		// backward = 1): more independent providers ⇒ more future pages worth
+		// fetching in parallel. Current page first, then forward, then backward.
 		const pages = [this.currentPage];
 		for (let d = 1; d <= this.prefetchForward; d++) {
-			pages.push(this.currentPage + d * dir);
+			pages.push(this.currentPage + d);
 		}
 		for (let d = 1; d <= this.prefetchBackward; d++) {
-			pages.push(this.currentPage - d * dir);
+			pages.push(this.currentPage - d);
 		}
 		return pages.filter(p => p >= 0 && (count <= 0 || p < count));
 	}
@@ -1196,13 +1144,6 @@ export class TranslationManager {
 		};
 		const navigationAtStart = this.navigationGeneration;
 		this.pages.set(pageIndex, state);
-		// 预取浪费计数 (2.3.9): 只有**显式后台预取**(foreground === false,即
-		// schedulePrefetch 发起的邻页)进账 —— 导出等路径不带 foreground 选项,
-		// 不算预取;当前页本身也不算。用户之后读到该页时从 unviewed 移出。
-		if (options?.foreground === false && pageIndex !== this.currentPage) {
-			this.usage.prefetchedPages.add(pageIndex);
-			this.usage.prefetchedUnviewed.add(pageIndex);
-		}
 		this.notify(state);
 
 		try {
@@ -1552,7 +1493,6 @@ export class TranslationManager {
 		// live response, and an incomplete hit only PREFILLS — the rest of the
 		// pipeline translates the missing blocks (toTranslate skips prefilled).
 		if (!bypass.bypassPageCache) {
-			this.usage.pageCacheLookups++;
 			const cached = await this.deps.readCache(pageIndex, blocks);
 			if (cached) {
 				const cachedById = new Map(cached.map(t => [t.id, t.translatedText]));
@@ -1565,7 +1505,6 @@ export class TranslationManager {
 					}
 				}
 				if (usable === activeBlocks.length) {
-					this.usage.pageCacheFullHits++;
 					state.status = 'done';
 					state.fromCache = true;
 					state.diagnostics = {
@@ -1576,7 +1515,6 @@ export class TranslationManager {
 					return;
 				}
 				if (usable) {
-					this.usage.pageCachePartialHits++;
 					logger.info(MODULE, `Page ${pageIndex + 1}: partial cache (${usable}/${activeBlocks.length}) — prefilled, translating the rest`);
 					this.notify(state); // show reused blocks immediately
 				}
@@ -1595,7 +1533,6 @@ export class TranslationManager {
 		const segHash = (b: SourceBlock): string => segmentHash(b.sourceText, source, target);
 		let segmentHits = 0;
 		if (!bypass.bypassSegments && this.deps.readSegments) {
-			this.usage.segmentLookups += activeBlocks.length;
 			const cached = await this.deps.readSegments(pageIndex, activeBlocks.map(segHash)).catch(() => null);
 			if (cached?.size) {
 				for (const block of activeBlocks) {
@@ -1606,7 +1543,6 @@ export class TranslationManager {
 					}
 				}
 				if (segmentHits) {
-					this.usage.segmentHits += segmentHits;
 					this.notify(state); // show reused segments immediately
 				}
 			}
@@ -1625,27 +1561,6 @@ export class TranslationManager {
 			}
 			return true;
 		});
-		// 同页相同内容去重 (2.3.5, 第四批 item7 · API-2): 同一页里 sourceText 完全
-		// 相同的块(模板化表头/重复短语/密集表格)只把**代表块**送去翻译,其余
-		// 同文块在代表译文到达时镜像共享 —— 省下重复块的输入+输出 token,零风险
-		// (segHash = 内容+语言,与段落缓存同一把键)。代表失败时同文块同样保留
-		// 原文,诚实计入 untranslated。
-		const dupOf = new Map<string, string[]>();
-		const uniqueToTranslate: SourceBlock[] = [];
-		{
-			const repByHash = new Map<string, string>();
-			for (const b of toTranslate) {
-				const h = segHash(b);
-				const rep = repByHash.get(h);
-				if (rep === undefined) {
-					repByHash.set(h, b.id);
-					uniqueToTranslate.push(b);
-				}
-				else {
-					dupOf.set(rep, [...(dupOf.get(rep) ?? []), b.id]);
-				}
-			}
-		}
 		if (!toTranslate.length) {
 			state.status = 'done';
 			state.diagnostics = {
@@ -1671,7 +1586,7 @@ export class TranslationManager {
 
 		// Protect formulas / citations / statistics per block (+ 不译词列表) —
 		// 占位符注册表 (1.1.0): 掩蔽/校验/还原共用同一实例,清单不可能串块。
-		const protectedBlocks = uniqueToTranslate.map((block) => {
+		const protectedBlocks = toTranslate.map((block) => {
 			const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block), block.styleRuns);
 			return { block, reg, text: reg.text };
 		});
@@ -1723,7 +1638,7 @@ export class TranslationManager {
 				// 前置的组合比单纯计数更早识别高风险块。
 				|| isFormulaDenseRisk(maskedById.get(b.id) ?? b.sourceText, ph);
 		};
-		const chunks = planChunks(uniqueToTranslate, buildLayoutModules(uniqueToTranslate), { riskOf });
+		const chunks = planChunks(toTranslate, buildLayoutModules(toTranslate), { riskOf });
 		// Hard ceiling on requests for this page so a misbehaving engine can never
 		// turn one page into a request storm: 2× the planned chunks, plus 2. Once
 		// hit, salvage stops and the remaining blocks are left for 「刷新本页」.
@@ -1741,24 +1656,6 @@ export class TranslationManager {
 		const canSpendFinal = (): boolean => metrics.requestCount < pageRequestCap + FINAL_RECOVERY_MAX;
 		const results: TranslatedBlock[] = [];
 		let untranslatedCount = 0;
-		// API-2 镜像: 代表块的译文一到,同文重复块立即共享(渐进渲染同帧可见);
-		// 结尾还有一次全量 sweep 兜住 salvage/纯文本兜底等晚到路径。
-		const mirrorDuplicates = (repId: string): void => {
-			const dups = dupOf.get(repId);
-			if (!dups) {
-				return;
-			}
-			const t = state.translations.get(repId);
-			if (t === undefined) {
-				return;
-			}
-			for (const d of dups) {
-				if (!state.translations.has(d)) {
-					state.translations.set(d, t);
-					results.push({ id: d, translatedText: t });
-				}
-			}
-		};
 
 		// Context is derived from SOURCE text only (audit-verified: nothing in a
 		// request reads a prior chunk's RESPONSE), so it is precomputable and the
@@ -1800,8 +1697,7 @@ export class TranslationManager {
 				const w2 = first.boundingBox?.width;
 				const similarWidth = !w1 || !w2 || Math.abs(w1 - w2) < Math.min(w1, w2);
 				if ((unfinished || continuing) && lastLineFull && similarWidth) {
-					// API-7: 跨页尾同样收窄 600→300。
-					contexts[0] = tail.length <= 300 ? tail : tail.slice(-300);
+					contexts[0] = tail.length <= 600 ? tail : tail.slice(-600);
 				}
 			}
 		}
@@ -2028,7 +1924,6 @@ export class TranslationManager {
 				const restored = pb.reg.restore(raw);
 				results.push({ id: block.id, translatedText: restored });
 				state.translations.set(block.id, restored);
-				mirrorDuplicates(block.id); // API-2: 同文块同帧共享
 				// 术语记忆: harvest 「中文术语(ABBR)」 pairs this page established.
 				this.docMemory.learn(extractTermPairs(block.sourceText, restored));
 			}
@@ -2175,11 +2070,6 @@ export class TranslationManager {
 			for (const k of keys) {
 				this.failedSegments.delete(k);
 			}
-		}
-		// API-2 收尾 sweep: salvage/纯文本兜底/残留修复等晚到路径接住的代表译文,
-		// 在这里统一镜像给同文块 —— 然后才如实清点 untranslated。
-		for (const rep of dupOf.keys()) {
-			mirrorDuplicates(rep);
 		}
 		untranslatedCount = toTranslate.filter(b => !state.translations.has(b.id)).length;
 

@@ -11,54 +11,17 @@
  *
  * Sharding is BY PAGE, deterministically, so a page\'s cache entry always
  * belongs to the same provider and re-opening the document hits the cache.
- *
- * 稳定映射 (2.2.1, 计划 第三批 item1 · Codex API-P1): 分配用 **rendezvous / HRW**
- * (最高随机权重)哈希,不再 `pageIndex % pool.length`。取模的致命处是**池一变全
- * 盘重排**:加一个服务商、删一个、甚至只改顺序,几乎每一页的规范引擎都换人 →
- * 页缓存键全变 → 整篇 miss 白重译。HRW 只让**受影响的那约 1/N 页**换人:
- *   - 加服务商 X:只有「X 对其恰好评分最高」的页迁到 X,其余不动;
- *   - 删服务商 Y:只有原属 Y 的页各自独立迁到自己的次高分服务商,其余不动;
- *   - 改顺序:零变化(评分只认 id 与页号,与池内位置无关)。
- * 每页对每个服务商算一个确定性分数,分最高者拥有该页;`rankProvidersForPage`
- * 给出整条降序榜,`pickProviderForPage` 取榜首,熔断/手动轮换取第 N 名。
  */
-
-/** FNV-1a(32-bit)over `${id}#${page}` —— 纯、确定、无依赖,只需相对大小可比。 */
-function hrwScore(providerId: string, pageIndex: number): number {
-	const s = providerId + '#' + pageIndex;
-	let h = 0x811c9dc5;
-	for (let i = 0; i < s.length; i++) {
-		h ^= s.charCodeAt(i);
-		h = Math.imul(h, 0x01000193);
-	}
-	return h >>> 0;
-}
-
-/**
- * 该页所有服务商的**降序榜**(评分最高在前)。同分以 id 字典序打破,保证完全
- * 确定。榜首 = 规范拥有者;第 1、2… 名供熔断/轮换按序退让。`pool` 需非空去重。
- */
-export function rankProvidersForPage(pool: string[], pageIndex: number): string[] {
-	const page = Number.isFinite(pageIndex) && pageIndex >= 0 ? pageIndex : 0;
-	return [...pool].sort((a, b) => {
-		const sa = hrwScore(a, page);
-		const sb = hrwScore(b, page);
-		if (sa !== sb) {
-			return sb - sa;
-		}
-		return a < b ? -1 : a > b ? 1 : 0;
-	});
-}
 
 /** The provider a page belongs to. `pool` must be non-empty and deduped. */
 export function pickProviderForPage(pool: string[], pageIndex: number): string {
 	if (!pool.length) {
 		throw new Error('provider pool is empty');
 	}
-	if (pool.length === 1) {
+	if (pool.length === 1 || !Number.isFinite(pageIndex) || pageIndex < 0) {
 		return pool[0]!;
 	}
-	return rankProvidersForPage(pool, pageIndex)[0]!;
+	return pool[pageIndex % pool.length]!;
 }
 
 /**

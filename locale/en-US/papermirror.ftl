@@ -1,13 +1,15 @@
 papermirror-prefpane-label = PaperMirror 文镜
 papermirror-toolbar-toggle = Bilingual reading (中英对照)
 papermirror-explain = Explain
-papermirror-explain-selection = Explain
 papermirror-explain-tip = Explain the text selected in the PDF (select first, then click here)
 papermirror-explain-title = Deep explanation
 papermirror-explain-no-selection = Select text in the PDF (or click a translated paragraph) first.
 papermirror-explain-needs-llm = Explanation requires an LLM provider (e.g. DeepSeek, Kimi, Claude); the free Bing/Google engines cannot explain.
 papermirror-explain-copy = Copy explanation
 papermirror-explain-save = Save explanation
+papermirror-clear-cache = Clear cache for this paper
+papermirror-more = More
+papermirror-toast-cache-cleared = Cache cleared for this document
 papermirror-pane-title = Mirror translation
 papermirror-explain-subtitle = Based on your selected sentence
 papermirror-status-translating-page = Translating page %n%…

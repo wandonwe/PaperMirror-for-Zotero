@@ -32,37 +32,6 @@ export function tokenize(text: string): string[] {
 	return text.match(/[A-Za-z0-9]+(?:[''\-.,;:%)\]}»""]*)?|\s+|./gsu) ?? [];
 }
 
-/**
- * CJK 标点禁则 (2.3.4, 第四批 item6 · LO-4) — pure。
- * 行首禁则: 收尾标点(。,、;:?!)】》」』…等)不得顶行首 → 悬挂到上一行行尾
- * (可微越界,典型中文排版做法);行尾禁则: 起始标点((【《「『)不得吊行尾 →
- * 下移到下一行行首。每行至多迁移 2 个字符,防病态循环;迁空的行被删除,行数只
- * 减不增 —— 已通过高度检查的排版应用禁则后仍然适配。
- */
-const KINSOKU_NO_START = new Set('。,、;:?!)〉》」』】〕…‰′″℃·—－,.;:!?)]}%~');
-const KINSOKU_NO_END = new Set('(〈《「『【〔([{');
-
-export function applyKinsoku(lines: string[]): string[] {
-	const out = [...lines];
-	for (let i = 1; i < out.length; i++) {
-		// 行首禁则: 把顶行首的收尾标点悬挂到上一行(至多 2 个)。
-		let moved = 0;
-		while (moved < 2 && out[i]!.length > 0 && KINSOKU_NO_START.has(out[i]![0]!)) {
-			out[i - 1] = out[i - 1]! + out[i]![0]!;
-			out[i] = out[i]!.slice(1);
-			moved++;
-		}
-		// 行尾禁则: 上一行行尾的起始标点下移到本行行首(至多 2 个)。
-		moved = 0;
-		while (moved < 2 && out[i - 1]!.length > 1 && KINSOKU_NO_END.has(out[i - 1]![out[i - 1]!.length - 1]!)) {
-			out[i] = out[i - 1]![out[i - 1]!.length - 1]! + out[i]!;
-			out[i - 1] = out[i - 1]!.slice(0, -1);
-			moved++;
-		}
-	}
-	return out.filter(l => l.length > 0);
-}
-
 /** Greedy wrap at a fixed size. Returns null if any single token exceeds the width. */
 export function wrapAt(text: string, size: number, maxWidth: number, measure: Measure): string[] | null {
 	const lines: string[] = [];
@@ -101,8 +70,7 @@ export function wrapAt(text: string, size: number, maxWidth: number, measure: Me
 	if (line.trim()) {
 		lines.push(line.trimEnd());
 	}
-	// CJK 标点禁则 (LO-4): 「。,)」不顶行首、「(《「」不吊行尾。
-	return applyKinsoku(lines);
+	return lines;
 }
 
 /**

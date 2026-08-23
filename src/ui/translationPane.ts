@@ -18,7 +18,7 @@
 import { isFormulaRun } from '../reader/formulaGuard';
 import { stripStyleMarkers } from '../reader/styleRuns';
 import * as logger from '../utils/logger';
-import { getPref } from '../utils/prefs';
+import { observeBoolPref } from '../utils/prefs';
 import type { ExplanationSection } from '../translation/explainer';
 import type { PageTranslationState } from '../translation/translationManager';
 import type { SourceBlock } from '../types/models';
@@ -70,17 +70,13 @@ const ICON_PATHS = {
 	swap: 'm7 7-4 4 4 4M3 11h13M17 17l4-4-4-4M21 13H8',
 	settings: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.96 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 10 3.01V3h4v.08a1.7 1.7 0 0 0 1.03 1.53 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z',
 	close: 'm6 6 12 12M18 6 6 18',
-	refresh: 'M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7',
-	// 三点「更多」(2.4.2): h.01 + stroke-linecap:round = 三个圆点。
-	more: 'M5 12h.01 M12 12h.01 M19 12h.01'
+	refresh: 'M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7'
 } as const;
 
 export interface PaneStrings {
 	eyebrow: string;
 	title: string;
 	explain: string;
-	/** 工具条按钮全名「解析选中内容」(2.3.1 item3); `explain` 留给块级 mini 按钮。 */
-	explainSelection: string;
 	explainTip: string;
 	explainTitle: string;
 	explainSubtitle: string;
@@ -125,6 +121,8 @@ export interface PaneCallbacks {
 	 * changes the segment context and forces a genuine re-translation).
 	 */
 	onRefreshPage(): void;
+	/** 菜单「换引擎重译本页」— 有池时轮换服务商,绕过段落库让新引擎真正重译本页。 */
+	onRotateEngine(): void;
 	/** 状态胶囊取消 — stop the current page's translation. */
 	onCancelPage(): void;
 	/** 状态胶囊「查看保留原文」— locate the kept-original segments. */
@@ -134,15 +132,12 @@ export interface PaneCallbacks {
 	/** 状态胶囊折叠/展开 — the session owns the shared collapsed state. */
 	onCollapsedChange(collapsed: boolean): void;
 	onSaveNote(): void;
-	/** 「更多」菜单「诊断」(2.4.2) — copy the sanitized per-page diagnostics JSON (NO source text). */
+	/** 菜单栏「诊断」— copy the sanitized per-page diagnostics JSON (NO source text). */
 	onShowDiagnostics(): void;
-	/** 「更多」菜单「语料」(仅 debugLogging) — copy the current page's text-layer spans (CONTAINS source text). */
+	/** 菜单栏「语料」— copy the current page's text-layer spans (CONTAINS source text). */
 	onCopyCorpus(): void;
-	/** 菜单栏「术语」(2.3.1, item3 · WF-8) — 预览本篇学得的术语并保存到词汇表
-	 *  (去重/确认/可撤销;「仅复制 TSV」保留为确认框第二按钮)。 */
-	onSaveTerms(): void;
-	/** 「更多」菜单「导出」— 导出译文 PDF(单语+对照两份,添加为条目附件)。 */
-	onExportPdf(): void;
+	/** 菜单栏「术语」— copy 本篇学得的术语对 (TSV,自动抽取入口 1.1.2)。 */
+	onCopyTerms(): void;
 	onToggleViewKind(kind: 'page' | 'article'): void;
 	/** 菜单栏直接切换 — no round-trip through the settings pane. */
 	onPickLanguages(source: string, target: string): void;
@@ -173,6 +168,10 @@ export class TranslationPane {
 	private providerName!: HTMLElement;
 	private providerMark!: HTMLElement;
 	private syncSwitch!: HTMLElement;
+	// 「诊断」是排障工具,默认对普通用户隐藏 (1.1.10);仅在开启调试日志时出现,
+	// 随该偏好实时显隐。存显隐观察者的清理函数,destroy 时调用。
+	private diagnosticsButton: HTMLElement | null = null;
+	private debugGateCleanup: (() => void) | null = null;
 
 	private pages = new Map<number, PageSection>();
 	private selectedBlockId: string | null = null;
@@ -310,25 +309,33 @@ export class TranslationPane {
 	}
 
 	/**
-	 * 「更多」三点图标 (2.4.2): 低频动作收进一个菜单 —— 导出译文 PDF 与诊断
-	 * 常驻;语料仅在开启调试日志时出现(P0-2 隐私姿态: 它含整页原文,不在普通
-	 * 用户一层可见)。菜单每次点开现读 pref,无需常驻观察者。
-	 * 诊断与语料是两个动作 (审核 P0-2): 诊断只含脱敏指标(引擎自检段一并产出);
-	 * 语料含整页原文,名字和提示都明说。
+	 * 「诊断」按钮 (1.1.10): 排障工具,默认隐藏,仅在开启调试日志
+	 * (extensions.…bilingualReader.debugLogging) 时显示,并随该偏好实时显隐 ——
+	 * 与 logger 的调试开关共用同一偏好,普通用户看不到这个开发者入口,需要提交
+	 * 诊断时在设置里勾选「开启调试日志」即可。按钮始终建出来(便于反应式显隐),
+	 * 初始与后续可见性都由 debugLogging 决定。
 	 */
-	private buildMoreButton(): HTMLElement {
-		let moreChip: HTMLElement;
-		moreChip = this.iconButton(ICON_PATHS.more, '更多:导出译文 PDF、诊断', () => {
-			const items: { label: string; checked: boolean; onPick(): void }[] = [
-				{ label: '导出译文 PDF(单语 + 对照两份)', checked: false, onPick: () => this.callbacks.onExportPdf() },
-				{ label: '诊断:复制脱敏指标 + 引擎自检(不含原文/密钥)', checked: false, onPick: () => this.callbacks.onShowDiagnostics() }
-			];
-			if (getPref<boolean>('debugLogging', false)) {
-				items.push({ label: '语料:复制本页布局语料(含本页原文)', checked: false, onPick: () => this.callbacks.onCopyCorpus() });
-			}
-			this.openBarMenu(moreChip, [{ items }]);
-		});
-		return moreChip;
+	private buildDiagnosticsButton(): HTMLElement {
+		// 诊断与语料拆成两个动作 (审核 P0-2): 1.1.7 曾把语料并进「诊断」,于是
+		// 一个叫「诊断」的按钮会把整页原文放进剪贴板 —— 用户在「提交诊断」的
+		// 心智下不会预期这一点,粘进 issue 就等于公开了未发表稿件。现在诊断
+		// 只含脱敏指标;要原文请点旁边的「语料」,它的名字和提示都明说含原文。
+		const wrap = this.el('span', 'pm-bar-actions-group');
+		const diag = this.textButton(
+			'pm-bar-action', '诊断',
+			'复制诊断 JSON:全文档脱敏指标(不含原文、译文与密钥)',
+			() => this.callbacks.onShowDiagnostics()
+		);
+		const corpus = this.textButton(
+			'pm-bar-action', '语料',
+			'复制当前页布局语料 JSON —— 含本页原文文本与坐标(回归测试用);不含译文与密钥',
+			() => this.callbacks.onCopyCorpus()
+		);
+		wrap.append(diag, corpus);
+		this.diagnosticsButton = wrap;
+		this.debugGateCleanup?.();
+		this.debugGateCleanup = observeBoolPref('debugLogging', on => { wrap.style.display = on ? '' : 'none'; });
+		return wrap;
 	}
 
 	/** demo .switch-label — label + iOS-style toggle */
@@ -678,15 +685,19 @@ export class TranslationPane {
 
 		this.syncSwitch = this.switchControl(this.strings.syncScroll, true, on => this.callbacks.onToggleSync(on));
 
-		// 刷新按钮 (2.3.8 恢复直达): 点击即「清缓存重译全文」(readerSession 侧
-		// 带确认对话框,破坏性动作不裸奔);悬停 tooltip 说明后果。轻量「修复
-		// 本页」仍在状态胶囊圆环上,不占菜单栏。
-		const refreshChip = this.iconButton(
-			ICON_PATHS.refresh,
-			'全文重译(丢失已翻译内容)',
-			() => this.callbacks.onRetranslate(),
-			'pm-refresh'
-		);
+		// 重译下拉 (2.1.10, 计划 item 4): 把原来的顶部「刷新全部」(清全部缓存)降级
+		// 进菜单,并拆成三档 —— 默认动作是轻量「修复本页」,破坏性的「清缓存重译
+		// 全文」只在这里、且带确认。
+		let refreshChip: HTMLElement;
+		refreshChip = this.iconButton(ICON_PATHS.refresh, '重译…', () => {
+			this.openBarMenu(refreshChip, [{
+				items: [
+					{ label: '修复本页(只补缺失/排版失败,不换引擎)', checked: false, onPick: () => this.callbacks.onRefreshPage() },
+					{ label: '换引擎重译本页', checked: false, onPick: () => this.callbacks.onRotateEngine() },
+					{ label: '清缓存重译全文…(会丢失已翻译内容)', checked: false, onPick: () => this.callbacks.onRetranslate() }
+				]
+			}]);
+		}, 'pm-refresh');
 
 		bar.append(
 			this.languagePill,
@@ -694,10 +705,10 @@ export class TranslationPane {
 			refreshChip,
 			this.el('span', 'pm-bar-spacer'),
 			this.syncSwitch,
-			this.textButton('pm-bar-action', `✦ ${this.strings.explainSelection}`, this.strings.explainTip, () => this.callbacks.onExplainSelection()),
+			this.textButton('pm-bar-action', `✦ ${this.strings.explain}`, this.strings.explainTip, () => this.callbacks.onExplainSelection()),
 			this.textButton('pm-bar-action', this.strings.saveNote, this.strings.saveNote, () => this.callbacks.onSaveNote()),
-			this.textButton('pm-bar-action', '术语', '预览本篇自动学得的术语,可保存到词汇表(可撤销)或仅复制 TSV', () => this.callbacks.onSaveTerms()),
-			this.buildMoreButton(),
+			this.buildDiagnosticsButton(),
+			this.textButton('pm-bar-action', '术语', '复制本篇自动学得的术语对照表 (TSV,可粘贴进词汇表)', () => this.callbacks.onCopyTerms()),
 			this.el('span', 'pm-bar-sep'),
 			this.makeSideButton(),
 			this.iconButton(ICON_PATHS.settings, this.strings.settings, () => this.callbacks.onOpenSettings()),
@@ -811,21 +822,14 @@ export class TranslationPane {
 			return;
 		}
 		const notice = this.el('div', 'pm-bilingual-notice');
-		// 首次引导 (2.3.3, 第四批 item5 · WF-3): 新用户在这张卡上往往还没配置任何
-		// 服务 —— 加一个「配置翻译服务 →」直达设置页,不必先接受再自己找设置。
-		const actions = this.el('div', 'pm-notice-actions');
-		actions.append(
-			this.textButton('pm-footer-button', '配置翻译服务 →', '打开设置选择翻译服务商 / 填写 API Key', () => this.callbacks.onOpenSettings()),
+		notice.append(
+			this.el('div', undefined, this.strings.privacyNotice),
+			this.el('div', 'pm-notice-host', `→ ${hostName}`),
 			this.textButton('pm-footer-button pm-primary', this.strings.privacyAccept, this.strings.privacyAccept, () => {
 				notice.remove();
 				this.privacyNoticeEl = null;
 				this.callbacks.onAcceptPrivacy();
 			})
-		);
-		notice.append(
-			this.el('div', undefined, this.strings.privacyNotice),
-			this.el('div', 'pm-notice-host', `→ ${hostName}`),
-			actions
 		);
 		this.articleHost.before(notice);
 		this.privacyNoticeEl = notice;
@@ -1602,6 +1606,9 @@ export class TranslationPane {
 			clearTimeout(this.ensureTimer);
 			this.ensureTimer = null;
 		}
+		this.debugGateCleanup?.();
+		this.debugGateCleanup = null;
+		this.diagnosticsButton = null;
 		this.closeBarMenu();
 		this.resizeObserver?.disconnect();
 		this.resizeObserver = null;

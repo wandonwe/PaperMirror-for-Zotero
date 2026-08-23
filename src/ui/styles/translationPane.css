@@ -643,14 +643,6 @@
 	margin-top: 11px;
 }
 
-/* 首次引导按钮行 (2.3.3, item5 · WF-3): 「配置翻译服务→」与「我已了解」并排。 */
-.pm-bilingual-notice .pm-notice-actions {
-	display: flex;
-	gap: 8px;
-	align-items: center;
-	flex-wrap: wrap;
-}
-
 .pm-status-inline {
 	padding: 5px 0;
 	font-size: 11px;

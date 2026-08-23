@@ -1,13 +1,15 @@
 papermirror-prefpane-label = PaperMirror 文鏡
 papermirror-toolbar-toggle = 中英對照閱讀
 papermirror-explain = 解析
-papermirror-explain-selection = 解析
 papermirror-explain-tip = 解析 PDF 中選取的文字(先選取,再點這裡)
 papermirror-explain-title = 深度解析
 papermirror-explain-no-selection = 請先在 PDF 中選取要解析的文字,或雙擊一個譯文段落。
 papermirror-explain-needs-llm = 解析功能需要 LLM 服務商(如 DeepSeek、Kimi、Claude);免費必應/谷歌引擎不支援解析。
 papermirror-explain-copy = 複製解析
 papermirror-explain-save = 儲存解析
+papermirror-clear-cache = 清除本文快取
+papermirror-more = 更多
+papermirror-toast-cache-cleared = 本文獻快取已清除
 papermirror-pane-title = 鏡像譯文
 papermirror-explain-subtitle = 基於你選取的句子
 papermirror-status-translating-page = 正在翻譯第 %n% 頁…
