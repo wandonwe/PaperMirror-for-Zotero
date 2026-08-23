@@ -55,6 +55,23 @@ test('a table is its own hard anchor and consecutive table rows stay together', 
 	assert.deepEqual(mods[0]!.memberIds, [t1.id, t2.id]);
 });
 
+test('synthetic table cells (type paragraph + tableRow/tableCol) anchor as a table module', () => {
+	seq = 0;
+	// Structuring emits cells as type:'paragraph' (rendering needs it) but stamps
+	// tableRow/tableCol. They must route as a 'table' anchor, not body prose.
+	const h = block('heading', 'Results');
+	const p = block('paragraph', 'body before the table');
+	const c1: SourceBlock = { ...block('paragraph', 'Group'), tableRow: 0, tableCol: 0 };
+	const c2: SourceBlock = { ...block('paragraph', 'Outcome'), tableRow: 0, tableCol: 1 };
+	const after = block('paragraph', 'body after the table');
+	const mods = buildLayoutModules([h, p, c1, c2, after]);
+	assert.deepEqual(mods.map(m => m.anchorType),
+		['heading', 'table', 'column-continuation']);
+	// consecutive cells collapse into one table module
+	assert.deepEqual(mods[1]!.memberIds, [c1.id, c2.id]);
+	assert.deepEqual(mods[2]!.memberIds, [after.id]);
+});
+
 test('modules never cross columns (right column starts a fresh module)', () => {
 	seq = 0;
 	const h = block('heading', 'Section', 0);

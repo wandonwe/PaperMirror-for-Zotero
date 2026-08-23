@@ -569,6 +569,11 @@ test('段落级缓存: hits skip requests entirely; misses translate and are sto
 	// Same source text on ANOTHER page → same hash → reused across pages.
 	const h = segmentHash(mkBlocks(0)[0]!.sourceText, 'en', 'zh-CN');
 	assert.ok(store.has(h), 'segment key is content-based, reusable across pages');
+	// 用量统计 (2.3.9): 段查询/命中随上面三轮翻译累计 —— 首轮 2 查 0 中,
+	// 普通刷新 2 查 2 中,force 绕过段落库不计。
+	const usage = (manager.exportDiagnostics() as { usage: Record<string, number> }).usage;
+	assert.equal(usage.segmentLookups, 4, '两轮走段落库,各查 2 段 (force 不计)');
+	assert.equal(usage.segmentHits, 2, '普通刷新那轮 2 段全命中');
 	manager.dispose();
 });
 
@@ -695,6 +700,59 @@ test('navigating to a QUEUED prefetch page promotes it to run now (not stuck)', 
 	manager.dispose();
 });
 
+test('按方向备下一页 (2.3.2 item4): 向回看时预取窗口翻转到行进方向', async () => {
+	const order: number[] = [];
+	const { deps } = makeDeps({
+		pageCount: () => 10,
+		extractPage: async (p) => [{
+			id: `page-${p}-block-0`, pageIndex: p, order: 0, type: 'paragraph',
+			sourceText: `Body text for page ${p} with enough words here.`
+		}],
+		translateRequest: async (request) => {
+			order.push(request.pageIndex ?? -1);
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '译文内容' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: true, delayFn: () => Promise.resolve(), prefetchDebounceMs: 0 });
+	manager.setPrefetchWindow(2, 1);
+	manager.setCurrentPage(5); // 从 0 → 5: 向前读,窗口 5,6,7 + 身后 4
+	await new Promise(r => setTimeout(r, 30));
+	assert.ok(order.includes(6) && order.includes(7), '向前读时预取 6、7');
+	manager.setCurrentPage(4); // 5 → 4: 向回看 —— 窗口应翻转为 4,3,2 + 身后 5
+	await new Promise(r => setTimeout(r, 30));
+	assert.ok(order.includes(3), '回看时行进方向的下一页 (3) 被预取');
+	assert.ok(order.includes(2), '回看时 forward 窗口整个翻向行进方向 (2 也预取) —— 旧实现只会备 3');
+	manager.dispose();
+});
+
+test('用量统计 (2.3.9): 预取浪费按页去重,读到即移出;诊断 usage 段成形', async () => {
+	const { deps } = makeDeps({
+		pageCount: () => 10,
+		extractPage: async (p) => [{
+			id: `page-${p}-block-0`, pageIndex: p, order: 0, type: 'paragraph',
+			sourceText: `Body text for page ${p} with enough words here.`
+		}],
+		translateRequest: async (request) => ({
+			translations: request.blocks.map(b => ({ id: b.id, translatedText: '译文内容' }))
+		})
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: true, delayFn: () => Promise.resolve(), prefetchDebounceMs: 0 });
+	manager.setPrefetchWindow(2, 1);
+	manager.setCurrentPage(5); // 预取 6、7(前)+ 4(后)
+	await new Promise(r => setTimeout(r, 30));
+	const usage1 = (manager.exportDiagnostics() as { usage: Record<string, number> }).usage;
+	assert.ok(usage1.prefetchedPages! >= 2, `后台预取的页数进账 (got ${usage1.prefetchedPages})`);
+	assert.equal(usage1.prefetchedUnviewed, usage1.prefetchedPages, '尚未读到任何预取页 → 全部计为未读');
+	assert.ok(usage1.pageCacheLookups! >= 1, '页缓存查询计数在走');
+	// 本 fixture 未注入段落库 (readSegments undefined) → 查询数应为 0 而非 NaN。
+	assert.equal(usage1.segmentLookups, 0, '无段落库时段查询计数保持 0');
+	manager.setCurrentPage(6); // 读到 6 → 6 不再是浪费
+	await new Promise(r => setTimeout(r, 30));
+	const usage2 = (manager.exportDiagnostics() as { usage: Record<string, number> }).usage;
+	assert.ok(usage2.prefetchedUnviewed! < usage2.prefetchedPages!, '读到预取页后 unviewed 少于 prefetched');
+	manager.dispose();
+});
+
 test('优先翻译当前页: the current page translates before any neighbour is prefetched', async () => {
 	const order: number[] = [];
 	const { deps } = makeDeps({
@@ -720,13 +778,15 @@ test('优先翻译当前页: the current page translates before any neighbour is
 
 test('chunks of one page run concurrently (2-way), and every block still lands', async () => {
 	// Two big blocks (5000 chars each) → planChunks(8000 budget) → 2 chunks.
+	// 文本必须互不相同 (2.3.5, API-2): 同页同文块现在会被去重成一个请求 —— 本
+	// 测试考的是 chunk 并发,不是去重,夹具改为两段不同文本。
 	let active = 0;
 	let maxActive = 0;
 	const { deps } = makeDeps({
 		extractPage: async (pageIndex) => [0, 1].map(i => ({
 			id: `page-${pageIndex}-block-${i}`,
 			pageIndex, order: i, type: 'paragraph' as const,
-			sourceText: 'x'.repeat(5000)
+			sourceText: (i === 0 ? 'x' : 'y').repeat(5000)
 		})),
 		translateRequest: async (request) => {
 			active++;
@@ -1766,5 +1826,31 @@ test("retranslatePage('rotate') 绕过段落库真正重译;'normal' 仍复用�
 	assert.ok(translateCalls > 0, '轮换刷新必须发出真实请求');
 	assert.equal(manager.getPageState(0)!.translations.get('page-0-block-0'), '新引擎的完整中文译文内容。');
 	assert.ok((manager as any).failedSegments.has(seeded), "'rotate' 不得像 'force' 那样清掉别处的全局止损记忆");
+	manager.dispose();
+});
+
+// ---- 2.3.5 (第四批 item7 · API-2): 同页相同内容去重 -------------------------
+
+test('同页同文块只翻译一次,其余镜像共享译文', async () => {
+	const requested: string[][] = [];
+	const { deps } = makeDeps({
+		extractPage: async (pageIndex) => [
+			{ id: `page-${pageIndex}-block-0`, pageIndex, order: 0, type: 'paragraph' as const, sourceText: 'Repeated boilerplate sentence here.' },
+			{ id: `page-${pageIndex}-block-1`, pageIndex, order: 1, type: 'paragraph' as const, sourceText: 'A different body paragraph entirely.' },
+			{ id: `page-${pageIndex}-block-2`, pageIndex, order: 2, type: 'paragraph' as const, sourceText: 'Repeated boilerplate sentence here.' }
+		],
+		translateRequest: async (request) => {
+			requested.push(request.blocks.map(b => b.id));
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '译文:' + b.id })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const state = manager.getPageState(0)!;
+	assert.equal(state.status, 'done');
+	const sent = requested.flat();
+	assert.ok(!sent.includes('page-0-block-2'), '重复块不进请求(只送代表块)');
+	assert.equal(state.translations.size, 3, '三个块全部拿到译文');
+	assert.equal(state.translations.get('page-0-block-2'), state.translations.get('page-0-block-0'), '重复块镜像代表块的译文');
 	manager.dispose();
 });

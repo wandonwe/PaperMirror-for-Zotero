@@ -45,6 +45,18 @@ const REFERENCES_HEADINGS = /^(references|bibliography|literature\s+cited|参考
 const isHeadingType = (b: SourceBlock): boolean => b.type === 'heading' || b.type === 'title';
 const isReferencesHeading = (b: SourceBlock): boolean => isHeadingType(b) && REFERENCES_HEADINGS.test(b.sourceText.trim());
 
+/**
+ * 表格单元格识别 (2.2.0, 计划 item 3): 结构化后单元格是合成块,`type` 仍是
+ * 'paragraph'(渲染需要),但成对携带 tableRow/tableCol(IR 不变量 table-cell-pair)。
+ * 翻译分组必须把它们当作**表格**处理 —— 否则文本单元格会被 planChunks 与相邻正文
+ * 段落打进**同一个请求**,表头/数据行译文互相污染、id 漂移、错位补救。用这个标记
+ * 让单元格锚定为 'table' 模块:连续单元格聚成一个表格模块,按预算批量翻译,绝不
+ * 与正文同请求。不改 block.type,故渲染/其余 paragraph 消费点零影响。数字/统计
+ * 单元格另由 translationMode:'preserve' 保护(结构化时已设),根本不进翻译。
+ */
+const isTableCellBlock = (b: SourceBlock): boolean =>
+	typeof b.tableRow === 'number' && typeof b.tableCol === 'number';
+
 /** The anchor type a block would take if it STARTS a module. */
 function anchorTypeForStart(b: SourceBlock): ModuleAnchorType {
 	if (isReferencesHeading(b)) {
@@ -56,7 +68,7 @@ function anchorTypeForStart(b: SourceBlock): ModuleAnchorType {
 	if (b.type === 'caption') {
 		return 'figure';
 	}
-	if (b.type === 'table') {
+	if (b.type === 'table' || isTableCellBlock(b)) {
 		return 'table';
 	}
 	return 'column-continuation';
@@ -109,7 +121,7 @@ export function buildLayoutModules(blocks: SourceBlock[]): LayoutModule[] {
 		const startsRefs = isReferencesHeading(block);
 		const isHeading = isHeadingType(block);
 		const isFigure = block.type === 'caption';
-		const isTable = block.type === 'table';
+		const isTable = block.type === 'table' || isTableCellBlock(block);
 		const col = block.column ?? 0;
 
 		let startNew: boolean;

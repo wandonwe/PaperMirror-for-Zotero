@@ -1,15 +1,14 @@
 papermirror-prefpane-label = PaperMirror 文镜
 papermirror-toolbar-toggle = 中英对照阅读
 papermirror-explain = 解析
+# 名称与行为统一 (2.3.1, 第四批 item3 · WF-8): 工具条按钮只解析**选中内容**,名称如实。
+papermirror-explain-selection = 解析
 papermirror-explain-tip = 解析 PDF 中选中的文字(先选中,再点这里)
 papermirror-explain-title = 深度解析
 papermirror-explain-no-selection = 请先在 PDF 中选中要解析的文字,或双击一个译文段落。
 papermirror-explain-needs-llm = 解析功能需要 LLM 服务商(如 DeepSeek、Kimi、Claude);免费必应/谷歌引擎不支持解析。
 papermirror-explain-copy = 复制解析
 papermirror-explain-save = 保存解析
-papermirror-clear-cache = 清除本文缓存
-papermirror-more = 更多
-papermirror-toast-cache-cleared = 本文献缓存已清除
 papermirror-pane-title = 镜像译文
 papermirror-explain-subtitle = 基于你选中的句子
 papermirror-status-translating-page = 正在翻译第 %n% 页…

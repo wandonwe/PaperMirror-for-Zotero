@@ -1,12 +1,52 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { auditPlacedBoxes, type AuditBox } from '../../src/ui/layoutSafety';
+import { auditPlacedBoxes, boxNewlyViolates, type AuditBox } from '../../src/ui/layoutSafety';
 import type { PixelBox } from '../../src/ui/translatedPageView';
 
 const box = (left: number, top: number, width: number, height: number): PixelBox => ({ left, top, width, height });
 const placed = (id: string, original: PixelBox, current?: PixelBox): AuditBox =>
 	({ id, box: current ?? { ...original }, originalBox: original });
 const none = { images: [], preserved: [] };
+
+// ---------------------------------------------------------------------------
+// 2.2.3, 第三批 item4 · 提交前几何预校验 boxNewlyViolates —— 与 auditPlacedBoxes
+// 同一套「新增侵入>容差」判据的单块闸,只是在揭示之前核验。
+// ---------------------------------------------------------------------------
+
+test('boxNewlyViolates: unexpanded box never violates (box === originalBox)', () => {
+	// 与已提交邻居原本就紧贴/轻叠也不算 —— 新增侵入为 0,首屏原字号揭示不受影响。
+	const self = placed('a', box(10, 60, 200, 50)); // touches b below
+	const committed = [placed('b', box(10, 108, 200, 50))];
+	assert.equal(boxNewlyViolates(self, committed, none, 600, 800), false);
+});
+
+test('boxNewlyViolates: expansion that newly overlaps a committed neighbour is caught', () => {
+	// self 原盒 (10,10,200,50);向下扩到高 110 → 侵入已提交的 b。
+	const self = placed('a', box(10, 10, 200, 50), box(10, 10, 200, 110));
+	const committed = [placed('b', box(10, 105, 200, 50))];
+	assert.equal(boxNewlyViolates(self, committed, none, 600, 800), true);
+	// 未扩到 b 之前(高 90,底边 100 < 105)不违例。
+	const shy = placed('a', box(10, 10, 200, 50), box(10, 10, 200, 90));
+	assert.equal(boxNewlyViolates(shy, committed, none, 600, 800), false);
+});
+
+test('boxNewlyViolates: expansion onto an image or off the page is caught', () => {
+	const img = box(230, 10, 100, 100);
+	const ontoImg = placed('a', box(10, 10, 200, 50), box(10, 10, 300, 50)); // grows right into image
+	assert.equal(boxNewlyViolates(ontoImg, [], { images: [img], preserved: [] }, 600, 800), true);
+	const offPage = placed('a', box(500, 10, 80, 50), box(500, 10, 200, 50)); // right edge 700 > 600
+	assert.equal(boxNewlyViolates(offPage, [], none, 600, 800), true);
+});
+
+test('boxNewlyViolates: expansion onto a preserved region (data cell) is caught, self-id skipped', () => {
+	const keep = { id: 'cell', box: box(10, 105, 200, 40) };
+	const self = placed('a', box(10, 10, 200, 50), box(10, 10, 200, 110));
+	assert.equal(boxNewlyViolates(self, [], { images: [], preserved: [keep] }, 600, 800), true);
+	// 一个块不会和「自己的 id」相撞(preserve 里若混入同 id 应跳过)。
+	const selfKeep = { id: 'a', box: box(10, 105, 200, 40) };
+	const shy = placed('a', box(10, 10, 200, 50)); // unexpanded
+	assert.equal(boxNewlyViolates(shy, [], { images: [], preserved: [selfKeep] }, 600, 800), false);
+});
 
 test('clean page: unexpanded boxes report nothing', () => {
 	const out = auditPlacedBoxes([

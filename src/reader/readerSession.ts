@@ -14,18 +14,18 @@ import {
 import { getApiKey } from '../security/credentialStore';
 import { registerUrlCredentials } from '../security/logSanitizer';
 import { getProvider, listProviders } from '../translation/providers/registry';
-import { buildPool, pickProviderForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
+import { buildPool, pickProviderForPage, rankProvidersForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
 import { endpointHost, supportsCharBudget } from '../translation/providers/types';
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
 import { TranslationManager, type PageTranslationState } from '../translation/translationManager';
 import { PROMPT_VERSION } from '../translation/promptBuilder';
-import { parseGlossaryJSON } from '../translation/glossary';
+import { parseGlossaryJSON, serializeGlossary, dedupeLearnedTerms } from '../translation/glossary';
 import { parseProviderProfiles, effectiveProviderConfig } from '../translation/providerProfiles';
 import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationResponse } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
-import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, auditStrictGeometry, probeStrictPlacement, flashKeptIndicator, type UnfitBlock } from '../ui/strictPageReplacement';
+import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, expandStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, auditStrictGeometry, probeStrictPlacement, flashKeptIndicator, type UnfitBlock } from '../ui/strictPageReplacement';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
 import * as logger from '../utils/logger';
@@ -37,10 +37,14 @@ import { taskPriority } from '../ui/statusCapsule';
 import { createSplitView, type SplitViewHandles } from './splitView';
 import { TextExtractor } from './textExtractor';
 import * as adapter from './zoteroReaderAdapter';
-import type { ReaderLike } from './zoteroReaderAdapter';
+import type { ReaderLike, PageRender } from './zoteroReaderAdapter';
+import { LruCache } from '../util/lru';
 
 const MODULE = 'readerSession';
-const PAGE_POLL_MS = 350;
+// 兜底轮询间隔 (2.2.9, 计划 第四批 item1 · PF-8): 页变化改为事件驱动
+// (updateviewarea 每滚动帧触发 syncCurrentPage),轮询只兜事件失效的底
+// (eventBus 不可得/事件被吞),350ms → 1500ms;窗口不可见时 tick 直接跳过。
+const PAGE_POLL_MS = 1500;
 
 /**
  * The three reader states behind the toolbar switcher
@@ -57,6 +61,7 @@ function paneStrings(): PaneStrings {
 		eyebrow: 'PAPERMIRROR',
 		title: getString('papermirror-pane-title'),
 		explain: getString('papermirror-explain'),
+		explainSelection: getString('papermirror-explain-selection'),
 		explainTip: getString('papermirror-explain-tip'),
 		explainTitle: getString('papermirror-explain-title'),
 		explainSubtitle: getString('papermirror-explain-subtitle'),
@@ -111,6 +116,8 @@ export class ReaderSession {
 	private viewMode: ViewMode = 'split';
 	private onViewModeChanged: ((mode: ViewMode) => void) | null = null;
 	private disposePdfEvents: (() => void) | null = null;
+	/** visibilitychange 监听的解除器 (2.2.9, item1 不可见即停)。 */
+	private disposeVisibility: (() => void) | null = null;
 	private pageRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 	/** 缓存身份 pref 观察者 (2.0.9, 审核 P2-4) 与其去抖定时器。 */
 	private identityPrefObservers: (symbol | string)[] = [];
@@ -128,6 +135,18 @@ export class ReaderSession {
 	private pool: string[] = [];
 	/** Real image rects per page (operator list), fetched once per document. */
 	private imageRects = new Map<number, [number, number, number, number][] | null>();
+	/**
+	 * 底图位图 LRU (2.2.5, 计划 第三批 item6 · PF-4): 缓存 renderPageBitmap 得到的
+	 * 独立底图,键 = `${page}@${宽度桶}`。切换页/回看/在原宽度重渲染时命中即复用
+	 * 底图,buildStrictPage 只重建遮罩+文本层,省掉最贵的 pdf.js 整页 rasterize。
+	 * 底图只随 (页, 宽度) 变,与译文/配置无关 → 无需失效,仅靠容量淘汰与 dispose。
+	 * 容量取小(4):单张底图受 oversample 像素预算封顶(~3.2M px ≈ 13MB),4 张
+	 * 够覆盖可视区+近邻回看(同宽度重建/对照切换/relayout 全部命中),内存上界
+	 * ~50MB,dispose 全释放。
+	 */
+	private baseBitmaps = new LruCache<PageRender>(4);
+	/** 讲解结果缓存 (2.3.5, item7 · API-8): 段落+引擎/模型/语言 → 解析节。 */
+	private explainCache = new LruCache<ExplanationSection[]>(20);
 	/**
 	 * Compress-and-retry rounds already spent, keyed by BLOCK id (max 2 each).
 	 * Per-block, not per-page: two long paragraphs at the top of a page must not
@@ -197,11 +216,16 @@ export class ReaderSession {
 	 */
 	private lastPartial: { pageIndex: number; element: HTMLElement } | null = null;
 
-	/** The engine responsible for a page, honouring the 刷新 rotation. */
+	/** The engine responsible for a page, honouring the 刷新 rotation.
+	 *  2.2.1 (计划 第三批 item1): 轮换取该页 HRW 降序榜的第 `offset` 名,而非
+	 *  旧的 `pickProviderForPage(pool, pageIndex+offset)`——后者是为取模量身的
+	 *  hack,一致性哈希下「页号+1」只是跳到另一个伪随机服务商、偶尔还转回原点。
+	 *  按榜退让则确定:offset0=规范拥有者,offset1=次高分,依次熔断退让。 */
 	private providerForPage(pageIndex: number): string {
 		if (this.pool.length > 1) {
 			const offset = this.pageProviderOffset.get(pageIndex) ?? 0;
-			return pickProviderForPage(this.pool, pageIndex + offset);
+			const rank = rankProvidersForPage(this.pool, pageIndex);
+			return rank[offset % rank.length]!;
 		}
 		return getPref<string>('provider', 'bing-free');
 	}
@@ -289,17 +313,17 @@ export class ReaderSession {
 			// highlighted 译文 block, or asks the reader to select text first.
 			onExplainSelection: () => void this.explainSelection(),
 			onToggleSync: enabled => this.setSyncEnabled(enabled),
-			onRetranslate: () => this.confirmClearCacheRetranslate(), // 菜单「清缓存重译全文」= 破坏性,先确认
-			onRotateEngine: () => void this.rotateCurrentEngine(), // 菜单「换引擎重译本页」= 有池时轮换引擎真正重译
+			onRetranslate: () => this.confirmClearCacheRetranslate(), // 菜单栏刷新按钮「清缓存重译全文」= 破坏性,先确认
 			onRefreshPage: () => void this.retranslateCurrent(), // 胶囊圆环 = 修复本页 (只补缺,不换引擎不清合格缓存)
 			onCancelPage: () => this.cancelCurrentTranslation(), // 胶囊取消 = 停止翻译
 			onViewPartial: () => this.viewKeptOriginal(), // 胶囊「查看保留原文」= 定位保留段落
 			onDismiss: () => this.dismissTopTask(), // 胶囊 × = 关闭当前通知
 			onCollapsedChange: (c) => this.setCapsuleCollapsed(c), // 折叠状态由会话统一管理
 			onSaveNote: () => void this.saveSelectionToNote(),
-			onShowDiagnostics: () => this.copyDiagnostics(),
+			onShowDiagnostics: () => void this.copyDiagnostics(),
 			onCopyCorpus: () => this.copyLayoutCorpus(),
-			onCopyTerms: () => this.copyLearnedTerms(),
+			onSaveTerms: () => this.previewSaveLearnedTerms(), // 2.3.1 item3: 预览并保存到词汇表(不再只复制 TSV)
+			onExportPdf: () => void this.exportTranslatedPdf(), // 菜单栏「导出」(2.3.8 从「更多」搬回工具条)
 			onOpenSettings: () => this.openSettings(),
 			onToggleViewKind: kind => setPref('paneView', kind),
 			onPickLanguages: (source, target) => this.applyLanguagePick(source, target),
@@ -366,7 +390,7 @@ export class ReaderSession {
 		// open()×destroy 竞态闸 (2.0.7, 审核 P1-1): 上面的 await(以及下面的
 		// prime,可达数秒)期间用户关标签/关窗口/禁用插件都会 destroy()。
 		// 此前 open() 继续执行: 在销毁**之后**注册 disposePdfEvents 与
-		// startPolling —— eventBus 监听与 350ms 轮询永不解除(tick 首行的
+		// startPolling —— eventBus 监听与兜底轮询永不解除(tick 首行的
 		// destroyed 检查只让它空转,不停止),每次「打开后迅速关闭」泄漏一条;
 		// 隐私未接受分支还会对已置 null 的 split/pane 直接调用抛 TypeError。
 		if (this.destroyed) {
@@ -403,12 +427,18 @@ export class ReaderSession {
 		}
 
 		// PDF.js events: the pane renders its pages itself now, so left-side
-		// re-renders and zooms no longer force a rebuild. The only thing the
-		// stream drives is 同步滚动 — following the reader's position (page AND
-		// fraction within it) continuously, which is what keeps 原文第 2 页
-		// from sitting beside 译文第 1 页.
+		// re-renders and zooms no longer force a rebuild. The stream drives
+		// 同步滚动 (following the reader's position continuously) AND — 2.2.9,
+		// item1 — 事件驱动的页同步: updateviewarea 每滚动帧触发 syncCurrentPage
+		// (廉价比较、幂等),翻页当帧即被捕捉,350ms 轮询从此只是兜底。
 		this.disposePdfEvents = adapter.onPdfRenderEvents(this.reader, (pageIndex) => {
-			if (this.destroyed || pageIndex !== null) {
+			if (this.destroyed) {
+				return;
+			}
+			if (!this.isWindowHidden()) {
+				this.syncCurrentPage();
+			}
+			if (pageIndex !== null) {
 				return;
 			}
 			// Zoom on the left → the right pages match the new glyph size.
@@ -513,8 +543,35 @@ export class ReaderSession {
 				extractRenderedPage: pageIndex => this.extractor.extractRenderedPage(pageIndex),
 				translateRequest: (request, signal) => this.translateRequest(request, signal),
 				readCache: async (pageIndex, blocks) => {
-					const parts = await this.cacheKey(pageIndex, blocks.map(b => b.sourceText));
-					return parts ? cacheManager.readPage(parts) : null;
+					const texts = blocks.map(b => b.sourceText);
+					const parts = await this.cacheKey(pageIndex, texts);
+					if (parts) {
+						const hit = await cacheManager.readPage(parts);
+						if (hit) {
+							return hit;
+						}
+					}
+					// 发送前查全服务商缓存 (2.2.1, 计划 第三批 item1 · Codex API-P1):
+					// 规范键 miss 后,遍历池内其余已启用服务商各自的完整页缓存 ——
+					// 只要**任一**服务商曾译过这页(上个会话主译的引擎、池变动前的
+					// 拥有者、熔断换过的引擎),就直接复用、绝不重付费。跨会话/增删
+					// 服务商后最常见的「白重译一整篇」由此根治。命中键与规范键不同
+					// 不回写(读写键仍恒等,下次仍靠这层探测,成本只是几次文件存在性
+					// 检查;getApiKey 已 memoize,构键几乎零开销)。
+					if (this.pool.length > 1) {
+						const canonical = parts?.provider;
+						for (const pid of this.pool) {
+							const alt = await this.cacheKey(pageIndex, texts, pid);
+							if (!alt || alt.provider === canonical) {
+								continue;
+							}
+							const hit = await cacheManager.readPage(alt);
+							if (hit) {
+								return hit;
+							}
+						}
+					}
+					return null;
 				},
 				writeCache: async (pageIndex, blocks, translations) => {
 					const parts = await this.cacheKey(pageIndex, blocks.map(b => b.sourceText));
@@ -773,13 +830,15 @@ export class ReaderSession {
 		return provider.translate(request, { ...settings, timeoutMs: scaled }, { signal });
 	}
 
-	private async cacheKey(pageIndex: number, texts: string[]): Promise<CacheKeyParts | null> {
+	private async cacheKey(pageIndex: number, texts: string[], providerId?: string): Promise<CacheKeyParts | null> {
 		const item = adapter.getReaderItem(this.reader);
 		if (!item) {
 			return null;
 		}
 		// 规范引擎,不是运行时引擎 (P2-16): 读写键必须恒等,见 canonicalProviderForPage。
-		const chosen = this.canonicalProviderForPage(pageIndex);
+		// providerId 省略 = 规范引擎(读写恒等);显式传入用于「发送前查全服务商缓存」
+		// (2.2.1, item1)—— 用池内其它服务商各自的键探测同一页是否已被译过。
+		const chosen = providerId ?? this.canonicalProviderForPage(pageIndex);
 		const settings = await this.providerSettingsFor(chosen);
 		const { source, target } = this.resolveLanguages(texts.join('\n').slice(0, 2000));
 		return {
@@ -1110,51 +1169,99 @@ export class ReaderSession {
 		this.pane?.revealKeptOriginal(pageIndex);
 	}
 
+	/** 主窗口不可见(最小化/被遮挡切走)—— 不可见即停 (2.2.9, item1)。 */
+	private isWindowHidden(): boolean {
+		try {
+			return this.getMainWindow()?.document?.hidden === true;
+		}
+		catch {
+			return false;
+		}
+	}
+
+	/**
+	 * 当前页同步:页变化 → 翻译优先级/面板/胶囊跟进。事件驱动为主
+	 * (updateviewarea 每滚动帧调用,比较廉价、幂等),兜底轮询为辅。
+	 */
+	private syncCurrentPage(): void {
+		const page = adapter.getCurrentPageIndex(this.reader);
+		if (page === this.lastPageIndex) {
+			return;
+		}
+		this.lastPageIndex = page;
+		// In 原文 mode nothing is displayed, so don't spend requests
+		// translating pages the reader scrolls past.
+		// quiescing 期间不入队 (P3, 2.0.10): 见 quiescing 字段注释。
+		if (this.viewMode !== 'original' && !this.quiescing) {
+			this.manager?.setCurrentPage(page);
+		}
+		this.pane?.setCurrentPage(page);
+		// NO forced scrollToPage on a page change: the continuous
+		// updateviewarea → setPdfScrollFraction anchor sync already keeps
+		// the pane aligned to the reader's exact position. Snapping the
+		// pane to the new page's TOP here is what made the right side jump
+		// to the page start mid-scroll; page-change only updates the label
+		// and translation priority now.
+		// A translation task pinned to the page we just LEFT must not keep
+		// the capsule frozen on that page's state ("正在适配排版 50%" forever
+		// — the audit's stale laying-out item). Drop it; the new page's own
+		// updates repopulate the capsule within one notify.
+		const stale = this.tasks.get('translation');
+		if (stale && stale.currentPage !== page + 1) {
+			this.setTask('translation', null);
+		}
+		// If nothing is actively running, the resting ring must retarget
+		// the new page (✓ vs ↻) instead of showing the old page's state.
+		if (!this.tasks.size) {
+			this.renderTopTask();
+		}
+	}
+
+	/** 兜底 tick(1.5s): 内存回收 + 分栏漂移看门狗 + 页同步兜底。 */
+	private pollTick(): void {
+		if (this.destroyed) {
+			return;
+		}
+		// lastPartial 滞留释放 (2.0.6, 审核 P3): 页面重渲染/卸载后其 strict
+		// 元素(带整页位图 canvas,约 26 MB)已脱离文档,却被 lastPartial
+		// 一直引用而无法回收。已断开就放手 ——「查看保留原文」对断开元素
+		// 本来就会走 pane 回退路径,不损失功能。(放在 hidden 检查之前:
+		// 后台窗口更该回收内存。)
+		if (this.lastPartial && !this.lastPartial.element.isConnected) {
+			this.lastPartial = null;
+		}
+		// 不可见即停 (2.2.9, item1): 窗口不可见时不做布局看门狗、不做页同步 ——
+		// 不触发 setCurrentPage 就不会产生新的翻译/预取请求;恢复可见由
+		// visibilitychange 监听立即补一拍,轮询照常兜底。
+		if (this.isWindowHidden()) {
+			return;
+		}
+		// Sidebar opened/closed/resized → re-balance the split.
+		this.split?.refreshLayout();
+		this.syncCurrentPage();
+	}
+
 	private startPolling(): void {
-		this.pollTimer = setInterval(() => {
-			if (this.destroyed) {
-				return;
+		this.pollTimer = setInterval(() => this.pollTick(), PAGE_POLL_MS);
+		// 恢复可见立即补一拍(不然要等最长 1.5s 的下一次兜底 tick)。
+		try {
+			const doc = this.getMainWindow()?.document;
+			if (doc) {
+				const onVisibility = (): void => {
+					if (!this.destroyed && !doc.hidden) {
+						this.pollTick();
+					}
+				};
+				doc.addEventListener('visibilitychange', onVisibility);
+				this.disposeVisibility = () => {
+					try {
+						doc.removeEventListener('visibilitychange', onVisibility);
+					}
+					catch { /* window may be gone */ }
+				};
 			}
-			// lastPartial 滞留释放 (2.0.6, 审核 P3): 页面重渲染/卸载后其 strict
-			// 元素(带整页位图 canvas,约 26 MB)已脱离文档,却被 lastPartial
-			// 一直引用而无法回收。已断开就放手 ——「查看保留原文」对断开元素
-			// 本来就会走 pane 回退路径,不损失功能。
-			if (this.lastPartial && !this.lastPartial.element.isConnected) {
-				this.lastPartial = null;
-			}
-			// Sidebar opened/closed/resized → re-balance the split.
-			this.split?.refreshLayout();
-			const page = adapter.getCurrentPageIndex(this.reader);
-			if (page !== this.lastPageIndex) {
-				this.lastPageIndex = page;
-				// In 原文 mode nothing is displayed, so don't spend requests
-				// translating pages the reader scrolls past.
-				// quiescing 期间不入队 (P3, 2.0.10): 见 quiescing 字段注释。
-				if (this.viewMode !== 'original' && !this.quiescing) {
-					this.manager?.setCurrentPage(page);
-				}
-				this.pane?.setCurrentPage(page);
-				// NO forced scrollToPage on a page change: the continuous
-				// updateviewarea → setPdfScrollFraction anchor sync already keeps
-				// the pane aligned to the reader's exact position. Snapping the
-				// pane to the new page's TOP here is what made the right side jump
-				// to the page start mid-scroll; page-change only updates the label
-				// and translation priority now.
-				// A translation task pinned to the page we just LEFT must not keep
-				// the capsule frozen on that page's state ("正在适配排版 50%" forever
-				// — the audit's stale laying-out item). Drop it; the new page's own
-				// updates repopulate the capsule within one notify.
-				const stale = this.tasks.get('translation');
-				if (stale && stale.currentPage !== page + 1) {
-					this.setTask('translation', null);
-				}
-				// If nothing is actively running, the resting ring must retarget
-				// the new page (✓ vs ↻) instead of showing the old page's state.
-				if (!this.tasks.size) {
-					this.renderTopTask();
-				}
-			}
-		}, PAGE_POLL_MS);
+		}
+		catch { /* visibility tracking is best-effort */ }
 	}
 
 	/**
@@ -1219,18 +1326,29 @@ export class ReaderSession {
 		const token = (this.renderToken.get(pageIndex) ?? 0) + 1;
 		this.renderToken.set(pageIndex, token);
 		const current = (): boolean => !this.destroyed && this.renderToken.get(pageIndex) === token;
-		// Supersample within a fixed pixel budget: sharp text without letting a
-		// tall page allocate an enormous canvas.
-		const oversample = Math.max(1, Math.min(1.8, Math.sqrt(3_200_000 / Math.max(1, width * width * 1.4))));
-		let render = await adapter.renderPageBitmap(this.reader, pageIndex, width, oversample);
-		if (!current()) {
-			return false;
+		// 底图位图 LRU (2.2.5, item6): 同页同宽度已 rasterize 过就直接复用,免去
+		// 最贵的 pdf.js 整页渲染;buildStrictPage 只重建遮罩+文本层。宽度取整分桶,
+		// 缩放换宽度自然落到不同键、旧宽度条目由 LRU 淘汰。
+		const bitmapKey = `${pageIndex}@${Math.round(width)}`;
+		let render = this.baseBitmaps.get(bitmapKey) ?? null;
+		if (!render) {
+			// Supersample within a fixed pixel budget: sharp text without letting a
+			// tall page allocate an enormous canvas.
+			const oversample = Math.max(1, Math.min(1.8, Math.sqrt(3_200_000 / Math.max(1, width * width * 1.4))));
+			render = await adapter.renderPageBitmap(this.reader, pageIndex, width, oversample);
+			if (!current()) {
+				return false;
+			}
+			if (render) {
+				this.baseBitmaps.set(bitmapKey, render); // 只缓存独立 raster
+			}
 		}
 		if (!render) {
 			// Core rendering unavailable (compartment quirk, worker busy):
 			// fall back to copying the LEFT viewer's canvas. It only exists for
 			// pages near the left viewport, and comes at the left zoom rather
-			// than the pane width — the element is scaled to fit below.
+			// than the pane width — the element is scaled to fit below. 不缓存
+			// (它是左视图 live canvas、宽度/缩放都不对,复用会错位)。
 			render = adapter.getPageRender(this.reader, pageIndex);
 		}
 		if (!render || this.destroyed) {
@@ -1375,8 +1493,18 @@ export class ReaderSession {
 		if (!live() || !unfit.length) {
 			return;
 		}
+		// (0) 无损空白扩边优先 (2.2.2, 计划 第三批 item3): 在缩写/缩字之前,先把靠
+		// 邻近安全空白就能放下的块无损救回 —— 不牺牲译文、不费一次 API。仍不适配
+		// 的块才进入后续的「压缩→缩字→保留原文」。扩边幂等(已提交块跳过),
+		// 递归回来时会对压缩后的更短文本再扩一次。
+		const stillAfterExpand = new Set(expandStrictBlocks(element, unfit.map(u => u.id)));
+		const remaining = unfit.filter(u => stillAfterExpand.has(u.id));
+		if (!remaining.length) {
+			this.reportPlacement(pageIndex, element);
+			return;
+		}
 		const budgetCapable = supportsCharBudget(getProvider(this.providerForPage(pageIndex)));
-		const plan = planStrictRetry(unfit, {
+		const plan = planStrictRetry(remaining, {
 			roundsFor: id => this.compressRounds.get(id) ?? 0,
 			maxRounds: 2,
 			budgetCapable
@@ -1402,7 +1530,7 @@ export class ReaderSession {
 			// 丢失唤醒补接力 (2.0.9, 审核 P2-10): 被在飞压缩挡回的渲染记下
 			// 待办,压缩 finally 里续跑 —— 否则这次渲染的未适配块永远无人处理。
 			else if (plan.compress.length && this.compressPending.has(pageIndex)) {
-				this.compressBlocked.set(pageIndex, { element, unfit, token });
+				this.compressBlocked.set(pageIndex, { element, unfit: remaining, token });
 			}
 			return;
 		}
@@ -1410,7 +1538,7 @@ export class ReaderSession {
 		for (const id of plan.compress) {
 			this.compressRounds.set(id, (this.compressRounds.get(id) ?? 0) + 1);
 		}
-		const entries = unfit.filter(u => plan.compress.includes(u.id));
+		const entries = remaining.filter(u => plan.compress.includes(u.id));
 		void this.manager.compressBlocks(pageIndex, entries)
 			.then((accepted) => {
 				if (!live()) {
@@ -1644,17 +1772,17 @@ export class ReaderSession {
 	 * open as the instant preview while this runs in the background.
 	 */
 	async exportTranslatedPdf(): Promise<void> {
+		// 点击必须立刻可见 (2.3.8, 修「点击后没反应」): 状态胶囊在每页翻完后会
+		// 自动折叠成 56px 圆环,而胶囊尊重折叠状态 —— 导出进度乃至失败信息全部
+		// 渲染进一个折叠的小环里,用户看起来就是「没反应」。导出是用户显式点击
+		// 的动作,启动时强制展开胶囊,并在任何 await 之前先推一条 0% 进度。
+		this.setCapsuleCollapsed(false);
 		if (this.exportingPdf) {
 			this.pushExport('translating', { message: getString('papermirror-export-running').replace('%n%', '…') });
 			return;
 		}
-		const item = adapter.getReaderItem(this.reader);
-		const filePath = item ? await (item as unknown as { getFilePathAsync(): Promise<string | false> }).getFilePathAsync() : null;
-		if (!item || !filePath) {
-			this.pushExport('failed', { message: getString('papermirror-export-failed') });
-			return;
-		}
 		this.exportingPdf = true;
+		this.pushExport('translating', { pct: 0, message: getString('papermirror-export-running').replace('%n%', '0') });
 		const report = (pct: number): void => {
 			this.pushExport('translating', {
 				pct,
@@ -1662,6 +1790,14 @@ export class ReaderSession {
 			});
 		};
 		try {
+			// 条目/路径解析也在 try 里 (2.3.8): 旧版这两个 await 在 try 之外,
+			// 一旦抛错整个 void 调用被静默吞掉 —— 正是「点击后没反应」的另一个洞。
+			const item = adapter.getReaderItem(this.reader);
+			const filePath = item ? await (item as unknown as { getFilePathAsync(): Promise<string | false> }).getFilePathAsync() : null;
+			if (!item || !filePath) {
+				this.pushExport('failed', { message: `${getString('papermirror-export-failed')}: 找不到 PDF 附件文件` });
+				return;
+			}
 			const bytes = new Uint8Array(await IOUtils.read(String(filePath)));
 			// 导出恒走内置生成 (2.1.6): 零配置、无外部依赖、无网络面。此前的
 			// 「完整 PDF 服务模式」(BabelDOC 本地 HTTP 桥接)连同其令牌/握手安全面
@@ -1716,6 +1852,7 @@ export class ReaderSession {
 		catch (e) {
 			const message = e instanceof PaperMirrorError ? e.message : String(e);
 			logger.warn(MODULE, 'exportTranslatedPdf failed', e);
+			this.setCapsuleCollapsed(false); // 失败必须可见,即使用户中途又把胶囊折叠了
 			this.pushExport('failed', { message: `${getString('papermirror-export-failed')}: ${message}` });
 		}
 		finally {
@@ -1786,8 +1923,10 @@ export class ReaderSession {
 			dual: true,
 			onProgress: (done, total) => report(70 + (done / total) * 28)
 		});
-		if (built.clippedBlocks > 0) {
-			logger.info(MODULE, `${built.clippedBlocks} block(s) clipped at minimum font size`);
+		if (built.keptOriginal > 0) {
+			// LO-1 (2.2.8): 放不下的块保留原文,不再涂白截断丢正文。
+			logger.info(MODULE, `${built.keptOriginal} block(s) kept original in exported PDF (translation would not fit)`);
+			this.flashNotice(`导出完成:${built.keptOriginal} 段译文放不下原区域,已保留原文(内容零丢失)`);
 		}
 		return { monoBytes: built.monoBytes, dualBytes: built.dualBytes };
 	}
@@ -1944,8 +2083,9 @@ export class ReaderSession {
 	/**
 	 * 修复本页 (2.1.10, 计划 item 4): 圆环默认动作。**只补缺失/无效/排版失败的
 	 * 段**,复用段落库里合格的译文,**不轮换服务商、不清合格缓存**——一次点击
-	 * 只为「把这页补齐」,不再像旧版那样在有池时默默换引擎+整页重付费。换引擎
-	 * 重译是另一个显式动作(rotateCurrentEngine)。
+	 * 只为「把这页补齐」,不再像旧版那样在有池时默默换引擎+整页重付费。
+	 * (2.3.8: 手动「换引擎重译本页」入口随菜单精简移除;引擎不稳时的自动换家
+	 * 仍在 onProviderUnstable 熔断里。)
 	 */
 	private async retranslateCurrent(): Promise<void> {
 		if (!this.manager) {
@@ -1957,36 +2097,6 @@ export class ReaderSession {
 		this.pane?.setBusy(true);
 		try {
 			await this.manager.retranslatePage(page, 'normal');
-		}
-		finally {
-			this.pane?.setBusy(false);
-		}
-	}
-
-	/**
-	 * 换引擎重译本页 (2.1.10, 计划 item 4): 显式动作(菜单)。有池时把本页发给
-	 * 下一家服务商并绕过段落库让新引擎**真正重译**(段落 context 用规范引擎、不含
-	 * 轮换偏移,故 'normal' 会零请求读回旧译文——必须走 'rotate' 才真正换家)。
-	 * 单引擎时无从换,退化为修复本页并提示。
-	 */
-	private async rotateCurrentEngine(): Promise<void> {
-		if (!this.manager) {
-			this.startTranslating();
-			return;
-		}
-		const page = adapter.getCurrentPageIndex(this.reader);
-		this.clearPageRounds(page);
-		const rotated = this.pool.length > 1;
-		if (rotated) {
-			this.pageProviderOffset.set(page, ((this.pageProviderOffset.get(page) ?? 0) + 1) % this.pool.length);
-			logger.info(MODULE, `换引擎重译 page ${page + 1} → provider ${this.providerForPage(page)}`);
-		}
-		else {
-			this.flashNotice('只配置了一个翻译服务商,无法换引擎;已按「修复本页」重译');
-		}
-		this.pane?.setBusy(true);
-		try {
-			await this.manager.retranslatePage(page, rotated ? 'rotate' : 'normal');
 		}
 		finally {
 			this.pane?.setBusy(false);
@@ -2152,10 +2262,18 @@ export class ReaderSession {
 			this.pane.showExplanation({ passage: text, error: getString('papermirror-explain-needs-llm') });
 			return;
 		}
-		// 3. Run
+		// 3. Run — 讲解缓存 (2.3.5, 第四批 item7 · API-8): 同段落+同引擎/模型/语言
+		// 的解析在会话内缓存,重复选中/误触零请求(重读一段是常态,按次计费)。
 		this.pane.showExplanation({ passage: text, loading: true });
 		try {
 			const { target } = this.resolveLanguages(text);
+			const cacheKey = hashSourceTexts([text, settings.providerId, settings.model ?? '', target]);
+			const cached = this.explainCache.get(cacheKey);
+			if (cached) {
+				this.lastExplanation = { passage: text, sections: cached, pageNumber: page + 1 };
+				this.pane.showExplanation({ passage: text, sections: cached });
+				return;
+			}
 			const item = adapter.getReaderItem(this.reader);
 			const result = await explainText(provider, settings, {
 				text,
@@ -2164,6 +2282,7 @@ export class ReaderSession {
 				context
 			});
 			const sections = parseExplanationSections(result);
+			this.explainCache.set(cacheKey, sections);
 			this.lastExplanation = { passage: text, sections, pageNumber: page + 1 };
 			this.pane.showExplanation({ passage: text, sections });
 		}
@@ -2210,14 +2329,44 @@ export class ReaderSession {
 	 * 等于公开了未发表稿件。语料已拆回独立的「语料」按钮 (copyLayoutCorpus),
 	 * 那个按钮的名字与提示都明说含原文,导出动作本身即知情授权。
 	 */
-	private copyDiagnostics(): void {
+	private async copyDiagnostics(): Promise<void> {
 		if (!this.manager) {
 			return;
 		}
 		try {
+			// 引擎自检 (2.3.0, 第四批 item2 · WF-2): 随诊断产出每个已启用引擎的
+			// 配置健康度 —— 纯本地检查(密钥是否已配、端点主机、模型、熔断轮换
+			// 次数),**不发任何网络请求**,也绝不含密钥本体。
+			const engines: Record<string, unknown>[] = [];
+			const ids = this.pool.length ? this.pool : [getPref<string>('provider', 'bing-free')];
+			for (const id of ids) {
+				try {
+					const s = await this.providerSettingsFor(id);
+					let host = '';
+					try {
+						host = s.apiBaseURL ? new URL(s.apiBaseURL).host : '';
+					}
+					catch {
+						host = '(invalid URL)';
+					}
+					engines.push({
+						id,
+						model: s.model || '(default)',
+						endpointHost: host,
+						keyConfigured: !!s.apiKey,
+						requiresKey: !!getProvider(id)?.requiresApiKey
+					});
+				}
+				catch (e) {
+					engines.push({ id, selfCheckError: e instanceof Error ? e.message : String(e) });
+				}
+			}
 			const payload = {
 				plugin: 'PaperMirror',
 				generatedAt: new Date().toISOString(),
+				engines,
+				// 会话内熔断/手动轮换过的页数(>0 说明有引擎不稳被换过)。
+				engineRotations: this.pageProviderOffset.size,
 				...(this.manager.exportDiagnostics() as Record<string, unknown>),
 				// 几何安全复核结果 (1.1.2 诊断闭环): 页号 → 违例/调整/保留计数。
 				geometryAudits: [...this.geometryAudits.entries()]
@@ -2283,12 +2432,10 @@ export class ReaderSession {
 	 * 增量形态): docMemory 边翻边学的「术语(ABBR)」对 → TSV 进剪贴板,
 	 * 用户可直接粘贴进词汇表或表格里编辑。
 	 */
-	private copyLearnedTerms(): void {
-		const terms = this.manager?.learnedTerms() ?? [];
-		if (!terms.length) {
-			this.flashNotice('本篇尚未学得术语对(翻译几页后再试)');
-			return;
-		}
+	/** 上次「保存术语到词汇表」前的快照 —— 一键撤销 (2.3.1, item3 · WF-8)。 */
+	private glossaryUndo: { json: string; added: number } | null = null;
+
+	private copyTermsTsv(terms: { source: string; target: string }[]): void {
 		try {
 			const tsv = terms.map(t => `${t.source}\t${t.target}`).join('\n');
 			Components.classes['@mozilla.org/widget/clipboardhelper;1']
@@ -2299,6 +2446,87 @@ export class ReaderSession {
 		catch (e) {
 			logger.warn(MODULE, 'term table copy failed', e);
 		}
+	}
+
+	/**
+	 * 「术语」名称与行为统一 (2.3.1, 计划 第四批 item3 · WF-8): 不再只复制 TSV,
+	 * 而是**预览并保存到词汇表** —— 与既有词汇表去重、确认框预览、保存为
+	 * 'suggested'(参考,不强制模型)、支持一键撤销;「编辑」在设置页词汇表
+	 * 编辑器闭环。确认框如实提示: 词汇表是译文身份的一部分(glossaryHash 入
+	 * 缓存键),保存会使本篇已缓存译文在下次打开时按新术语重译。
+	 * 「仅复制 TSV」保留为确认框第二按钮(旧行为不丢)。
+	 */
+	private previewSaveLearnedTerms(): void {
+		const terms = this.manager?.learnedTerms() ?? [];
+		if (!terms.length) {
+			this.flashNotice('本篇尚未学得术语对(翻译几页后再试)');
+			return;
+		}
+		const existingJson = getPref<string>('glossaryGlobal', '[]');
+		const existing = parseGlossaryJSON(existingJson);
+		// 去重: 先对既有词汇表,再对本篇自身(纯函数,单测覆盖)。
+		const fresh = dedupeLearnedTerms(existing, terms);
+		const prompt = (Services as unknown as {
+			prompt?: {
+				confirm(parent: unknown, title: string, text: string): boolean;
+				confirmEx?(parent: unknown, title: string, text: string, flags: number,
+					b0: string | null, b1: string | null, b2: string | null,
+					check: string | null, state: { value: boolean }): number;
+			};
+		}).prompt;
+		const win = (Zotero as unknown as { getMainWindow?(): unknown }).getMainWindow?.() ?? null;
+		if (!fresh.length) {
+			// 全部已在词汇表 → 提供撤销上次保存(若有)。
+			if (this.glossaryUndo && prompt?.confirm) {
+				const undo = this.glossaryUndo;
+				if (prompt.confirm(win, '术语已全部在词汇表中',
+					`本篇学得的 ${terms.length} 条术语已全部在词汇表中。撤销上次保存的 ${undo.added} 条?`)) {
+					setPref('glossaryGlobal', undo.json);
+					this.glossaryUndo = null;
+					this.flashNotice(`已撤销上次保存的 ${undo.added} 条术语`);
+				}
+			}
+			else {
+				this.flashNotice(`本篇学得的 ${terms.length} 条术语已全部在词汇表中(设置 → 词汇表可编辑)`);
+			}
+			return;
+		}
+		const PREVIEW_MAX = 12;
+		const previewLines = fresh.slice(0, PREVIEW_MAX).map(t => `${t.source} → ${t.target}`);
+		if (fresh.length > PREVIEW_MAX) {
+			previewLines.push(`…等共 ${fresh.length} 条`);
+		}
+		const text = `本篇新学得 ${fresh.length} 条术语(已与词汇表现有 ${existing.length} 条去重):\n\n`
+			+ previewLines.join('\n')
+			+ '\n\n保存为「参考」术语(不强制模型);可在设置 → 词汇表中编辑,再点一次「术语」可撤销。'
+			+ '\n注意:词汇表变化会使本篇已缓存译文在下次打开时按新术语重译。';
+		let choice = 0; // 0=保存 1=仅复制TSV 2=取消
+		try {
+			if (prompt?.confirmEx) {
+				// STD flags: (BUTTON_TITLE_IS_STRING=127) 每键位 <<0/8/16。
+				const IS_STRING = 127;
+				choice = prompt.confirmEx(win, '保存术语到词汇表', text,
+					IS_STRING | (IS_STRING << 8) | (IS_STRING << 16),
+					'保存到词汇表', '仅复制 TSV', '取消', null, { value: false });
+			}
+			else if (prompt?.confirm) {
+				choice = prompt.confirm(win, '保存术语到词汇表', text) ? 0 : 2;
+			}
+		}
+		catch {
+			choice = 2; // 无法弹框时不做破坏性动作
+		}
+		if (choice === 1) {
+			this.copyTermsTsv(terms);
+			return;
+		}
+		if (choice !== 0) {
+			return;
+		}
+		this.glossaryUndo = { json: existingJson, added: fresh.length };
+		const merged = [...existing, ...fresh.map(t => ({ source: t.source, target: t.target, mode: 'suggested' as const }))];
+		setPref('glossaryGlobal', serializeGlossary(merged));
+		this.flashNotice(`已保存 ${fresh.length} 条术语到词汇表(设置中可编辑;再点「术语」可撤销)`);
 	}
 
 	/**
@@ -2420,8 +2648,11 @@ export class ReaderSession {
 		this.lastPartial = null;
 		this.compressBlocked.clear(); // P2-10: 不再持有已卸载页元素
 		this.placementStats.clear();
+		this.baseBitmaps.clear(); // 释放缓存的底图 canvas
 		this.disposePdfEvents?.();
 		this.disposePdfEvents = null;
+		this.disposeVisibility?.();
+		this.disposeVisibility = null;
 		this.overlay?.destroy();
 		this.overlay = null;
 		this.manager?.dispose();

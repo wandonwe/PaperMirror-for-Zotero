@@ -1,6 +1,6 @@
 {
 	"name": "zotero-bilingual-reader",
-	"version": "2.1.10",
+	"version": "2.4.2",
 	"description": "PaperMirror for Zotero — bilingual side-by-side reading mode for the Zotero PDF reader",
 	"private": true,
 	"license": "AGPL-3.0-or-later",
@@ -12,6 +12,7 @@
 		"test": "npm run typecheck:tests && node scripts/test.mjs",
 		"package": "node scripts/package.mjs",
 		"verify:xpi": "node scripts/verify-xpi.mjs",
+		"bench": "node scripts/bench.mjs",
 		"gen:updates": "node scripts/gen-updates.mjs",
 		"dev-install": "node scripts/dev-install.mjs"
 	},

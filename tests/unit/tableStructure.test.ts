@@ -146,3 +146,25 @@ test('cells export tableRow alongside tableCol (1.0.6 — row was only in the id
 		assert.equal(c.tableCol, Number(m[2]));
 	}
 });
+
+// ---- 2.3.7 (基线 doc1 实证): 微小符号格直接归 data/preserve ------------------
+
+test('tiny symbol-only cells (R², n=5, ±SD) are data — never sent to translation', () => {
+	// 4 列结构: 表头 + 两行,c1/c2/c3 是微小符号格。
+	const mk = (id: string, text: string, left: number, top: number, w = 40): CellMember => ({
+		id, text, box: { left, top, width: w, height: 10 }
+	});
+	const members = [
+		mk('h0', 'Group', 0, 0, 80), mk('h1', 'Value', 100, 0), mk('h2', 'Sig', 160, 0), mk('h3', 'Note', 220, 0),
+		mk('a0', 'Treatment arm', 0, 20, 80), mk('a1', 'R²', 100, 20), mk('a2', 'n=5', 160, 20), mk('a3', 'good outcome', 220, 20),
+		mk('b0', 'Control arm', 0, 40, 80), mk('b1', '±SD', 100, 40), mk('b2', 'p<.1', 160, 40), mk('b3', 'poor outcome', 220, 40)
+	];
+	const model = buildTableModel(0, 0, { left: 0, top: 0, width: 300, height: 60 }, members);
+	const kindOf = (r: number, c: number) => model.cells.find(x => x.row === r && x.col === c)?.kind;
+	assert.equal(kindOf(1, 1), 'data', 'R² 是符号格 → data');
+	assert.equal(kindOf(1, 2), 'data', 'n=5 是符号格 → data');
+	assert.equal(kindOf(2, 1), 'data', '±SD 是符号格 → data');
+	// 真文本格不受影响。
+	assert.equal(kindOf(1, 0), 'text', 'Treatment arm 仍是文本格');
+	assert.equal(kindOf(1, 3), 'text', 'good outcome 仍是文本格');
+});

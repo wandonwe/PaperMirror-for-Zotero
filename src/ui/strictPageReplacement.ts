@@ -31,7 +31,7 @@ import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
 import { detectTableRegions } from '../reader/tableGuard';
 import { buildTableModel, type CellMember } from '../reader/tableStructure';
-import { auditPlacedBoxes, violationStillPresent, type AuditBox } from './layoutSafety';
+import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, type AuditBox, type AuditObstacles } from './layoutSafety';
 import { parseStyledSegments } from '../reader/styleRuns';
 import {
 	inkFor,
@@ -96,6 +96,52 @@ export function ladderFor(minLineHeight: number): { lineHeight: number; letterSp
 const SHRINK_STEPS = [0.94, 0.88];
 const SHRINK_FLOOR_PX = 8.5;
 
+/**
+ * 末位缩字是否允许作用于该块类型 (2.2.7, 计划 第三批 item7(b) · LO-3) — pure。
+ *
+ * 正文(paragraph/list)**不**参与单块末位缩字: 一段正文缩到 88% 而上下相邻段
+ * 仍 100%,读起来就是「发花」(同栏正文忽大忽小)。正文只在**页内统一字号**下
+ * 排版 —— 靠行距/字距梯子、无损扩边、压缩把它放进原字号盒,放不下就保留原文
+ * (诚实计数,可「查看保留原文」),绝不单独缩它一块。独立元素(图题 caption、
+ * 标题 heading/title)是孤立的,缩它自己不会与正文比出大小差,仍可末位缩字保住
+ * 译文。表格单元格由独立表格模型渲染、根本不进这条 items 流水线,不受影响。
+ */
+export function allowsFontShrink(blockType: string, opts?: { isTableCell?: boolean; tinyLine?: boolean }): boolean {
+	// 2.3.7 (基线 doc3 实证修正): 2.2.7 的「正文不缩字」把两类**孤立小盒**误伤了 ——
+	// 探针显示 13px/9px 高的单行表格单元格与表单细行因禁缩只能整行放弃(一篇文档
+	// abandoned 从个位数涨到 56)。它们不是正文流,各自缩字不会与相邻正文比出
+	// 「发花」: ① 表格单元格(格间本就独立);② 微小单行块(标签/表行,单行盒
+	// 行距梯子无从发力、扩边被下一行挡死,缩字是唯一救法)。两类放行缩字;
+	// 真正文段(多行 paragraph/list)维持 2.2.7 的页内统一字号。
+	if (opts?.isTableCell || opts?.tinyLine) {
+		return true;
+	}
+	return blockType !== 'paragraph' && blockType !== 'list';
+}
+
+/**
+ * LO-7 (2.4.0) 大标题「整体另置」的候选位置 — pure。
+ *
+ * 顺序即偏好: 正下方(标题与摘要/作者行之间通常有版式留白)优先,正上方次之。
+ * 两端各留 2% 页高的安全边;放不进页面的候选直接不出。宽度沿用标题原盒宽
+ * (展示型标题通常横贯版心),left 不动 —— 另置只在垂直向找空白。
+ */
+export function annexCandidateBoxes(
+	original: { left: number; top: number; width: number; height: number },
+	naturalHeight: number,
+	pageHeight: number,
+	gap = 6
+): { left: number; top: number; width: number; height: number }[] {
+	const out: { left: number; top: number; width: number; height: number }[] = [];
+	for (const top of [original.top + original.height + gap, original.top - gap - naturalHeight]) {
+		if (top < pageHeight * 0.02 || top + naturalHeight > pageHeight * 0.98) {
+			continue;
+		}
+		out.push({ left: original.left, top, width: original.width, height: naturalHeight });
+	}
+	return out;
+}
+
 export interface StrictPageInput {
 	blocks: SourceBlock[];
 	translations: Map<string, string>;
@@ -136,6 +182,9 @@ export interface StrictPageStats {
 	untranslated: number;
 	/** Below the min-size gate (tiny fragments). */
 	tooSmall: number;
+	/** LO-7 (2.4.0): 大标题原位放不下、译文整体另置成功的块数(已含在
+	 * `committed` 里,单列仅供诊断观察另置策略的启用频率)。 */
+	annexed: number;
 }
 
 export interface StrictPageResult {
@@ -233,26 +282,71 @@ export function splitRegionForPlacement(
 	if (!groups || groups.length < 2 || !translation) {
 		return null;
 	}
+	// A group with no line rects can't be placed — bail rather than emit a
+	// zero-area box that would silently swallow its paragraph.
+	if (groups.some(g => !g.lineRectsPdf?.length)) {
+		return null;
+	}
 	// Split on ANY run of newlines, not just blank lines: coalesceRegions joins
 	// paragraph groups with "\n\n", but translation engines commonly normalise
 	// that to a single "\n" — matching only "\n\n" silently fell back and left
 	// the region collapsed. Within a group the text has no newlines (members are
 	// joined with " "/""), so "\n+" partitions exactly at the group boundaries.
 	const paras = translation.split(/\n+/).map(p => p.trim()).filter(Boolean);
-	if (paras.length !== groups.length) {
-		return null; // engine didn't preserve the paragraph structure — fall back
-	}
-	// A group with no line rects can't be placed — bail rather than emit a
-	// zero-area box that would silently swallow its paragraph.
-	if (groups.some(g => !g.lineRectsPdf?.length)) {
+	// 一坨(引擎把所有分段合成一段)无从拆分 → 回退整块放置(与旧行为一致)。
+	if (paras.length < 2) {
 		return null;
 	}
-	return groups.map((g, i) => ({
-		id: `${block.id}::p${i}`,
-		lineRectsPdf: g.lineRectsPdf,
-		fontSize: g.fontSize,
-		text: paras[i]!
-	}));
+	const G = groups.length;
+	const P = paras.length;
+	if (P === G) {
+		// 段数相等: 一一对应,每段落进自己的组盒(最忠实)。
+		return groups.map((g, i) => ({
+			id: `${block.id}::p${i}`,
+			lineRectsPdf: g.lineRectsPdf!,
+			fontSize: g.fontSize,
+			text: paras[i]!
+		}));
+	}
+	// 尽力对齐 (2.2.6, 计划 第三批 item7 · LO-2): 段数不等不再整块塌顶,而是把**多
+	// 的一侧**按顺序均匀并入**少的一侧**,得到 K=min(P,G) 个盒子 —— 每盒都有文本、
+	// 每段文本都落地、顺序不变、盒子几何覆盖原区域全部行矩形(不留空、不塌顶)。
+	// K≥2 恒成立(此处 P≥2 且 G≥2)。「顺次映射 + 贪心合并」正是计划所述做法。
+	const K = Math.min(P, G);
+	// 把 n 个有序项切成 K 个连续、尽量均匀的桶 → 每桶 [start,end)。
+	const bins = (n: number): [number, number][] => {
+		const out: [number, number][] = [];
+		let start = 0;
+		for (let i = 0; i < K; i++) {
+			const size = Math.floor(n / K) + (i < n % K ? 1 : 0);
+			out.push([start, start + size]);
+			start += size;
+		}
+		return out;
+	};
+	if (P > G) {
+		// 译文比组多(引擎多切了段): 盒子=G 个组(几何不变),P 段按序并入 G 桶,
+		// 桶内多段用空格接回一段。
+		const pb = bins(P); // K === G 个桶
+		return groups.map((g, i) => ({
+			id: `${block.id}::p${i}`,
+			lineRectsPdf: g.lineRectsPdf!,
+			fontSize: g.fontSize,
+			text: paras.slice(pb[i]![0], pb[i]![1]).join(' ')
+		}));
+	}
+	// 译文比组少(引擎并了段): 合并 G 个组盒到 P 个(并集行矩形),与 P 段一一对应。
+	const gb = bins(G); // K === P 个桶
+	return paras.map((text, i) => {
+		const [s, e] = gb[i]!;
+		const merged = groups.slice(s, e);
+		return {
+			id: `${block.id}::p${i}`,
+			lineRectsPdf: merged.flatMap(g => g.lineRectsPdf!),
+			fontSize: merged[0]!.fontSize,
+			text
+		};
+	});
 }
 
 /** Parse an `rgb(r,g,b)` / `rgba(...)` string into [r,g,b]; white on failure. */
@@ -382,11 +476,31 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				tableIntentional += cell.memberIds.length;
 				continue;
 			}
-			// Assemble the cell's translation from its members; if any member is
-			// missing a translation the cell can't be shown whole → keep original.
+			// Assemble the cell's translation from its members. 逐 member 兜底
+			// (2.3.4, 第四批 item6 · LO-8): 任一 member 缺译不再把**整格**回退 ——
+			// 有译文的 member 各自作为独立块放置(用自己的行矩形),只有真正缺译
+			// 的 member 保留原文并计入 tableFailed。整格齐全时仍走整格路径(拼合
+			// 译文进单元格盒,排版最好)。
 			const parts = cell.memberIds.map(mid => input.translations.get(mid));
 			if (parts.some(p => p === undefined || !p.trim())) {
-				tableFailed += cell.memberIds.length; // a cell whose text was not translated
+				for (let mi = 0; mi < cell.memberIds.length; mi++) {
+					const mid = cell.memberIds[mi]!;
+					const text = parts[mi];
+					const mb = blockById.get(mid);
+					if (text === undefined || !text.trim() || !mb?.lineRectsPdf?.length) {
+						tableFailed += 1; // 这个 member 缺译/缺几何 → 保留原文
+						continue;
+					}
+					cellBlocks.push({
+						id: mid, // 真实块 id: translationOf 直接命中 input.translations
+						pageIndex: input.pageIndex,
+						order: 0,
+						type: 'paragraph',
+						sourceText: mb.sourceText,
+						lineRectsPdf: mb.lineRectsPdf,
+						fontSize: mb.fontSize ?? bodyPt
+					});
+				}
 				continue;
 			}
 			const lineRects: [number, number, number, number][] = [];
@@ -431,6 +545,9 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	let imageExcluded = 0;
 	let untranslated = 0;
 	let tooSmall = 0;
+	// LO-7 (2.4.0): 展示型大标题原位放不下、改为「整体另置」成功的块数。
+	// 另置块同时计入 committed(它确实显示了),这里单列供诊断观察。
+	let annexed = 0;
 	for (const block of translatable) {
 		if (consumedMemberIds.has(block.id)) {
 			continue; // owned by the table cell model (translated cell or kept original)
@@ -633,6 +750,11 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		node.className = 'pm-repage-block';
 		node.setAttribute('data-pm-block', block.id);
 		node.setAttribute('data-pm-type', block.type);
+		// 表格单元格标记 (2.3.7): 整格块与逐 member 兜底块的 id 都是
+		// `…-table-T-rR-cC` 形;单元格可末位缩字(allowsFontShrink 豁免)。
+		if (typeof block.tableRow === 'number' || /-table-\d+-r\d+-c\d+/.test(block.id)) {
+			node.setAttribute('data-pm-cell', 'true');
+		}
 		node.setAttribute('data-pm-page', String(block.pageIndex));
 		node.style.left = `${box.left}px`;
 		node.style.top = `${box.top}px`;
@@ -659,7 +781,9 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			node.setAttribute('data-pm-strong', 'true');
 		}
 		fillStyled(node, translationOf(block.id)!); // SAFE: text nodes + b/i elements, never innerHTML
-		node.title = block.sourceText;
+		// 单段操作提示 (2.3.3, 第四批 item5 · WF-6): 悬停既看原文,也自然发现
+		// 双击解析 / 右键单段重译这两个隐藏交互。
+		node.title = `${block.sourceText}\n\n双击:解析此段 · 右键:重译此段`;
 		textLayer.appendChild(node);
 		// The block's own original leading: the median gap between successive
 		// source line tops, relative to the font. One-line blocks (headings)
@@ -707,11 +831,20 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	};
 
 	const budgetFor = (item: StrictItem): number => {
-		const estimate = estimateCjkCapacity(item.box.width, item.box.height, item.fontPx);
+		// 计入可用空白 (2.2.2, 计划 第三批 item3 · LO-6/API): 压缩预算按「原盒 +
+		// 可安全扩进的邻近空白」算容量,而非仅原盒。否则模型被告知偏小的框、一
+		// 上来就过度缩写(信息流失),而这页本可先无损扩边救回。扩边无损,预算据
+		// 此放宽 —— 模型只需缩到「盒+空白」放得下,不必更狠。
+		const grow = expansionAllowance(item);
+		const capW = item.box.width + grow.right;
+		const capH = item.box.height + grow.down;
+		const estimate = estimateCjkCapacity(capW, capH, item.fontPx);
 		const textLen = (item.node.textContent ?? '').length;
 		const sh = item.node.scrollHeight;
-		const measured = sh > item.box.height && textLen > 0
-			? Math.floor(textLen * (item.box.height / sh) * 0.92)
+		// sh 在当前(较窄)盒宽下测得,对 capH 是保守高估 → 预算偏宽不偏窄,与
+		// 「别过度缩写」同向;Math.min(estimate,…) 仍封顶。
+		const measured = sh > capH && textLen > 0
+			? Math.floor(textLen * (capH / sh) * 0.92)
 			: estimate;
 		return Math.max(8, Math.min(estimate, measured));
 	};
@@ -781,6 +914,73 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		item.node.style.height = `${height}px`;
 	};
 
+	// ---- 提交前几何预校验 (2.2.3, 计划 第三批 item4 · 页面级原子提交) ----------
+	// 与末端 pmGeometryAudit 同一套「新增侵入>容差」判据(boxNewlyViolates),但在
+	// **揭示之前**核验:扩展后的块只有既适配、又不新压盖已提交块/图形/preserve/
+	// 出界时才 commit。杜绝「显示了又被审计回退」的闪烁。非扩展块(盒==原盒)恒
+	// 通过,首屏原字号揭示不受影响。preserve/图形遮挡物与审计、扩展避让共用一份。
+	const geometryObstacles = (): AuditObstacles => ({
+		images: imageBoxes,
+		preserved: geometric
+			.filter(b => !byId.has(b.id))
+			.map(b => ({ id: b.id, box: pxOf.get(b.id)! }))
+			.filter(p => !!p.box)
+			.concat(inkObstacles)
+	});
+	const violatesGeometry = (item: StrictItem): boolean => boxNewlyViolates(
+		{ id: item.id, box: item.box, originalBox: item.originalBox },
+		items
+			.filter(i => i.committed && !i.abandoned && i.id !== item.id)
+			.map(i => ({ id: i.id, box: i.box, originalBox: i.originalBox })),
+		geometryObstacles(),
+		canvas.width / BITMAP_SCALE,
+		canvas.height / BITMAP_SCALE
+	);
+
+	// ---- 无损扩边优先 (2.2.2, 计划 第三批 item3): 在**压缩/缩字之前**,只靠邻近
+	// 安全空白(算法3,原字号、原文一字不动)把能救回的块救回 —— "图1→Figure 1"
+	// 式越译越长的标签/标题正是这样无损放下,既不牺牲译文、也不费一次 API。
+	// 适配即提交;不适配则**回退原盒**(让后续压缩/缩字从真实盒起算),返回仍未
+	// 适配的 id。与 pmShrinkFit 的区别: 这里绝不缩字、绝不动到最小字号组合。
+	(page as HTMLElement & { pmExpandFit?: (ids: string[]) => string[] }).pmExpandFit = (ids: string[]): string[] => {
+		const still: string[] = [];
+		for (const id of ids) {
+			const item = byId.get(id);
+			if (!item || item.committed || item.abandoned) {
+				continue;
+			}
+			const original = { width: item.box.width, height: item.box.height };
+			const grow = expansionAllowance(item);
+			const expansions: [number, number][] = [];
+			if (grow.right > 4) {
+				expansions.push([original.width + grow.right, original.height]);
+			}
+			if (grow.down > 4) {
+				expansions.push([original.width, original.height + grow.down]);
+			}
+			if (grow.right > 4 && grow.down > 4) {
+				expansions.push([original.width + grow.right, original.height + grow.down]);
+			}
+			let fits = false;
+			for (const [w, h] of expansions) {
+				applyBox(item, w, h);
+				// 既适配、又不新压盖邻居/图形/preserve/出界 —— 提交前预校验 (item4)。
+				if (ladderFits(item) && !violatesGeometry(item)) {
+					fits = true;
+					break;
+				}
+			}
+			if (fits) {
+				commit(item);
+			}
+			else {
+				applyBox(item, original.width, original.height); // 回退,预算/后续从原盒起算
+				still.push(id);
+			}
+		}
+		return still;
+	};
+
 	// ---- last-resort fit: 先扩边界(算法3),再缩字号(SHRINK_STEPS),最后
 	// 底线组合(最小字号 + 最大扩展)——全失败才交还给放弃流程。
 	(page as HTMLElement & { pmShrinkFit?: (ids: string[]) => string[] }).pmShrinkFit = (ids: string[]): string[] => {
@@ -806,12 +1006,21 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			}
 			for (const [w, h] of expansions) {
 				applyBox(item, w, h);
-				fits = ladderFits(item);
+				fits = ladderFits(item) && !violatesGeometry(item); // 扩展提交前预校验 (item4)
 				if (fits) {
 					break;
 				}
 			}
-			if (!fits) {
+			// 正文不单独缩字 (2.2.7, item7(b)): 多行 paragraph/list 只靠扩边放置,
+			// 放不下保留原文。2.3.7 豁免(基线 doc3 实证): 表格单元格与微小单行块
+			// 是孤立小盒,缩字不发花,禁缩只会让它们整行放弃 —— 放行。
+			const tinyLine = item.originalBox.height <= item.fontPx * 1.7
+				&& (item.node.textContent ?? '').length <= 120;
+			const canShrink = allowsFontShrink(item.node.getAttribute('data-pm-type') ?? '', {
+				isTableCell: item.node.hasAttribute('data-pm-cell'),
+				tinyLine
+			});
+			if (!fits && canShrink) {
 				applyBox(item, original.width, original.height);
 				// 2. 既有缩字梯子(原盒)。
 				for (const factor of SHRINK_STEPS) {
@@ -826,7 +1035,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				if (!fits && expansions.length) {
 					const last = expansions[expansions.length - 1]!;
 					applyBox(item, last[0], last[1]);
-					fits = ladderFits(item);
+					fits = ladderFits(item) && !violatesGeometry(item); // 组合扩展也预校验 (item4)
 				}
 			}
 			if (fits) {
@@ -841,11 +1050,103 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		return still;
 	};
 
+	// ---- LO-7 (2.4.0, 计划 排版P2): 封面大标题「整体另置」---------------------
+	// 展示型大标题 (type='title') 走完梯子/扩边/压缩/缩字仍放不下时,不再整块保留
+	// 英文:原文**原样保留**(不画遮罩),译文以缩小字号另置到标题正下方(次选
+	// 正上方)的空白处。安全面三层:①候选区先对**底图采样**——未建模墨迹(作者行、
+	// 刊头、装饰线)一票否决,这是 LO-10 指出的扩边盲区,另置不允许有;②仍走
+	// boxNewlyViolates 预校验(已提交块/图形/保护区/出界);③全部失败恢复原状,
+	// 落回既有放弃流程。旋转刊名条在提取层就被排除,不进此路径。
+	const ANNEX_FONT_STEPS = [0.72, 0.6, 0.5];
+	const ANNEX_GAP = 6;
+	const areaHasInk = (b: PixelBox): boolean => {
+		if (!ctx) {
+			return false; // 无底图可采样时不否决 —— 交给 boxNewlyViolates 兜底
+		}
+		try {
+			const [pr, pg, pb] = parseRgb(paper);
+			const x = Math.max(0, Math.round(b.left * BITMAP_SCALE));
+			const y = Math.max(0, Math.round(b.top * BITMAP_SCALE));
+			const w = Math.min(ctx.canvas.width - x, Math.round(b.width * BITMAP_SCALE));
+			const h = Math.min(ctx.canvas.height - y, Math.round(b.height * BITMAP_SCALE));
+			if (w <= 0 || h <= 0) {
+				return true; // 出界当作有墨,让位置候选被拒
+			}
+			const data = ctx.getImageData(x, y, w, h).data;
+			const stride = Math.max(1, Math.floor(Math.sqrt((w * h) / 900))); // ≤~900 采样点
+			let inked = 0;
+			let total = 0;
+			for (let yy = 0; yy < h; yy += stride) {
+				for (let xx = 0; xx < w; xx += stride) {
+					const o = (yy * w + xx) * 4;
+					total++;
+					if (Math.abs((data[o] ?? 0) - pr) + Math.abs((data[o + 1] ?? 0) - pg) + Math.abs((data[o + 2] ?? 0) - pb) > 48) {
+						inked++;
+					}
+				}
+			}
+			return total > 0 && inked / total > 0.02;
+		}
+		catch {
+			return false; // 采样失败不否决(与探针同姿态),几何预校验仍在
+		}
+	};
+	const restoreOriginalBox = (item: StrictItem): void => {
+		item.box = { ...item.originalBox };
+		item.node.style.fontSize = `${item.fontPx.toFixed(2)}px`;
+		item.node.style.left = `${item.originalBox.left}px`;
+		item.node.style.top = `${item.originalBox.top}px`;
+		item.node.style.width = `${item.originalBox.width}px`;
+		item.node.style.height = `${item.originalBox.height}px`;
+	};
+	const tryAnnexTitle = (item: StrictItem): boolean => {
+		const pageH = canvas.height / BITMAP_SCALE;
+		const ob = item.originalBox;
+		item.node.style.letterSpacing = '';
+		item.node.style.lineHeight = '1.3';
+		for (const factor of ANNEX_FONT_STEPS) {
+			const px = Math.max(9, item.fontPx * factor);
+			item.node.style.fontSize = `${px.toFixed(2)}px`;
+			// 自然高度: 标题原宽下测量(展示型标题通常横贯版心,宽度沿用原盒)。
+			item.node.style.width = `${ob.width}px`;
+			item.node.style.height = 'auto';
+			const natural = item.node.scrollHeight + 2;
+			item.node.style.height = `${natural}px`;
+			for (const candidate of annexCandidateBoxes(ob, natural, pageH, ANNEX_GAP)) {
+				if (areaHasInk(candidate)) {
+					continue;
+				}
+				item.box = candidate;
+				item.node.style.left = `${candidate.left}px`;
+				item.node.style.top = `${candidate.top}px`;
+				if (item.node.scrollHeight <= natural + 1.5
+					&& item.node.scrollWidth <= ob.width + 1.5
+					&& !violatesGeometry(item)) {
+					// 另置提交: 不画遮罩 —— 原文标题保持可见,译文是附加而非替换。
+					item.node.setAttribute('data-pm-annex', 'true');
+					item.node.style.visibility = '';
+					item.node.removeAttribute('data-pm-unfit');
+					item.committed = true;
+					annexed++;
+					return true;
+				}
+			}
+		}
+		restoreOriginalBox(item);
+		return false;
+	};
+
 	// ---- give up on a block: stays original forever (it was never shown) -----
 	(page as HTMLElement & { pmRevert?: (ids: string[]) => void }).pmRevert = (ids: string[]): void => {
 		for (const id of ids) {
 			const item = byId.get(id);
 			if (!item) {
+				continue;
+			}
+			// LO-7: 大标题在放弃前最后尝试整体另置(成功即显示,计 committed)。
+			if (!item.committed && !item.abandoned
+				&& item.node.getAttribute('data-pm-type') === 'title'
+				&& tryAnnexTitle(item)) {
 				continue;
 			}
 			item.abandoned = true;
@@ -989,7 +1290,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				state,
 				left: Math.round(item.box.left), top: Math.round(item.box.top),
 				width: Math.round(item.box.width), height: Math.round(item.box.height),
-				baseInk, maskOpaque
+				baseInk, maskOpaque,
+				...(item.node.hasAttribute('data-pm-annex') ? { annex: true } : {})
 			});
 		}
 		return rows;
@@ -1014,7 +1316,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		return {
 			replaceable: items.length,
 			committed, abandoned, pending,
-			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall
+			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed
 		};
 	};
 
@@ -1025,7 +1327,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		stats: {
 			replaceable: items.length,
 			committed: 0, abandoned: 0, pending: items.length,
-			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall
+			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed: 0
 		}
 	};
 }
@@ -1080,6 +1382,8 @@ export interface StrictProbeRow {
 	baseInk: boolean;
 	/** The mask is opaque over the block (original covered). */
 	maskOpaque: boolean;
+	/** LO-7 (2.4.0): 该块是「整体另置」的大标题译文(原文未遮,box 是另置位置)。 */
+	annex?: boolean;
 }
 
 export function probeStrictPlacement(element: HTMLElement): StrictProbeRow[] | null {
@@ -1314,4 +1618,14 @@ export function computeExpansionAllowance(
 export function shrinkStrictBlocks(element: HTMLElement, ids: string[]): string[] {
 	const shrink = (element as HTMLElement & { pmShrinkFit?: (ids: string[]) => string[] }).pmShrinkFit;
 	return shrink ? shrink(ids) : ids;
+}
+
+/**
+ * 无损扩边优先 (2.2.2, 计划 第三批 item3): 压缩/缩字之前先只靠邻近安全空白
+ * (原字号、原文不动)救回能救的块。返回仍未适配的 id —— 只有这些才需要进入
+ * 后续的压缩→缩字→保留原文流程。找不到 hook(理论上不会)时保守返回全部。
+ */
+export function expandStrictBlocks(element: HTMLElement, ids: string[]): string[] {
+	const expand = (element as HTMLElement & { pmExpandFit?: (ids: string[]) => string[] }).pmExpandFit;
+	return expand ? expand(ids) : ids;
 }
