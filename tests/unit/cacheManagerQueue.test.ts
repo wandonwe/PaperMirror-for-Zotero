@@ -49,7 +49,8 @@ test('并发 writeSegments 不再互相覆盖: 两个页面的段落全部存活
 	const io = installIO();
 	io.readDelayMs = 10; // 制造旧竞态的交错窗口
 	try {
-		const { writeSegments, readSegments } = await import('../../src/cache/cacheManager');
+		const { writeSegments, readSegments, setSegmentFlushDelayMs } = await import('../../src/cache/cacheManager');
+		setSegmentFlushDelayMs(0); // 确定性即时落盘(不改语义,仅去掉节流窗口)
 		const parts = {
 			attachmentKey: 'K1', fileHash: 'H1', provider: 'openai', model: 'm',
 			promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n', settingsHash: 's'
@@ -70,7 +71,8 @@ test('高并发 8 路写全部存活', async () => {
 	const io = installIO();
 	io.readDelayMs = 3;
 	try {
-		const { writeSegments, readSegments } = await import('../../src/cache/cacheManager');
+		const { writeSegments, readSegments, setSegmentFlushDelayMs } = await import('../../src/cache/cacheManager');
+		setSegmentFlushDelayMs(0); // 确定性即时落盘(不改语义,仅去掉节流窗口)
 		const parts = {
 			attachmentKey: 'K2', fileHash: 'H2', provider: 'openai', model: 'm',
 			promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n', settingsHash: 's'
@@ -83,12 +85,57 @@ test('高并发 8 路写全部存活', async () => {
 	finally { io.teardown(); }
 });
 
+// ---- 2.2.4 (item5): 内存合并 + 节流落盘 —— 去掉整篇 O(N²) 全量重写 -----------
+
+test('节流窗口内多次 writeSegments 坍缩为一次落盘, 条目全存活', async () => {
+	const io = installIO();
+	try {
+		const mod = await import('../../src/cache/cacheManager');
+		mod.setSegmentFlushDelayMs(30); // 一个真实收集窗口
+		let writes = 0;
+		const realWrite = (globalThis as Record<string, any>).IOUtils.writeJSON;
+		(globalThis as Record<string, any>).IOUtils.writeJSON = async (p: string, d: unknown) => { writes++; return realWrite(p, d); };
+		const parts = {
+			attachmentKey: 'KC', fileHash: 'HC', provider: 'openai', model: 'm',
+			promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n', settingsHash: 's'
+		};
+		// 6 个"页面"各写一条,都落在同一个 30ms 收集窗口内 → 应只落盘一次(旧实现是 6 次全库重写)。
+		const proms = Array.from({ length: 6 }, (_, i) =>
+			mod.writeSegments(parts, [{ hash: `c${i}`, translatedText: `译${i}` }]));
+		await Promise.all(proms);
+		assert.equal(writes, 1, `窗口内 6 次写应坍缩为 1 次落盘, 实际 ${writes}`);
+		const out = await mod.readSegments(parts, Array.from({ length: 6 }, (_, i) => `c${i}`));
+		assert.equal(out.size, 6, '坍缩后 6 条段落一个不少');
+	}
+	finally { io.teardown(); }
+});
+
+test('落盘前 pending 对 readSegments 可见 (跨页去重不因节流丢失)', async () => {
+	const io = installIO();
+	try {
+		const mod = await import('../../src/cache/cacheManager');
+		mod.setSegmentFlushDelayMs(50);
+		const parts = {
+			attachmentKey: 'KP', fileHash: 'HP', provider: 'openai', model: 'm',
+			promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n', settingsHash: 's'
+		};
+		const wp = mod.writeSegments(parts, [{ hash: 'pz', translatedText: '预览' }]); // 不 await
+		const before = await mod.readSegments(parts, ['pz']); // 文件尚未落盘 → 应从 pending 命中
+		assert.equal(before.get('pz'), '预览', '尚未落盘也应从内存 pending 命中');
+		await wp; // 窗口到点,落盘完成
+		const after = await mod.readSegments(parts, ['pz']);
+		assert.equal(after.get('pz'), '预览', '落盘后从磁盘命中');
+	}
+	finally { io.teardown(); }
+});
+
 // ---- P2-1 (2.0.7): 合并基底读失败不得以空库覆盖 -----------------------------
 
 test('合并基底瞬时读失败 → 放弃本次写,已有段落库不被截断', async () => {
 	const io = installIO();
 	try {
-		const { writeSegments, readSegments } = await import('../../src/cache/cacheManager');
+		const { writeSegments, readSegments, setSegmentFlushDelayMs } = await import('../../src/cache/cacheManager');
+		setSegmentFlushDelayMs(0); // 确定性即时落盘(不改语义,仅去掉节流窗口)
 		const parts = {
 			attachmentKey: 'K9', fileHash: 'H9', provider: 'openai', model: 'm',
 			promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n', settingsHash: 's'
@@ -122,7 +169,8 @@ test('合并基底瞬时读失败 → 放弃本次写,已有段落库不被截�
 test('合并基底 JSON 确认损坏 (SyntaxError) → 允许以空库重建', async () => {
 	const io = installIO();
 	try {
-		const { writeSegments, readSegments } = await import('../../src/cache/cacheManager');
+		const { writeSegments, readSegments, setSegmentFlushDelayMs } = await import('../../src/cache/cacheManager');
+		setSegmentFlushDelayMs(0); // 确定性即时落盘(不改语义,仅去掉节流窗口)
 		const parts = {
 			attachmentKey: 'K10', fileHash: 'H10', provider: 'openai', model: 'm',
 			promptVersion: 2, customPromptHash: 'cp', glossaryHash: 'g', noTranslateHash: 'n', settingsHash: 's'

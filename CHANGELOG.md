@@ -7,6 +7,30 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.2.4] — 2026-08-23
+
+优化计划**第三批 item 5·段落缓存分片(内存合并 + 节流落盘)**(本审计 PF-3)。去掉
+整篇翻译时对段落 store 的 O(N²) 全量重读重写。
+
+### Performance
+
+- **段落写入改为内存合并 + 节流落盘,不再每页重写整篇 store**。每 attachment+context
+  只有一个段落 store 文件,旧的 `writeSegments` 每次调用都 read→merge→**整篇重写**;
+  整篇论文按页翻译时 store 随页增长、每页各重写一遍全库 → 全篇累计 O(N²) 的 JSON
+  读写。现在写入先并入**内存 pending**(按文件路径合并),节流窗口(默认 500ms)到点
+  时把该路径**当前累积的全部** pending 一次性 read→merge→write —— 突发整篇翻译里
+  几十次每页写坍缩成个位数次全库重写。`readSegments` 先查 pending(落盘前另一页刚
+  写的段落也能命中,跨页去重不因节流丢失)再落盘。(`cacheManager`)
+
+### Notes
+
+- 语义零变化,三条既有硬约束全部保留:① 同路径写经 `enqueueWrite` 串行,并发页
+  不互相覆盖(P1, 1.3.0);② 合并基底瞬时读失败 → 放弃本次落盘、绝不以空库截断
+  (P2-1, 2.0.7);③ 原子 tmp 写 + 0700/0600 收权。`writeSegments` 返回的 Promise 仍
+  在本批真正落盘后才 resolve,调用方可照旧 await 持久化。
+- `clearAttachment`/全清前先丢弃相关未落盘 pending 并清定时器,杜绝「落盘复活已删
+  文件」。flush 窗口可注入(测试置 0 取确定性即时落盘)。
+
 ## [2.2.3] — 2026-08-23
 
 优化计划**第三批 item 4·页面级原子提交(核心:提交前几何预校验)**(Codex 排版P1 +

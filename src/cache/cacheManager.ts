@@ -137,63 +137,71 @@ function segmentsPath(parts: SegmentContextParts): string {
 }
 
 /**
- * 段落级缓存 read: return whichever of the requested segment hashes exist in
- * this attachment+context's segment store. Misses are simply absent from the
- * returned map. Any read problem is a miss, never an error.
+ * 段落写入的内存合并 + 节流落盘 (2.2.4, 计划 第三批 item5 · PF-3)。
+ *
+ * 问题: 每 attachment+context 只有一个 store 文件,旧的 writeSegments 每次调用
+ * 都 read→merge→**整篇重写**。整篇论文按页翻译时,store 随页增长、每页各重写
+ * 一遍全库 → 全篇累计 O(N²) 的 JSON 读写。
+ *
+ * 现在: writeSegments 把条目并入**内存 pending**(按文件路径合并),启动一个节流
+ * 窗口;窗口到点时 flushSegments 把该路径**当前累积的全部** pending 一次性
+ * read→merge→write。整篇突发翻译里几十次每页写坍缩成个位数次全库重写。返回的
+ * Promise 在**本批真正落盘后**才 resolve(读写语义不变,调用方仍可 await 持久化)。
+ *
+ * 保留三条既有硬约束:① 同路径写经 enqueueWrite 串行,并发页不互相覆盖(P1,
+ * 1.3.0);② 合并基底瞬时读失败 → 放弃本次落盘、绝不以空库截断(P2-1, 2.0.7);
+ * ③ 原子 tmp 写 + 0700/0600 收权。
  */
-export async function readSegments(parts: SegmentContextParts, hashes: string[]): Promise<Map<string, string>> {
-	const out = new Map<string, string>();
-	if (!hashes.length) {
-		return out;
-	}
-	const path = segmentsPath(parts);
-	try {
-		if (!(await IOUtils.exists(path))) {
-			return out;
+interface PendingSegments {
+	context: string;
+	entries: Map<string, string>;
+	timer: ReturnType<typeof setTimeout> | null;
+	promise: Promise<void>;
+	resolve: () => void;
+}
+const pendingSegments = new Map<string, PendingSegments>();
+
+/** flush 节流窗口 (ms)。默认 500;测试用 setSegmentFlushDelayMs(0) 取确定性即时落盘。 */
+let segmentFlushDelayMs = 500;
+export function setSegmentFlushDelayMs(ms: number): void {
+	segmentFlushDelayMs = Math.max(0, ms | 0);
+}
+
+/** 丢弃指定路径前缀下的 pending(clear* 删文件前调用,防止落盘复活已删文件)。 */
+function dropPendingSegments(pathPrefix?: string): void {
+	for (const [path, p] of pendingSegments) {
+		if (pathPrefix && !path.startsWith(pathPrefix)) {
+			continue;
 		}
-		const data = await IOUtils.readJSON(path);
-		if (!isValidCachedSegments(data, segmentContextHash(parts))) {
-			await IOUtils.remove(path, { ignoreAbsent: true });
-			return out;
+		if (p.timer) {
+			try { clearTimeout(p.timer); }
+			catch { /* timers may be gone */ }
 		}
-		for (const h of hashes) {
-			const text = data.segments[h];
-			if (typeof text === 'string' && text) {
-				out.set(h, text);
-			}
-		}
-		return out;
-	}
-	catch (e) {
-		logger.warn(MODULE, 'Segment cache read failed; treating as miss', e);
-		return out;
+		pendingSegments.delete(path);
+		p.resolve(); // 别让 await 者悬挂 —— 库正被清,丢弃即视为完成
 	}
 }
 
-/**
- * 段落级缓存 write: merge the new entries into the existing store (read →
- * merge → atomic write). The whole read→merge→write runs inside the file's
- * write queue (enqueueWrite), so concurrent pages appending segments can no
- * longer clobber each other's earlier writes — the atomic rename alone never
- * guaranteed the MERGE was based on the latest contents.
- */
-export async function writeSegments(parts: SegmentContextParts, entries: { hash: string; translatedText: string }[]): Promise<void> {
-	if (!entries.length) {
+async function flushSegments(path: string): Promise<void> {
+	const p = pendingSegments.get(path);
+	if (!p) {
 		return;
 	}
-	const path = segmentsPath(parts);
+	// 抽干并从表中摘除: flush 期间到达的新写入另起一个 pending + 新窗口,绝不丢。
+	if (p.timer) {
+		try { clearTimeout(p.timer); }
+		catch { /* ignore */ }
+		p.timer = null;
+	}
+	pendingSegments.delete(path);
+	const { context, entries, resolve } = p;
 	const dir = PathUtils.parent(path);
-	const context = segmentContextHash(parts);
 	await enqueueWrite(path, async () => {
 		try {
 			let segments: Record<string, string> = {};
 			if (await IOUtils.exists(path)) {
-				// 合并基底的读取失败分类 (2.0.7, 审核 P2-1): 此前任何读失败都被
-				// 当作「库不存在」,以 {} 为基底,原子写把只含本次新增几条的
-				// 文件 rename 覆盖过去 —— 该 attachment+context 积累的全部段落
-				// 译文一次瞬时 I/O 失败(文件被占用/权限抖动/网盘同步)即静默
-				// 清空。与读路径/清扫的 P2-13 同一条规则: 只有内容确认损坏
-				// (SyntaxError)或 context 不符才允许以空库重建;瞬时失败直接
+				// 合并基底的读取失败分类 (2.0.7, 审核 P2-1): 只有内容确认损坏
+				// (SyntaxError)或 context 不符才允许以空库重建;瞬时读失败直接
 				// 放弃本次合并 —— 少写几条段落远好过丢掉整库。
 				let data: unknown;
 				try {
@@ -210,9 +218,9 @@ export async function writeSegments(parts: SegmentContextParts, entries: { hash:
 					segments = data.segments;
 				}
 			}
-			for (const e of entries) {
-				if (e.hash && e.translatedText) {
-					segments[e.hash] = e.translatedText;
+			for (const [hash, text] of entries) {
+				if (hash && text) {
+					segments[hash] = text;
 				}
 			}
 			const entry: CachedSegments = { schemaVersion: CACHE_SCHEMA_VERSION, context, segments };
@@ -227,16 +235,104 @@ export async function writeSegments(parts: SegmentContextParts, entries: { hash:
 			logger.warn(MODULE, 'Segment cache write failed (continuing without cache)', e);
 		}
 	});
+	resolve();
+}
+
+/**
+ * 段落级缓存 read: return whichever of the requested segment hashes exist for
+ * this attachment+context — first from the un-flushed in-memory pending (so a
+ * segment just written by a concurrent page is visible before its flush), then
+ * from the on-disk store. Misses are simply absent. Any read problem is a miss.
+ */
+export async function readSegments(parts: SegmentContextParts, hashes: string[]): Promise<Map<string, string>> {
+	const out = new Map<string, string>();
+	if (!hashes.length) {
+		return out;
+	}
+	const path = segmentsPath(parts);
+	// 先查 pending: 节流窗口内另一页刚写、尚未落盘的段落也能命中(不丢跨页去重)。
+	const pending = pendingSegments.get(path);
+	const remaining: string[] = [];
+	for (const h of hashes) {
+		const mem = pending?.entries.get(h);
+		if (typeof mem === 'string' && mem) {
+			out.set(h, mem);
+		}
+		else {
+			remaining.push(h);
+		}
+	}
+	if (!remaining.length) {
+		return out;
+	}
+	try {
+		if (!(await IOUtils.exists(path))) {
+			return out;
+		}
+		const data = await IOUtils.readJSON(path);
+		if (!isValidCachedSegments(data, segmentContextHash(parts))) {
+			await IOUtils.remove(path, { ignoreAbsent: true });
+			return out;
+		}
+		for (const h of remaining) {
+			const text = data.segments[h];
+			if (typeof text === 'string' && text) {
+				out.set(h, text);
+			}
+		}
+		return out;
+	}
+	catch (e) {
+		logger.warn(MODULE, 'Segment cache read failed; treating as miss', e);
+		return out;
+	}
+}
+
+/**
+ * 段落级缓存 write: merge into the in-memory pending for this store file, then
+ * flush the WHOLE accumulated pending in one read→merge→write after a throttle
+ * window (0 = flush now, for deterministic tests). Coalesces a full-document
+ * burst of per-page writes into a handful of disk rewrites — see PendingSegments.
+ */
+export async function writeSegments(parts: SegmentContextParts, entries: { hash: string; translatedText: string }[]): Promise<void> {
+	if (!entries.length) {
+		return;
+	}
+	const path = segmentsPath(parts);
+	const context = segmentContextHash(parts);
+	let p = pendingSegments.get(path);
+	if (!p) {
+		let resolve!: () => void;
+		const promise = new Promise<void>((r) => { resolve = r; });
+		p = { context, entries: new Map(), timer: null, promise, resolve };
+		pendingSegments.set(path, p);
+	}
+	for (const e of entries) {
+		if (e.hash && e.translatedText) {
+			p.entries.set(e.hash, e.translatedText);
+		}
+	}
+	if (segmentFlushDelayMs <= 0) {
+		void flushSegments(path);
+	}
+	else if (!p.timer) {
+		// 收集窗口从**本批首条**起 500ms —— 期间的写并入同一 pending、不重置窗口,
+		// 落盘延迟因此有上界,不会被持续写入饿死。
+		p.timer = setTimeout(() => { void flushSegments(path); }, segmentFlushDelayMs);
+	}
+	return p.promise;
 }
 
 export async function clearAttachment(attachmentKey: string, fileHash: string): Promise<void> {
 	const dir = PathUtils.join(cacheRootDir(), attachmentDirName(attachmentKey, fileHash));
+	dropPendingSegments(dir); // 删目录前丢弃其未落盘 pending,防止 flush 复活已删文件
 	await IOUtils.remove(dir, { recursive: true, ignoreAbsent: true });
 }
 
 /** Remove every cache dir for this attachment key regardless of file hash. */
 export async function clearAttachmentAllVersions(attachmentKey: string): Promise<void> {
 	const root = cacheRootDir();
+	dropPendingSegments(); // 跨版本清理: 保守丢弃全部未落盘 pending
 	try {
 		if (!(await IOUtils.exists(root))) {
 			return;
@@ -255,6 +351,7 @@ export async function clearAttachmentAllVersions(attachmentKey: string): Promise
 }
 
 export async function clearAll(): Promise<void> {
+	dropPendingSegments(); // 全清前丢弃全部未落盘 pending
 	await IOUtils.remove(cacheRootDir(), { recursive: true, ignoreAbsent: true });
 }
 
