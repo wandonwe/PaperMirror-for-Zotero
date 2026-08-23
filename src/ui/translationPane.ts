@@ -829,14 +829,21 @@ export class TranslationPane {
 			return;
 		}
 		const notice = this.el('div', 'pm-bilingual-notice');
-		notice.append(
-			this.el('div', undefined, this.strings.privacyNotice),
-			this.el('div', 'pm-notice-host', `→ ${hostName}`),
+		// 首次引导 (2.3.3, 第四批 item5 · WF-3): 新用户在这张卡上往往还没配置任何
+		// 服务 —— 加一个「配置翻译服务 →」直达设置页,不必先接受再自己找设置。
+		const actions = this.el('div', 'pm-notice-actions');
+		actions.append(
+			this.textButton('pm-footer-button', '配置翻译服务 →', '打开设置选择翻译服务商 / 填写 API Key', () => this.callbacks.onOpenSettings()),
 			this.textButton('pm-footer-button pm-primary', this.strings.privacyAccept, this.strings.privacyAccept, () => {
 				notice.remove();
 				this.privacyNoticeEl = null;
 				this.callbacks.onAcceptPrivacy();
 			})
+		);
+		notice.append(
+			this.el('div', undefined, this.strings.privacyNotice),
+			this.el('div', 'pm-notice-host', `→ ${hostName}`),
+			actions
 		);
 		this.articleHost.before(notice);
 		this.privacyNoticeEl = notice;

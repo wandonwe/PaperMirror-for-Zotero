@@ -310,6 +310,19 @@ interface PaperMirrorPublicAPI {
 				});
 			}
 
+			// 单次请求超时 (2.3.3, item5 · WF-5): 秒显示、毫秒存储,数字 pref 不能用
+			// preference 绑定(menulist/checkbox 绑定写字符串会破坏 pref 类型)。
+			const timeoutInput = byId<HTMLInputElement>('papermirror-timeout');
+			if (timeoutInput) {
+				const clampSec = (v: number): number => Math.max(10, Math.min(300, Math.round(Number.isFinite(v) ? v : 60)));
+				timeoutInput.value = String(clampSec(Number(getPref('timeoutMs') ?? 60000) / 1000));
+				timeoutInput.addEventListener('change', () => {
+					const sec = clampSec(Number(timeoutInput.value));
+					timeoutInput.value = String(sec);
+					setPref('timeoutMs', sec * 1000);
+				});
+			}
+
 			const poolHost = byId<HTMLElement>('papermirror-pool');
 			const renderPool = async (): Promise<void> => {
 				if (!poolHost) {

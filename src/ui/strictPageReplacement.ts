@@ -718,7 +718,9 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			node.setAttribute('data-pm-strong', 'true');
 		}
 		fillStyled(node, translationOf(block.id)!); // SAFE: text nodes + b/i elements, never innerHTML
-		node.title = block.sourceText;
+		// 单段操作提示 (2.3.3, 第四批 item5 · WF-6): 悬停既看原文,也自然发现
+		// 双击解析 / 右键单段重译这两个隐藏交互。
+		node.title = `${block.sourceText}\n\n双击:解析此段 · 右键:重译此段`;
 		textLayer.appendChild(node);
 		// The block's own original leading: the median gap between successive
 		// source line tops, relative to the font. One-line blocks (headings)
