@@ -319,3 +319,28 @@ test('元素已断开 → 超时不再执行测量 (无泄漏测量)', async () 
 	await new Promise(r => setTimeout(r, 90));
 	assert.deepEqual(calls.map(c => c.final), [false], '断开后 final 测量不发生');
 });
+
+// ---- LO-7 (2.4.0): 大标题「整体另置」候选位置 — pure ----------------------
+
+test('annexCandidateBoxes: 正下方优先、正上方次之,left/width 沿用原盒', async () => {
+	const { annexCandidateBoxes } = await import('../../src/ui/strictPageReplacement');
+	const ob = { left: 50, top: 100, width: 500, height: 60 };
+	const boxes = annexCandidateBoxes(ob, 40, 800, 6);
+	assert.equal(boxes.length, 2);
+	assert.deepEqual(boxes[0], { left: 50, top: 166, width: 500, height: 40 }, '首选正下方 (top+height+gap)');
+	assert.deepEqual(boxes[1], { left: 50, top: 54, width: 500, height: 40 }, '次选正上方 (top-gap-natural)');
+});
+
+test('annexCandidateBoxes: 越出页面安全边 (2%/98%) 的候选不产出', async () => {
+	const { annexCandidateBoxes } = await import('../../src/ui/strictPageReplacement');
+	// 标题贴近页顶: 上方候选 top < 2% 页高 → 只剩下方。
+	const nearTop = annexCandidateBoxes({ left: 0, top: 20, width: 400, height: 50 }, 40, 800, 6);
+	assert.equal(nearTop.length, 1);
+	assert.ok(nearTop[0]!.top > 20, '仅剩下方候选');
+	// 标题贴近页底: 下方候选超 98% 页高 → 只剩上方。
+	const nearBottom = annexCandidateBoxes({ left: 0, top: 740, width: 400, height: 50 }, 40, 800, 6);
+	assert.equal(nearBottom.length, 1);
+	assert.ok(nearBottom[0]!.top < 740, '仅剩上方候选');
+	// 两头都放不下 (页面极矮) → 空数组,调用方落回放弃流程。
+	assert.equal(annexCandidateBoxes({ left: 0, top: 10, width: 400, height: 30 }, 40, 60, 6).length, 0);
+});

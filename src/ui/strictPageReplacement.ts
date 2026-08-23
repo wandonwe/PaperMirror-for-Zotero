@@ -119,6 +119,29 @@ export function allowsFontShrink(blockType: string, opts?: { isTableCell?: boole
 	return blockType !== 'paragraph' && blockType !== 'list';
 }
 
+/**
+ * LO-7 (2.4.0) 大标题「整体另置」的候选位置 — pure。
+ *
+ * 顺序即偏好: 正下方(标题与摘要/作者行之间通常有版式留白)优先,正上方次之。
+ * 两端各留 2% 页高的安全边;放不进页面的候选直接不出。宽度沿用标题原盒宽
+ * (展示型标题通常横贯版心),left 不动 —— 另置只在垂直向找空白。
+ */
+export function annexCandidateBoxes(
+	original: { left: number; top: number; width: number; height: number },
+	naturalHeight: number,
+	pageHeight: number,
+	gap = 6
+): { left: number; top: number; width: number; height: number }[] {
+	const out: { left: number; top: number; width: number; height: number }[] = [];
+	for (const top of [original.top + original.height + gap, original.top - gap - naturalHeight]) {
+		if (top < pageHeight * 0.02 || top + naturalHeight > pageHeight * 0.98) {
+			continue;
+		}
+		out.push({ left: original.left, top, width: original.width, height: naturalHeight });
+	}
+	return out;
+}
+
 export interface StrictPageInput {
 	blocks: SourceBlock[];
 	translations: Map<string, string>;
@@ -159,6 +182,9 @@ export interface StrictPageStats {
 	untranslated: number;
 	/** Below the min-size gate (tiny fragments). */
 	tooSmall: number;
+	/** LO-7 (2.4.0): 大标题原位放不下、译文整体另置成功的块数(已含在
+	 * `committed` 里,单列仅供诊断观察另置策略的启用频率)。 */
+	annexed: number;
 }
 
 export interface StrictPageResult {
@@ -519,6 +545,9 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	let imageExcluded = 0;
 	let untranslated = 0;
 	let tooSmall = 0;
+	// LO-7 (2.4.0): 展示型大标题原位放不下、改为「整体另置」成功的块数。
+	// 另置块同时计入 committed(它确实显示了),这里单列供诊断观察。
+	let annexed = 0;
 	for (const block of translatable) {
 		if (consumedMemberIds.has(block.id)) {
 			continue; // owned by the table cell model (translated cell or kept original)
@@ -1021,11 +1050,103 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		return still;
 	};
 
+	// ---- LO-7 (2.4.0, 计划 排版P2): 封面大标题「整体另置」---------------------
+	// 展示型大标题 (type='title') 走完梯子/扩边/压缩/缩字仍放不下时,不再整块保留
+	// 英文:原文**原样保留**(不画遮罩),译文以缩小字号另置到标题正下方(次选
+	// 正上方)的空白处。安全面三层:①候选区先对**底图采样**——未建模墨迹(作者行、
+	// 刊头、装饰线)一票否决,这是 LO-10 指出的扩边盲区,另置不允许有;②仍走
+	// boxNewlyViolates 预校验(已提交块/图形/保护区/出界);③全部失败恢复原状,
+	// 落回既有放弃流程。旋转刊名条在提取层就被排除,不进此路径。
+	const ANNEX_FONT_STEPS = [0.72, 0.6, 0.5];
+	const ANNEX_GAP = 6;
+	const areaHasInk = (b: PixelBox): boolean => {
+		if (!ctx) {
+			return false; // 无底图可采样时不否决 —— 交给 boxNewlyViolates 兜底
+		}
+		try {
+			const [pr, pg, pb] = parseRgb(paper);
+			const x = Math.max(0, Math.round(b.left * BITMAP_SCALE));
+			const y = Math.max(0, Math.round(b.top * BITMAP_SCALE));
+			const w = Math.min(ctx.canvas.width - x, Math.round(b.width * BITMAP_SCALE));
+			const h = Math.min(ctx.canvas.height - y, Math.round(b.height * BITMAP_SCALE));
+			if (w <= 0 || h <= 0) {
+				return true; // 出界当作有墨,让位置候选被拒
+			}
+			const data = ctx.getImageData(x, y, w, h).data;
+			const stride = Math.max(1, Math.floor(Math.sqrt((w * h) / 900))); // ≤~900 采样点
+			let inked = 0;
+			let total = 0;
+			for (let yy = 0; yy < h; yy += stride) {
+				for (let xx = 0; xx < w; xx += stride) {
+					const o = (yy * w + xx) * 4;
+					total++;
+					if (Math.abs((data[o] ?? 0) - pr) + Math.abs((data[o + 1] ?? 0) - pg) + Math.abs((data[o + 2] ?? 0) - pb) > 48) {
+						inked++;
+					}
+				}
+			}
+			return total > 0 && inked / total > 0.02;
+		}
+		catch {
+			return false; // 采样失败不否决(与探针同姿态),几何预校验仍在
+		}
+	};
+	const restoreOriginalBox = (item: StrictItem): void => {
+		item.box = { ...item.originalBox };
+		item.node.style.fontSize = `${item.fontPx.toFixed(2)}px`;
+		item.node.style.left = `${item.originalBox.left}px`;
+		item.node.style.top = `${item.originalBox.top}px`;
+		item.node.style.width = `${item.originalBox.width}px`;
+		item.node.style.height = `${item.originalBox.height}px`;
+	};
+	const tryAnnexTitle = (item: StrictItem): boolean => {
+		const pageH = canvas.height / BITMAP_SCALE;
+		const ob = item.originalBox;
+		item.node.style.letterSpacing = '';
+		item.node.style.lineHeight = '1.3';
+		for (const factor of ANNEX_FONT_STEPS) {
+			const px = Math.max(9, item.fontPx * factor);
+			item.node.style.fontSize = `${px.toFixed(2)}px`;
+			// 自然高度: 标题原宽下测量(展示型标题通常横贯版心,宽度沿用原盒)。
+			item.node.style.width = `${ob.width}px`;
+			item.node.style.height = 'auto';
+			const natural = item.node.scrollHeight + 2;
+			item.node.style.height = `${natural}px`;
+			for (const candidate of annexCandidateBoxes(ob, natural, pageH, ANNEX_GAP)) {
+				if (areaHasInk(candidate)) {
+					continue;
+				}
+				item.box = candidate;
+				item.node.style.left = `${candidate.left}px`;
+				item.node.style.top = `${candidate.top}px`;
+				if (item.node.scrollHeight <= natural + 1.5
+					&& item.node.scrollWidth <= ob.width + 1.5
+					&& !violatesGeometry(item)) {
+					// 另置提交: 不画遮罩 —— 原文标题保持可见,译文是附加而非替换。
+					item.node.setAttribute('data-pm-annex', 'true');
+					item.node.style.visibility = '';
+					item.node.removeAttribute('data-pm-unfit');
+					item.committed = true;
+					annexed++;
+					return true;
+				}
+			}
+		}
+		restoreOriginalBox(item);
+		return false;
+	};
+
 	// ---- give up on a block: stays original forever (it was never shown) -----
 	(page as HTMLElement & { pmRevert?: (ids: string[]) => void }).pmRevert = (ids: string[]): void => {
 		for (const id of ids) {
 			const item = byId.get(id);
 			if (!item) {
+				continue;
+			}
+			// LO-7: 大标题在放弃前最后尝试整体另置(成功即显示,计 committed)。
+			if (!item.committed && !item.abandoned
+				&& item.node.getAttribute('data-pm-type') === 'title'
+				&& tryAnnexTitle(item)) {
 				continue;
 			}
 			item.abandoned = true;
@@ -1169,7 +1290,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				state,
 				left: Math.round(item.box.left), top: Math.round(item.box.top),
 				width: Math.round(item.box.width), height: Math.round(item.box.height),
-				baseInk, maskOpaque
+				baseInk, maskOpaque,
+				...(item.node.hasAttribute('data-pm-annex') ? { annex: true } : {})
 			});
 		}
 		return rows;
@@ -1194,7 +1316,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		return {
 			replaceable: items.length,
 			committed, abandoned, pending,
-			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall
+			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed
 		};
 	};
 
@@ -1205,7 +1327,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		stats: {
 			replaceable: items.length,
 			committed: 0, abandoned: 0, pending: items.length,
-			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall
+			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed: 0
 		}
 	};
 }
@@ -1260,6 +1382,8 @@ export interface StrictProbeRow {
 	baseInk: boolean;
 	/** The mask is opaque over the block (original covered). */
 	maskOpaque: boolean;
+	/** LO-7 (2.4.0): 该块是「整体另置」的大标题译文(原文未遮,box 是另置位置)。 */
+	annex?: boolean;
 }
 
 export function probeStrictPlacement(element: HTMLElement): StrictProbeRow[] | null {
