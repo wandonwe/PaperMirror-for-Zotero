@@ -240,9 +240,22 @@ test('splitRegionForPlacement: splits translation across paragraph groups, falls
 	const single = splitRegionForPlacement(region, '甲。\n乙。\n丙。');
 	assert.equal(single?.length, 3, 'single-newline separators split too');
 	assert.deepEqual(single!.map(p => p.text), ['甲。', '乙。', '丙。']);
-	// Mismatch → null (fall back to whole-region union-box placement, never worse).
-	assert.equal(splitRegionForPlacement(region, '甲。乙。丙。'), null, 'engine dropped breaks → fall back');
-	assert.equal(splitRegionForPlacement(region, '甲。\n\n乙。'), null, 'too few paragraphs → fall back');
+	// 一坨(全部分段被合成一段,无换行)→ null: 无从拆,回退整块(与旧行为一致)。
+	assert.equal(splitRegionForPlacement(region, '甲。乙。丙。'), null, 'engine dropped ALL breaks → fall back');
+	// 尽力对齐 (2.2.6, item7): 段数不等不再回退塌顶 ------------------------------
+	// P<G: 2 段 / 3 组 → 合并组盒到 2 个(前两组并成一盒),每段落地、顺序不变。
+	const fewer = splitRegionForPlacement(region, '甲。\n\n乙。');
+	assert.ok(fewer, '2 段 3 组不再回退,尽力对齐');
+	assert.equal(fewer!.length, 2);
+	assert.deepEqual(fewer!.map(p => p.text), ['甲。', '乙。']);
+	assert.deepEqual(fewer![0]!.lineRectsPdf, [[0, 90, 100, 100], [0, 70, 100, 80]], '前两组盒并集承载第一段');
+	assert.deepEqual(fewer![1]!.lineRectsPdf, [[0, 50, 100, 60]], '第三组盒承载第二段');
+	// P>G: 4 段 / 3 组 → 盒子仍是 3 个组(几何不变),4 段按序均匀并入(桶 2/1/1)。
+	const more = splitRegionForPlacement(region, '甲。\n乙。\n丙。\n丁。');
+	assert.ok(more, '4 段 3 组不再回退,尽力对齐');
+	assert.equal(more!.length, 3);
+	assert.deepEqual(more!.map(p => p.text), ['甲。 乙。', '丙。', '丁。'], '多出的段并入首桶');
+	assert.deepEqual(more![0]!.lineRectsPdf, [[0, 90, 100, 100]], '组盒几何不变');
 	// A single-group (or no) region never splits.
 	assert.equal(splitRegionForPlacement({ ...region, regionParagraphs: [region.regionParagraphs[0]!] }, '甲。'), null);
 	assert.equal(splitRegionForPlacement({ ...region, regionParagraphs: undefined }, '甲。\n\n乙。'), null);

@@ -233,26 +233,71 @@ export function splitRegionForPlacement(
 	if (!groups || groups.length < 2 || !translation) {
 		return null;
 	}
+	// A group with no line rects can't be placed — bail rather than emit a
+	// zero-area box that would silently swallow its paragraph.
+	if (groups.some(g => !g.lineRectsPdf?.length)) {
+		return null;
+	}
 	// Split on ANY run of newlines, not just blank lines: coalesceRegions joins
 	// paragraph groups with "\n\n", but translation engines commonly normalise
 	// that to a single "\n" — matching only "\n\n" silently fell back and left
 	// the region collapsed. Within a group the text has no newlines (members are
 	// joined with " "/""), so "\n+" partitions exactly at the group boundaries.
 	const paras = translation.split(/\n+/).map(p => p.trim()).filter(Boolean);
-	if (paras.length !== groups.length) {
-		return null; // engine didn't preserve the paragraph structure — fall back
-	}
-	// A group with no line rects can't be placed — bail rather than emit a
-	// zero-area box that would silently swallow its paragraph.
-	if (groups.some(g => !g.lineRectsPdf?.length)) {
+	// 一坨(引擎把所有分段合成一段)无从拆分 → 回退整块放置(与旧行为一致)。
+	if (paras.length < 2) {
 		return null;
 	}
-	return groups.map((g, i) => ({
-		id: `${block.id}::p${i}`,
-		lineRectsPdf: g.lineRectsPdf,
-		fontSize: g.fontSize,
-		text: paras[i]!
-	}));
+	const G = groups.length;
+	const P = paras.length;
+	if (P === G) {
+		// 段数相等: 一一对应,每段落进自己的组盒(最忠实)。
+		return groups.map((g, i) => ({
+			id: `${block.id}::p${i}`,
+			lineRectsPdf: g.lineRectsPdf!,
+			fontSize: g.fontSize,
+			text: paras[i]!
+		}));
+	}
+	// 尽力对齐 (2.2.6, 计划 第三批 item7 · LO-2): 段数不等不再整块塌顶,而是把**多
+	// 的一侧**按顺序均匀并入**少的一侧**,得到 K=min(P,G) 个盒子 —— 每盒都有文本、
+	// 每段文本都落地、顺序不变、盒子几何覆盖原区域全部行矩形(不留空、不塌顶)。
+	// K≥2 恒成立(此处 P≥2 且 G≥2)。「顺次映射 + 贪心合并」正是计划所述做法。
+	const K = Math.min(P, G);
+	// 把 n 个有序项切成 K 个连续、尽量均匀的桶 → 每桶 [start,end)。
+	const bins = (n: number): [number, number][] => {
+		const out: [number, number][] = [];
+		let start = 0;
+		for (let i = 0; i < K; i++) {
+			const size = Math.floor(n / K) + (i < n % K ? 1 : 0);
+			out.push([start, start + size]);
+			start += size;
+		}
+		return out;
+	};
+	if (P > G) {
+		// 译文比组多(引擎多切了段): 盒子=G 个组(几何不变),P 段按序并入 G 桶,
+		// 桶内多段用空格接回一段。
+		const pb = bins(P); // K === G 个桶
+		return groups.map((g, i) => ({
+			id: `${block.id}::p${i}`,
+			lineRectsPdf: g.lineRectsPdf!,
+			fontSize: g.fontSize,
+			text: paras.slice(pb[i]![0], pb[i]![1]).join(' ')
+		}));
+	}
+	// 译文比组少(引擎并了段): 合并 G 个组盒到 P 个(并集行矩形),与 P 段一一对应。
+	const gb = bins(G); // K === P 个桶
+	return paras.map((text, i) => {
+		const [s, e] = gb[i]!;
+		const merged = groups.slice(s, e);
+		return {
+			id: `${block.id}::p${i}`,
+			lineRectsPdf: merged.flatMap(g => g.lineRectsPdf!),
+			fontSize: merged[0]!.fontSize,
+			text
+		};
+	});
 }
 
 /** Parse an `rgb(r,g,b)` / `rgba(...)` string into [r,g,b]; white on failure. */
