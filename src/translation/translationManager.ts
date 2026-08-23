@@ -453,6 +453,22 @@ export class TranslationManager {
 	private prefetchBackward = 1;
 	/** 用户当前的翻页方向 (2.3.2, item4): 1=向前读, -1=向回看。默认向前。 */
 	private readDirection: 1 | -1 = 1;
+	/**
+	 * 用量统计计数器 (2.3.9, 计划 API-P1/WF-4 的观测子集): 只计数、零开销、
+	 * 不进日志 —— 随诊断 JSON 的 usage 段导出,用于回答两个调参问题:
+	 *   1. 缓存到底省了多少 —— 页缓存整页命中/部分命中,段落缓存查询/命中;
+	 *   2. 预取浪费了多少 —— 后台预取翻译的页里,用户最终没读到的有几页。
+	 * prefetchedUnviewed 按页去重;用户滚到该页时移出(不再算浪费)。
+	 */
+	private usage = {
+		pageCacheLookups: 0,
+		pageCacheFullHits: 0,
+		pageCachePartialHits: 0,
+		segmentLookups: 0,
+		segmentHits: 0,
+		prefetchedPages: new Set<number>(),
+		prefetchedUnviewed: new Set<number>()
+	};
 	/** Pages whose provider has already been reported unstable (fire once). */
 	private unstableFired = new Set<number>();
 	/**
@@ -583,6 +599,8 @@ export class TranslationManager {
 			this.readDirection = pageIndex > this.currentPage ? 1 : -1;
 		}
 		this.currentPage = pageIndex;
+		// 用户读到了这一页 → 它的预取(如有)没有浪费。
+		this.usage.prefetchedUnviewed.delete(pageIndex);
 		this.navigationGeneration++;
 		const wanted = this.wantedPages();
 		const wantedSet = new Set(wanted);
@@ -943,7 +961,23 @@ export class TranslationManager {
 							: {})
 					}))
 				})),
-			docMemoryTerms: this.docMemory.size()
+			docMemoryTerms: this.docMemory.size(),
+			// 用量统计 (2.3.9): 纯计数,不含文本。比率现算,分母为 0 时省略。
+			usage: {
+				pageCacheLookups: this.usage.pageCacheLookups,
+				pageCacheFullHits: this.usage.pageCacheFullHits,
+				pageCachePartialHits: this.usage.pageCachePartialHits,
+				...(this.usage.pageCacheLookups
+					? { pageCacheHitRate: Number((this.usage.pageCacheFullHits / this.usage.pageCacheLookups).toFixed(3)) }
+					: {}),
+				segmentLookups: this.usage.segmentLookups,
+				segmentHits: this.usage.segmentHits,
+				...(this.usage.segmentLookups
+					? { segmentHitRate: Number((this.usage.segmentHits / this.usage.segmentLookups).toFixed(3)) }
+					: {}),
+				prefetchedPages: this.usage.prefetchedPages.size,
+				prefetchedUnviewed: this.usage.prefetchedUnviewed.size
+			}
 		};
 	}
 
@@ -1162,6 +1196,13 @@ export class TranslationManager {
 		};
 		const navigationAtStart = this.navigationGeneration;
 		this.pages.set(pageIndex, state);
+		// 预取浪费计数 (2.3.9): 只有**显式后台预取**(foreground === false,即
+		// schedulePrefetch 发起的邻页)进账 —— 导出等路径不带 foreground 选项,
+		// 不算预取;当前页本身也不算。用户之后读到该页时从 unviewed 移出。
+		if (options?.foreground === false && pageIndex !== this.currentPage) {
+			this.usage.prefetchedPages.add(pageIndex);
+			this.usage.prefetchedUnviewed.add(pageIndex);
+		}
 		this.notify(state);
 
 		try {
@@ -1511,6 +1552,7 @@ export class TranslationManager {
 		// live response, and an incomplete hit only PREFILLS — the rest of the
 		// pipeline translates the missing blocks (toTranslate skips prefilled).
 		if (!bypass.bypassPageCache) {
+			this.usage.pageCacheLookups++;
 			const cached = await this.deps.readCache(pageIndex, blocks);
 			if (cached) {
 				const cachedById = new Map(cached.map(t => [t.id, t.translatedText]));
@@ -1523,6 +1565,7 @@ export class TranslationManager {
 					}
 				}
 				if (usable === activeBlocks.length) {
+					this.usage.pageCacheFullHits++;
 					state.status = 'done';
 					state.fromCache = true;
 					state.diagnostics = {
@@ -1533,6 +1576,7 @@ export class TranslationManager {
 					return;
 				}
 				if (usable) {
+					this.usage.pageCachePartialHits++;
 					logger.info(MODULE, `Page ${pageIndex + 1}: partial cache (${usable}/${activeBlocks.length}) — prefilled, translating the rest`);
 					this.notify(state); // show reused blocks immediately
 				}
@@ -1551,6 +1595,7 @@ export class TranslationManager {
 		const segHash = (b: SourceBlock): string => segmentHash(b.sourceText, source, target);
 		let segmentHits = 0;
 		if (!bypass.bypassSegments && this.deps.readSegments) {
+			this.usage.segmentLookups += activeBlocks.length;
 			const cached = await this.deps.readSegments(pageIndex, activeBlocks.map(segHash)).catch(() => null);
 			if (cached?.size) {
 				for (const block of activeBlocks) {
@@ -1561,6 +1606,7 @@ export class TranslationManager {
 					}
 				}
 				if (segmentHits) {
+					this.usage.segmentHits += segmentHits;
 					this.notify(state); // show reused segments immediately
 				}
 			}

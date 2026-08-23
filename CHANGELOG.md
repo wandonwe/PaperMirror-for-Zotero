@@ -7,6 +7,24 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.3.9] — 2026-08-23
+
+**用量统计计数器**(计划 API-P1/WF-4 的观测子集,第三批 item2 议定的最小集):回答
+两个调参问题——缓存到底省了多少、预取浪费了多少。纯计数、零文本、零网络。
+
+### Added
+
+- **诊断 JSON 新增 `usage` 段**:`pageCacheLookups/FullHits/PartialHits`(+ 命中率)、
+  `segmentLookups/segmentHits`(+ 命中率)、`prefetchedPages`(后台预取翻译过的页数,
+  按页去重)、`prefetchedUnviewed`(其中用户到导出诊断时仍未读到的页数 = 预取浪费)。
+  用户滚到某页即从 unviewed 移出;导出等非预取路径不计入。
+- **`baseline-report.mjs` 增列** `pageHitRate` / `segHitRate` / `prefetchWaste`
+  (旧诊断无 usage 段时显示 n/a)。
+
+### Notes
+
+- 782 测试全过(新增预取浪费去重/移出断言 + 段查询/命中累计断言)。
+
 ## [2.3.8] — 2026-08-23
 
 **菜单栏回归原布局 + 导出修复**(用户指定):撤掉 2.3.0 引入的「更多 ⋯」聚合菜单,

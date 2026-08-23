@@ -569,6 +569,11 @@ test('段落级缓存: hits skip requests entirely; misses translate and are sto
 	// Same source text on ANOTHER page → same hash → reused across pages.
 	const h = segmentHash(mkBlocks(0)[0]!.sourceText, 'en', 'zh-CN');
 	assert.ok(store.has(h), 'segment key is content-based, reusable across pages');
+	// 用量统计 (2.3.9): 段查询/命中随上面三轮翻译累计 —— 首轮 2 查 0 中,
+	// 普通刷新 2 查 2 中,force 绕过段落库不计。
+	const usage = (manager.exportDiagnostics() as { usage: Record<string, number> }).usage;
+	assert.equal(usage.segmentLookups, 4, '两轮走段落库,各查 2 段 (force 不计)');
+	assert.equal(usage.segmentHits, 2, '普通刷新那轮 2 段全命中');
 	manager.dispose();
 });
 
@@ -717,6 +722,34 @@ test('按方向备下一页 (2.3.2 item4): 向回看时预取窗口翻转到行�
 	await new Promise(r => setTimeout(r, 30));
 	assert.ok(order.includes(3), '回看时行进方向的下一页 (3) 被预取');
 	assert.ok(order.includes(2), '回看时 forward 窗口整个翻向行进方向 (2 也预取) —— 旧实现只会备 3');
+	manager.dispose();
+});
+
+test('用量统计 (2.3.9): 预取浪费按页去重,读到即移出;诊断 usage 段成形', async () => {
+	const { deps } = makeDeps({
+		pageCount: () => 10,
+		extractPage: async (p) => [{
+			id: `page-${p}-block-0`, pageIndex: p, order: 0, type: 'paragraph',
+			sourceText: `Body text for page ${p} with enough words here.`
+		}],
+		translateRequest: async (request) => ({
+			translations: request.blocks.map(b => ({ id: b.id, translatedText: '译文内容' }))
+		})
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: true, delayFn: () => Promise.resolve(), prefetchDebounceMs: 0 });
+	manager.setPrefetchWindow(2, 1);
+	manager.setCurrentPage(5); // 预取 6、7(前)+ 4(后)
+	await new Promise(r => setTimeout(r, 30));
+	const usage1 = (manager.exportDiagnostics() as { usage: Record<string, number> }).usage;
+	assert.ok(usage1.prefetchedPages! >= 2, `后台预取的页数进账 (got ${usage1.prefetchedPages})`);
+	assert.equal(usage1.prefetchedUnviewed, usage1.prefetchedPages, '尚未读到任何预取页 → 全部计为未读');
+	assert.ok(usage1.pageCacheLookups! >= 1, '页缓存查询计数在走');
+	// 本 fixture 未注入段落库 (readSegments undefined) → 查询数应为 0 而非 NaN。
+	assert.equal(usage1.segmentLookups, 0, '无段落库时段查询计数保持 0');
+	manager.setCurrentPage(6); // 读到 6 → 6 不再是浪费
+	await new Promise(r => setTimeout(r, 30));
+	const usage2 = (manager.exportDiagnostics() as { usage: Record<string, number> }).usage;
+	assert.ok(usage2.prefetchedUnviewed! < usage2.prefetchedPages!, '读到预取页后 unviewed 少于 prefetched');
 	manager.dispose();
 });
 

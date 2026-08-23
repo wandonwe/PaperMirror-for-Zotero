@@ -57,7 +57,13 @@ for (const f of files) {
 		placed,
 		keptPlace: kept,
 		placeRate: (placed + kept) ? `${(placed / (placed + kept) * 100).toFixed(1)}%` : 'n/a',
-		geoViolations: audits.reduce((n, a) => n + (a.violations ?? 0), 0)
+		geoViolations: audits.reduce((n, a) => n + (a.violations ?? 0), 0),
+		// 用量统计 (2.3.9): 旧诊断没有 usage 段时显示 n/a。
+		pageHitRate: d.usage?.pageCacheLookups
+			? `${(d.usage.pageCacheFullHits / d.usage.pageCacheLookups * 100).toFixed(0)}%` : 'n/a',
+		segHitRate: d.usage?.segmentLookups
+			? `${(d.usage.segmentHits / d.usage.segmentLookups * 100).toFixed(0)}%` : 'n/a',
+		prefetchWaste: d.usage ? `${d.usage.prefetchedUnviewed ?? 0}/${d.usage.prefetchedPages ?? 0}` : 'n/a'
 	});
 }
 
@@ -84,12 +90,15 @@ const totals = {
 	keptPlace: sum('keptPlace'),
 	placeRate: (sum('placed') + sum('keptPlace'))
 		? `${(sum('placed') / (sum('placed') + sum('keptPlace')) * 100).toFixed(1)}%` : 'n/a',
-	geoViolations: sum('geoViolations')
+	geoViolations: sum('geoViolations'),
+	pageHitRate: '—',
+	segHitRate: '—',
+	prefetchWaste: '—'
 };
 
 console.table([...rows, totals]);
 
-const headers = ['doc', 'pages', 'requests', 'reqPerPage', 'salvage', 'rate429', 'timeouts', 'segHits', 'avgPageMs', 'translated', 'preserved', 'keptOriginal', 'placed', 'keptPlace', 'placeRate', 'geoViolations'];
+const headers = ['doc', 'pages', 'requests', 'reqPerPage', 'salvage', 'rate429', 'timeouts', 'segHits', 'avgPageMs', 'translated', 'preserved', 'keptOriginal', 'placed', 'keptPlace', 'placeRate', 'geoViolations', 'pageHitRate', 'segHitRate', 'prefetchWaste'];
 const md = [
 	'# 性能基线报告(真实世界)',
 	'',
