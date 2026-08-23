@@ -451,6 +451,8 @@ export class TranslationManager {
 	/** Prefetch window (scales with the provider pool; set by the host). */
 	private prefetchForward = 1;
 	private prefetchBackward = 1;
+	/** 用户当前的翻页方向 (2.3.2, item4): 1=向前读, -1=向回看。默认向前。 */
+	private readDirection: 1 | -1 = 1;
 	/** Pages whose provider has already been reported unstable (fire once). */
 	private unstableFired = new Set<number>();
 	/**
@@ -574,6 +576,12 @@ export class TranslationManager {
 		if (this.disposed) {
 			return;
 		}
+		// 按方向备下一页 (2.3.2, 计划 第四批 item4 · Codex 工作流): 记录用户实际的
+		// 翻页方向 —— 向后翻(回看/复查)时预取窗口跟着翻转,大窗口朝行进方向、
+		// 小窗口朝身后。同页不动时保持既有方向。
+		if (pageIndex !== this.currentPage) {
+			this.readDirection = pageIndex > this.currentPage ? 1 : -1;
+		}
 		this.currentPage = pageIndex;
 		this.navigationGeneration++;
 		const wanted = this.wantedPages();
@@ -659,10 +667,11 @@ export class TranslationManager {
 			if (page === this.currentPage) {
 				continue;
 			}
-			// Nearer pages first; the next page beats the previous one.
+			// Nearer pages first; the page AHEAD (行进方向, 2.3.2 item4) beats the
+			// one behind — direction-relative, not fixed page-number order.
 			const distance = Math.abs(page - this.currentPage);
-			const priority = page === this.currentPage + 1 ? PRIORITY.NEXT_PAGE
-				: page === this.currentPage - 1 ? PRIORITY.PREVIOUS_PAGE
+			const priority = page === this.currentPage + this.readDirection ? PRIORITY.NEXT_PAGE
+				: page === this.currentPage - this.readDirection ? PRIORITY.PREVIOUS_PAGE
 					: Math.max(1, PRIORITY.SECOND_NEXT_PAGE - distance);
 			void this.ensurePage(page, priority, { foreground: false });
 		}
@@ -1009,15 +1018,18 @@ export class TranslationManager {
 			return [this.currentPage];
 		}
 		const count = this.deps.pageCount();
-		// Window scales with the provider pool (host sets forward = min(2N, 12),
-		// backward = 1): more independent providers ⇒ more future pages worth
-		// fetching in parallel. Current page first, then forward, then backward.
+		// Window scales with the provider pool (host sets forward/backward, 2.1.9):
+		// more independent providers ⇒ more upcoming pages worth fetching in
+		// parallel. 按方向 (2.3.2, item4): 「forward」是**行进方向**而非固定页号
+		// 增向 —— 向回看时窗口翻转,大窗口朝用户正在去的方向,身后只留小窗口。
+		// Current page first, then ahead (direction), then behind.
+		const dir = this.readDirection;
 		const pages = [this.currentPage];
 		for (let d = 1; d <= this.prefetchForward; d++) {
-			pages.push(this.currentPage + d);
+			pages.push(this.currentPage + d * dir);
 		}
 		for (let d = 1; d <= this.prefetchBackward; d++) {
-			pages.push(this.currentPage - d);
+			pages.push(this.currentPage - d * dir);
 		}
 		return pages.filter(p => p >= 0 && (count <= 0 || p < count));
 	}

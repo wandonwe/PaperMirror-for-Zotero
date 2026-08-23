@@ -695,6 +695,31 @@ test('navigating to a QUEUED prefetch page promotes it to run now (not stuck)', 
 	manager.dispose();
 });
 
+test('按方向备下一页 (2.3.2 item4): 向回看时预取窗口翻转到行进方向', async () => {
+	const order: number[] = [];
+	const { deps } = makeDeps({
+		pageCount: () => 10,
+		extractPage: async (p) => [{
+			id: `page-${p}-block-0`, pageIndex: p, order: 0, type: 'paragraph',
+			sourceText: `Body text for page ${p} with enough words here.`
+		}],
+		translateRequest: async (request) => {
+			order.push(request.pageIndex ?? -1);
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '译文内容' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: true, delayFn: () => Promise.resolve(), prefetchDebounceMs: 0 });
+	manager.setPrefetchWindow(2, 1);
+	manager.setCurrentPage(5); // 从 0 → 5: 向前读,窗口 5,6,7 + 身后 4
+	await new Promise(r => setTimeout(r, 30));
+	assert.ok(order.includes(6) && order.includes(7), '向前读时预取 6、7');
+	manager.setCurrentPage(4); // 5 → 4: 向回看 —— 窗口应翻转为 4,3,2 + 身后 5
+	await new Promise(r => setTimeout(r, 30));
+	assert.ok(order.includes(3), '回看时行进方向的下一页 (3) 被预取');
+	assert.ok(order.includes(2), '回看时 forward 窗口整个翻向行进方向 (2 也预取) —— 旧实现只会备 3');
+	manager.dispose();
+});
+
 test('优先翻译当前页: the current page translates before any neighbour is prefetched', async () => {
 	const order: number[] = [];
 	const { deps } = makeDeps({
