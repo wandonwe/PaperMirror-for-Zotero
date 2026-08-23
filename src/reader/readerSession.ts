@@ -289,8 +289,9 @@ export class ReaderSession {
 			// highlighted 译文 block, or asks the reader to select text first.
 			onExplainSelection: () => void this.explainSelection(),
 			onToggleSync: enabled => this.setSyncEnabled(enabled),
-			onRetranslate: () => void this.retranslateAll(), // 菜单栏刷新 = 刷新全部 (强制全量,清页+段缓存)
-			onRefreshPage: () => void this.retranslateCurrent(), // 胶囊圆环 = 刷新本页 (普通刷新,复用合格段落)
+			onRetranslate: () => this.confirmClearCacheRetranslate(), // 菜单「清缓存重译全文」= 破坏性,先确认
+			onRotateEngine: () => void this.rotateCurrentEngine(), // 菜单「换引擎重译本页」= 有池时轮换引擎真正重译
+			onRefreshPage: () => void this.retranslateCurrent(), // 胶囊圆环 = 修复本页 (只补缺,不换引擎不清合格缓存)
 			onCancelPage: () => this.cancelCurrentTranslation(), // 胶囊取消 = 停止翻译
 			onViewPartial: () => this.viewKeptOriginal(), // 胶囊「查看保留原文」= 定位保留段落
 			onDismiss: () => this.dismissTopTask(), // 胶囊 × = 关闭当前通知
@@ -1928,13 +1929,8 @@ export class ReaderSession {
 		});
 	}
 
-	private async retranslateCurrent(): Promise<void> {
-		if (!this.manager) {
-			this.startTranslating();
-			return;
-		}
-		const page = adapter.getCurrentPageIndex(this.reader);
-		// Per-block round counters are keyed `page-<n>-…`; clear this page's.
+	/** 本页每块轮次计数清理(修复/换引擎共用)。 */
+	private clearPageRounds(page: number): void {
 		const prefix = `page-${page}-`;
 		for (const id of [...this.compressRounds.keys()]) {
 			if (id.startsWith(prefix)) {
@@ -1943,23 +1939,77 @@ export class ReaderSession {
 		}
 		this.compressPending.delete(page);
 		this.compressBlocked.delete(page);
-		// Pool active → deal this page to the next engine before re-translating.
+	}
+
+	/**
+	 * 修复本页 (2.1.10, 计划 item 4): 圆环默认动作。**只补缺失/无效/排版失败的
+	 * 段**,复用段落库里合格的译文,**不轮换服务商、不清合格缓存**——一次点击
+	 * 只为「把这页补齐」,不再像旧版那样在有池时默默换引擎+整页重付费。换引擎
+	 * 重译是另一个显式动作(rotateCurrentEngine)。
+	 */
+	private async retranslateCurrent(): Promise<void> {
+		if (!this.manager) {
+			this.startTranslating();
+			return;
+		}
+		const page = adapter.getCurrentPageIndex(this.reader);
+		this.clearPageRounds(page);
+		this.pane?.setBusy(true);
+		try {
+			await this.manager.retranslatePage(page, 'normal');
+		}
+		finally {
+			this.pane?.setBusy(false);
+		}
+	}
+
+	/**
+	 * 换引擎重译本页 (2.1.10, 计划 item 4): 显式动作(菜单)。有池时把本页发给
+	 * 下一家服务商并绕过段落库让新引擎**真正重译**(段落 context 用规范引擎、不含
+	 * 轮换偏移,故 'normal' 会零请求读回旧译文——必须走 'rotate' 才真正换家)。
+	 * 单引擎时无从换,退化为修复本页并提示。
+	 */
+	private async rotateCurrentEngine(): Promise<void> {
+		if (!this.manager) {
+			this.startTranslating();
+			return;
+		}
+		const page = adapter.getCurrentPageIndex(this.reader);
+		this.clearPageRounds(page);
 		const rotated = this.pool.length > 1;
 		if (rotated) {
 			this.pageProviderOffset.set(page, ((this.pageProviderOffset.get(page) ?? 0) + 1) % this.pool.length);
-			logger.info(MODULE, `刷新 page ${page + 1} → provider ${this.providerForPage(page)}`);
+			logger.info(MODULE, `换引擎重译 page ${page + 1} → provider ${this.providerForPage(page)}`);
+		}
+		else {
+			this.flashNotice('只配置了一个翻译服务商,无法换引擎;已按「修复本页」重译');
 		}
 		this.pane?.setBusy(true);
 		try {
-			// 轮换刷新走 'rotate' (2.0.8, 审核 P2-6): P2-16 之后段落 context 用
-			// 规范引擎(不含轮换偏移),轮换不再改变 context —— 'normal' 会把旧
-			// 引擎的全部合格段落原样从段落库读回,零请求发向新引擎,页面逐字节
-			// 不变,「换一家重译」实质失效。'rotate' 绕过段落库让新引擎真正重译;
-			// 单引擎时仍是 'normal'(复用合格段落,只补缺)。
 			await this.manager.retranslatePage(page, rotated ? 'rotate' : 'normal');
 		}
 		finally {
 			this.pane?.setBusy(false);
+		}
+	}
+
+	/**
+	 * 清缓存重译全文 (2.1.10, 计划 item 4): 破坏性动作,先确认。清掉本文档全部
+	 * 页面+段落缓存并从头重译,已翻译内容会丢失。
+	 */
+	private confirmClearCacheRetranslate(): void {
+		let ok = true;
+		try {
+			const prompt = (Services as unknown as { prompt?: { confirm(parent: unknown, title: string, text: string): boolean } }).prompt;
+			const win = (Zotero as unknown as { getMainWindow?(): unknown }).getMainWindow?.() ?? null;
+			ok = prompt ? prompt.confirm(win, '清缓存重译全文',
+				'将清除本文档的全部页面与段落缓存并从头重译,已翻译内容会丢失。确定继续?') : true;
+		}
+		catch {
+			ok = true; // 无法弹确认时不阻断(退化为直接执行)
+		}
+		if (ok) {
+			void this.retranslateAll();
 		}
 	}
 

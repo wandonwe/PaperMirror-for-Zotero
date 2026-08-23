@@ -3,8 +3,8 @@
 		"zotero-bilingual-reader@local": {
 			"updates": [
 				{
-					"version": "2.1.9",
-					"update_link": "https://github.com/wandonwe/PaperMirror-for-Zotero/releases/download/v2.1.9/zotero-bilingual-reader-2.1.9.xpi",
+					"version": "2.1.10",
+					"update_link": "https://github.com/wandonwe/PaperMirror-for-Zotero/releases/download/v2.1.10/zotero-bilingual-reader-2.1.10.xpi",
 					"applications": {
 						"zotero": {
 							"strict_min_version": "9.0",

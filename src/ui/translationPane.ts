@@ -121,6 +121,8 @@ export interface PaneCallbacks {
 	 * changes the segment context and forces a genuine re-translation).
 	 */
 	onRefreshPage(): void;
+	/** 菜单「换引擎重译本页」— 有池时轮换服务商,绕过段落库让新引擎真正重译本页。 */
+	onRotateEngine(): void;
 	/** 状态胶囊取消 — stop the current page's translation. */
 	onCancelPage(): void;
 	/** 状态胶囊「查看保留原文」— locate the kept-original segments. */
@@ -683,10 +685,24 @@ export class TranslationPane {
 
 		this.syncSwitch = this.switchControl(this.strings.syncScroll, true, on => this.callbacks.onToggleSync(on));
 
+		// 重译下拉 (2.1.10, 计划 item 4): 把原来的顶部「刷新全部」(清全部缓存)降级
+		// 进菜单,并拆成三档 —— 默认动作是轻量「修复本页」,破坏性的「清缓存重译
+		// 全文」只在这里、且带确认。
+		let refreshChip: HTMLElement;
+		refreshChip = this.iconButton(ICON_PATHS.refresh, '重译…', () => {
+			this.openBarMenu(refreshChip, [{
+				items: [
+					{ label: '修复本页(只补缺失/排版失败,不换引擎)', checked: false, onPick: () => this.callbacks.onRefreshPage() },
+					{ label: '换引擎重译本页', checked: false, onPick: () => this.callbacks.onRotateEngine() },
+					{ label: '清缓存重译全文…(会丢失已翻译内容)', checked: false, onPick: () => this.callbacks.onRetranslate() }
+				]
+			}]);
+		}, 'pm-refresh');
+
 		bar.append(
 			this.languagePill,
 			providerPill,
-			this.iconButton(ICON_PATHS.refresh, '刷新全部', () => this.callbacks.onRetranslate(), 'pm-refresh'),
+			refreshChip,
 			this.el('span', 'pm-bar-spacer'),
 			this.syncSwitch,
 			this.textButton('pm-bar-action', `✦ ${this.strings.explain}`, this.strings.explainTip, () => this.callbacks.onExplainSelection()),
