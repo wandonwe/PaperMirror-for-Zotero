@@ -7,6 +7,14 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.4.2] — 2026-08-23
+
+### Changed
+
+- 工具条「导出」文字按钮换成通用的三点「更多」图标:菜单里常驻**导出译文 PDF**
+  与**诊断**;开启调试日志时追加**语料**(点开时现读偏好,无常驻观察者)。
+  「诊断/语料」不再作为独立的调试期按钮组出现在工具条上。
+
 ## [2.4.1] — 2026-08-23
 
 ### Changed
