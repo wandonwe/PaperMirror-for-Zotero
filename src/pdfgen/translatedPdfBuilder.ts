@@ -3,12 +3,14 @@
  *
  * Takes the ORIGINAL PDF bytes plus the per-page blocks/translations the
  * session already produced, and writes the translation back into a real PDF
- * with pdf-lib: each translated body paragraph's line rects are painted over
- * in white (the print page is white — the dark look in the reader is just the
- * viewer theme) and the translation is typeset into the same box at the same
- * point size, shrinking only when it genuinely runs longer. Headings, titles,
- * figures, tables, references and metadata stay untouched, so the page's
- * frame is the original's.
+ * with pdf-lib: each translated body paragraph is first TYPESET into its own
+ * box at the source point size (shrinking only when it genuinely runs longer);
+ * only when it fits are the original line rects painted over in white (the
+ * print page is white — the dark look in the reader is just the viewer theme)
+ * and the translation drawn. A block that cannot fit even at the minimum size
+ * KEEPS THE ORIGINAL (LO-1, 2.2.8) — never whitewashed-and-truncated, so the
+ * exported file never loses content. Headings, titles, figures, tables,
+ * references and metadata stay untouched, so the page's frame is the original's.
  *
  * CJK text needs a CJK font: a build-time GB2312 subset of Noto Sans SC
  * (~2.2 MB, the 6763 common hanzi + Latin/Greek/punctuation) ships inside the
@@ -77,8 +79,14 @@ export interface BuildPdfOptions {
 export interface BuiltPdfs {
 	monoBytes: Uint8Array;
 	dualBytes: Uint8Array | null;
-	/** Blocks that had to be clipped even at the minimum font size. */
-	clippedBlocks: number;
+	/**
+	 * Blocks whose translation could not fit even at the minimum font size and
+	 * therefore KEPT THE ORIGINAL text (2.2.8, LO-1) — nothing was painted over,
+	 * nothing was truncated. The old behaviour (whitewash the original, then draw
+	 * a "…"-clipped translation) silently destroyed the paragraph tail in the
+	 * exported file.
+	 */
+	keptOriginal: number;
 }
 
 /** Which blocks get replaced in the generated file — body text only. */
@@ -130,7 +138,7 @@ export async function buildTranslatedPdf(
 
 	const measure = (text: string, size: number): number => font.widthOfTextAtSize(text, size);
 	const pageList = doc.getPages();
-	let clippedBlocks = 0;
+	let keptOriginal = 0;
 	let done = 0;
 
 	for (const [pageIndex, data] of pages) {
@@ -144,17 +152,12 @@ export async function buildTranslatedPdf(
 				continue;
 			}
 			const rects = block.lineRectsPdf!;
-			// 1. paint out the original lines
-			for (const [x1, y1, x2, y2] of rects) {
-				page.drawRectangle({
-					x: x1 - MASK_PAD,
-					y: y1 - MASK_PAD,
-					width: (x2 - x1) + MASK_PAD * 2,
-					height: (y2 - y1) + MASK_PAD * 2,
-					color: WHITE
-				});
-			}
-			// 2. typeset the translation into the union box, same point size
+			// 1. typeset FIRST — the mask is painted only after the translation is
+			//    known to fit. 顺序是 LO-1 修复的核心 (2.2.8): 旧实现先涂白再排版,
+			//    排不下也只画带「…」的截断译文 —— 原文已被涂掉,段落尾部在导出文件
+			//    里**永久丢失**。现在放不下(最小字号仍溢出)就整块跳过: 不涂白、
+			//    不画截断,原文完整保留 —— 与阅读器严格替换同一条铁律「宁保原文,
+			//    不毁内容」。
 			const union = rects.reduce(
 				(acc, r) => [Math.min(acc[0], r[0]), Math.min(acc[1], r[1]), Math.max(acc[2], r[2]), Math.max(acc[3], r[3])],
 				[Infinity, Infinity, -Infinity, -Infinity]
@@ -164,7 +167,18 @@ export async function buildTranslatedPdf(
 			const sourceSize = block.fontSize && block.fontSize > 0 ? block.fontSize : 10;
 			const layout = layoutBlock(sanitize(stripStyleMarkers(translation!)), boxWidth, boxHeight, sourceSize, measure);
 			if (layout.overflow) {
-				clippedBlocks++;
+				keptOriginal++;
+				continue; // 放不下 → 保留原文,绝不涂白截断
+			}
+			// 2. the translation fits — NOW paint out the original lines.
+			for (const [x1, y1, x2, y2] of rects) {
+				page.drawRectangle({
+					x: x1 - MASK_PAD,
+					y: y1 - MASK_PAD,
+					width: (x2 - x1) + MASK_PAD * 2,
+					height: (y2 - y1) + MASK_PAD * 2,
+					color: WHITE
+				});
 			}
 			// First baseline: ascent ≈ 0.86 em below the box top.
 			let baseline = union[3]! - layout.fontSize * 0.86;
@@ -214,5 +228,5 @@ export async function buildTranslatedPdf(
 		}
 	}
 
-	return { monoBytes, dualBytes, clippedBlocks };
+	return { monoBytes, dualBytes, keptOriginal };
 }

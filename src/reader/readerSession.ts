@@ -1852,8 +1852,10 @@ export class ReaderSession {
 			dual: true,
 			onProgress: (done, total) => report(70 + (done / total) * 28)
 		});
-		if (built.clippedBlocks > 0) {
-			logger.info(MODULE, `${built.clippedBlocks} block(s) clipped at minimum font size`);
+		if (built.keptOriginal > 0) {
+			// LO-1 (2.2.8): 放不下的块保留原文,不再涂白截断丢正文。
+			logger.info(MODULE, `${built.keptOriginal} block(s) kept original in exported PDF (translation would not fit)`);
+			this.flashNotice(`导出完成:${built.keptOriginal} 段译文放不下原区域,已保留原文(内容零丢失)`);
 		}
 		return { monoBytes: built.monoBytes, dualBytes: built.dualBytes };
 	}
