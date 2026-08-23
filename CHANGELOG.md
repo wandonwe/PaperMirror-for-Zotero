@@ -7,6 +7,37 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.3.6] — 2026-08-23
+
+优化计划**第五批·性能回归基线**。基线分两半:离线半锁进 CI(本版落地),真实
+世界半提供采集器 + 操作指南(需在真实 Zotero 环境按指南跑 20 篇 PDF)。
+
+### Added
+
+- **离线流水线基线入 CI**(`tests/integration/pipelineBaseline.test.ts`):对仓库内
+  12 页真实 PDF 语料(8 篇文档)跑与运行时同构的确定性流水线,把**请求计划形状**
+  锁进 `tests/fixtures/baseline/pipeline-baseline.json`——blocks/translatable/
+  tableCells/modules/chunks(fast/slow)/maxBlocksPerChunk/payloadChars(token 代理)/
+  dupBlocks(API-2 去重量)。任何让 chunk 数或 payload 回涨的改动都会红 CI;有意的
+  优化删基线重新生成、diff 进 PR。基线缺失自动生成(与布局快照同一约定);新增
+  语料页只提示不红。
+- **`npm run bench`**(`scripts/bench.mjs`):同一流水线的每页中位数耗时 + 计划形状
+  信息表(当前 12 页语料合计 ~38ms)。耗时环境相关,信息性、不进 CI 断言。
+- **真实世界基线采集器**(`scripts/baseline-report.mjs`):汇总若干篇「更多⋯→诊断」
+  导出的诊断 JSON,输出每篇 + 合计基线表(页数/请求数/请求页比/补救/429/超时/
+  段落命中/页均耗时/已译与保留块数/排版 placed·kept·成功率/几何违例),并写出
+  `baseline-report.md`。纯计数聚合,不含任何文本。
+- **操作指南**(`docs/reviews/性能基线-操作指南.md`):20 篇 PDF 的覆盖面建议
+  (双栏/表格/公式/长文/扫描/复杂封面)、冷/热缓存口径、判定门槛建议(请求/页
+  ≤1.5、排版成功率 ≥97%、几何违例 =0、热缓存重读 ≈0)、首屏时间与峰值内存的
+  手工口径、以及 API-3 跨文档命中的直接验证点。
+
+### Notes
+
+- 首屏时间/峰值内存暂为手工口径(指南§三);其余指标已可复现采集。
+- 780 测试全过(基线对比路径二跑确定性验证)。**至此优化计划五批全部落地**
+  (暂缓项:第三批 item2 用量统计——观测性,按约定跳过)。
+
 ## [2.3.5] — 2026-08-23
 
 优化计划**第四批 item 7·省调用打磨**(本审计 API-2/3/4/7/8)。五个省 token/省请求
