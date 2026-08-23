@@ -101,6 +101,12 @@ test('allowsFontShrink: 正文不缩字(按页统一), 独立元素可缩字 (it
 	assert.equal(allowsFontShrink('heading'), true, '小标题可缩字');
 	assert.equal(allowsFontShrink('title'), true, '大标题可缩字');
 	assert.equal(allowsFontShrink(''), true, '未知类型保守放行缩字(不误伤正文)');
+	// 2.3.7 豁免(基线 doc3 实证): 表格单元格与微小单行块是孤立小盒,缩字不发花,
+	// 禁缩只会让它们整行放弃(一篇文档 abandoned 曾涨到 56)。
+	assert.equal(allowsFontShrink('paragraph', { isTableCell: true }), true, '表格单元格可缩字');
+	assert.equal(allowsFontShrink('paragraph', { tinyLine: true }), true, '微小单行块可缩字');
+	assert.equal(allowsFontShrink('paragraph', {}), false, '普通正文段仍不缩字');
+	assert.equal(allowsFontShrink('list', { isTableCell: false, tinyLine: false }), false, '列表正文仍不缩字');
 });
 
 test('shrinkStrictBlocks without the hook falls back to reverting everything', () => {

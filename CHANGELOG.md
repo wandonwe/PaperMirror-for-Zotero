@@ -7,6 +7,37 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.3.7] — 2026-08-23
+
+**基线驱动修复第一轮**:三篇真实文档的诊断基线(第五批采集)暴露的问题,当轮修复。
+证据:doc1 表格密集页 tableFailed 48;doc3 表单/单行密集页 abandoned 56(placementProbe
+显示全是 13px/9px 高的单行小盒);两篇的 preserve 单元格在诊断里误显示为失败。
+
+### Fixed
+
+- **表格单元格与微小单行块恢复末位缩字(修 2.2.7 的误伤)**。2.2.7 为治正文「发花」
+  禁了 paragraph/list 缩字,但把两类**孤立小盒**一起禁了:表格单元格(格间本就独立)
+  与微小单行块(标签/表行——单行盒行距梯子无从发力、扩边被下一行挡死,缩字是唯一
+  救法)。doc3 实证后果:abandoned 从个位数涨到 56,探针里 13px 单元格行与 9px 表单
+  行成批放弃,且同表短格 committed、长格 abandoned(长度依赖,证据闭合)。现在
+  `allowsFontShrink` 豁免 `isTableCell`(节点 `data-pm-cell` 标记,整格与逐 member
+  兜底块都打)与 `tinyLine`(盒高 ≤1.7×字号且 ≤120 字符);多行正文段维持 2.2.7
+  页内统一字号。
+- **微小符号格(R²、n=5、±SD)直接归 data/preserve (doc1 实证)**。≤4 字符且不含
+  2+ 连续字母/汉字的格翻译无意义——送去只会被验收拒掉再计入 tableFailed,白费请求。
+  现在分类阶段直接保护,不进翻译。(`tableStructure` 分类器;既有布局快照零扰动)
+- **诊断新增 `state:"preserved"`(口径修正)**。preserve 块(数据单元格等)是**有意**
+  不翻译,此前显示 `"untranslated"`——表格密集页在诊断里看起来一片失败,实际全是
+  保护性保留(doc1 页 5:126 格 intentional 被误读)。`baseline-report.mjs` 相应单列
+  `preserved`,不再算进 keptOriginal。
+
+### Notes
+
+- 三篇基线的达标面:429/超时 = 0、几何违例 = 0(27 页)、段落缓存链实证生效
+  (doc2 五个页面 0 请求毫秒级完成、跨文档命中)。本轮修复正对未达标面:表格/表单
+  密集页的排版成功率与请求浪费。
+- 781 测试全过(新增缩字豁免四断言 + 微小符号格分类测试)。
+
 ## [2.3.6] — 2026-08-23
 
 优化计划**第五批·性能回归基线**。基线分两半:离线半锁进 CI(本版落地),真实

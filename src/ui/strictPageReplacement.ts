@@ -106,7 +106,16 @@ const SHRINK_FLOOR_PX = 8.5;
  * 标题 heading/title)是孤立的,缩它自己不会与正文比出大小差,仍可末位缩字保住
  * 译文。表格单元格由独立表格模型渲染、根本不进这条 items 流水线,不受影响。
  */
-export function allowsFontShrink(blockType: string): boolean {
+export function allowsFontShrink(blockType: string, opts?: { isTableCell?: boolean; tinyLine?: boolean }): boolean {
+	// 2.3.7 (基线 doc3 实证修正): 2.2.7 的「正文不缩字」把两类**孤立小盒**误伤了 ——
+	// 探针显示 13px/9px 高的单行表格单元格与表单细行因禁缩只能整行放弃(一篇文档
+	// abandoned 从个位数涨到 56)。它们不是正文流,各自缩字不会与相邻正文比出
+	// 「发花」: ① 表格单元格(格间本就独立);② 微小单行块(标签/表行,单行盒
+	// 行距梯子无从发力、扩边被下一行挡死,缩字是唯一救法)。两类放行缩字;
+	// 真正文段(多行 paragraph/list)维持 2.2.7 的页内统一字号。
+	if (opts?.isTableCell || opts?.tinyLine) {
+		return true;
+	}
 	return blockType !== 'paragraph' && blockType !== 'list';
 }
 
@@ -712,6 +721,11 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		node.className = 'pm-repage-block';
 		node.setAttribute('data-pm-block', block.id);
 		node.setAttribute('data-pm-type', block.type);
+		// 表格单元格标记 (2.3.7): 整格块与逐 member 兜底块的 id 都是
+		// `…-table-T-rR-cC` 形;单元格可末位缩字(allowsFontShrink 豁免)。
+		if (typeof block.tableRow === 'number' || /-table-\d+-r\d+-c\d+/.test(block.id)) {
+			node.setAttribute('data-pm-cell', 'true');
+		}
 		node.setAttribute('data-pm-page', String(block.pageIndex));
 		node.style.left = `${box.left}px`;
 		node.style.top = `${box.top}px`;
@@ -968,10 +982,15 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 					break;
 				}
 			}
-			// 正文不单独缩字 (2.2.7, item7(b)): paragraph/list 只靠扩边(上面已试)放置,
-			// 放不下就保留原文,绝不缩它一块致「发花」。缩字梯+组合仅对独立元素
-			// (图题/标题)执行。type 取自节点 data-pm-type(表格单元格不在此流水线)。
-			const canShrink = allowsFontShrink(item.node.getAttribute('data-pm-type') ?? '');
+			// 正文不单独缩字 (2.2.7, item7(b)): 多行 paragraph/list 只靠扩边放置,
+			// 放不下保留原文。2.3.7 豁免(基线 doc3 实证): 表格单元格与微小单行块
+			// 是孤立小盒,缩字不发花,禁缩只会让它们整行放弃 —— 放行。
+			const tinyLine = item.originalBox.height <= item.fontPx * 1.7
+				&& (item.node.textContent ?? '').length <= 120;
+			const canShrink = allowsFontShrink(item.node.getAttribute('data-pm-type') ?? '', {
+				isTableCell: item.node.hasAttribute('data-pm-cell'),
+				tinyLine
+			});
 			if (!fits && canShrink) {
 				applyBox(item, original.width, original.height);
 				// 2. 既有缩字梯子(原盒)。

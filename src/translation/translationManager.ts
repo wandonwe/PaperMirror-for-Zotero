@@ -929,9 +929,15 @@ export class TranslationManager {
 						id: b.id,
 						type: b.type,
 						chars: b.sourceText.length,
+						// 'preserved' (2.3.7, 基线口径修正): preserve 块(数据单元格等)
+						// **有意**不翻译,此前显示 'untranslated' —— 表格密集页看起来
+						// 一片失败,实际全是保护性保留。诊断从此与 placement 的
+						// tableIntentional 对得上号。
 						state: s.translations.has(b.id)
 							? 'translated'
-							: (s.keepOrigin?.get(b.id) ?? 'untranslated'),
+							: b.translationMode === 'preserve'
+								? 'preserved'
+								: (s.keepOrigin?.get(b.id) ?? 'untranslated'),
 						...(s.rejectReasons?.has(b.id) && !s.translations.has(b.id)
 							? { lastReject: s.rejectReasons.get(b.id) }
 							: {})

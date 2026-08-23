@@ -51,7 +51,9 @@ for (const f of files) {
 		segHits: m(x => x.segmentHits),
 		avgPageMs: durPages ? Math.round(durSum / durPages) : 0,
 		translated: blocks.filter(b => b.state === 'translated').length,
-		keptOriginal: blocks.filter(b => b.state !== 'translated').length,
+		// 2.3.7 口径: preserve 块是**有意**保留(数据单元格保护),单列、不算失败。
+		preserved: blocks.filter(b => b.state === 'preserved').length,
+		keptOriginal: blocks.filter(b => b.state !== 'translated' && b.state !== 'preserved').length,
 		placed,
 		keptPlace: kept,
 		placeRate: (placed + kept) ? `${(placed / (placed + kept) * 100).toFixed(1)}%` : 'n/a',
@@ -76,6 +78,7 @@ const totals = {
 	segHits: sum('segHits'),
 	avgPageMs: rows.length ? Math.round(rows.reduce((n, r) => n + r.avgPageMs, 0) / rows.length) : 0,
 	translated: sum('translated'),
+	preserved: sum('preserved'),
 	keptOriginal: sum('keptOriginal'),
 	placed: sum('placed'),
 	keptPlace: sum('keptPlace'),
@@ -86,7 +89,7 @@ const totals = {
 
 console.table([...rows, totals]);
 
-const headers = ['doc', 'pages', 'requests', 'reqPerPage', 'salvage', 'rate429', 'timeouts', 'segHits', 'avgPageMs', 'translated', 'keptOriginal', 'placed', 'keptPlace', 'placeRate', 'geoViolations'];
+const headers = ['doc', 'pages', 'requests', 'reqPerPage', 'salvage', 'rate429', 'timeouts', 'segHits', 'avgPageMs', 'translated', 'preserved', 'keptOriginal', 'placed', 'keptPlace', 'placeRate', 'geoViolations'];
 const md = [
 	'# 性能基线报告(真实世界)',
 	'',

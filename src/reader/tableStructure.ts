@@ -181,10 +181,14 @@ export function buildTableModel(
 		// otherwise flag it just for containing a year.
 		const hasWord = /[A-Za-z一-鿿]/.test(text);
 		const isPureNumeric = /^[\d\s.,%±()/<>=+\-·—–]+$/.test(text);
+		// 微小符号格 (2.3.7, 基线 doc1 实证): ≤4 字符且不含 2+ 连续字母/汉字的格
+		// ("R²"、"n=5"、"±SD")翻译无意义 —— 送去只会被验收拒掉再计入 tableFailed,
+		// 白费请求。直接归 data/preserve。
+		const tinySymbol = text.length <= 4 && !/[A-Za-z一-鿿]{2,}/.test(text);
 		const kind: TableCell['kind'] =
 			slot.straddles || !text ? 'data'
 				: row === 0 && hasWord && !isPureNumeric ? 'text'
-					: looksTabular(text) || text.length < 3 ? 'data' : 'text';
+					: looksTabular(text) || text.length < 3 || tinySymbol ? 'data' : 'text';
 		cells.push({
 			id: `page-${pageIndex}-table-${tableIndex}-r${row}-c${col}`,
 			memberIds: ordered.map(m => m.id),
