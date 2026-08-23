@@ -233,7 +233,12 @@ export function splitRegionForPlacement(
 	if (!groups || groups.length < 2 || !translation) {
 		return null;
 	}
-	const paras = translation.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+	// Split on ANY run of newlines, not just blank lines: coalesceRegions joins
+	// paragraph groups with "\n\n", but translation engines commonly normalise
+	// that to a single "\n" — matching only "\n\n" silently fell back and left
+	// the region collapsed. Within a group the text has no newlines (members are
+	// joined with " "/""), so "\n+" partitions exactly at the group boundaries.
+	const paras = translation.split(/\n+/).map(p => p.trim()).filter(Boolean);
 	if (paras.length !== groups.length) {
 		return null; // engine didn't preserve the paragraph structure — fall back
 	}

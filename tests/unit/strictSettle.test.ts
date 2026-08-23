@@ -223,6 +223,10 @@ test('splitRegionForPlacement: splits translation across paragraph groups, falls
 	assert.deepEqual(ok![1]!.lineRectsPdf, [[0, 70, 100, 80]], 'paragraph placed in its OWN group box');
 	// Extra blank lines are tolerated (engines vary): still 3 parts.
 	assert.equal(splitRegionForPlacement(region, '甲。\n\n\n乙。\n\n丙。')?.length, 3);
+	// SINGLE newlines are the common engine output — must also split (2.1.4).
+	const single = splitRegionForPlacement(region, '甲。\n乙。\n丙。');
+	assert.equal(single?.length, 3, 'single-newline separators split too');
+	assert.deepEqual(single!.map(p => p.text), ['甲。', '乙。', '丙。']);
 	// Mismatch → null (fall back to whole-region union-box placement, never worse).
 	assert.equal(splitRegionForPlacement(region, '甲。乙。丙。'), null, 'engine dropped breaks → fall back');
 	assert.equal(splitRegionForPlacement(region, '甲。\n\n乙。'), null, 'too few paragraphs → fall back');
