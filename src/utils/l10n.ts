@@ -15,7 +15,7 @@ const FALLBACKS: Record<string, string> = {
 	'papermirror-show-original': '对照 / Original',
 	'papermirror-overlay': 'PDF 叠加 / On-page',
 	'papermirror-explain': '讲解',
-	'papermirror-explain-selection': '解析选中内容',
+	'papermirror-explain-selection': '解析',
 	'papermirror-explain-title': '深度讲解 / Explanation',
 	'papermirror-explain-copy': '复制讲解',
 	'papermirror-explain-save': '保存讲解',

@@ -691,7 +691,7 @@ export class TranslationPane {
 		// 本页」仍在状态胶囊圆环上,不占菜单栏。
 		const refreshChip = this.iconButton(
 			ICON_PATHS.refresh,
-			'清缓存重译全文…(会丢失已翻译内容)',
+			'全文重译(丢失已翻译内容)',
 			() => this.callbacks.onRetranslate(),
 			'pm-refresh'
 		);

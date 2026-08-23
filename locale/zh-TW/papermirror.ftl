@@ -1,6 +1,7 @@
 papermirror-prefpane-label = PaperMirror 文鏡
 papermirror-toolbar-toggle = 中英對照閱讀
 papermirror-explain = 解析
+papermirror-explain-selection = 解析
 papermirror-explain-tip = 解析 PDF 中選取的文字(先選取,再點這裡)
 papermirror-explain-title = 深度解析
 papermirror-explain-no-selection = 請先在 PDF 中選取要解析的文字,或雙擊一個譯文段落。
