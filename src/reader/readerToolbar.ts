@@ -30,6 +30,19 @@ const MENU_CLASS = 'pm-compare-menu';
 const STYLE_ID = 'pm-compare-style';
 
 const SWITCH_CSS = `
+/* Windows 单击无响应的根因 (2.4.3): Zotero 7 在 Windows 上默认隐藏原生标题栏,
+   阅读器工具栏整条落在**窗口拖拽区** (-moz-window-dragging: drag) 内。拖拽区里
+   的元素 mousedown 被窗口移动逻辑接管,click 根本不派发到内容层 —— 表现就是
+   单击没反应、下拉点不开。macOS 的标题栏拖拽走另一套系统机制,点击照常穿透,
+   所以 Mac 一切正常。Zotero 自家工具栏按钮全部显式标了 no-drag;我们注入的
+   节点必须同样退出拖拽区,菜单与菜单项也一样(它们同在这条工具栏里)。 */
+.${SWITCH_CLASS},
+.${BUTTON_CLASS},
+.${CARET_CLASS},
+.${MENU_CLASS},
+.${MENU_CLASS} button {
+	-moz-window-dragging: no-drag;
+}
 .${SWITCH_CLASS} {
 	display: inline-flex;
 	align-items: stretch;
@@ -455,6 +468,18 @@ export class ReaderToolbarController {
 			section.appendChild(this.makeSwitcher(doc, reader));
 			sections.appendChild(section);
 			logger.info(MODULE, 'Injected compare button into already-open reader');
+			// 拖拽区自检 (2.4.3): 直接读注入后的**计算值** —— 若这里不是 no-drag,
+			// 说明 no-drag 规则没生效(样式未注入/被覆盖),Windows 上的点击就会
+			// 继续被窗口移动逻辑吃掉。纯几何/字符串,不含任何文档内容。
+			try {
+				const wrap = section.querySelector(`.${SWITCH_CLASS}`);
+				const win = doc.defaultView;
+				if (wrap && win) {
+					const drag = win.getComputedStyle(wrap).getPropertyValue('-moz-window-dragging').trim();
+					logger.debug(MODULE, `toolbar drag region: -moz-window-dragging=${drag || '(unset)'}`);
+				}
+			}
+			catch { /* 自检纯诊断,失败不影响注入 */ }
 		}
 		catch (e) {
 			logger.warn(MODULE, 'Direct toolbar injection failed', e);

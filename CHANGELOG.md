@@ -7,6 +7,21 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.4.3] — 2026-08-23
+
+### Fixed
+
+- **Windows 上工具栏按钮单击无反应、下拉点不开(macOS 正常)**。根因不在点击
+  逻辑,而是 Firefox/XUL 的**窗口拖拽区**:Zotero 7 在 Windows 上默认隐藏原生
+  标题栏,阅读器工具栏整条落在 `-moz-window-dragging: drag` 区域内;区域内元素
+  的 mousedown 被窗口移动逻辑接管,`click` 根本不派发到内容层。macOS 的标题栏
+  拖拽走另一套系统机制,点击照常穿透 —— 这就是"只有 Windows 坏"的原因。
+  Zotero 自家工具栏按钮全部显式标了 `no-drag`,我们注入的节点漏了。现在
+  `.pm-compare-wrap / -btn / -caret / -menu` 及菜单项一并声明
+  `-moz-window-dragging: no-drag`。
+- 注入后增加**拖拽区自检**(仅调试日志):读回 `-moz-window-dragging` 的计算值,
+  若不是 `no-drag` 说明样式未生效,一眼可辨。纯字符串,不含文档内容。
+
 ## [2.4.2] — 2026-08-23
 
 ### Changed
