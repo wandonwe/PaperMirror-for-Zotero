@@ -371,8 +371,17 @@ function classify(text: string, fontSize: number, bodySize: number, lineCount: n
 	// heading. NOT applied to the title arm above: a real wrapped title splits
 	// into fragments that can end with a hyphen ("… Pediatric Photon-") or
 	// begin lowercase ("counting CT").
+	//
+	// 长度上限 160 → 70 (2.4.7, 由 jacc-ccta2020-p1 语料实证): ratio ≥ 1.1 这条
+	// 门槛在**字号种类多的封面页**上会连环误判 —— 该页 6.0pt 的单位/披露声明有
+	// 26 行、7.5pt 的摘要只有 17 行,于是 dominantFontSize 把 bodySize 判成 6.0pt,
+	// 摘要行 ratio = 1.249 越过 1.1,整段摘要被切成「heading + 正文 + heading +
+	// heading」四块。真 heading 是**短标签**:全语料 22 个 heading 中位 16 字、
+	// 除这两处误判外最长 42 字,而误判的是 108/112 字的摘要行 —— 43~107 之间
+	// 是一条干净的空隙,70 落在正中,两侧余量都充足。收紧后该页摘要合并回一整块,
+	// 其余 12 页语料快照零改动。
 	const proseContinuation = /^[a-z]/.test(text.trim()) || /[-,]$/.test(text.trim());
-	if (lineCount <= 2 && text.length < 160
+	if (lineCount <= 2 && text.length < 70
 		&& ((ratio >= 1.1 && !proseContinuation)
 			|| isSectionNumberHeading(text)
 			|| /^(abstract|introduction|methods?|results|discussion|conclusions?|references|摘要|引言|方法|结果|讨论|结论)\s*$/i.test(text))) {
