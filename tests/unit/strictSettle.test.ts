@@ -344,3 +344,92 @@ test('annexCandidateBoxes: 越出页面安全边 (2%/98%) 的候选不产出', a
 	// 两头都放不下 (页面极矮) → 空数组,调用方落回放弃流程。
 	assert.equal(annexCandidateBoxes({ left: 0, top: 10, width: 400, height: 30 }, 40, 60, 6).length, 0);
 });
+
+// ---- LO-10 (2.4.6): 扩展新占的条带 — pure --------------------------------
+
+test('expansionStrips: 只产出新增部分,原盒不采样(原盒底下是本块自己的原文)', async () => {
+	const { expansionStrips } = await import('../../src/ui/strictPageReplacement');
+	const ob = { left: 100, top: 200, width: 300, height: 60 };
+	// 只向右长: 一条右条,原高。
+	assert.deepEqual(expansionStrips(ob, { ...ob, width: 340 }), [
+		{ left: 400, top: 200, width: 40, height: 60 }
+	]);
+	// 只向下长: 一条下条,原宽。
+	assert.deepEqual(expansionStrips(ob, { ...ob, height: 90 }), [
+		{ left: 100, top: 260, width: 300, height: 30 }
+	]);
+	// 没长 → 不产出,连采样都不必做。
+	assert.deepEqual(expansionStrips(ob, { ...ob }), []);
+});
+
+test('expansionStrips: 双向长时两条不重叠, 合起来正好覆盖 L 形(含拐角)', async () => {
+	const { expansionStrips } = await import('../../src/ui/strictPageReplacement');
+	const ob = { left: 100, top: 200, width: 300, height: 60 };
+	const strips = expansionStrips(ob, { ...ob, width: 340, height: 90 });
+	assert.equal(strips.length, 2);
+	const [right, down] = strips as [typeof ob, typeof ob];
+	// 右条只占原高范围 —— 与下条不重叠。
+	assert.deepEqual(right, { left: 400, top: 200, width: 40, height: 60 });
+	// 下条取**扩展后全宽**,才能盖住 L 形右下的拐角。
+	assert.deepEqual(down, { left: 100, top: 260, width: 340, height: 30 });
+	assert.equal(right.top + right.height, down.top, '两条首尾相接,无缝无叠');
+	// 面积之和 = 扩展后面积 − 原面积。
+	const added = right.width * right.height + down.width * down.height;
+	assert.equal(added, 340 * 90 - 300 * 60);
+});
+
+test('expansionStrips: 亚像素级增长按 minSize 忽略,不为半个像素做采样', async () => {
+	const { expansionStrips } = await import('../../src/ui/strictPageReplacement');
+	const ob = { left: 0, top: 0, width: 100, height: 20 };
+	assert.deepEqual(expansionStrips(ob, { ...ob, width: 100.4 }, 1), []);
+	assert.equal(expansionStrips(ob, { ...ob, width: 102 }, 1).length, 1);
+});
+
+// ---- LO-10 (2.4.6): 墨迹阈值 —— 为什么扩边不能用另置那 2% 的口径 -----------
+
+const WHITE: [number, number, number] = [255, 255, 255];
+/** 造一张纯白条带,可选在某一列画一条 1px 竖线(分栏线的形状)。 */
+function strip(width: number, height: number, lineAtX?: number): Uint8ClampedArray {
+	const data = new Uint8ClampedArray(width * height * 4).fill(255);
+	if (lineAtX !== undefined) {
+		for (let y = 0; y < height; y++) {
+			const o = (y * width + lineAtX) * 4;
+			data[o] = 0; data[o + 1] = 0; data[o + 2] = 0;
+		}
+	}
+	return data;
+}
+
+test('墨迹阈值: 1px 分栏竖线 —— 另置口径 (2%) 漏掉, 扩边口径 (0.5%) 抓到', async () => {
+	const { bitmapHasInk } = await import('../../src/ui/strictPageReplacement');
+	// 100×30 的条带里一条 1px 竖线 ≈ 1% 面积 —— 正好卡在两档口径之间。
+	const data = strip(100, 30, 50);
+	assert.equal(
+		bitmapHasInk(data, 100, 30, WHITE, { minShare: 0.02, minPoints: 1 }), false,
+		'2% 口径漏掉细线 —— 这正是 LO-10 说的失明'
+	);
+	assert.equal(
+		bitmapHasInk(data, 100, 30, WHITE, { minShare: 0.005, minPoints: 3 }), true,
+		'0.5% 口径抓到 → 该次扩展被拒,译文不会叠印在分栏线上'
+	);
+});
+
+test('墨迹阈值: 纯白条带两档都放行 —— 真空白处照常扩边', async () => {
+	const { bitmapHasInk } = await import('../../src/ui/strictPageReplacement');
+	const blank = strip(100, 30);
+	assert.equal(bitmapHasInk(blank, 100, 30, WHITE, { minShare: 0.005, minPoints: 3 }), false);
+	assert.equal(bitmapHasInk(blank, 100, 30, WHITE, { minShare: 0.02, minPoints: 1 }), false);
+});
+
+test('墨迹阈值: minPoints 挡住单点噪声, 不让反锯齿把扩边判死', async () => {
+	const { bitmapHasInk } = await import('../../src/ui/strictPageReplacement');
+	const data = strip(60, 20);
+	// 单个孤立黑点(反锯齿残留/压缩噪声)不该否决整次扩展。
+	data[(10 * 60 + 30) * 4] = 0; data[(10 * 60 + 30) * 4 + 1] = 0; data[(10 * 60 + 30) * 4 + 2] = 0;
+	assert.equal(bitmapHasInk(data, 60, 20, WHITE, { minShare: 0.005, minPoints: 3 }), false, '单点不算墨迹');
+});
+
+test('墨迹阈值: 空区域安全返回 false, 不抛', async () => {
+	const { bitmapHasInk } = await import('../../src/ui/strictPageReplacement');
+	assert.equal(bitmapHasInk(new Uint8ClampedArray(0), 0, 0, WHITE, { minShare: 0.005, minPoints: 3 }), false);
+});

@@ -12,7 +12,8 @@ const base: StrictPageStats = {
 	imageExcluded: 0,
 	untranslated: 0,
 	tooSmall: 0,
-	annexed: 0
+	annexed: 0,
+	inkBlocked: 0
 };
 
 test('placed is exactly committed — table text cells are NOT added on top (issue 3)', () => {

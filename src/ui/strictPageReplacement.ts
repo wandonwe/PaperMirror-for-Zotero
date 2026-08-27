@@ -126,6 +126,83 @@ export function allowsFontShrink(blockType: string, opts?: { isTableCell?: boole
  * 两端各留 2% 页高的安全边;放不进页面的候选直接不出。宽度沿用标题原盒宽
  * (展示型标题通常横贯版心),left 不动 —— 另置只在垂直向找空白。
  */
+/**
+ * LO-10 (2.4.6) 像素级墨迹判据 — pure,便于单测阈值。
+ *
+ * `data` 是 RGBA 扫描结果(canvas getImageData 的 data),`paper` 是纸色。
+ * 按 stride 抽样(总点数约 ≤900),数出与纸色距离超过 `distance` 的点。
+ * 两个门槛都要过:占比 > `minShare`,且绝对命中数 ≥ `minPoints`。
+ *
+ * 两档口径的由来:判「这块区域是不是空白」(另置)用 2%;抓「有没有一条细线」
+ * (扩边)必须低得多 —— 一条 1px 分栏竖线在 100px 宽的条带里只占 1%,2% 必漏。
+ * 低门槛带来的单点噪声由 `minPoints` 挡住。
+ */
+export function bitmapHasInk(
+	data: ArrayLike<number>,
+	width: number,
+	height: number,
+	paper: [number, number, number],
+	opts: { minShare: number; minPoints: number; distance?: number }
+): boolean {
+	if (width <= 0 || height <= 0) {
+		return false;
+	}
+	const distance = opts.distance ?? 48;
+	const [pr, pg, pb] = paper;
+	const stride = Math.max(1, Math.floor(Math.sqrt((width * height) / 900)));
+	let inked = 0;
+	let total = 0;
+	for (let yy = 0; yy < height; yy += stride) {
+		for (let xx = 0; xx < width; xx += stride) {
+			const o = (yy * width + xx) * 4;
+			total++;
+			if (Math.abs((data[o] ?? 0) - pr) + Math.abs((data[o + 1] ?? 0) - pg)
+				+ Math.abs((data[o + 2] ?? 0) - pb) > distance) {
+				inked++;
+			}
+		}
+	}
+	return total > 0 && inked >= opts.minPoints && inked / total > opts.minShare;
+}
+
+/**
+ * LO-10 (2.4.6) 扩展新占的条带 — pure。
+ *
+ * 一次扩展可能同时向右和向下长。新占的地方是「扩展后盒 − 原盒」这个 L 形区域,
+ * 拆成两条不重叠的矩形:右条(原高,右侧新增宽)、下条(**扩展后的全宽**,
+ * 下方新增高)—— 下条取全宽才能覆盖 L 形的拐角,两条合起来恰好是那个 L,
+ * 且互不重叠(右条只占原高范围)。
+ *
+ * 只返回**新增**部分:原盒底下是本块自己的原文,它会被遮罩盖掉,采样它只会
+ * 得到假阳性。宽/高没长的方向不产出条带。
+ */
+export function expansionStrips(
+	original: { left: number; top: number; width: number; height: number },
+	expanded: { left: number; top: number; width: number; height: number },
+	minSize = 1
+): { left: number; top: number; width: number; height: number }[] {
+	const strips: { left: number; top: number; width: number; height: number }[] = [];
+	const grewRight = expanded.width - original.width;
+	const grewDown = expanded.height - original.height;
+	if (grewRight >= minSize) {
+		strips.push({
+			left: original.left + original.width,
+			top: original.top,
+			width: grewRight,
+			height: original.height
+		});
+	}
+	if (grewDown >= minSize) {
+		strips.push({
+			left: original.left,
+			top: original.top + original.height,
+			width: Math.max(original.width, expanded.width),
+			height: grewDown
+		});
+	}
+	return strips;
+}
+
 export function annexCandidateBoxes(
 	original: { left: number; top: number; width: number; height: number },
 	naturalHeight: number,
@@ -185,6 +262,9 @@ export interface StrictPageStats {
 	/** LO-7 (2.4.0): 大标题原位放不下、译文整体另置成功的块数(已含在
 	 * `committed` 里,单列仅供诊断观察另置策略的启用频率)。 */
 	annexed: number;
+	/** LO-10 (2.4.6): 因新占区域压上未建模墨迹而被否决的扩展次数(按次计)。
+	 * 不是失败 —— 块回退原盒后继续走压缩/缩字/保留原文的既有流程。 */
+	inkBlocked: number;
 }
 
 export interface StrictPageResult {
@@ -548,6 +628,9 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// LO-7 (2.4.0): 展示型大标题原位放不下、改为「整体另置」成功的块数。
 	// 另置块同时计入 committed(它确实显示了),这里单列供诊断观察。
 	let annexed = 0;
+	// LO-10 (2.4.6): 因新占条带上有**未建模墨迹**(分节横线/分栏竖线等)而被
+	// 否决的扩展次数 —— 这些块本来会叠印上去且审计看不见。按次计,非按块。
+	let inkBlocked = 0;
 	for (const block of translatable) {
 		if (consumedMemberIds.has(block.id)) {
 			continue; // owned by the table cell model (translated cell or kept original)
@@ -914,6 +997,49 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		item.node.style.height = `${height}px`;
 	};
 
+	// ---- LO-10 (2.4.6): 未建模墨迹 —— 扩边前对底图采样 -------------------------
+	// 扩边的避让清单只认**建模过**的东西:图形盒、preserve 墨迹、兄弟块盒。页面上
+	// 还有一类墨迹从不进任何模型 —— 分节横线、分栏竖线、脚注分隔线、装饰边框。
+	// 扩边对它们失明,译文盒长过去就是叠印;末端审计同样看不见,不会回退。
+	// 2.4.0 的大标题另置已经证明「拿渲染底图当真相」这条路可行,这里把它推广到
+	// 扩边路径:只采样**新增的那一条**(原盒底下是本块自己的原文,它会被遮罩,
+	// 采样它只会得到假阳性),命中未建模墨迹即拒绝这次扩展,回退原盒。
+	// 阈值比另置路径低得多:另置要判「这块区域是不是空白」,而这里要抓的是
+	// **一条细线** —— 一条 1px 分栏竖线在 100px 宽的条带里只占 1%,用另置的 2%
+	// 门槛必然漏掉。改为 0.5% 且至少 3 个采样点命中(挡住反锯齿单点噪声)。
+	const INK_COLOUR_DISTANCE = 48;
+	const paperRgb = parseRgb(paper);
+	const regionHasInk = (b: PixelBox, minShare: number, minPoints: number): boolean => {
+		if (!ctx) {
+			return false; // 无底图可采样时不否决 —— 交给 boxNewlyViolates 兜底
+		}
+		try {
+			const [pr, pg, pb] = paperRgb;
+			const x = Math.max(0, Math.round(b.left * BITMAP_SCALE));
+			const y = Math.max(0, Math.round(b.top * BITMAP_SCALE));
+			const w = Math.min(ctx.canvas.width - x, Math.round(b.width * BITMAP_SCALE));
+			const h = Math.min(ctx.canvas.height - y, Math.round(b.height * BITMAP_SCALE));
+			if (w <= 0 || h <= 0) {
+				return true; // 出界当作有墨,让候选被拒
+			}
+			const data = ctx.getImageData(x, y, w, h).data;
+			return bitmapHasInk(data, w, h, [pr, pg, pb], { minShare, minPoints, distance: INK_COLOUR_DISTANCE });
+		}
+		catch {
+			return false; // 采样失败不否决(与探针同姿态),几何预校验仍在
+		}
+	};
+	/** 另置路径的口径 (2.4.0 原样): 判「这块区域是不是空白」。 */
+	const areaHasInk = (b: PixelBox): boolean => regionHasInk(b, 0.02, 1);
+	/** 扩边路径的口径 (2.4.6): 抓细线,门槛低、要求至少 3 点命中。 */
+	const stripHasInk = (b: PixelBox): boolean => regionHasInk(b, 0.005, 3);
+	/**
+	 * 这次扩展新占的地方有未建模墨迹吗?只看**新增条带**,不看原盒。
+	 * 任一条带命中即拒。
+	 */
+	const expansionHitsInk = (item: StrictItem): boolean =>
+		expansionStrips(item.originalBox, item.box).some(stripHasInk);
+
 	// ---- 提交前几何预校验 (2.2.3, 计划 第三批 item4 · 页面级原子提交) ----------
 	// 与末端 pmGeometryAudit 同一套「新增侵入>容差」判据(boxNewlyViolates),但在
 	// **揭示之前**核验:扩展后的块只有既适配、又不新压盖已提交块/图形/preserve/
@@ -964,10 +1090,15 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			let fits = false;
 			for (const [w, h] of expansions) {
 				applyBox(item, w, h);
-				// 既适配、又不新压盖邻居/图形/preserve/出界 —— 提交前预校验 (item4)。
-				if (ladderFits(item) && !violatesGeometry(item)) {
+				// 既适配、又不新压盖邻居/图形/preserve/出界 —— 提交前预校验 (item4);
+				// 新占的条带还不能压上未建模墨迹(分节横线/分栏竖线,LO-10 2.4.6)。
+				const clean = ladderFits(item) && !violatesGeometry(item);
+				if (clean && !expansionHitsInk(item)) {
 					fits = true;
 					break;
+				}
+				if (clean) {
+					inkBlocked++; // 几何干净、只输在未建模墨迹上
 				}
 			}
 			if (fits) {
@@ -1006,7 +1137,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			}
 			for (const [w, h] of expansions) {
 				applyBox(item, w, h);
-				fits = ladderFits(item) && !violatesGeometry(item); // 扩展提交前预校验 (item4)
+				// 预校验 (item4) + 未建模墨迹闸 (LO-10 2.4.6)。
+				const clean = ladderFits(item) && !violatesGeometry(item);
+				fits = clean && !expansionHitsInk(item);
+				if (clean && !fits) {
+					inkBlocked++;
+				}
 				if (fits) {
 					break;
 				}
@@ -1035,7 +1171,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				if (!fits && expansions.length) {
 					const last = expansions[expansions.length - 1]!;
 					applyBox(item, last[0], last[1]);
-					fits = ladderFits(item) && !violatesGeometry(item); // 组合扩展也预校验 (item4)
+					// 组合扩展同样预校验 (item4) + 墨迹闸 (LO-10 2.4.6)。
+					fits = ladderFits(item) && !violatesGeometry(item) && !expansionHitsInk(item);
 				}
 			}
 			if (fits) {
@@ -1059,38 +1196,6 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// 落回既有放弃流程。旋转刊名条在提取层就被排除,不进此路径。
 	const ANNEX_FONT_STEPS = [0.72, 0.6, 0.5];
 	const ANNEX_GAP = 6;
-	const areaHasInk = (b: PixelBox): boolean => {
-		if (!ctx) {
-			return false; // 无底图可采样时不否决 —— 交给 boxNewlyViolates 兜底
-		}
-		try {
-			const [pr, pg, pb] = parseRgb(paper);
-			const x = Math.max(0, Math.round(b.left * BITMAP_SCALE));
-			const y = Math.max(0, Math.round(b.top * BITMAP_SCALE));
-			const w = Math.min(ctx.canvas.width - x, Math.round(b.width * BITMAP_SCALE));
-			const h = Math.min(ctx.canvas.height - y, Math.round(b.height * BITMAP_SCALE));
-			if (w <= 0 || h <= 0) {
-				return true; // 出界当作有墨,让位置候选被拒
-			}
-			const data = ctx.getImageData(x, y, w, h).data;
-			const stride = Math.max(1, Math.floor(Math.sqrt((w * h) / 900))); // ≤~900 采样点
-			let inked = 0;
-			let total = 0;
-			for (let yy = 0; yy < h; yy += stride) {
-				for (let xx = 0; xx < w; xx += stride) {
-					const o = (yy * w + xx) * 4;
-					total++;
-					if (Math.abs((data[o] ?? 0) - pr) + Math.abs((data[o + 1] ?? 0) - pg) + Math.abs((data[o + 2] ?? 0) - pb) > 48) {
-						inked++;
-					}
-				}
-			}
-			return total > 0 && inked / total > 0.02;
-		}
-		catch {
-			return false; // 采样失败不否决(与探针同姿态),几何预校验仍在
-		}
-	};
 	const restoreOriginalBox = (item: StrictItem): void => {
 		item.box = { ...item.originalBox };
 		item.node.style.fontSize = `${item.fontPx.toFixed(2)}px`;
@@ -1316,7 +1421,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		return {
 			replaceable: items.length,
 			committed, abandoned, pending,
-			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed
+			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed, inkBlocked
 		};
 	};
 
@@ -1327,7 +1432,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		stats: {
 			replaceable: items.length,
 			committed: 0, abandoned: 0, pending: items.length,
-			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed: 0
+			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed: 0, inkBlocked: 0
 		}
 	};
 }
