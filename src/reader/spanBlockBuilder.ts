@@ -26,6 +26,7 @@ import type { BlockType, SourceBlock } from '../types/models';
 import { detectTableRegions } from './tableGuard';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
 import { isMetadataBlock, isPublisherBoilerplateLine, isRunningHeadOrFoot } from './metaFilter';
+import type { RepeatObserver } from './repeatRegistry';
 import {
 	columnOf,
 	detectColumns,
@@ -388,6 +389,11 @@ export interface SpanBuildOptions {
 	pageWidth?: number;
 	includeReferences?: boolean;
 	referencesAlreadyStarted?: boolean;
+	/**
+	 * 跨页重复登记表 (2.4.5, MinerU 页眉页脚去重)。文档级状态,由 TextExtractor
+	 * 持有并逐页喂入。缺省(单测/纯函数调用)时行为与从前逐字节一致。
+	 */
+	repeats?: RepeatObserver;
 }
 
 export interface SpanBuildResult {
@@ -606,6 +612,17 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			// band, and losing it is far worse than translating one running head.
 			if (p.type !== 'title' && isRunningHeadOrFoot(p.rect, options.pageHeight, p.group.length, p.text)) {
 				continue;
+			}
+			// 跨页重复去重 (2.4.5, MinerU): 先登记本页页边带内的候选,再问登记表
+			// 「这条在够多的**不同页**上出现过吗」。这抓的是上面单页形状判据的
+			// 结构性盲区 —— 落在带外或超过 2 行/140 字的版权与许可声明块。
+			// `title` 同样豁免(理由同上:封面标题可能落在带内)。纯附加:登记表
+			// 只会多丢,不会把上面已经丢掉的救回来。
+			if (p.type !== 'title' && options.repeats) {
+				options.repeats.observe(options.pageIndex, p.text, p.rect, options.pageHeight, p.type);
+				if (options.repeats.isRepeated(p.text)) {
+					continue;
+				}
 			}
 			if ((p.type === 'heading' || p.type === 'title') && REFERENCES_HEADINGS.test(p.text)) {
 				referencesStarted = true;
