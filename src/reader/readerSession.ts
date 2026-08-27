@@ -41,6 +41,27 @@ import type { ReaderLike, PageRender } from './zoteroReaderAdapter';
 import { LruCache } from '../util/lru';
 
 const MODULE = 'readerSession';
+
+/**
+ * 页底图缓存的像素预算 (2.5.3)。16M 像素 ≈ 64MB @4B/px —— 比原来「4 条 ×
+ * 最坏 3.2M px」的 ~50MB 略高,但换来的是回看命中率:窄栏/中等缩放下一张
+ * 底图往往只有 1–2M 像素,同样的内存能多存一倍以上的页。
+ */
+const BASE_BITMAP_PIXEL_BUDGET = 16_000_000;
+
+/**
+ * 立刻释放 canvas 的后备存储 —— 把宽高清零比等 GC 回收几十 MB 的位图靠谱。
+ * 只对我们自己 rasterize 出来的独立底图调用;左视图的 live canvas 从不入缓存。
+ */
+function releaseCanvas(canvas: HTMLCanvasElement): void {
+	try {
+		canvas.width = 0;
+		canvas.height = 0;
+	}
+	catch {
+		// canvas 已被文档丢弃: 无所谓,GC 会收
+	}
+}
 // 兜底轮询间隔 (2.2.9, 计划 第四批 item1 · PF-8): 页变化改为事件驱动
 // (updateviewarea 每滚动帧触发 syncCurrentPage),轮询只兜事件失效的底
 // (eventBus 不可得/事件被吞),350ms → 1500ms;窗口不可见时 tick 直接跳过。
@@ -140,11 +161,20 @@ export class ReaderSession {
 	 * 独立底图,键 = `${page}@${宽度桶}`。切换页/回看/在原宽度重渲染时命中即复用
 	 * 底图,buildStrictPage 只重建遮罩+文本层,省掉最贵的 pdf.js 整页 rasterize。
 	 * 底图只随 (页, 宽度) 变,与译文/配置无关 → 无需失效,仅靠容量淘汰与 dispose。
-	 * 容量取小(4):单张底图受 oversample 像素预算封顶(~3.2M px ≈ 13MB),4 张
-	 * 够覆盖可视区+近邻回看(同宽度重建/对照切换/relayout 全部命中),内存上界
-	 * ~50MB,dispose 全释放。
+	 *
+	 * 按像素计容 (2.5.3): 原来按**条数**取 4 —— 上限只能照最坏的一张定
+	 * (整页 ~3.2M px ≈ 13MB × 4 ≈ 50MB),于是窄栏那种一张只有几十万像素的
+	 * 情形也只敢存 4 张。往回翻超过 4 页必然落空,要整页重新 rasterize
+	 * (getPage 轮询 5s + 渲染 12s 的预算),回看时先转一会儿圈才出译文。
+	 * 现在预算 = 16M 像素(≈64MB @4B/px):最坏情形 5 张,常见的窄栏/中等
+	 * 缩放下 7–10 张,内存上界反而比原来更可控。淘汰即把 canvas 尺寸清零,
+	 * 不等 GC。
 	 */
-	private baseBitmaps = new LruCache<PageRender>(4);
+	private baseBitmaps = new LruCache<PageRender>(
+		BASE_BITMAP_PIXEL_BUDGET,
+		(_key, render) => releaseCanvas(render.canvas),
+		(render) => Math.max(1, render.canvas.width * render.canvas.height)
+	);
 	/** 讲解结果缓存 (2.3.5, item7 · API-8): 段落+引擎/模型/语言 → 解析节。 */
 	private explainCache = new LruCache<ExplanationSection[]>(20);
 	/**

@@ -65,3 +65,78 @@ test('a burst of same-key hits keeps size at 1 (revisit/zoom-back reuse)', () =>
 	}
 	assert.equal(c.size, 1, 'repeated revisits of one (page,width) never grow the cache');
 });
+
+// ---- 按权重计容 (2.5.3) -----------------------------------------------------
+
+test('计权时 capacity 是权重总量,不是条数', () => {
+	const evicted: string[] = [];
+	const cache = new LruCache<{ px: number }>(
+		100,
+		(k) => { evicted.push(k); },
+		(v) => v.px
+	);
+	cache.set('a', { px: 40 });
+	cache.set('b', { px: 40 });
+	assert.equal(cache.size, 2);
+	assert.equal(cache.weight, 80);
+	cache.set('c', { px: 40 }); // 120 > 100 → 淘汰最久未用的 a
+	assert.deepEqual(evicted, ['a']);
+	assert.equal(cache.size, 2);
+	assert.equal(cache.weight, 80);
+	// 小条目能存更多 —— 这正是按像素计容的意义
+	cache.set('d', { px: 5 });
+	cache.set('e', { px: 5 });
+	assert.equal(cache.size, 4);
+	assert.deepEqual(cache.keys(), ['b', 'c', 'd', 'e']);
+});
+
+test('计权时 get 命中同样保命', () => {
+	const evicted: string[] = [];
+	const cache = new LruCache<{ px: number }>(100, (k) => { evicted.push(k); }, (v) => v.px);
+	cache.set('a', { px: 40 });
+	cache.set('b', { px: 40 });
+	cache.get('a'); // a 变成最近使用
+	cache.set('c', { px: 40 });
+	assert.deepEqual(evicted, ['b'], '被淘汰的应是 b,不是 a');
+});
+
+test('刷新同一个键要按新权重重新计账', () => {
+	const cache = new LruCache<{ px: number }>(100, undefined, (v) => v.px);
+	cache.set('a', { px: 90 });
+	cache.set('a', { px: 10 });
+	assert.equal(cache.weight, 10, '旧权重必须先扣掉,否则总量只增不减');
+	cache.set('b', { px: 80 });
+	assert.equal(cache.size, 2, '账算对了才不会误淘汰');
+});
+
+test('单条就超预算时也要留住它,否则缓存等于永远为空', () => {
+	const evicted: string[] = [];
+	const cache = new LruCache<{ px: number }>(100, (k) => { evicted.push(k); }, (v) => v.px);
+	cache.set('huge', { px: 500 });
+	assert.equal(cache.size, 1);
+	assert.deepEqual(evicted, []);
+	cache.set('next', { px: 10 });
+	assert.deepEqual(evicted, ['huge'], '下一次写入把它挤走,但不是自己挤走自己');
+	assert.equal(cache.size, 1);
+});
+
+test('clear 归零权重账,并对每条触发 onEvict', () => {
+	const evicted: string[] = [];
+	const cache = new LruCache<{ px: number }>(100, (k) => { evicted.push(k); }, (v) => v.px);
+	cache.set('a', { px: 30 });
+	cache.set('b', { px: 30 });
+	cache.clear();
+	assert.deepEqual(evicted.sort(), ['a', 'b']);
+	assert.equal(cache.weight, 0);
+	cache.set('c', { px: 90 });
+	assert.equal(cache.size, 1, '清空后账没归零的话这里会立刻误淘汰');
+});
+
+test('不传 weigh 时行为与旧版逐字一致(按条数)', () => {
+	const cache = new LruCache<number>(2);
+	cache.set('a', 1);
+	cache.set('b', 2);
+	cache.set('c', 3);
+	assert.deepEqual(cache.keys(), ['b', 'c']);
+	assert.equal(cache.weight, 2);
+});

@@ -196,6 +196,118 @@ function dropPendingSegments(pathPrefix?: string): void {
 	}
 }
 
+/**
+ * 段落库解析缓存 + 条目上限 (2.5.3, PF-5)。
+ *
+ * 问题: readSegments 每页都把**整份**共享段落库 readJSON 一遍(为了解析出这一
+ * 页那二十来个 hash),而 2.3.5 把段落库从「每篇一份」改成**全局共享**之后,
+ * 这份文件跨论文只增不减 —— 全仓没有任何 prune/evict,只有「清除全部缓存」能
+ * 删。于是第 N 页读的是已经含前 N−1 页的库:单篇内 O(N²),常数还由你读过的
+ * 所有论文带进来。用户感受就是「越往后翻越慢」。
+ *
+ * 解法两条:
+ *   ① 进程内保留**已解析**的库,用 (size, lastModified) 作指纹校验 —— 命中
+ *      时一次 stat 顶掉一次整库 parse。自己写盘后直接就地更新指纹,连 stat
+ *      都省了。指纹拿不到(stat 缺字段/失败)就老实重读,绝不假定有效。
+ *   ② 库有条目上限,超了在落盘时按**插入序**淘汰最旧的。读命中会把条目重新
+ *      插到末尾(见 readSegments),所以插入序就是近似 LRU。段落 hash 是 16 位
+ *      定长十六进制,超过 2^32 不构成数组下标,Object.keys 严格保持插入序。
+ */
+interface StoreCacheEntry {
+	context: string;
+	segments: Record<string, string>;
+	/** `${size}:${lastModified}` —— 与磁盘一致的证据。 */
+	stamp: string;
+}
+const storeCache = new Map<string, StoreCacheEntry>();
+
+/** 共享段落库的条目上限。约 2 万条 ≈ 十几 MB,跨论文攒得再久也有天花板。 */
+const MAX_SEGMENT_ENTRIES = 20000;
+let maxSegmentEntries = MAX_SEGMENT_ENTRIES;
+/** 仅供测试: 把上限调小,免得为了验证淘汰而真写两万条。 */
+export function setMaxSegmentEntries(n: number): void {
+	maxSegmentEntries = Math.max(1, n | 0);
+}
+
+/** 丢弃解析缓存(删库/清缓存后必须调用,否则会拿着已删文件的内容继续命中)。 */
+function dropStoreCache(pathPrefix?: string): void {
+	if (!pathPrefix) {
+		storeCache.clear();
+		return;
+	}
+	for (const path of [...storeCache.keys()]) {
+		if (path.startsWith(pathPrefix)) {
+			storeCache.delete(path);
+		}
+	}
+}
+
+/** 文件指纹;拿不到可用的 size+lastModified 就返回 null(= 无法证明缓存有效)。 */
+async function statStamp(path: string): Promise<string | null> {
+	try {
+		const st = await (IOUtils as unknown as { stat?(p: string): Promise<{ size?: number; lastModified?: number }> }).stat?.(path);
+		if (typeof st?.size === 'number' && typeof st?.lastModified === 'number') {
+			return `${st.size}:${st.lastModified}`;
+		}
+	}
+	catch {
+		// stat 失败 = 说不清,按缓存未命中处理
+	}
+	return null;
+}
+
+type StoreLoad =
+	| { kind: 'hit'; segments: Record<string, string> }
+	/** 文件不存在 —— 空库是正确起点。 */
+	| { kind: 'missing' }
+	/** 内容确认损坏或 context 不符 —— 允许以空库重建。 */
+	| { kind: 'invalid' }
+	/** 瞬时读失败 —— 什么都别做,尤其别拿空库覆盖(2.0.7 审核 P2-1)。 */
+	| { kind: 'error' };
+
+async function loadSegmentStore(path: string, context: string): Promise<StoreLoad> {
+	const stamp = await statStamp(path);
+	const cached = storeCache.get(path);
+	if (cached && stamp && cached.stamp === stamp && cached.context === context) {
+		return { kind: 'hit', segments: cached.segments };
+	}
+	let exists: boolean;
+	try {
+		exists = await IOUtils.exists(path);
+	}
+	catch {
+		return { kind: 'error' };
+	}
+	if (!exists) {
+		storeCache.delete(path);
+		return { kind: 'missing' };
+	}
+	let data: unknown;
+	try {
+		data = await IOUtils.readJSON(path);
+	}
+	catch (e) {
+		if ((e as Error)?.name === 'SyntaxError') {
+			storeCache.delete(path);
+			return { kind: 'invalid' };
+		}
+		return { kind: 'error' };
+	}
+	if (!isValidCachedSegments(data, context)) {
+		storeCache.delete(path);
+		return { kind: 'invalid' };
+	}
+	// 指纹在**读之后**再取一次: 读前那次可能已被并发写作废。
+	const after = await statStamp(path);
+	if (after) {
+		storeCache.set(path, { context, segments: data.segments, stamp: after });
+	}
+	else {
+		storeCache.delete(path);
+	}
+	return { kind: 'hit', segments: data.segments };
+}
+
 async function flushSegments(path: string): Promise<void> {
 	const p = pendingSegments.get(path);
 	if (!p) {
@@ -212,30 +324,33 @@ async function flushSegments(path: string): Promise<void> {
 	const dir = PathUtils.parent(path);
 	await enqueueWrite(path, async () => {
 		try {
-			let segments: Record<string, string> = {};
-			if (await IOUtils.exists(path)) {
-				// 合并基底的读取失败分类 (2.0.7, 审核 P2-1): 只有内容确认损坏
-				// (SyntaxError)或 context 不符才允许以空库重建;瞬时读失败直接
-				// 放弃本次合并 —— 少写几条段落远好过丢掉整库。
-				let data: unknown;
-				try {
-					data = await IOUtils.readJSON(path);
-				}
-				catch (readError) {
-					if ((readError as Error)?.name !== 'SyntaxError') {
-						logger.warn(MODULE, 'Segment merge base read failed transiently; skipping this write to protect the store', readError);
-						return;
-					}
-					data = null; // 内容确认损坏: 允许重建
-				}
-				if (isValidCachedSegments(data, context)) {
-					segments = data.segments;
-				}
+			// 合并基底的读取失败分类 (2.0.7, 审核 P2-1): 只有内容确认损坏
+			// (SyntaxError)或 context 不符才允许以空库重建;瞬时读失败直接
+			// 放弃本次合并 —— 少写几条段落远好过丢掉整库。命中解析缓存时这里
+			// 一次磁盘 parse 都不做 (2.5.3)。
+			const loaded = await loadSegmentStore(path, context);
+			if (loaded.kind === 'error') {
+				logger.warn(MODULE, 'Segment merge base read failed transiently; skipping this write to protect the store');
+				return;
 			}
+			const segments: Record<string, string> = loaded.kind === 'hit' ? loaded.segments : {};
 			for (const [hash, text] of entries) {
 				if (hash && text) {
+					// 先删后插: 复写一条老段落也要把它移到插入序末尾,否则它会
+					// 顶着旧位置被当成"最旧"淘汰掉。
+					delete segments[hash];
 					segments[hash] = text;
 				}
+			}
+			// 条目上限 (2.5.3): 插入序最旧的先走。读命中会把条目重新插到末尾,
+			// 所以这就是近似 LRU —— 常被命中的样板句活得久,一次性段落先出局。
+			const keys = Object.keys(segments);
+			if (keys.length > maxSegmentEntries) {
+				const drop = keys.length - maxSegmentEntries;
+				for (let i = 0; i < drop; i++) {
+					delete segments[keys[i]!];
+				}
+				logger.info(MODULE, `Segment store trimmed: dropped ${drop} least-recently-used entries (cap ${maxSegmentEntries})`);
 			}
 			const entry: CachedSegments = { schemaVersion: CACHE_SCHEMA_VERSION, context, segments };
 			if (dir) {
@@ -244,8 +359,18 @@ async function flushSegments(path: string): Promise<void> {
 			}
 			await IOUtils.writeJSON(path, entry, { tmpPath: path + '.tmp' });
 			await chmodBestEffort(path, 0o600);
+			// 刚写完的内容就是权威版本: 就地更新解析缓存,下一页连 parse 带
+			// 重读全省。指纹取不到就把缓存丢掉,绝不留一份无法证明有效的。
+			const stamp = await statStamp(path);
+			if (stamp) {
+				storeCache.set(path, { context, segments, stamp });
+			}
+			else {
+				storeCache.delete(path);
+			}
 		}
 		catch (e) {
+			storeCache.delete(path); // 写到一半失败: 内存里那份可能已不对应磁盘
 			logger.warn(MODULE, 'Segment cache write failed (continuing without cache)', e);
 		}
 	});
@@ -284,22 +409,31 @@ export async function readSegments(parts: SegmentContextParts, hashes: string[])
 	// 摘除;任何读失败都只是 miss。
 	const readStore = async (storePath: string, removeInvalid: boolean): Promise<void> => {
 		try {
-			if (!remaining.length || !(await IOUtils.exists(storePath))) {
+			if (!remaining.length) {
 				return;
 			}
-			const data = await IOUtils.readJSON(storePath);
-			if (!isValidCachedSegments(data, context)) {
-				if (removeInvalid) {
-					await IOUtils.remove(storePath, { ignoreAbsent: true });
-				}
+			// 命中解析缓存时这里一次整库 parse 都不做 —— 那正是「越往后翻越慢」
+			// 的来源 (2.5.3)。
+			const loaded = await loadSegmentStore(storePath, context);
+			if (loaded.kind === 'invalid' && removeInvalid) {
+				storeCache.delete(storePath);
+				await IOUtils.remove(storePath, { ignoreAbsent: true });
 				return;
 			}
+			if (loaded.kind !== 'hit') {
+				return;
+			}
+			const segments = loaded.segments;
 			for (let i = remaining.length - 1; i >= 0; i--) {
 				const h = remaining[i]!;
-				const text = data.segments[h];
+				const text = segments[h];
 				if (typeof text === 'string' && text) {
 					out.set(h, text);
 					remaining.splice(i, 1);
+					// LRU 触碰: 命中的条目重新插到插入序末尾,淘汰时最后才轮到
+					// 它。只动内存里这份,不写盘 —— 顺序随下一次落盘自然持久化。
+					delete segments[h];
+					segments[h] = text;
 				}
 			}
 		}
@@ -350,6 +484,7 @@ export async function writeSegments(parts: SegmentContextParts, entries: { hash:
 export async function clearAttachment(attachmentKey: string, fileHash: string): Promise<void> {
 	const dir = PathUtils.join(cacheRootDir(), attachmentDirName(attachmentKey, fileHash));
 	dropPendingSegments(dir); // 删目录前丢弃其未落盘 pending,防止 flush 复活已删文件
+	dropStoreCache(dir);      // 解析缓存同样要丢 —— 否则会拿着已删文件的内容继续命中
 	await IOUtils.remove(dir, { recursive: true, ignoreAbsent: true });
 }
 
@@ -357,6 +492,7 @@ export async function clearAttachment(attachmentKey: string, fileHash: string): 
 export async function clearAttachmentAllVersions(attachmentKey: string): Promise<void> {
 	const root = cacheRootDir();
 	dropPendingSegments(); // 跨版本清理: 保守丢弃全部未落盘 pending
+	dropStoreCache();
 	try {
 		if (!(await IOUtils.exists(root))) {
 			return;
@@ -376,6 +512,7 @@ export async function clearAttachmentAllVersions(attachmentKey: string): Promise
 
 export async function clearAll(): Promise<void> {
 	dropPendingSegments(); // 全清前丢弃全部未落盘 pending
+	dropStoreCache();
 	await IOUtils.remove(cacheRootDir(), { recursive: true, ignoreAbsent: true });
 }
 
@@ -450,6 +587,8 @@ export async function sweepStaleCacheFiles(): Promise<number> {
 			}
 		}
 		if (removed) {
+			// 清扫删过文件: 解析缓存整体作废(启动期通常还是空的,纯属守序)。
+			dropStoreCache();
 			logger.info(MODULE, `Schema sweep removed ${removed} stale cache file(s)`);
 		}
 	}

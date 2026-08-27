@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+/** 单调递增的假 mtime —— 跨用例不复用，避免陈旧指纹意外命中。 */
+let mtimeClock = 1_000;
+
 /**
  * 段落缓存写入串行化 (1.3.0, 审核 P1): 并发 writeSegments 曾是
  * 读旧文件 → 合并 → 原子覆盖 —— 两个页面同时读到 {x},后写者覆盖先写者的
@@ -10,7 +13,14 @@ import assert from 'node:assert/strict';
 
 function installIO(): { files: Map<string, unknown>; teardown: () => void; readDelayMs: number } {
 	const files = new Map<string, unknown>();
+	// 文件元数据: 2.5.3 的解析缓存用 (size, lastModified) 作指纹，假 IOUtils
+	// 必须真的模拟 stat，否则这些用例走的是「指纹拿不到 → 每次重读」的退化
+	// 路径，等于没测到缓存。mtime 全局单调递增，跨用例绝不重复。
+	const meta = new Map<string, { size: number; lastModified: number }>();
 	const state = { readDelayMs: 0 };
+	const stampFile = (p: string, data: unknown): void => {
+		meta.set(p, { size: JSON.stringify(data).length, lastModified: ++mtimeClock });
+	};
 	const delay = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
 	(globalThis as Record<string, any>).IOUtils = {
 		exists: async (p: string) => files.has(p),
@@ -21,11 +31,21 @@ function installIO(): { files: Map<string, unknown>; teardown: () => void; readD
 			}
 			return JSON.parse(JSON.stringify(files.get(p)));
 		},
-		writeJSON: async (p: string, data: unknown) => { await delay(1); files.set(p, JSON.parse(JSON.stringify(data))); },
+		writeJSON: async (p: string, data: unknown) => {
+			await delay(1);
+			files.set(p, JSON.parse(JSON.stringify(data)));
+			stampFile(p, data);
+		},
 		makeDirectory: async () => {},
-		remove: async (p: string) => { files.delete(p); },
+		remove: async (p: string) => { files.delete(p); meta.delete(p); },
 		getChildren: async () => [],
-		stat: async () => ({ type: 'regular', size: 0 })
+		stat: async (p: string) => {
+			const m = meta.get(p);
+			if (!m) {
+				throw new Error('ENOENT');
+			}
+			return { type: 'regular', size: m.size, lastModified: m.lastModified };
+		}
 	};
 	(globalThis as Record<string, any>).PathUtils = {
 		join: (...parts: string[]) => parts.join('/'),
@@ -35,6 +55,16 @@ function installIO(): { files: Map<string, unknown>; teardown: () => void; readD
 	(globalThis as Record<string, any>).Zotero = { DataDirectory: { dir: '/data' } };
 	return {
 		files,
+		/**
+		 * 模拟「别的进程动过这个文件」: 把所有文件的 mtime 往前推。2.5.3 的
+		 * 解析缓存以 (size, lastModified) 为指纹，这一下就让它整体失效，回到
+		 * 必须真读磁盘的路径 —— 下面几条基底读失败的用例正需要那条路径。
+		 */
+		bumpMtime: () => {
+			for (const [p, m] of meta) {
+				meta.set(p, { size: m.size, lastModified: (mtimeClock += 100) });
+			}
+		},
 		get readDelayMs() { return state.readDelayMs; },
 		set readDelayMs(v: number) { state.readDelayMs = v; },
 		teardown: () => {
@@ -145,6 +175,8 @@ test('合并基底瞬时读失败 → 放弃本次写,已有段落库不被截�
 			{ hash: 'old-1', translatedText: '既有译文一' },
 			{ hash: 'old-2', translatedText: '既有译文二' }
 		]);
+		// 先让解析缓存失效 —— 缓存命中时根本不读盘，读失败这条路走不到 (2.5.3)。
+		(io as any).bumpMtime();
 		// 下一次合并写的基底读取瞬时失败 (文件被占用/网盘同步)。
 		(globalThis as Record<string, any>).IOUtils.readJSON = async () => {
 			throw new Error('NS_ERROR_FILE_IS_LOCKED');
@@ -177,6 +209,8 @@ test('合并基底 JSON 确认损坏 (SyntaxError) → 允许以空库重建', a
 		};
 		await writeSegments(parts, [{ hash: 'a', translatedText: '旧' }]);
 		const files = io.files as Map<string, unknown>;
+		// 文件被外部写坏 = mtime 变了，解析缓存随之失效 (2.5.3)。
+		(io as any).bumpMtime();
 		const restore = (globalThis as Record<string, any>).IOUtils.readJSON;
 		(globalThis as Record<string, any>).IOUtils.readJSON = async () => {
 			throw new SyntaxError('Unexpected end of JSON input');
