@@ -117,7 +117,9 @@ function sizeOf(items: SpanItem[]): number {
 }
 
 /** Step 1: items sharing a baseline band, left to right. No x constraint. */
-function groupIntoRows(items: SpanItem[]): SpanItem[][] {
+/** 同基线的 run 成行 —— 导出仅为可测性 (2.4.9): 白槽投票在这一层做,
+ * 切分后的 SpanLine 已经看不到「一行横跨两栏」,拿它做探针必然测不出东西。 */
+export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 	const usable = items.filter((i) => {
 		if (!i.text.trim().length || !Number.isFinite(i.rect[1]) || !Number.isFinite(i.rect[3])) {
 			return false;

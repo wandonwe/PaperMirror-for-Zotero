@@ -4,9 +4,11 @@ import {
 	buildBlocksFromSpans,
 	groupIntoLines,
 	groupIntoParagraphs,
+	groupIntoRows,
 	lineText,
 	type SpanItem
 } from '../../src/reader/spanBlockBuilder';
+import { detectColumns } from '../../src/reader/paragraphHeuristics';
 
 const PAGE_HEIGHT = 792;
 
@@ -356,4 +358,36 @@ test('1.2.2 审核项: 排除参考文献时, 表格行不再绕过参考文献�
 		includeReferences: true, referencesAlreadyStarted: true, imageRectsPdf: []
 	});
 	assert.ok(included.blocks.length >= 12, '包含参考文献时表格行照常提取');
+});
+
+// ---- 栏归属的已知缺陷 (2.4.9, 由 radiology-radiomics2023-p1 语料定位) --------
+// 现状固化为测试:满幅前言压倒双栏正文时,detectColumns 只报 1 栏。
+// 这一条**断言的是缺陷本身**,修好之后它会失败 —— 那正是提示去更新它。
+
+test('已知缺陷: 满幅前言占多数时,双栏正文的栏归属失败 (RSNA 封面页形态)', () => {
+	// 40 行满幅前言(标题/作者/单位/摘要)+ 12 行双栏正文。真白槽在 x≈292–308。
+	const items: SpanItem[] = [];
+	for (let i = 0; i < 40; i++) {
+		// 满幅行:宽度参差(段末行天然短),部分落在 0.62 全幅阈值之下 →
+		// 混进投影,横跨白槽把两栏焊在一起。
+		const right = i % 3 === 0 ? 341 : i % 3 === 1 ? 526 : 444;
+		items.push(span(`front matter line ${i} spanning the full text block`, 72, 740 - i * 9, right - 72, 7));
+	}
+	for (let i = 0; i < 12; i++) {
+		items.push(span(`left column body line ${i}`, 72, 300 - i * 12, 219));
+		items.push(span(`right column body line ${i}`, 309, 300 - i * 12, 219));
+	}
+	const lines = groupIntoLines(items, 594, 783);
+	const bands = detectColumns(lines.map(l => l.rect), 594, 783);
+	assert.equal(bands.length, 1, '当前行为: 只识别出 1 栏 —— 双栏正文的栏归属丢失');
+	// 修好后应为 2 栏且白槽在 291–309 之间;届时把上面一行改成:
+	//   assert.equal(bands.length, 2);
+	//   assert.ok(bands[0]!.right < 300 && bands[1]!.left > 300);
+
+	// 对照组 —— 这一条保证上面测的是**前言压倒**,而不是夹具本身就认不出栏:
+	// 同样的 12 行双栏正文,去掉前言,栏归属完全正常。
+	const bodyOnly = items.slice(40);
+	const clean = detectColumns(groupIntoLines(bodyOnly, 594, 783).map(l => l.rect), 594, 783);
+	assert.equal(clean.length, 2, '对照: 只有正文时正常识别出 2 栏');
+	assert.ok(clean[0]!.right < 300 && clean[1]!.left > 300, '对照: 白槽落在 291–309');
 });
