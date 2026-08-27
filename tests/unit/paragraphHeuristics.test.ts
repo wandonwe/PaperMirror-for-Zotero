@@ -8,6 +8,7 @@ import {
 	endsSentence,
 	joinFragments,
 	looksLikeListStart,
+	looksLikeListBlock,
 	planMerges,
 	reachesRightMargin,
 	shouldBreak,
@@ -311,4 +312,68 @@ test('ordered-list vs section-number classification', async () => {
 	assert.equal(isSectionNumberHeading('1.1 Background'), true);
 	assert.equal(isSectionNumberHeading('4.6.1 Results'), true);
 	assert.equal(isSectionNumberHeading('3. Methods'), false);
+});
+
+// ---- 块级列表/目录判定 (2.4.4, MinerU __is_list_or_index_block) -------------
+
+test('列表块 (a): 多个条目标记被黏成一块 → list,不再被并进正文段', () => {
+	// groupIntoParagraphs 把整段参考文献黏成一个块时,只有第一行带 [1] ——
+	// 逐行的 looksLikeListStart 看不见后面的条目,块级判据能。
+	assert.equal(looksLikeListBlock([
+		'[1] Smith J, Doe A. Photon-counting CT of the lumbar spine. Radiology. 2023;18:e1307.',
+		'[2] Wang L, Chen H. Dual-energy imaging in oncology. Eur Radiol. 2022;32:441-450.',
+		'[3] Horst M. Spectral reconstruction methods. J Med Phys. 2024;51:88-97.'
+	]), true);
+	// 项目符号列表同理。
+	assert.equal(looksLikeListBlock([
+		'• 首次采集使用标准剂量协议',
+		'• 第二次采集降低至 50% 剂量',
+		'• 两次采集间隔不超过 30 天'
+	]), true);
+});
+
+test('列表块 (b): 目录引导点行 → list', () => {
+	assert.equal(looksLikeListBlock([
+		'1. Introduction ................................ 5',
+		'2. Materials and Methods ................. 12',
+		'3. Results ......................................... 24'
+	]), true);
+});
+
+test('列表块 (c): ≥3 行各自以句末标点收尾 → list (MinerU 主判据)', () => {
+	assert.equal(looksLikeListBlock([
+		'All participants provided written informed consent.',
+		'The study was approved by the institutional review board.',
+		'No adverse events were recorded during follow-up.'
+	]), true);
+	// 分号收尾同样算条目。
+	assert.equal(looksLikeListBlock([
+		'纳入标准为年龄大于 18 岁;',
+		'排除标准为既往接受过介入治疗;',
+		'所有影像由两名放射科医师独立评估。'
+	]), true);
+});
+
+test('列表块: 折行的散文段不误判 —— 除末行外都停在句子中间', () => {
+	assert.equal(looksLikeListBlock([
+		'Photon-counting detector CT enables spectral separation without the',
+		'dose penalty of dual-source acquisition, which has limited the routine',
+		'use of virtual noncalcium reconstructions in the lumbar spine.'
+	]), false);
+	assert.equal(looksLikeListBlock([
+		'光子计数探测器 CT 能够在不增加辐射剂量的前提下完成能谱分离,这一点',
+		'正是既往双源方案难以在腰椎常规检查中推广的原因所在,因而本研究',
+		'重点评估其在椎间盘突出检出中的表现。'
+	]), false);
+});
+
+test('列表块: ≥3 行的保守边界 —— 两行都以句号结尾在散文里很常见,不算', () => {
+	// "…et al." / "…2019." 这类巧合在真散文里并不罕见,两行不足以定性。
+	assert.equal(looksLikeListBlock([
+		'The method was first described by Smith et al.',
+		'A refined variant was published in 2019.'
+	]), false);
+	// 单行块没有「行分布」可言,交给逐行判据。
+	assert.equal(looksLikeListBlock(['[1] Smith J. A single reference entry. Radiology. 2023.']), false);
+	assert.equal(looksLikeListBlock([]), false);
 });

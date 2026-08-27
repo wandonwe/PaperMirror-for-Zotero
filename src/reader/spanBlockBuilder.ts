@@ -38,6 +38,7 @@ import {
 	startsContinuation,
 	linesShareColumn,
 	looksLikeListStart,
+	looksLikeListBlock,
 	isOrderedListStart,
 	isSectionNumberHeading,
 	planMerges,
@@ -329,7 +330,7 @@ export function isBareFigureLabel(text: string): boolean {
 	return /^(figure|fig\.?|图)\s*\d+\s*[.:：]?\s*$/i.test(text.trim());
 }
 
-function classify(text: string, fontSize: number, bodySize: number, lineCount: number): BlockType {
+function classify(text: string, fontSize: number, bodySize: number, lineCount: number, lines: string[] = []): BlockType {
 	if (/^(figure|fig\.?|table|图|表|圖)\s*\d+/i.test(text)) {
 		return /^(table|表)/i.test(text) ? 'table' : 'caption';
 	}
@@ -341,6 +342,14 @@ function classify(text: string, fontSize: number, bodySize: number, lineCount: n
 	// still recognising numbered section headings.
 	if ((looksLikeListStart(text) && /^[•▪◦‣·*–—-]\s/.test(text.trim()))
 		|| (isOrderedListStart(text) && ratio < 1.1)) {
+		return 'list';
+	}
+	// 块级列表/目录判定 (2.4.4, 移植自 MinerU `__is_list_or_index_block`): 上面
+	// 两条只看块**开头**那一行 —— 多个条目被黏成一个块时,后续条目的标记都在
+	// 块中间,看不见。这条改看**行的分布**,把黏成一团的参考文献/条目列表/目录
+	// 认回列表,从而不再被 planMerges 并进相邻正文段。排在 title/heading 之前:
+	// 三行各自以句号收尾的块是条目列表,不是标题,即便它的字号偏大。
+	if (looksLikeListBlock(lines)) {
 		return 'list';
 	}
 	// A title is a large, short block — but it WRAPS. "Virtual Noncalcium
@@ -466,7 +475,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		// span, or a heading-styled lead-in, and using it skewed the whole
 		// block's translated type size.
 		const repSize = dominantFontSize(group.map(l => l.fontSize)) || group[0]!.fontSize;
-		const type = classify(text, repSize, bodySize, group.length);
+		const type = classify(text, repSize, bodySize, group.length, group.map(lineText));
 		// Body text is typeset at the MINIMUM of its own body cluster (drop
 		// caps and superscripts excluded); headings keep the dominant size.
 		const fontSize = (type === 'paragraph' || type === 'list' || type === 'caption')

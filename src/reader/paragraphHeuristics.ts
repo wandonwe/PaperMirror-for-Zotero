@@ -422,6 +422,46 @@ export function looksLikeListStart(text: string): boolean {
 }
 
 /**
+ * 块级列表/目录判定 (移植自 MinerU `para_split.py::__is_list_or_index_block`,
+ * opendatalab/MinerU, Apache-2.0 — 完整致谢见 THIRD-PARTY-NOTICES.md)。
+ *
+ * `looksLikeListStart` 只看**一行的开头**;当多个条目被 groupIntoParagraphs
+ * 黏成一个块时,块的开头只有第一个条目的标记,后面的条目就此消失在正文段里
+ * (参考文献列表、图注列表被并进正文段的根因)。MinerU 的判据在**块的行分布**
+ * 上做,三条任一成立即列表块:
+ *
+ *   (a) ≥60% 的行以条目标记开头 —— 「[1]…/[2]…」「• …」这类被黏在一起的列表;
+ *   (b) ≥60% 的行是目录引导点行 —— 「Introduction ...... 5」这类目录块;
+ *   (c) ≥80% 的行以句末标点 `.。;；` 收尾(MinerU 主判据,要求 ≥3 行)——
+ *       散文段是**折行**的,除末行外都停在句子中间;每行各自收尾的块是列表。
+ *
+ * (c) 要求 ≥3 行是本移植加的保守边界:两行都恰好以句号结尾在真散文里并不罕见
+ * (「…et al.」/「…2019.」),3 行连续对齐才足以排除巧合。
+ *
+ * 影响面:块型从 paragraph 变 list —— 下游锚字号、缩字许可、coalesce、跨页
+ * 续接对两者完全同权,唯一改变的是 `planMerges` 的 bodyOnly 门不再把它们黏进
+ * 相邻正文段。Pure — 只看文本,可单测。
+ */
+export function looksLikeListBlock(lines: string[]): boolean {
+	const usable = lines.map(l => l.trim()).filter(l => l.length > 0);
+	if (usable.length < 2) {
+		return false; // 单行块无「行分布」可言,交给逐行的 looksLikeListStart
+	}
+	const share = (pred: (line: string) => boolean): number =>
+		usable.filter(pred).length / usable.length;
+	if (share(looksLikeListStart) >= 0.6) {
+		return true; // (a) 多个条目标记 → 被黏在一起的列表
+	}
+	if (share(hasLeaderDots) >= 0.6) {
+		return true; // (b) 目录块
+	}
+	if (usable.length >= 3 && share(line => /[.。;；]$/.test(line)) >= 0.8) {
+		return true; // (c) 每行各自收尾 → 条目,不是折行的散文
+	}
+	return false;
+}
+
+/**
  * A single-level ordered-list marker — "1." "2)" "10." "(3)" — but NOT a
  * multi-level section number like "1.1" or "4.6.1". This keeps a short numbered
  * list at the foot of a page from being classified as a big heading.

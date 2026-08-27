@@ -7,6 +7,36 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.4.4] — 2026-08-27
+
+**MinerU 借鉴第一项:块级列表/目录判定**(移植自 `para_split.py::__is_list_or_index_block`,
+opendatalab/MinerU,Apache-2.0;致谢已在 `THIRD-PARTY-NOTICES.md`)。
+
+### Added
+
+- **`looksLikeListBlock(lines)`**(纯函数):既有的 `looksLikeListStart` 只看块
+  **开头那一行**——多个条目被 `groupIntoParagraphs` 黏成一个块时,后续条目的
+  标记都在块中间,看不见。新判据改看**行的分布**,三条任一成立即列表块:
+  (a) ≥60% 的行以条目标记开头(黏在一起的参考文献/条目列表);
+  (b) ≥60% 的行是目录引导点行;
+  (c) ≥80% 的行以 `.。;；` 收尾且 ≥3 行(MinerU 主判据——散文段是**折行**的,
+  除末行外都停在句子中间;每行各自收尾的块是条目)。
+- 接入 `spanBlockBuilder.classify`,排在 title/heading 判据**之前**:三行各自
+  以句号收尾的块是条目列表,不是标题,即便字号偏大。
+
+### Notes
+
+- **影响面刻意极小**:块型 `paragraph → list` 后,下游的锚字号、缩字许可、
+  区域合并、跨页续接对两者完全同权,唯一改变的是 `planMerges` 的 `bodyOnly`
+  门不再把它们黏进相邻正文段 —— 而能触发本判据的块(每行各自以句号收尾)
+  本就会被既有的 `endsSentence` 挡住合并,所以**结构上不可能造成回归**。
+- (c) 要求 ≥3 行是本移植加的保守边界:两行都恰好以句号结尾在真散文里并不
+  罕见(「…et al.」/「…2019.」),3 行连续对齐才足以排除巧合。
+- 789 测试全过(新增 5 组:三条判据各一 + 折行散文/CJK 散文负例 + ≥3 行边界)。
+- **回归语料对照:12 页零改判** —— 无误伤,但也**未覆盖目标形态**:现有 layout
+  语料全是正文/表格页,没有参考文献页与目录页。要真正验证这条规则(以及后续
+  版面规则),语料需要补这两类页面。
+
 ## [2.4.3] — 2026-08-23
 
 ### Fixed
