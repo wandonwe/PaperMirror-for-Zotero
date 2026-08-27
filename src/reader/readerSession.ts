@@ -23,7 +23,7 @@ import { parseGlossaryJSON, serializeGlossary, dedupeLearnedTerms } from '../tra
 import { parseProviderProfiles, effectiveProviderConfig } from '../translation/providerProfiles';
 import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationResponse } from '../types/models';
 import { PaperMirrorError } from '../types/models';
-import { TranslationPane, type PaneStrings } from '../ui/translationPane';
+import { TranslationPane, type PageRenderResult, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
 import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, expandStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, auditStrictGeometry, probeStrictPlacement, flashKeptIndicator, type UnfitBlock } from '../ui/strictPageReplacement';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
@@ -172,6 +172,8 @@ export class ReaderSession {
 	private compressBlocked = new Map<number, { element: HTMLElement; unfit: UnfitBlock[]; token: number }>();
 	/** 扫描/纯图页每页只提示一次。 */
 	private scannedNoticeShown = new Set<number>();
+	/** 排版失败提示每页只弹一次 (2.5.2) —— 这条路径现在会自动重试。 */
+	private strictFailNoticeShown = new Set<number>();
 	/** 几何安全复核结果按页留档(进诊断导出;只计数,无文本)。 */
 	private geometryAudits = new Map<number, import('../ui/strictPageReplacement').GeometryAuditResult>();
 	/** 每页最近一次 placement 统计 (2.0.10, 审核 P3): imageExcluded 等
@@ -1320,7 +1322,7 @@ export class ReaderSession {
 	 * goes through pdf.js core (adapter.renderPageBitmap), so any page works —
 	 * not just the ones the left viewer keeps on screen.
 	 */
-	private async renderDocPage(pageIndex: number, slot: HTMLElement, width: number): Promise<'translated' | 'original' | false> {
+	private async renderDocPage(pageIndex: number, slot: HTMLElement, width: number): Promise<PageRenderResult> {
 		// Claim this render's generation up front; any older render still in its
 		// async tail will see a newer token and bow out before touching the slot.
 		const token = (this.renderToken.get(pageIndex) ?? 0) + 1;
@@ -1405,7 +1407,12 @@ export class ReaderSession {
 			catch (e) {
 				logger.error(MODULE, `buildStrictPage threw on page ${pageIndex + 1}; showing original`, e);
 				this.setTask('translation', null);
-				this.flashNotice(`第 ${pageIndex + 1} 页排版失败,已保留原文(可刷新本页重试)`);
+				// 每页只提示一次 (2.5.2): 这条路径现在会被自动重试,若每次都弹
+				// 提示,一页确定性失败就要连刷三条。
+				if (!this.strictFailNoticeShown.has(pageIndex)) {
+					this.strictFailNoticeShown.add(pageIndex);
+					this.flashNotice(`第 ${pageIndex + 1} 页排版失败,已保留原文(可刷新本页重试)`);
+				}
 			}
 			if (built) {
 				if (!current()) {
@@ -1473,8 +1480,12 @@ export class ReaderSession {
 				return 'translated';
 			}
 		}
+		// 画原文兜底。但「这页本来就没有译文」和「这页有译文、只是这一趟没重建
+		// 出来」是两回事 (2.5.2): 后者必须让面板知道可以再试,否则一次偶发失败
+		// 就把该页整个会话钉死在英文 —— 用户看到的正是"往回翻译文消失"。
+		const degraded = !!(state && state.status === 'done' && state.blocks.length);
 		slot.replaceChildren(applyFit(buildOriginalPage(doc, render)));
-		return 'original';
+		return degraded ? 'degraded' : 'original';
 	}
 
 	/**

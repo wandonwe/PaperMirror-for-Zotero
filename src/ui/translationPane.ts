@@ -62,6 +62,11 @@ const BRAND_SVGS: Record<string, string> = {
 };
 
 const MODULE = 'translationPane';
+/**
+ * 一页最多重试几次降级重建 (2.5.2)。够覆盖偶发失败(底图被淘汰、页刚被
+ * PDF.js 销毁、字体未就绪),又不至于让确定性失败的页每 2.5 秒空转一次。
+ */
+const MAX_DEGRADED_REBUILDS = 3;
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -104,6 +109,64 @@ export interface PaneStrings {
 	viewPage: string;
 	privacyNotice: string;
 	privacyAccept: string;
+}
+
+/**
+ * 一次整页重建的结果 (2.5.2)。
+ *
+ *   'translated' 译文页已画上。
+ *   'original'   这页本来就没有可替换的译文(纯图/扫描页,或该页尚未翻完)
+ *                —— 画原文是**正确**结果,是终态。
+ *   'degraded'   这页确实翻完了、有译文,但这一趟重建没成(buildStrictPage
+ *                抛异常或返回 null),画的是原文兜底。**必须能再试**:此前它
+ *                和 'original' 不分,被当成终态钉死,于是一次偶发失败会让那
+ *                一页整个会话都停在英文 —— 用户看到的就是"往回翻译文消失"。
+ *   false        现在画不了(底图没拿到、渲染被更新的一趟顶掉),保持 ghost。
+ */
+export type PageRenderResult = 'translated' | 'original' | 'degraded' | false;
+
+/** pumpRenders 对一次重建结果的处置 —— 纯函数,单测锁死。 */
+export interface SlotDecision {
+	state: 'empty' | 'original' | 'translated';
+	/** 是否排进重排队列(与 retryAt 一起构成退避重试)。 */
+	dirty: boolean;
+	/** 早于此刻不重排;0 = 不设退避。 */
+	retryAt: number;
+	/** 更新后的降级重试计数。 */
+	tries: number;
+}
+
+/**
+ * 槽状态机 (2.5.2)。
+ *
+ * 关键在于 'degraded' 与 'original' 必须**分开**处置:pumpRenders 只重排
+ * 'empty' 或 slotDirty 的槽,而 slotDirty 只在 manager 通知 done 时置位、
+ * 已经 done 的页永不再通知。所以任何被写成终态的结果就是"这一页这辈子
+ * 不会再重建了"。此前 'degraded'(有译文却没重建出来)被当成 'original'
+ * 写死,一次偶发失败 —— 往回翻时 PDF.js 刚销毁该页、底图被 LRU 淘汰、
+ * fonts 未就绪 —— 就把那一页整个会话钉死在英文,正是"往回翻译文消失"。
+ *
+ * 现在 'degraded' 像 false 一样自愈,区别只在画面:false 保持 ghost,
+ * 'degraded' 先把原文画上(总比空白强),两者都排进退避重试。
+ */
+export function nextSlotState(
+	result: PageRenderResult,
+	degradeTries: number,
+	now: number
+): SlotDecision {
+	if (result === false) {
+		// 现在画不了:保持 ghost,过一会儿再来 —— 绝不在同一页上空转。
+		return { state: 'empty', dirty: false, retryAt: now + 2500, tries: degradeTries };
+	}
+	if (result === 'degraded') {
+		const tries = degradeTries + 1;
+		if (tries > MAX_DEGRADED_REBUILDS) {
+			// 确定性失败:停在原文,不再空转(用户仍可手动刷新本页)。
+			return { state: 'original', dirty: false, retryAt: 0, tries };
+		}
+		return { state: 'original', dirty: true, retryAt: now + 1200 * tries, tries };
+	}
+	return { state: result, dirty: false, retryAt: 0, tries: 0 };
 }
 
 export interface PaneCallbacks {
@@ -186,7 +249,7 @@ export class TranslationPane {
 	 * 'article' 流式译文 — the translation as a continuous article.
 	 */
 	private viewKind: 'page' | 'article' = 'page';
-	private pageRenderer: ((pageIndex: number, slot: HTMLElement, width: number) => Promise<'translated' | 'original' | false>) | null = null;
+	private pageRenderer: ((pageIndex: number, slot: HTMLElement, width: number) => Promise<PageRenderResult>) | null = null;
 	private pageHost: HTMLElement | null = null;
 	private currentPage = -1;
 	private compareOriginal = false;
@@ -218,6 +281,12 @@ export class TranslationPane {
 	private slotToken: number[] = [];
 	/** A failed slot is not retried before this timestamp (no hot spinning). */
 	private slotRetryAt: number[] = [];
+	/**
+	 * 降级重建的重试次数 (2.5.2)。'degraded' = 这页确实有译文,但这一趟重建
+	 * 没成,画的是原文。它必须能再试 —— 见 pumpRenders 里的说明。上限防的是
+	 * 确定性失败(某页 buildStrictPage 必抛)变成每 2.5 秒一次的永久空转。
+	 */
+	private slotDegradeTries: number[] = [];
 	/** One render at a time; re-prioritised between renders. */
 	private pumping = false;
 	private ensureTimer: ReturnType<typeof setTimeout> | null = null;
@@ -957,7 +1026,7 @@ export class TranslationPane {
 	 * 'translated', 'original' (translation not finished yet), or false when
 	 * the page could not be rendered at all.
 	 */
-	setPageRenderer(renderer: (pageIndex: number, slot: HTMLElement, width: number) => Promise<'translated' | 'original' | false>): void {
+	setPageRenderer(renderer: (pageIndex: number, slot: HTMLElement, width: number) => Promise<PageRenderResult>): void {
 		this.pageRenderer = renderer;
 		this.observeResize();
 	}
@@ -976,6 +1045,7 @@ export class TranslationPane {
 		this.slotDirty = [];
 		this.slotToken = [];
 		this.slotRetryAt = [];
+		this.slotDegradeTries = [];
 		this.refreshViewKindButton();
 		if (kind === 'page') {
 			this.initPageList();
@@ -1107,6 +1177,7 @@ export class TranslationPane {
 		this.slotDirty = [];
 		this.slotToken = [];
 		this.slotRetryAt = [];
+		this.slotDegradeTries = [];
 		const children: HTMLElement[] = [];
 		for (let i = 0; i < this.docPageSizes.length; i++) {
 			const slot = this.el('div', 'pm-repage-slot');
@@ -1118,6 +1189,7 @@ export class TranslationPane {
 			this.slotDirty.push(false);
 			this.slotToken.push(0);
 			this.slotRetryAt.push(0);
+			this.slotDegradeTries.push(0);
 			children.push(
 				this.el('div', 'pm-repage-page-label',
 					`${this.strings.pagePrefix} ${i + 1} ${this.strings.pageSuffix}`.trim()),
@@ -1229,7 +1301,7 @@ export class TranslationPane {
 				const token = ++this.slotToken[target]!;
 				this.slotDirty[target] = false;
 				const slot = this.slots[target]!;
-				let result: 'translated' | 'original' | false = false;
+				let result: PageRenderResult = false;
 				try {
 					// The renderer has its own timeouts; this race is the
 					// backstop that keeps the whole pump from freezing if it
@@ -1246,15 +1318,12 @@ export class TranslationPane {
 				if (this.slotToken[target] !== token || this.viewKind !== 'page') {
 					continue; // superseded while rendering
 				}
-				if (result === false) {
-					// Not renderable right now: keep the ghost, come back in a
-					// moment — never spin on the same failing page.
-					this.slotState[target] = 'empty';
-					this.slotRetryAt[target] = Date.now() + 2500;
-				}
-				else {
-					this.slotState[target] = result;
-					this.slotRetryAt[target] = 0;
+				const next = nextSlotState(result, this.slotDegradeTries[target] ?? 0, Date.now());
+				this.slotState[target] = next.state;
+				this.slotDirty[target] = next.dirty;
+				this.slotRetryAt[target] = next.retryAt;
+				this.slotDegradeTries[target] = next.tries;
+				if (result !== false) {
 					this.applyCompareState();
 				}
 			}
@@ -1275,6 +1344,8 @@ export class TranslationPane {
 				this.slotToken[i]!++;
 				this.slotState[i] = 'empty';
 				this.slotDirty[i] = false;
+				// 槽被回收 = 下次进入是一次全新的重建,降级预算随之复位。
+				this.slotDegradeTries[i] = 0;
 				this.slots[i]!.replaceChildren(this.makeGhost(i));
 			}
 		}
@@ -1304,6 +1375,8 @@ export class TranslationPane {
 			return;
 		}
 		this.slotDirty[pageIndex] = true;
+		this.slotRetryAt[pageIndex] = 0;
+		this.slotDegradeTries[pageIndex] = 0;
 		this.scheduleEnsure();
 	}
 

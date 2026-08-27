@@ -626,8 +626,25 @@ export class PdfOverlay {
 			layer.appendChild(item.el);
 		}
 		layer.setAttribute('data-pm-peekhover', String(this.peekOnHover));
+		layer.setAttribute('data-pm-mode', this.displayMode);
 
-		// Measure only after everything is in the document.
+		if (!view.div.style.position) {
+			view.div.style.position = 'relative';
+		}
+		// 必须先入文档再量 (2.5.2)。这里原来的注释写着「Measure only after
+		// everything is in the document」,可 appendChild 在**测量之后**才发生
+		// —— 量的是一棵游离子树,getBoundingClientRect().height、scrollHeight、
+		// scrollWidth、clientWidth 全是 0,fits() 于是在第 0 级阶梯就恒真:每个
+		// 框都拿最大字号、字号阶梯形同虚设、data-pm-overflow 永不置位,而
+		// .pm-overlay-box 的 overflow:hidden 把超出的译文直接裁掉。
+		//
+		// 又不能为了量就先把旧层摘掉:原子替换的意义正是"新层落地那一帧之前
+		// 旧层一直可见",否则缩放会闪回原文。所以新层先以 visibility:hidden
+		// 入文档 —— 隐藏元素照常参与布局,量得到真实尺寸,而旧层仍在画面上
+		// (层本身 pointer-events:none,不会抢事件)。
+		layer.style.visibility = 'hidden';
+		view.div.appendChild(layer);
+
 		for (const item of pending) {
 			const height = item.el.getBoundingClientRect().height || item.box.height;
 			const size = this.fitFontSize(item.el, item.span, height, item.lineCount);
@@ -636,27 +653,22 @@ export class PdfOverlay {
 			}
 		}
 
-		// Restore the source reading order for the DOM (hover/expand stacking).
-		layer.setAttribute('data-pm-mode', this.displayMode);
-
 		// The node may have been swapped by PDF.js during the 80ms debounce; only
 		// commit to a page div that is still live, else reschedule onto the fresh
 		// one instead of painting a layer that is about to be discarded.
 		const latest = adapter.getPageView(this.reader, pageIndex);
 		if (!latest || latest.div !== view.div || !view.div.isConnected) {
+			layer.remove(); // 量完就撤,绝不把一层隐藏的死层留在页上
 			this.drawnSignature.delete(pageIndex);
 			this.scheduleRedraw(pageIndex);
 			return;
 		}
 
-		if (!view.div.style.position) {
-			view.div.style.position = 'relative';
-		}
-		// Atomic swap: attach the finished new layer, THEN drop any previous
+		// Atomic swap: reveal the finished new layer, THEN drop any previous
 		// layer(s) for this page and set the correct mode class. The old overlay
 		// stays visible right up to the frame the new one lands, so a zoom never
 		// blanks the page to the original in between.
-		view.div.appendChild(layer);
+		layer.style.visibility = '';
 		for (const node of Array.from(view.div.querySelectorAll(`.${LAYER_CLASS}`))) {
 			if (node !== layer) {
 				node.remove();
