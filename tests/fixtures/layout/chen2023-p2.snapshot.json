@@ -48,7 +48,7 @@
 		"text": "Materials and Methods"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 0,
 		"readingIndex": 8,
 		"text": "Study Design and Sample"
@@ -66,7 +66,7 @@
 		"text": "Study 2.—To validate the prognostic valu"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 1,
 		"readingIndex": 11,
 		"text": "CCTA Analysis"
@@ -78,7 +78,7 @@
 		"text": "Details of CCTA protocols, anatomic plaq"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 1,
 		"readingIndex": 13,
 		"text": "Intravascular US Analysis"

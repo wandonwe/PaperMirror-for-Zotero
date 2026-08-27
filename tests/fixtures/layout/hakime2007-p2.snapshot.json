@@ -6,39 +6,51 @@
 		"text": "Conventionally, therapeutic response has"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 0,
 		"readingIndex": 1,
-		"text": "Advances in Knowledge ■ Multisection CT "
+		"text": "Advances in Knowledge"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 2,
-		"text": "strated to be reliable (8–12) and reprod"
+		"text": "■ Multisection CT tumor perfusion assess"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 3,
-		"text": "Materials and Methods Animal Model"
+		"text": "strated to be reliable (8–12) and reprod"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 4,
+		"text": "Materials and Methods"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 5,
+		"text": "Animal Model"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 4,
+		"readingIndex": 6,
 		"text": "All animal protocols and experiments wer"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 5,
+		"readingIndex": 7,
 		"text": "which enabled controlled modulation of b"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 6,
+		"readingIndex": 8,
 		"text": "Published online 10.1148/radiol.24330520"
 	}
 ]

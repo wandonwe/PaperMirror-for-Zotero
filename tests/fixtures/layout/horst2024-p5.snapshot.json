@@ -36,7 +36,7 @@
 		"text": "Spectral Beam Shaping: Added Tin Filter "
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 1,
 		"readingIndex": 6,
 		"text": "Automatic Exposure Control"

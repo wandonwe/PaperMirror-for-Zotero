@@ -7,6 +7,48 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.5.5] — 2026-08-27
+
+**表格页的三处塌陷,根子上是同一条**。审阅整篇语料时列的第 4、5、6 条缺陷,
+查下来 5 和 6 出自同一个判据。
+
+### Fixed
+
+- **「下一段」不再允许出现在页面上方 —— 负间距也要拦**。`planMerges` 的间距
+  判据原先只拦「离得太远」(`gapAfter <= size * 1.2`),却放过了**负间距**。
+  而阅读序是把满幅块排在分栏块**之前**的,于是「下一段」常常在页面上方几百点
+  处:第 4 页表 1 底下那条以逗号收尾的「Note.—…BMI = body mass index,」,
+  它后面跟的是**页顶的页眉**,`gapAfter = −349` —— `-349 <= 10.8` 照样成立,
+  两者被焊成一个纵跨整页(y 404→753)的块。后果是连锁的:
+  - 页眉被拼进正文中间(「…BMI = body mass index, **Radiomics Model to
+    Identify Vulnerable Plaque and Predict Cardiovascular Events** Table 1:…」);
+  - 那个纵跨整页的块把**表格区域从页顶一路撑到页底**,`structureTableCells`
+    因此认不出网格,表 1 的 77 个单元格连同表题、表头一起塌成**一块**
+    `preserve`(即整张表都不翻译),而且排在它本该垫底的 Note 之前。
+  现在间距双向卡死,只容忍上下标/悬挂标点造成的轻微重叠(−0.5em)。第 4 页
+  **8 块 / 2 个单元格 → 90 块 / 77 个单元格**,表格恢复成格、阅读序恢复正常;
+  第 10 页的表 5 也从「Note 打头」回到「表题打头」。
+- **与正文同号的加粗小节标题被认出来了**。文本层只给 text/rect/fontSize ——
+  **看不见 bold**,于是「Model Prognosis Assessment (Study 2)」「Study Sample
+  Characteristics」「Materials and Methods」「Animal Model」这类与正文同号的
+  加粗标题全部落成 `paragraph`,随后被区域合并并进邻段,整节结构在译文页上
+  消失(第 6 页最终只剩 3 块,`hakime2007-p2` 干脆出现过「Materials and Methods
+  Animal Model」被焊进正文的情形)。字号帮不上忙,改从排印形态判:**自成一行、
+  ≤60 字、不以句读收尾、不含逗号、每个实词都大写**。
+- 三道排除项都是被语料逼出来的:**逗号**挡住作者行(「Yi Ning Wang, MD, PhD」
+  同样"实词全大写",而 heading 是元数据过滤的豁免类型,误判会把作者名单放回
+  正文);**实词全大写**(而非"多数")挡住「Clinical presentation」「Risk
+  factor」这类表格行标签;**行尾虚词**(复用 2.5.1 的判据)挡住被版面截断的
+  碎片「Dr. Valentin Fuster on」「Odds Ratio or」。
+
+### Tests
+
+- 830 → 832(另有 23 页快照与流水线基线重新生成并逐行审阅)。新增负间距不得
+  合并 / 轻微重叠仍可合并两例,以及同号标题识别与三类误判排除。
+- 语料实证:11 个 fixture 新认出小节标题(「Study Participants」「CCTA Analysis」
+  「Advances in Knowledge」…),四张表的单元格数一个不差(77/177/71/56/27),
+  首页逐字节不变 —— 没有把元数据放回来。
+
 ## [2.5.4] — 2026-08-27
 
 **整篇语料揪出的三处文本损坏**。语料库第一次收进一份**完整**文档

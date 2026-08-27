@@ -25,7 +25,7 @@
 import type { BlockType, SourceBlock } from '../types/models';
 import { detectTableRegions } from './tableGuard';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
-import { isMetadataBlock, isPublisherBoilerplateLine, isRunningHeadOrFoot } from './metaFilter';
+import { endsMidSentence, isMetadataBlock, isPublisherBoilerplateLine, isRunningHeadOrFoot } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -412,7 +412,7 @@ export function isBareFigureLabel(text: string): boolean {
 	return /^(figure|fig\.?|图)\s*\d+\s*[.:：]?\s*$/i.test(text.trim());
 }
 
-function classify(text: string, fontSize: number, bodySize: number, lineCount: number, lines: string[] = []): BlockType {
+function classify(text: string, fontSize: number, bodySize: number, lineCount: number, lines: string[] = [], isTableLine = false): BlockType {
 	if (/^(figure|fig\.?|table|图|表|圖)\s*\d+/i.test(text)) {
 		return /^(table|表)/i.test(text) ? 'table' : 'caption';
 	}
@@ -468,7 +468,58 @@ function classify(text: string, fontSize: number, bodySize: number, lineCount: n
 			|| /^(abstract|introduction|methods?|results|discussion|conclusions?|references|摘要|引言|方法|结果|讨论|结论)\s*$/i.test(text))) {
 		return 'heading';
 	}
+	// 与正文同号的加粗小节标题 (2.5.5, chen2023-p3/p6 实证)。文本层只给
+	// text/rect/fontSize —— **看不见 bold**,于是「Model Prognosis Assessment
+	// (Study 2)」「Study Sample Characteristics」这类 10pt 加粗小节标题全部落成
+	// paragraph,随后被 coalesceRegions 并进邻段,整节结构在译文页上消失
+	// (第 6 页最终只剩 3 块)。字号帮不上忙,只能靠排印形态:自成一行、短、
+	// 不以句读收尾、每个实词都大写。
+	if (!isTableLine && lineCount === 1 && ratio >= 0.95 && ratio <= 1.25
+		&& looksLikeTitleCaseHeading(text)) {
+		return 'heading';
+	}
 	return 'paragraph';
+}
+
+/** 标题式排印: 短、无句读收尾、无逗号、每个实词首字母大写。 */
+function looksLikeTitleCaseHeading(text: string): boolean {
+	const t = text.trim();
+	// 长度上限与既有 heading 臂一致;逗号是关键的排除项 —— 作者行
+	// (「Qian Chen, MD*」)同样满足"实词全大写",但它带逗号,而小节标题几乎
+	// 不带。heading 是元数据过滤的豁免类型,误判会把作者名单放回正文。
+	if (t.length < 4 || t.length > 60 || /[,，]/.test(t)) {
+		return false;
+	}
+	if (/[.。;；:：?!？!]$/.test(t)) {
+		return false;
+	}
+	// 停在虚词上的行是没说完的句子,不是标题 —— 复用 2.5.1 的行尾判据。
+	// 「Dr. Valentin Fuster on」「Odds Ratio or」都是被版面截断的碎片,
+	// 实词确实全大写,却绝不是小节标题。
+	if (endsMidSentence(t)) {
+		return false;
+	}
+	const words = t.split(/\s+/).filter(w => /[A-Za-z]/.test(w));
+	if (words.length < 2 || words.length > 8) {
+		return false;
+	}
+	// 虚词不参与判定 ——「Study Design and Sample」里的 and 本就该小写。
+	const MINOR = new Set(['and', 'or', 'of', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'with', 'vs', 'versus', 'per', 'by', 'from']);
+	let significant = 0;
+	let capitalised = 0;
+	for (const w of words) {
+		const bare = w.replace(/^[^A-Za-z]+/, '');
+		if (!bare || MINOR.has(bare.toLowerCase())) {
+			continue;
+		}
+		significant++;
+		if (/^[A-Z]/.test(bare)) {
+			capitalised++;
+		}
+	}
+	// 全部实词都大写才算 —— 放宽到"多数"会把「Clinical presentation」「Risk
+	// factor」这类表格行标签一并卷进来。
+	return significant >= 2 && capitalised === significant;
 }
 
 export interface SpanBuildOptions {
@@ -643,7 +694,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	const tableParas = [...tableLineIdx].sort((a, b) => a - b).map((i) => {
 		const line = lines[i]!;
 		const text = joinLines([lineText(line)]);
-		const type = classify(text, line.fontSize, bodySize, 1);
+		const type = classify(text, line.fontSize, bodySize, 1, [lineText(line)], true);
 		const fontSize = (type === 'paragraph' || type === 'list' || type === 'caption')
 			? (replacementFontSize([line.fontSize]) || line.fontSize)
 			: line.fontSize;

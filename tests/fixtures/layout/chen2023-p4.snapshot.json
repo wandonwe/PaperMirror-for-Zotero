@@ -1,56 +1,773 @@
 [
 	{
-		"type": "paragraph",
-		"column": 1,
+		"type": "table",
+		"column": 0,
 		"readingIndex": 0,
-		"tableRow": 0,
-		"tableCol": 3,
-		"mode": "translate",
-		"text": "External Test Set (n = 31)"
+		"text": "Table 1: Baseline Clinical Characteristi"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
+		"column": 0,
 		"readingIndex": 1,
-		"tableRow": 0,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "Note.—Unless otherwise specified, data a"
+		"text": "Characteristic"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 2,
-		"text": "NSTEMI = non-ST elevation myocardial inf"
+		"text": "Development Set (n = 225)"
 	},
 	{
-		"type": "list",
+		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 3,
-		"text": "* Data are means ± SDs. † Data in parent"
+		"text": "Age (y)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 4,
-		"text": "RS development set included 225 patients"
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Mean*"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 5,
-		"text": "Model Development and Validation (Study "
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "64 ± 10"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 6,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Median†"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 7,
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "64 (34–89)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 8,
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "No. of men"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 9,
+		"tableRow": 2,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "68 (30)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 10,
+		"tableRow": 3,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "BMI (kg/m2)*"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 11,
+		"tableRow": 3,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "24.5 ± 2.8"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 12,
+		"tableRow": 4,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Risk factor"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 13,
+		"tableRow": 5,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Hypertension"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 14,
+		"tableRow": 5,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "152 (68)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 15,
+		"tableRow": 6,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Diabetes mellitus"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 16,
+		"tableRow": 6,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "58 (26)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 17,
+		"tableRow": 7,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Hypercholesterolemia"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 18,
+		"tableRow": 7,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "155 (69)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 19,
+		"tableRow": 8,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Current smoker"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 20,
+		"tableRow": 8,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "79 (35)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 21,
+		"tableRow": 9,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Clinical presentation"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 22,
+		"tableRow": 10,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "No chest pain"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 23,
+		"tableRow": 10,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "11 (5)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 24,
+		"tableRow": 11,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Stable angina"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 25,
+		"tableRow": 11,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "45 (20)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 26,
+		"tableRow": 12,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Unstable angina"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 27,
+		"tableRow": 12,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "163 (72)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 28,
+		"tableRow": 13,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "NSTEMI"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 29,
+		"tableRow": 13,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "6 (3)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 30,
+		"tableRow": 14,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Stain therapy"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 31,
+		"tableRow": 14,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "60 (27)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 32,
+		"tableRow": 15,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Aspirin therapy"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 33,
+		"tableRow": 15,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "127 (56)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 34,
+		"tableRow": 16,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Scanner type"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 35,
+		"tableRow": 17,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "SOMATOM Definition or"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 36,
+		"tableRow": 17,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "225 (100)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 37,
+		"tableRow": 18,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Force (Siemens Healthineers)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 38,
+		"tableRow": 19,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "IQon Spectral CT (Philips)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 39,
+		"tableRow": 19,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "0"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 40,
+		"tableRow": 20,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Tube voltage"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 41,
+		"tableRow": 21,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "70–80 kVp"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 42,
+		"tableRow": 21,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "0 (0)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 43,
+		"tableRow": 22,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "100–120 kVp"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 44,
+		"tableRow": 22,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "225 (100)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 45,
+		"text": "Internal Test Set (n = 43)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 46,
+		"text": "External Test Set (n = 31)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 47,
+		"tableRow": 0,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "65 ± 9"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 48,
+		"tableRow": 0,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "66 ± 10"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 49,
+		"tableRow": 1,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "65 (49–81)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 50,
+		"tableRow": 1,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "65 (37–81)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 51,
+		"tableRow": 2,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "37 (86)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 52,
+		"tableRow": 2,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "21 (68)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 53,
+		"tableRow": 3,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "24.0 ± 2.7"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 54,
+		"tableRow": 3,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "24.4 ± 3.0"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 55,
+		"tableRow": 5,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "33 (77)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 56,
+		"tableRow": 5,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "16 (52)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 57,
+		"tableRow": 6,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "14 (33)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 58,
+		"tableRow": 6,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "7 (23)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 59,
+		"tableRow": 7,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "17 (40)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 60,
+		"tableRow": 7,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "10 (32)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 61,
+		"tableRow": 8,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "18 (42)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 62,
+		"tableRow": 8,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "11 (36)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 63,
+		"tableRow": 10,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "3 (7)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 64,
+		"tableRow": 10,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "14 (45)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 65,
+		"tableRow": 11,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "6 (14)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 66,
+		"tableRow": 11,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "7 (23)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 67,
+		"tableRow": 12,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "31 (72)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 68,
+		"tableRow": 12,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "9 (29)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 69,
+		"tableRow": 13,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "3 (7)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 70,
+		"tableRow": 13,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "1 (3)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 71,
+		"tableRow": 14,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "39 (91)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 72,
+		"tableRow": 14,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "8 (26)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 73,
+		"tableRow": 15,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "41 (95)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 74,
+		"tableRow": 15,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "8 (26)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 75,
+		"tableRow": 17,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "43 (100)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 76,
+		"tableRow": 17,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "29 (94)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 77,
+		"tableRow": 19,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "0"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 78,
+		"tableRow": 19,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "2 (7)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 79,
+		"tableRow": 21,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "0 (0)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 80,
+		"tableRow": 21,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "17 (55)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 81,
+		"tableRow": 22,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "43 (100)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 82,
+		"tableRow": 22,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "14 (45)"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 83,
+		"text": "Note.—Unless otherwise specified, data a"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 84,
+		"text": "NSTEMI = non-ST elevation myocardial inf"
+	},
+	{
+		"type": "list",
+		"column": 0,
+		"readingIndex": 85,
+		"text": "* Data are means ± SDs. † Data in parent"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 86,
+		"text": "RS development set included 225 patients"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 87,
+		"text": "Model Development and Validation (Study "
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 88,
 		"text": "Lesion characteristics.—Of the 419 lesio"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 7,
+		"readingIndex": 89,
 		"text": "correlation coefficient analysis. Three "
 	}
 ]

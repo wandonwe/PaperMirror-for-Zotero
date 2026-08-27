@@ -6,13 +6,13 @@
 		"text": "Table 2. Clinical and Imaging Outcomes."
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 0,
 		"readingIndex": 1,
 		"text": "Endovascular Therapy"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 0,
 		"readingIndex": 2,
 		"text": "Medical Therapy"

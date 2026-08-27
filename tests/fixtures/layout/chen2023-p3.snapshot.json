@@ -24,7 +24,7 @@
 		"text": "Results"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 1,
 		"readingIndex": 4,
 		"text": "Study Sample Characteristics"

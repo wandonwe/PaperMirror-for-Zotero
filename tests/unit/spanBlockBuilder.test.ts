@@ -525,3 +525,52 @@ test('同字号的行内碎片仍按盒心配对 —— 不受上下标规则影
 	assert.deepEqual(rows[0]!.map(i => i.text), ['Exclusion criteria were', '(a)', 'refusal to consent,']);
 	assert.deepEqual(rows[1]!.map(i => i.text), ['tion to iodine-based contrast media, and']);
 });
+
+// ---- 与正文同号的加粗小节标题 (2.5.5) --------------------------------------
+
+test('同字号的小节标题被认出来 —— 文本层看不见 bold,只能靠排印形态', () => {
+	// chen2023-p6 实证: 「Model Prognosis Assessment (Study 2)」是 10pt 加粗,
+	// 与正文同号,classify 只看字号比就把它判成 paragraph,随后被区域合并吞进
+	// 邻段,整节结构在译文页上消失(该页最终只剩 3 块)。
+	// 段末那行本来就短(真实页面里是「result (Fig 4B).」),否则连断段都轮不到
+	// 标题判据出场。
+	const before = [
+		...lines([
+			'quantitative plaque parameters (AUC, 0.81; 95% CI: 0.75, 0.87; P < .001).',
+			'The precision-recall curve showed a similar'
+		], 48, 350, 10, 12, 240),
+		span('result (Fig 4B).', 48, 326, 60, 10)
+	];
+	const heading = lines(['Model Prognosis Assessment (Study 2)'], 48, 302, 10, 12, 154);
+	const after = lines([
+		'Lesion characteristics.—Of the 1020 lesions in 708 patients, 438 were',
+		'classified as RS positive and 582 as RS negative using the optimal value.'
+	], 48, 280, 10, 12, 240);
+	const { blocks } = buildBlocksFromSpans([...before, ...heading, ...after], {
+		pageIndex: 5, pageHeight: PAGE_HEIGHT, pageWidth: 594
+	});
+	const h = blocks.find(b => b.sourceText.trim() === 'Model Prognosis Assessment (Study 2)');
+	assert.ok(h, '标题必须自成一块');
+	assert.equal(h!.type, 'heading', '判成 paragraph 就会被区域合并吞掉');
+});
+
+test('标题式判据不误伤作者行、表格行标签与被截断的碎片', () => {
+	const { blocks } = buildBlocksFromSpans([
+		// 作者行: 实词确实全大写,但带逗号 —— heading 是元数据过滤的豁免类型,
+		// 误判会把作者名单放回正文。
+		...lines(['Yi Ning Wang, MD, PhD'], 48, 700, 10, 12, 96),
+		// 表格行标签: 实词没有全大写。
+		...lines(['Clinical presentation'], 48, 660, 10, 12, 80),
+		// 被版面截断的碎片: 停在虚词上,不是标题。
+		...lines(['Dr. Valentin Fuster on'], 48, 620, 10, 12, 90),
+		...lines([
+			'All patients underwent thin-section CT with a standard protocol and the',
+			'images were reconstructed at 0.6 mm section thickness for every case.'
+		], 48, 580, 10, 12, 240)
+	], { pageIndex: 0, pageHeight: PAGE_HEIGHT, pageWidth: 594 });
+	const typeOf = (needle: string): string | undefined =>
+		blocks.find(b => b.sourceText.includes(needle))?.type;
+	assert.notEqual(typeOf('Yi Ning Wang'), 'heading', '带逗号的作者行不是标题');
+	assert.notEqual(typeOf('Clinical presentation'), 'heading', '实词没全大写,不是标题');
+	assert.notEqual(typeOf('Valentin Fuster'), 'heading', '停在虚词上的碎片不是标题');
+});

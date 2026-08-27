@@ -377,3 +377,23 @@ test('列表块: ≥3 行的保守边界 —— 两行都以句号结尾在散�
 	assert.equal(looksLikeListBlock(['[1] Smith J. A single reference entry. Radiology. 2023.']), false);
 	assert.equal(looksLikeListBlock([]), false);
 });
+
+test('planMerges 不把页面上方的块当作"下一段" —— 负间距也要拦 (2.5.5)', () => {
+	// chen2023-p4/p10 实证: 阅读序把满幅块排在分栏块**之前**,于是「下一段」
+	// 常常在页面上方几百点处。表 1 底下那条以逗号收尾的 Note 后面跟着页顶的
+	// 页眉,gapAfter = −349 —— 原判据只拦「离得太远」,`-349 <= 10.8` 照样成立,
+	// 两者被焊成一个纵跨整页的块:页眉混进正文,表格区域被撑到页顶,整张表
+	// 塌成一块。
+	assert.deepEqual(planMerges([
+		{ text: 'Note.—Unless otherwise specified, data are numbers of patients, BMI = body mass index,', column: -1, type: 'paragraph', gapAfter: -349, fontSize: 9 },
+		{ text: 'Radiomics Model to Identify Vulnerable Plaque and Predict Cardiovascular Events', column: 0, type: 'paragraph' }
+	]), [[0], [1]], '往回跳的"下一段"从来不是被拆开的同一段');
+});
+
+test('planMerges 仍容忍上下标造成的轻微重叠 (2.5.5)', () => {
+	// 负间距不是一律拒绝: 段落 rect 含上标时,下一段的顶边可能略高于本段底边。
+	assert.deepEqual(planMerges([
+		{ text: 'the interaction between FFR and CCTA was explored and', column: 0, type: 'paragraph', gapAfter: -2, fontSize: 10 },
+		{ text: 'noncardiac deaths were treated as a competing event.', column: 0, type: 'paragraph' }
+	]), [[0, 1]]);
+});

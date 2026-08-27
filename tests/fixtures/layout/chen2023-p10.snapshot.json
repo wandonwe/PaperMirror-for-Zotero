@@ -1,38 +1,44 @@
 [
 	{
-		"type": "paragraph",
+		"type": "table",
 		"column": -1,
 		"readingIndex": 0,
-		"text": "Note.—Data in parentheses are 95% CIs. T"
+		"text": "Table 5: Results of Univariate and Multi"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 1,
+		"text": "Events"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 2,
 		"text": "Univariate Analyses"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 3,
 		"text": "HR"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 0,
-		"readingIndex": 3,
+		"readingIndex": 4,
 		"text": "P Value"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 4,
+		"readingIndex": 5,
 		"text": "Variable"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 5,
+		"readingIndex": 6,
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "translate",
@@ -41,7 +47,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 6,
+		"readingIndex": 7,
 		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -50,7 +56,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 7,
+		"readingIndex": 8,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -59,7 +65,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 8,
+		"readingIndex": 9,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -68,7 +74,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 9,
+		"readingIndex": 10,
 		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -77,7 +83,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 10,
+		"readingIndex": 11,
 		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -86,7 +92,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 11,
+		"readingIndex": 12,
 		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -95,7 +101,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 12,
+		"readingIndex": 13,
 		"tableRow": 7,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -104,7 +110,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 13,
+		"readingIndex": 14,
 		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -113,7 +119,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 14,
+		"readingIndex": 15,
 		"tableRow": 9,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -122,7 +128,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 15,
+		"readingIndex": 16,
 		"tableRow": 10,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -131,7 +137,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 16,
+		"readingIndex": 17,
 		"tableRow": 11,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -140,7 +146,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 17,
+		"readingIndex": 18,
 		"tableRow": 12,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -149,7 +155,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 18,
+		"readingIndex": 19,
 		"tableRow": 13,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -158,34 +164,40 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 19,
+		"readingIndex": 20,
 		"tableRow": 14,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "RS (per 0.01 increment) 2.0 (1.5, 2.6) <"
 	},
 	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 20,
-		"text": "Multivariate Analysis P Value HR†"
-	},
-	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 1,
 		"readingIndex": 21,
-		"text": "HR*"
+		"text": "Multivariate Analysis"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 1,
 		"readingIndex": 22,
-		"text": "P Value"
+		"text": "P Value HR†"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 23,
+		"text": "HR*"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 24,
+		"text": "P Value"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 25,
 		"tableRow": 0,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -194,7 +206,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 24,
+		"readingIndex": 26,
 		"tableRow": 0,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -203,7 +215,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 25,
+		"readingIndex": 27,
 		"tableRow": 2,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -212,7 +224,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 26,
+		"readingIndex": 28,
 		"tableRow": 2,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -221,7 +233,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 27,
+		"readingIndex": 29,
 		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -230,7 +242,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 28,
+		"readingIndex": 30,
 		"tableRow": 3,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -239,7 +251,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 29,
+		"readingIndex": 31,
 		"tableRow": 4,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -248,7 +260,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 30,
+		"readingIndex": 32,
 		"tableRow": 4,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -257,7 +269,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 31,
+		"readingIndex": 33,
 		"tableRow": 6,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -266,7 +278,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 32,
+		"readingIndex": 34,
 		"tableRow": 6,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -275,7 +287,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 33,
+		"readingIndex": 35,
 		"tableRow": 7,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -284,7 +296,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 34,
+		"readingIndex": 36,
 		"tableRow": 7,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -293,7 +305,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 35,
+		"readingIndex": 37,
 		"tableRow": 8,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -302,7 +314,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 36,
+		"readingIndex": 38,
 		"tableRow": 8,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -311,7 +323,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 37,
+		"readingIndex": 39,
 		"tableRow": 10,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -320,7 +332,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 38,
+		"readingIndex": 40,
 		"tableRow": 10,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -329,7 +341,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 39,
+		"readingIndex": 41,
 		"tableRow": 11,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -338,7 +350,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 40,
+		"readingIndex": 42,
 		"tableRow": 12,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -347,7 +359,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 41,
+		"readingIndex": 43,
 		"tableRow": 12,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -356,7 +368,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 42,
+		"readingIndex": 44,
 		"tableRow": 14,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -365,40 +377,34 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 43,
+		"readingIndex": 45,
 		"tableRow": 14,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "2.0 (1.2, 3.3) .005"
 	},
 	{
-		"type": "table",
+		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 44,
-		"text": "Table 5: Results of Univariate and Multi"
+		"readingIndex": 46,
+		"text": "Note.—Data in parentheses are the 95% CI"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 45,
-		"text": "Note.—Data in parentheses are the 95% CI"
-	},
-	{
-		"type": "list",
-		"column": -1,
-		"readingIndex": 46,
-		"text": "* HR was adjusted for clinical variables"
+		"readingIndex": 47,
+		"text": "† HR was adjusted for RS and conventiona"
 	},
 	{
 		"type": "table",
 		"column": 0,
-		"readingIndex": 47,
+		"readingIndex": 48,
 		"text": "Table 6: Incremental Prognostic Value of"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 48,
+		"readingIndex": 49,
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "translate",
@@ -407,7 +413,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 49,
+		"readingIndex": 50,
 		"tableRow": 0,
 		"tableCol": 1,
 		"mode": "translate",
@@ -416,7 +422,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 50,
+		"readingIndex": 51,
 		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "translate",
@@ -425,7 +431,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 51,
+		"readingIndex": 52,
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -434,7 +440,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 52,
+		"readingIndex": 53,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
@@ -443,7 +449,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 53,
+		"readingIndex": 54,
 		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -452,7 +458,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 54,
+		"readingIndex": 55,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
@@ -461,22 +467,22 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 55,
+		"readingIndex": 56,
 		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "0.72 (0.65, 0.78)"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 1,
-		"readingIndex": 56,
+		"readingIndex": 57,
 		"text": "P Value"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 57,
+		"readingIndex": 58,
 		"tableRow": 0,
 		"tableCol": 2,
 		"mode": "translate",
@@ -485,7 +491,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 58,
+		"readingIndex": 59,
 		"tableRow": 0,
 		"tableCol": 3,
 		"mode": "translate",
@@ -494,7 +500,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 59,
+		"readingIndex": 60,
 		"tableRow": 0,
 		"tableCol": 4,
 		"mode": "translate",
@@ -503,7 +509,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 60,
+		"readingIndex": 61,
 		"tableRow": 1,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -512,7 +518,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 61,
+		"readingIndex": 62,
 		"tableRow": 1,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -521,18 +527,9 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 62,
+		"readingIndex": 63,
 		"tableRow": 1,
 		"tableCol": 4,
-		"mode": "preserve",
-		"text": "<.001"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 63,
-		"tableRow": 2,
-		"tableCol": 2,
 		"mode": "preserve",
 		"text": "<.001"
 	},
@@ -541,6 +538,15 @@
 		"column": 1,
 		"readingIndex": 64,
 		"tableRow": 2,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "<.001"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 65,
+		"tableRow": 2,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "…"
@@ -548,7 +554,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 65,
+		"readingIndex": 66,
 		"tableRow": 2,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -557,7 +563,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 66,
+		"readingIndex": 67,
 		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -566,7 +572,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 67,
+		"readingIndex": 68,
 		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -575,7 +581,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 68,
+		"readingIndex": 69,
 		"tableRow": 3,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -584,19 +590,19 @@
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 69,
-		"text": "† HR was adjusted for RS and conventiona"
+		"readingIndex": 70,
+		"text": "Note.—Data in parentheses are 95% CIs. T"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 70,
-		"text": "noncalcified plaque, and necrotic core v"
+		"readingIndex": 71,
+		"text": "For example, the lesions of the entire c"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 71,
+		"readingIndex": 72,
 		"text": "In conclusion, this study presents a rad"
 	}
 ]

@@ -54,7 +54,7 @@
 		"text": "Materials and Methods"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 0,
 		"readingIndex": 9,
 		"text": "Study Participants"
@@ -66,7 +66,7 @@
 		"text": "Exclusion criteria were (a) refusal to c"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 1,
 		"readingIndex": 11,
 		"text": "Cardiac MRI Acquisition"

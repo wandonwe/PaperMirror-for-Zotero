@@ -617,7 +617,15 @@ export function planMerges<T extends MergeableParagraph>(paragraphs: T[]): numbe
 		// A genuine over-split leaves the two fragments on CONSECUTIVE lines.
 		// Anything separated by real whitespace was a deliberate break.
 		const size = prev.fontSize && prev.fontSize > 0 ? prev.fontSize : 10;
-		const adjacent = prev.gapAfter === undefined || prev.gapAfter <= size * 1.2;
+		// 间距要**双向**卡死 (2.5.4 → 2.5.5, chen2023-p4/p10 实证)。原判据只拦
+		// 「离得太远」,却放过了负间距 —— 而阅读序把满幅块排在分栏块**之前**,
+		// 于是「下一段」常常在页面上方几百点处:表 1 底下那条以逗号收尾的
+		// 「Note.—…BMI = body mass index,」后面跟的是页顶的页眉,gapAfter = −349,
+		// `-349 <= 10.8` 照样成立,两者被焊成一个纵跨整页的块(页眉因此混进正文,
+		// 还把表格区域从页顶一路撑到页底)。往回跳的"下一段"从来不是被拆开的
+		// 同一段;只容忍上下标/悬挂标点造成的轻微重叠。
+		const adjacent = prev.gapAfter === undefined
+			|| (prev.gapAfter <= size * 1.2 && prev.gapAfter >= -size * 0.5);
 		// Same-column test, GEOMETRY-first: when both fragments have rects (the
 		// real pipeline) two fragments belong together iff their x-ranges
 		// overlap — the band index is unstable row-to-row on narrow two-column

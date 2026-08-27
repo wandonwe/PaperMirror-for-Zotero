@@ -12,9 +12,21 @@
 		"text": "quantitative plaque parameters (AUC, 0.8"
 	},
 	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "Model Prognosis Assessment (Study 2)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "Lesion characteristics.—Of the 1020 lesi"
+	},
+	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 2,
+		"readingIndex": 4,
 		"text": "parameters, including segment stenosis s"
 	}
 ]

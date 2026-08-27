@@ -12,9 +12,21 @@
 		"text": "The purpose of this study was to evaluat"
 	},
 	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "Materials and Methods"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "All patients underwent thin-section CT w"
+	},
+	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 2,
+		"readingIndex": 4,
 		"text": "Results showed that 128 of the 342 pulmo"
 	}
 ]

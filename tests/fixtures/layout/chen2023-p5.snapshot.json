@@ -6,7 +6,7 @@
 		"text": "Table 2: Baseline Clinical Characteristi"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 0,
 		"readingIndex": 1,
 		"text": "All Patients"
@@ -783,7 +783,7 @@
 		"text": "Table 3: Baseline Lesion Characteristics"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 0,
 		"readingIndex": 89,
 		"text": "All Lesions"
@@ -1653,9 +1653,9 @@
 		"text": "Note.—Unless otherwise specified, data a"
 	},
 	{
-		"type": "paragraph",
+		"type": "list",
 		"column": 0,
 		"readingIndex": 187,
-		"text": "MLA = minimum lumen area, OM = obtuse ma"
+		"text": "* Numbers are medians, with IQRs in pare"
 	}
 ]
