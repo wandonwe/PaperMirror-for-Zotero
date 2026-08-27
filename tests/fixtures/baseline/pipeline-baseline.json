@@ -56,7 +56,7 @@
 		"fastChunks": 1,
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 8,
-		"payloadChars": 4519,
+		"payloadChars": 4517,
 		"dupBlocks": 0
 	},
 	"chen2023-p1": {

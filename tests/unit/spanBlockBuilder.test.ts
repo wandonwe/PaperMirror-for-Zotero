@@ -390,3 +390,26 @@ test('满幅前言占多数时仍能分出双栏 (2.5.0 左缘聚类兜底; RSNA
 	assert.equal(clean.length, 2, '对照: 只有正文时正常识别出 2 栏');
 	assert.ok(clean[0]!.right < 300 && clean[1]!.left > 300, '对照: 白槽落在 291–309');
 });
+
+// ---- 首字下沉 (2.5.1) -------------------------------------------------------
+
+test('下沉首字并入第一行,而不是焊到第二行', () => {
+	// Chen 2023 第 1 页真实坐标:大写 A 高 25.19pt,盒心 155.30 正好落在第二行
+	// (顶 155.34) 的基线带里 —— 按中心配对就会产出「Acauses of morbidity…」。
+	const cap: SpanItem = { text: 'A', rect: [71.96, 142.70, 87.14, 167.90], fontSize: 25 };
+	const line1: SpanItem = { text: 'cute coronary syndrome remains one of the leading', rect: [89, 157.4, 290, 167.4], fontSize: 10 };
+	const line2: SpanItem = { text: 'causes of morbidity and mortality globally', rect: [71.96, 145.3, 290, 155.3], fontSize: 10 };
+	const rows = groupIntoRows([line2, cap, line1]);
+	assert.equal(rows.length, 2);
+	assert.deepEqual(rows[0]!.map(i => i.text), ['A', 'cute coronary syndrome remains one of the leading']);
+	assert.deepEqual(rows[1]!.map(i => i.text), ['causes of morbidity and mortality globally']);
+});
+
+test('下沉首字规则不影响上标与普通行', () => {
+	// 上标标注比正文矮但不满足「≥18pt 的 1–2 字符大字母」判据,仍按中心配对并入本行。
+	const body: SpanItem = { text: 'myocardial infarction', rect: [72, 600, 200, 610], fontSize: 10 };
+	const sup: SpanItem = { text: '12', rect: [200, 605, 206, 610], fontSize: 5 };
+	const rows = groupIntoRows([body, sup]);
+	assert.equal(rows.length, 1);
+	assert.deepEqual(rows[0]!.map(i => i.text), ['myocardial infarction', '12']);
+});

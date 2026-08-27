@@ -22,7 +22,6 @@ import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
 import { buildBlocks, buildBlocksFromPlainText, medianFontSize } from './blockBuilder';
 import { buildBlocksFromSpans } from './spanBlockBuilder';
-import { RepeatRegistry } from './repeatRegistry';
 import { coalesceRegions } from './regionCoalescer';
 import { orderBlocksForReading } from './readingOrder';
 import { structureTableCells } from './tableStructure';
@@ -72,12 +71,6 @@ export class TextExtractor implements PageParser {
 	private reader: ReaderLike;
 	private includeReferences: boolean;
 	private referencesStartedByPage = new Map<number, boolean>();
-	/**
-	 * 跨页重复登记表 (2.4.5, MinerU 页眉页脚去重): 与 referencesStartedByPage
-	 * 同为**文档级**状态 —— 逐页管线里唯一能积累「这条在多少页上出现过」的地方。
-	 * 随 TextExtractor 生命周期,换文档即换实例。
-	 */
-	private repeats = new RepeatRegistry();
 	private fullText: adapter.FullTextInfo | null = null;
 	private bodyFontSize = 0;
 	/** 边框硬屏障: per-page figure rects (operator list), cached; [] = none. */
@@ -292,8 +285,7 @@ export class TextExtractor implements PageParser {
 				pageWidth: page.pageWidth,
 				includeReferences: this.includeReferences,
 				referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
-				imageRectsPdf: obstacles,
-				repeats: this.repeats
+				imageRectsPdf: obstacles
 			});
 			// Rebuild semantic regions from whatever fragments extraction
 			// produced: whole regions translate as whole sentences.

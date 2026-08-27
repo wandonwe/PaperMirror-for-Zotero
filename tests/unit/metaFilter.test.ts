@@ -220,3 +220,38 @@ test('real running feet in the band are still dropped', () => {
 	// it must NOT be mistaken for a body continuation and spared.
 	assert.equal(isRunningHeadOrFoot([66, 23, 400, 33], H, 1, 'n engl j med 378;8 nejm.org February 22, 2018'), true);
 });
+
+// ---- 栏底正文以虚词收尾:句子没说完,不是页脚 (2.5.1) ----------------------
+test('a capitalised body line that trails off mid-sentence is NOT a running foot', () => {
+	// Chen 2023 (Radiology) 第 1 页左栏栏底,真实坐标:单行、54 字符、
+	// y=[25.85, 35.85] 落在 783pt 页的底部 8% 带内,首字母大写 —— 「以小写开头」
+	// 那条规则看不见它,2.4.8 的诊断里这句正文就是这样整句消失的。
+	const H = 783;
+	assert.equal(isRunningHeadOrFoot(
+		[71.96, 25.85, 290.12, 35.85], H, 1,
+		'These features have been reported to be associated with'
+	), false);
+	// 连字符断词同理
+	assert.equal(isRunningHeadOrFoot([66, 23, 400, 33], H, 1, 'Radiomic features extracted from peri-'), false);
+	// 其它常见虚词收尾
+	assert.equal(isRunningHeadOrFoot([66, 23, 400, 33], H, 1, 'The primary end point was the composite of'), false);
+	assert.equal(isRunningHeadOrFoot([66, 23, 400, 33], H, 1, 'Patients were followed until death or'), false);
+});
+
+test('虚词收尾规则不放过真正的页眉页脚', () => {
+	const H = 783;
+	// 自足的标题短语,以实词收尾
+	assert.equal(isRunningHeadOrFoot([66, 23, 400, 33], H, 1, 'Coronary CT Angiography Radiomics'), true);
+	assert.equal(
+		isRunningHeadOrFoot([66, 23, 400, 33], H, 1, 'Radiomics Model to Identify Vulnerable Plaque'),
+		true,
+		'中间有虚词但收尾是实词'
+	);
+	// 期刊脚注带域名/卷期,即使收尾像虚词也照旧丢弃
+	assert.equal(
+		isRunningHeadOrFoot([66, 23, 400, 33], H, 1, 'radiology.rsna.org ■ Radiology: Volume 307: Number 2—April'),
+		true
+	);
+	// 纯页码不受影响
+	assert.equal(isRunningHeadOrFoot([290, 23, 312, 33], H, 1, '451'), true);
+});

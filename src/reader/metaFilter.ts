@@ -169,7 +169,45 @@ export function isRunningHeadOrFoot(
 	if (/^[a-z]/.test(t) && !looksLikeJournalFoot) {
 		return false;
 	}
+	// A run that ENDS mid-sentence is a wrapped body line too, even when it
+	// begins with a capital (2.5.1, Radiology 语料: 「These features have been
+	// reported to be associated with」 坐在左栏栏底,单行 54 字符、首字母大写,
+	// 上面那条小写规则看不见它,于是整句正文被当页脚丢弃)。正文行在版心用尽处
+	// 断开,断点常落在虚词或连字符上;页眉页脚是自足的标题/引文短语,绝不会以
+	// 「with」「of」「and」收尾。
+	if (!looksLikeJournalFoot && endsMidSentence(t)) {
+		return false;
+	}
 	return lineCount <= 2 && t.length <= 140;
+}
+
+/** 虚词表:标题不会以此收尾,折行的正文行经常如此。 */
+const TRAILING_FUNCTION_WORDS = new Set([
+	'a', 'an', 'the', 'and', 'or', 'nor', 'but', 'if', 'as', 'that', 'which', 'who', 'whom', 'whose',
+	'of', 'to', 'in', 'on', 'at', 'by', 'for', 'from', 'with', 'without', 'within', 'into', 'onto',
+	'upon', 'over', 'under', 'above', 'below', 'between', 'among', 'through', 'during', 'before',
+	'after', 'since', 'until', 'while', 'when', 'where', 'than', 'then', 'because', 'although',
+	'though', 'whether', 'via', 'per', 'about', 'against', 'toward', 'towards', 'across', 'along',
+	'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am', 'has', 'have', 'had', 'having',
+	'do', 'does', 'did', 'can', 'could', 'may', 'might', 'must', 'shall', 'should', 'will', 'would',
+	'not', 'no', 'both', 'each', 'either', 'neither', 'all', 'any', 'some', 'such', 'more', 'most',
+	'less', 'least', 'we', 'they', 'it', 'its', 'their', 'our', 'these', 'those', 'this', 'there',
+	'using', 'used', 'based'
+]);
+
+/** 行尾停在连字符或虚词上 —— 句子还没说完,下一行才是续文。 */
+export function endsMidSentence(text: string): boolean {
+	const t = text.trim();
+	// 跨行连字符断词
+	if (/\p{L}-$/u.test(t)) {
+		return true;
+	}
+	const tail = t.match(/([\p{L}\p{N}'’-]+)\s*$/u);
+	const word = tail?.[1];
+	if (!word) {
+		return false;
+	}
+	return TRAILING_FUNCTION_WORDS.has(word.toLowerCase());
 }
 
 /**

@@ -26,7 +26,6 @@ import type { BlockType, SourceBlock } from '../types/models';
 import { detectTableRegions } from './tableGuard';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
 import { isMetadataBlock, isPublisherBoilerplateLine, isRunningHeadOrFoot } from './metaFilter';
-import type { RepeatObserver } from './repeatRegistry';
 import {
 	columnOf,
 	detectColumns,
@@ -119,6 +118,31 @@ function sizeOf(items: SpanItem[]): number {
 /** Step 1: items sharing a baseline band, left to right. No x constraint. */
 /** 同基线的 run 成行 —— 导出仅为可测性 (2.4.9): 白槽投票在这一层做,
  * 切分后的 SpanLine 已经看不到「一行横跨两栏」,拿它做探针必然测不出东西。 */
+/**
+ * 该行是否由一个「下沉首字」领起 —— 行内最高的 item 只有 1–2 个字符,
+ * 绝对高度 ≥ 18pt,且比来客高出 1.8 倍以上。
+ */
+function hasDropCapLead(
+	row: { items: SpanItem[]; top: number; bottom: number },
+	incomingHeight: number
+): boolean {
+	let lead: SpanItem | undefined;
+	let leadHeight = 0;
+	for (const it of row.items) {
+		const h = it.rect[3] - it.rect[1];
+		if (h > leadHeight) {
+			leadHeight = h;
+			lead = it;
+		}
+	}
+	if (!lead) {
+		return false;
+	}
+	return lead.text.trim().length <= 2
+		&& leadHeight >= 18
+		&& leadHeight >= incomingHeight * 1.8;
+}
+
 export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 	const usable = items.filter((i) => {
 		if (!i.text.trim().length || !Number.isFinite(i.rect[1]) || !Number.isFinite(i.rect[3])) {
@@ -144,7 +168,18 @@ export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 	for (const item of sorted) {
 		const height = Math.max(1, item.rect[3] - item.rect[1]);
 		const centre = (item.rect[1] + item.rect[3]) / 2;
-		const row = rows.find(r => Math.abs((r.top + r.bottom) / 2 - centre) <= height * 0.6);
+		// 首字下沉 (2.5.1): 段首那个 2–3 行高的大写字母,盒心正好落在【第二行】
+		// 的基线带里,于是按中心配对会把它焊成「Acauses of morbidity…」,而真正
+		// 的第一行 "cute coronary syndrome…" 反被挤成独立行。下沉首字与第一行是
+		// 【顶边】对齐的 (A 顶 167.48 / 第一行顶 167.33,差 0.15;第二行顶
+		// 155.34,差 12.1),所以含下沉首字的行改按顶边配对。判据落在「行内最高
+		// 的 item 是个 1–2 字符的大字母」上,标题行、上标都不满足,不受影响。
+		const row = rows.find((r) => {
+			if (hasDropCapLead(r, height)) {
+				return Math.abs(r.top - item.rect[3]) <= height * 0.5;
+			}
+			return Math.abs((r.top + r.bottom) / 2 - centre) <= height * 0.6;
+		});
 		if (row) {
 			row.items.push(item);
 			row.top = Math.max(row.top, item.rect[3]);
@@ -400,11 +435,6 @@ export interface SpanBuildOptions {
 	pageWidth?: number;
 	includeReferences?: boolean;
 	referencesAlreadyStarted?: boolean;
-	/**
-	 * 跨页重复登记表 (2.4.5, MinerU 页眉页脚去重)。文档级状态,由 TextExtractor
-	 * 持有并逐页喂入。缺省(单测/纯函数调用)时行为与从前逐字节一致。
-	 */
-	repeats?: RepeatObserver;
 }
 
 export interface SpanBuildResult {
@@ -623,17 +653,6 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			// band, and losing it is far worse than translating one running head.
 			if (p.type !== 'title' && isRunningHeadOrFoot(p.rect, options.pageHeight, p.group.length, p.text)) {
 				continue;
-			}
-			// 跨页重复去重 (2.4.5, MinerU): 先登记本页页边带内的候选,再问登记表
-			// 「这条在够多的**不同页**上出现过吗」。这抓的是上面单页形状判据的
-			// 结构性盲区 —— 落在带外或超过 2 行/140 字的版权与许可声明块。
-			// `title` 同样豁免(理由同上:封面标题可能落在带内)。纯附加:登记表
-			// 只会多丢,不会把上面已经丢掉的救回来。
-			if (p.type !== 'title' && options.repeats) {
-				options.repeats.observe(options.pageIndex, p.text, p.rect, options.pageHeight, p.type);
-				if (options.repeats.isRepeated(p.text)) {
-					continue;
-				}
 			}
 			if ((p.type === 'heading' || p.type === 'title') && REFERENCES_HEADINGS.test(p.text)) {
 				referencesStarted = true;
