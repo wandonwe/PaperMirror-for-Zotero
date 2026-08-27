@@ -1,0 +1,92 @@
+[
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 0,
+		"text": "Abbreviations"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "AUC = area under the curve, CAD = corona"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "Summary"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "A radiomic signature based on coronary C"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 4,
+		"text": "Key Results"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 5,
+		"text": "■ In a retrospective analysis of 299 pat"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 6,
+		"text": "intravascular US–derived features (9,10)"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 7,
+		"text": "Materials and Methods"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 8,
+		"text": "Study Design and Sample"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 9,
+		"text": "The flowchart of this two-stage study is"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 10,
+		"text": "Study 2.—To validate the prognostic valu"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 11,
+		"text": "CCTA Analysis"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 12,
+		"text": "Details of CCTA protocols, anatomic plaq"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 13,
+		"text": "Intravascular US Analysis"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 14,
+		"text": "All intravascular US data were assessed "
+	}
+]

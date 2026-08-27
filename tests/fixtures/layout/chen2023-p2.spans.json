@@ -1,0 +1,1348 @@
+{
+"source": "chen2023",
+"page": 2,
+"pageWidth": 594,
+"pageHeight": 783,
+"items": [
+{
+"text": "Radiomics Model to Identify Vulnerable Plaque and Predict Cardiovascular Events",
+"rect": [
+47.95898795127869,
+744.7089807987214,
+304.52147126197815,
+752.7070330381393
+],
+"fontSize": 7.998052239417916
+},
+{
+"text": "2",
+"rect": [
+47.95898795127869,
+21.38869929313659,
+52.77343690395355,
+29.38674259185788
+],
+"fontSize": 7.998043298721292
+},
+{
+"text": "radiology.rsna.org",
+"rect": [
+363.720703125,
+21.603517413139407,
+411.6992175579071,
+28.605468750000053
+],
+"fontSize": 7.001951336860646
+},
+{
+"text": "■",
+"rect": [
+414.0038967132569,
+22.40430879592895,
+416.660150885582,
+26.808603286743104
+],
+"fontSize": 4.404294490814152
+},
+{
+"text": "Radiology:",
+"rect": [
+418.8672065734864,
+21.603517413139407,
+448.25196862220764,
+28.605468750000053
+],
+"fontSize": 7.001951336860646
+},
+{
+"text": "Volume 307: Number 2—April 2023",
+"rect": [
+449.9707102775574,
+21.603517413139407,
+545.3222751617432,
+28.605468750000053
+],
+"fontSize": 7.001951336860646
+},
+{
+"text": "Study 2.—",
+"rect": [
+305.7909965515137,
+722.1210973262787,
+346.86521887779236,
+732.1210967302322
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "To validate the prognostic value of the proposed RS,",
+"rect": [
+346.5722680091858,
+721.8085931539536,
+546.4941501617432,
+731.8085925579072
+],
+"fontSize": 9.999999403953666
+},
+{
+"text": "we explored its performance for predicting MACE in a single-",
+"rect": [
+305.7909965515137,
+709.7578125,
+546.6113090515137,
+719.7578119039536
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "center prospective observational cohort, in which CT-derived",
+"rect": [
+305.7909965515137,
+697.7753924131395,
+546.582019329071,
+707.7753918170929
+],
+"fontSize": 9.999999403953439
+},
+{
+"text": "fractional flow reserve (FFR",
+"rect": [
+305.7909965515137,
+685.8027355670929,
+413.53513598442083,
+695.8027349710464
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "CT",
+"rect": [
+413.1054639816284,
+683.5468726158142,
+420.9277242422104,
+689.3769489526749
+],
+"fontSize": 5.830076336860657
+},
+{
+"text": ") was used to guide clinical care",
+"rect": [
+420.94727754592896,
+685.8027355670929,
+546.1035221815109,
+695.8027349710464
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "compared with CCTA alone. This study design has been previ-",
+"rect": [
+305.7324171066284,
+673.8203154802322,
+546.5624928474426,
+683.8203148841858
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "ously described (13). Please see Appendix S2 for more details.",
+"rect": [
+305.7324171066284,
+661.7695348262787,
+546.5038955211639,
+671.7695342302322
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "In brief, 1133 patients with suspected CAD undergoing CCTA",
+"rect": [
+305.7324171066284,
+649.7871057987213,
+546.5722560882568,
+659.7871052026749
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "at Jinling Hospital were assigned to the CCTA alone group",
+"rect": [
+305.7324171066284,
+637.8144489526749,
+546.5624928474426,
+647.8144572973251
+],
+"fontSize": 10.000008344650269
+},
+{
+"text": "(",
+"rect": [
+305.7324171066284,
+625.8320288658142,
+309.06248688697815,
+635.8320282697678
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "n",
+"rect": [
+308.87696743011475,
+625.8320288658142,
+313.87697160243994,
+635.8320282697678
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "= 566) or the FFR",
+"rect": [
+317.37306118011475,
+625.8320288658142,
+391.26954674720764,
+635.8320282697678
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "CT ",
+"rect": [
+390.96679687500006,
+623.5859380960464,
+402.32421755790716,
+629.4160144329071
+],
+"fontSize": 5.830076336860657
+},
+{
+"text": "group (",
+"rect": [
+402.3632884025574,
+625.8320288658142,
+431.57227635383606,
+635.8320282697678
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "n",
+"rect": [
+431.3281059265137,
+625.8320288658142,
+436.32811009883886,
+635.8320282697678
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "= 567) from April 2018 to",
+"rect": [
+439.8828148841858,
+625.8320288658142,
+546.0839867591858,
+635.8320282697678
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "March 2019. The prior study focused on downstream manage-",
+"rect": [
+305.7324171066284,
+613.7812482118607,
+546.5527296066284,
+623.7812476158142
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "ment and 1-year outcomes of the FFR",
+"rect": [
+305.7324171066284,
+601.8085824251176,
+448.6913949251175,
+611.808581829071
+],
+"fontSize": 9.999999403953439
+},
+{
+"text": "CT ",
+"rect": [
+448.1249928474426,
+599.5527373552322,
+458.06639492511755,
+605.3828136920929
+],
+"fontSize": 5.830076336860657
+},
+{
+"text": "strategy compared with",
+"rect": [
+458.10545682907104,
+601.8085824251176,
+545.9374934434892,
+611.808581829071
+],
+"fontSize": 9.999999403953439
+},
+{
+"text": "CCTA alone, whereas the current study aimed to assess the prog-",
+"rect": [
+305.7909965515137,
+589.8261712789536,
+546.5527296066284,
+599.8261706829071
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "nostic value of the proposed RS at 3-year follow-up.",
+"rect": [
+305.7909965515137,
+577.8535233736038,
+501.5917897224427,
+587.8535227775574
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "CCTA Analysis",
+"rect": [
+305.7909965515137,
+554.132817864418,
+364.0234172344208,
+564.1328172683717
+],
+"fontSize": 9.999999403953666
+},
+{
+"text": "Details of CCTA protocols, anatomic plaque parameter analysis,",
+"rect": [
+305.7909965515137,
+541.8378936052322,
+546.6015458106995,
+551.8378930091858
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "radiomics analysis, and interobserver assessment are presented in",
+"rect": [
+305.7909965515137,
+529.8652278184891,
+546.5527296066284,
+539.8652272224426
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "Appendix S3.",
+"rect": [
+305.7909965515137,
+517.804692864418,
+357.20701217651373,
+527.8046922683716
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "Anatomic plaque parameters.—",
+"rect": [
+305.7909965515137,
+494.17187440395355,
+432.3144346475601,
+504.17187380790716
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "For each lesion, diameter ste-",
+"rect": [
+431.63087368011475,
+493.84959805011755,
+546.0254073143005,
+503.84959745407104
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "nosis, minimum lumen area, plaque burden, plaque volume,",
+"rect": [
+305.7909965515137,
+481.87695014476776,
+546.6015458106995,
+491.87694954872137
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "and vessel volume were measured using a semiautomated plaque",
+"rect": [
+305.7909965515137,
+469.82616055011755,
+546.5624928474426,
+479.82615995407104
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "analysis software (Coronary Plaque Analysis, Syngo.Via FRON-",
+"rect": [
+305.7909965515137,
+457.8437315225601,
+546.5722560882568,
+467.84373092651373
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "TIER, version 5.0.2; Siemens). Significant stenosis was defined",
+"rect": [
+305.7909965515137,
+445.8711014986039,
+546.5917825698853,
+455.8711009025573
+],
+"fontSize": 9.999999403953439
+},
+{
+"text": "as diameter stenosis of at least 50% (14). Plaque burden was",
+"rect": [
+305.7909965515137,
+433.88867247104645,
+546.5624928474426,
+443.88867187500006
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "defined as plaque volume divided by vessel volume (15). Each",
+"rect": [
+305.7909965515137,
+421.8379007577896,
+546.6405987739563,
+431.8379001617432
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "coronary lesion was assessed for adverse plaque characteristics in-",
+"rect": [
+305.7909965515137,
+409.8554717302323,
+546.5331852436066,
+419.8554711341858
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "cluding positive remodeling, low-attenuation plaque, spotty cal-",
+"rect": [
+305.7909965515137,
+397.88280594348913,
+546.6015458106995,
+407.8828053474426
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "cification, and napkin-ring sign (16). High-risk plaque (HRP)",
+"rect": [
+305.7909965515137,
+385.82227098941803,
+546.6308355331421,
+395.82227039337164
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "was defined as a lesion with at least two features of adverse",
+"rect": [
+305.7909965515137,
+373.84959626197815,
+546.5331852436066,
+383.8496046066285
+],
+"fontSize": 10.000008344650325
+},
+{
+"text": "plaque characteristics. The segment involvement score and seg-",
+"rect": [
+305.7909965515137,
+361.8671761751175,
+546.582019329071,
+371.86717557907104
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "ment stenosis score were calculated as measures of the extent and",
+"rect": [
+305.7909965515137,
+349.8945461511612,
+546.5429484844208,
+359.89454555511475
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "severity of CAD (17).",
+"rect": [
+305.7909965515137,
+337.8437386751175,
+387.9687309265137,
+347.84373807907104
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "Radiomic plaque features.—",
+"rect": [
+305.7909965515137,
+314.20117485523224,
+419.638654589653,
+324.20117425918585
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "Radiomic feature extraction was",
+"rect": [
+419.042980670929,
+313.8886796236038,
+546.0839956998825,
+323.8886790275574
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "performed using a radiomics software (Radiomics, Syngo.Via",
+"rect": [
+305.7909965515137,
+301.90625059604645,
+546.582019329071,
+311.90625000000006
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "FRONTIER, version 1.2.1; Siemens). A total of 1691 radiomic",
+"rect": [
+305.7909965515137,
+289.8554788827896,
+546.6405987739563,
+299.8554782867432
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "features were extracted from each plaque, including 324 first-",
+"rect": [
+305.7909965515137,
+277.87304985523224,
+546.5624928474426,
+287.8730492591858
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "order features, 17 shape features, and 1350 textural features. The",
+"rect": [
+305.7909965515137,
+265.9003840684891,
+546.5429484844208,
+275.9003834724427
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "feature selection process and the details of the XGBoost algo-",
+"rect": [
+305.7909965515137,
+253.91795504093173,
+546.5624928474426,
+263.91795444488525
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "rithm used to produce the RS are presented in Appendix S3. The",
+"rect": [
+305.7909965515137,
+241.8671743869782,
+546.6308355331421,
+251.86718273162842
+],
+"fontSize": 10.000008344650212
+},
+{
+"text": "code can be found in Github",
+"rect": [
+305.7909965515137,
+229.88475430011746,
+421.2988078594208,
+239.88475370407107
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "(https://github.com/tomato08217/",
+"rect": [
+424.2675662040711,
+229.88475430011746,
+546.1718648672104,
+239.88475370407107
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "plaque_ analysis)",
+"rect": [
+305.7909965515137,
+217.91212427616117,
+367.5683408975602,
+227.91212368011477
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": ".",
+"rect": [
+367.22656488418585,
+217.91212427616117,
+369.7265625,
+227.91212368011477
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "Intravascular US Analysis",
+"rect": [
+305.7909965515137,
+194.19141876697537,
+407.0409983396531,
+204.19141817092898
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "All intravascular US data were assessed blinded to CCTA results",
+"rect": [
+305.7909965515137,
+181.90625774860382,
+546.5917825698853,
+191.9062571525574
+],
+"fontSize": 9.99999940395358
+},
+{
+"text": "at a core laboratory (Nanjing First Hospital Cardiovascular Re-",
+"rect": [
+305.7909965515137,
+169.92382872104648,
+546.5429484844208,
+179.923828125
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "search Institute). Vulnerable plaques were defined as the pres-",
+"rect": [
+305.7909965515137,
+157.95116293430328,
+546.5527296066284,
+167.9511623382568
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "ence of attenuated plaque or echolucent plaque (4,5,18). Details",
+"rect": [
+305.7909965515137,
+145.89066374301908,
+546.582019329071,
+155.89066314697268
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "of the intravascular US analysis are illustrated in Appendix S4.",
+"rect": [
+305.7909965515137,
+133.9179979562759,
+540.2636647224426,
+143.91799736022952
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "Statistical Analysis",
+"rect": [
+305.7909965515137,
+110.27536261081697,
+377.011701464653,
+120.2753620147705
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "Statistical analyses were performed by two statisticians (M.L.",
+"rect": [
+305.7909965515137,
+97.91209566593167,
+546.5527296066284,
+107.91209506988528
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "and Y.W., with 10 and 20 years of experience, respectively).",
+"rect": [
+305.7909965515137,
+85.92970240116121,
+546.5722560882568,
+95.92970180511473
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "Details of the power calculation, descriptive statistics, group",
+"rect": [
+305.7909965515137,
+73.95703661441803,
+546.5527296066284,
+83.95703601837155
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "comparison, interobserver agreement, and construction of",
+"rect": [
+305.7909965515137,
+61.97457182407381,
+546.5917825698853,
+71.97457122802741
+],
+"fontSize": 9.999999403953602
+},
+{
+"text": "models are provided in Appendix S5.",
+"rect": [
+305.7909965515137,
+49.92380011081698,
+452.6074022054672,
+59.923799514770586
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "intravascular US–derived features (9,10). Radiomics is the pro-",
+"rect": [
+47.95898795127869,
+484.14257633686066,
+288.75001072883606,
+494.1425757408142
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "cess of extracting thousands of quantitative features from medical",
+"rect": [
+47.95898795127869,
+472.1699105501175,
+288.75977396965027,
+482.16990995407104
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "images and can provide an automated, objective, and data-driven",
+"rect": [
+47.95898795127869,
+460.11913883686066,
+288.7793004512787,
+470.1191382408142
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "evaluation of plaque morphologic characteristics and composi-",
+"rect": [
+47.95898795127869,
+448.13670980930334,
+288.74024748802185,
+458.13670921325684
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "tion (11). Several small sample studies have shown that radiomics",
+"rect": [
+47.95898795127869,
+436.1640440225602,
+288.75977396965027,
+446.1640434265137
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "based on CCTA is a potentially useful tool for detecting vulnerable",
+"rect": [
+47.95898795127869,
+424.1816507577896,
+288.75001072883606,
+434.1816501617431
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "plaques in correlation with histologic examination (12) or intra-",
+"rect": [
+47.95898795127869,
+412.1308790445328,
+288.7988269329071,
+422.1308784484864
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "vascular imaging modalities (10); however, its clinical implications",
+"rect": [
+47.95898795127869,
+400.1484500169754,
+288.7695372104645,
+410.14844942092896
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "have not been validated. Whether the radiomics technique could",
+"rect": [
+47.95898795127869,
+388.17578423023224,
+288.75001072883606,
+398.1757836341858
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "be used to predict future major adverse cardiac events (MACE) in",
+"rect": [
+47.95898795127869,
+376.19334626197815,
+288.7695372104645,
+386.1933546066284
+],
+"fontSize": 10.000008344650269
+},
+{
+"text": "patients with CAD remains unknown.",
+"rect": [
+47.95898795127869,
+364.1425834894181,
+190.1464819908142,
+374.1425828933716
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "Thus, we aimed to assess whether a CCTA-based radiomic",
+"rect": [
+59.94140803813934,
+352.16015446186066,
+288.70116770267487,
+362.16015386581427
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "signature (RS) of vulnerable plaques determined by using in-",
+"rect": [
+47.95898795127869,
+340.1874886751175,
+288.7793004512787,
+350.1874880790711
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "travascular US as the reference standard was associated with in-",
+"rect": [
+47.95898795127869,
+328.2148586511612,
+288.7109398841858,
+338.21485805511475
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "creased risk for future MACE.",
+"rect": [
+47.95898795127869,
+316.1542879343033,
+161.96289360523224,
+326.15428733825684
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "Materials and Methods",
+"rect": [
+47.95898795127869,
+292.08205211162567,
+158.9257836341858,
+304.08399868011475
+],
+"fontSize": 12.001946568489075
+},
+{
+"text": "Study Design and Sample",
+"rect": [
+47.95898795127869,
+266.5254102945328,
+150.3710925579071,
+276.5254096984863
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "The flowchart of this two-stage study is presented in Figure 1.",
+"rect": [
+47.95898795127869,
+254.23045027256012,
+288.7890636920929,
+264.23044967651373
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "This study was approved by the institutional review board of each",
+"rect": [
+47.95898795127869,
+242.17967855930328,
+288.7304663658142,
+252.17967796325686
+],
+"fontSize": 9.99999940395358
+},
+{
+"text": "participating hospital. Written informed consent was waived in",
+"rect": [
+47.95898795127869,
+230.2070127725601,
+288.75977396965027,
+240.2070121765137
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "study 1 but obtained in study 2. The study was conducted fol-",
+"rect": [
+47.95898795127869,
+218.22461950778964,
+288.8183534145355,
+228.22461891174316
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "lowing the principles of the Declaration of Helsinki.",
+"rect": [
+47.95898795127869,
+206.25195372104645,
+244.9511826038361,
+216.25195312499997
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "Study 1.—",
+"rect": [
+47.95898795127869,
+182.53124821186066,
+88.39843869209291,
+192.53124761581418
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "To develop a CCTA-based RS of vulnerable plaques,",
+"rect": [
+88.07617127895357,
+182.21875298023227,
+288.68164122104645,
+192.2187523841858
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "we retrospectively included consecutive patients with CAD",
+"rect": [
+47.95898795127869,
+170.23631501197815,
+288.74024748802185,
+180.23632335662845
+],
+"fontSize": 10.000008344650297
+},
+{
+"text": "who first underwent CCTA and then intravascular US within",
+"rect": [
+47.95898795127869,
+158.185552239418,
+288.8183534145355,
+168.1855516433716
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "3 months at three tertiary medical centers. The development set",
+"rect": [
+47.95898795127869,
+146.2030874490738,
+288.75977396965027,
+156.20308685302732
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "was obtained from Nanjing First Hospital between June 2013",
+"rect": [
+47.95898795127869,
+134.23049318790436,
+288.720703125,
+144.23049259185788
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "and December 2020. These patients were randomly assigned to",
+"rect": [
+47.95898795127869,
+122.24802839756015,
+288.7695372104645,
+132.24802780151367
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "a training and validation set at a ratio of 7:3. The internal test set",
+"rect": [
+47.95898795127869,
+110.19725668430331,
+288.74024748802185,
+120.19725608825684
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "was enrolled from Nanjing First Hospital between January 2021",
+"rect": [
+47.95898795127869,
+98.22459089756013,
+288.74024748802185,
+108.22459030151366
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "and December 2021. The external test sets were from two hospi-",
+"rect": [
+47.95898795127869,
+86.24219763278958,
+288.720703125,
+96.24219703674319
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "tals (Affiliated Huaian No.1 People’s Hospital of Nanjing Medical",
+"rect": [
+47.95898795127869,
+74.26953184604642,
+288.720703125,
+84.26953125000001
+],
+"fontSize": 9.999999403953595
+},
+{
+"text": "University and Peking Union Medical College Hospital). Details",
+"rect": [
+47.95898795127869,
+62.20896112918854,
+288.75001072883606,
+72.20896053314215
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "of the patient selection protocol are available in Appendix S1.",
+"rect": [
+47.95898795127869,
+50.236366868019104,
+275.80077052116394,
+60.23636627197271
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "Abbreviations",
+"rect": [
+53.94531190395356,
+714.1718791723251,
+99.16015863418579,
+726.1738257408143
+],
+"fontSize": 12.001946568489188
+},
+{
+"text": "AUC = area under the curve, CAD = coronary artery disease, CCTA =",
+"rect": [
+53.94531190395356,
+702.1796869039536,
+281.9335967302323,
+710.6757806539536
+],
+"fontSize": 8.49609375
+},
+{
+"text": "coronary CT angiography, FFR",
+"rect": [
+53.94531190395356,
+692.7070276737213,
+155.4296851158142,
+701.2031214237213
+],
+"fontSize": 8.49609375
+},
+{
+"text": "CT ",
+"rect": [
+155.39063215255737,
+690.7636688947678,
+164.25781846046448,
+695.7246111631393
+],
+"fontSize": 4.960942268371582
+},
+{
+"text": "= CT-derived fractional flow reserve,",
+"rect": [
+164.28710818290713,
+692.7070276737213,
+281.8945348262787,
+701.2031214237213
+],
+"fontSize": 8.49609375
+},
+{
+"text": "HR = hazard ratio, HRP = high-risk plaque, MACE = major adverse",
+"rect": [
+53.94531190395356,
+683.1562535762787,
+281.9335967302323,
+691.6523473262787
+],
+"fontSize": 8.49609375
+},
+{
+"text": "cardiac events, RS = radiomic signature",
+"rect": [
+53.94531190395356,
+673.6835943460464,
+179.25781309604645,
+682.1796880960464
+],
+"fontSize": 8.49609375
+},
+{
+"text": "Summary",
+"rect": [
+53.94531190395356,
+654.1328119039537,
+86.3476574420929,
+666.1347674131393
+],
+"fontSize": 12.001955509185677
+},
+{
+"text": "A radiomic signature based on coronary CT angiography enabled the",
+"rect": [
+53.94531190395356,
+642.2089802026749,
+275.16600787639624,
+650.7050739526749
+],
+"fontSize": 8.49609375
+},
+{
+"text": "identification of vulnerable plaques and was associated with major",
+"rect": [
+53.94531190395356,
+632.6679693460464,
+264.74609076976776,
+641.1640630960464
+],
+"fontSize": 8.49609375
+},
+{
+"text": "adverse cardiac events.",
+"rect": [
+53.94531190395356,
+623.1953101158142,
+125.18554329872131,
+631.6914038658142
+],
+"fontSize": 8.49609375
+},
+{
+"text": "Key Results",
+"rect": [
+53.94531190395356,
+603.7128882408142,
+92.09960997104645,
+615.71484375
+],
+"fontSize": 12.001955509185791
+},
+{
+"text": "■",
+"rect": [
+53.94531190395356,
+592.2285186052324,
+57.871091365814216,
+598.7324194908142
+],
+"fontSize": 6.5039008855818565
+},
+{
+"text": "In a retrospective analysis of 299 patients with coronary artery dis-",
+"rect": [
+62.968745827674866,
+591.7206959724426,
+274.99999701976776,
+600.2167897224426
+],
+"fontSize": 8.49609375
+},
+{
+"text": "ease (CAD), a coronary CT angiography–based radiomic signature",
+"rect": [
+62.968745827674866,
+582.169921875,
+276.65039598941803,
+590.6660156250001
+],
+"fontSize": 8.496093750000114
+},
+{
+"text": "(RS) had moderate to good diagnostic performance (area under the",
+"rect": [
+62.968745827674866,
+572.697253704071,
+277.7929812669754,
+581.193347454071
+],
+"fontSize": 8.49609375
+},
+{
+"text": "curve, ≥0.75) in the identification of vulnerable plaque defined with",
+"rect": [
+62.968745827674866,
+563.224621295929,
+280.33203184604645,
+571.720715045929
+],
+"fontSize": 8.49609375
+},
+{
+"text": "intravascular US.",
+"rect": [
+62.968745827674866,
+553.6738293170929,
+117.7734375,
+562.1699230670929
+],
+"fontSize": 8.49609375
+},
+{
+"text": "■",
+"rect": [
+53.94531190395356,
+541.7402343750001,
+57.871091365814216,
+548.2441442012787
+],
+"fontSize": 6.503909826278573
+},
+{
+"text": "In an independent prospective cohort study of 708 patients with sus-",
+"rect": [
+62.968745827674866,
+541.2324206829071,
+277.7246028184891,
+549.7285144329071
+],
+"fontSize": 8.49609375
+},
+{
+"text": "pected CAD, the RS was associated with increased risk for",
+"rect": [
+62.968745827674866,
+531.681628704071,
+244.15039122104645,
+540.177722454071
+],
+"fontSize": 8.49609375
+},
+{
+"text": "major car-",
+"rect": [
+245.78125476837158,
+531.681628704071,
+277.97852754592896,
+540.177722454071
+],
+"fontSize": 8.49609375
+},
+{
+"text": "diac events (adjusted hazard ratio, 2.0 per 0.01",
+"rect": [
+62.968745827674866,
+522.208996295929,
+208.18359553813937,
+530.705090045929
+],
+"fontSize": 8.49609375
+},
+{
+"text": "increment;",
+"rect": [
+209.81444120407107,
+522.208996295929,
+243.69139373302463,
+530.705090045929
+],
+"fontSize": 8.49609375
+},
+{
+"text": "P",
+"rect": [
+245.48828601837158,
+522.208996295929,
+250.21485686302188,
+530.705090045929
+],
+"fontSize": 8.49609375
+},
+{
+"text": "= .005).",
+"rect": [
+251.96288824081424,
+522.208996295929,
+276.8652319908142,
+530.705090045929
+],
+"fontSize": 8.49609375
+}
+]
+}

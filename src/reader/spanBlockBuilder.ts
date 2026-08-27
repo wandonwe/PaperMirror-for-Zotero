@@ -88,6 +88,17 @@ function rectOf(items: SpanItem[]): Rect {
 	return rect;
 }
 
+/**
+ * 字号跳变判据 (2.5.4)。
+ *
+ * 原判据是 `> 0.2`,而 sizeOf 把字号按半点分桶 —— 10pt 正文接 12pt 小节标题
+ * 算出来**恰好是 0.2,不大于**,于是期刊排版里最常见的一档标题级差从来断不开
+ * 段。chen2023-p3 的 "Results" 就这样被焊在「…(version 4.1.1;www.R-project.org).」
+ * 尾巴上,整节结构在译文页上消失。改成 `>=` 让这一档落进来;更小的级差
+ * (10→11 = 0.1)仍然不算跳变,以免正文里的字号抖动把段落切碎。
+ */
+const FONT_JUMP_RATIO = 0.2;
+
 function sizeOf(items: SpanItem[]): number {
 	// Dominant by CHARACTER COUNT, not by span count: one superscript must not
 	// inflate the whole line, and neither must a drop cap. A drop-cap line has
@@ -143,6 +154,21 @@ function hasDropCapLead(
 		&& leadHeight >= incomingHeight * 1.8;
 }
 
+/** 一个 run 的字号 —— 缺字号时退回盒高。 */
+function fontSizeOf(item: SpanItem): number {
+	const s = item.fontSize ?? (item.rect[3] - item.rect[1]);
+	return Number.isFinite(s) && s > 0 ? s : 0;
+}
+
+/** 行的代表字号 = 行内最大的那个,用来认出比它明显小的上下标。 */
+function rowFontSize(row: { items: SpanItem[] }): number {
+	let max = 0;
+	for (const it of row.items) {
+		max = Math.max(max, fontSizeOf(it));
+	}
+	return max;
+}
+
 export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 	const usable = items.filter((i) => {
 		if (!i.text.trim().length || !Number.isFinite(i.rect[1]) || !Number.isFinite(i.rect[3])) {
@@ -168,6 +194,7 @@ export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 	for (const item of sorted) {
 		const height = Math.max(1, item.rect[3] - item.rect[1]);
 		const centre = (item.rect[1] + item.rect[3]) / 2;
+		const itemFont = fontSizeOf(item);
 		// 首字下沉 (2.5.1): 段首那个 2–3 行高的大写字母,盒心正好落在【第二行】
 		// 的基线带里,于是按中心配对会把它焊成「Acauses of morbidity…」,而真正
 		// 的第一行 "cute coronary syndrome…" 反被挤成独立行。下沉首字与第一行是
@@ -177,6 +204,23 @@ export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 		const row = rows.find((r) => {
 			if (hasDropCapLead(r, height)) {
 				return Math.abs(r.top - item.rect[3]) <= height * 0.5;
+			}
+			// 上下标按【纵向重叠】归行 (2.5.4)。按盒心配对时容差取的是**来客
+			// 自身**的高度,而下标又矮又偏:chen2023-p2 里 FFR 的下标 CT 高
+			// 4.9pt,离本行中心 3.7、离下一行中心 5.8 —— 容差只有 ±2.9,两边都
+			// 够不着,于是自成一行。这一行随后被当成新段落的开头:第 2 页输出
+			// 「MACE = major adverseCT cardiac events」(下标掉进了下一行),
+			// 第 3 页整个右栏段落被劈成两块、第二块以「CT on MACE was
+			// explored…」起头。上下标与它所属的那一行必然大面积重叠,与相邻行
+			// 只擦一点边,重叠度是比盒心距离稳得多的判据。
+			// 判据用【字号】而不是行盒高度: 行盒会随成员增长,一旦它被某个高
+			// glyph 撑高,后面每个正常行都会被误判成"小来客"而走上宽松的重叠
+			// 匹配 —— aquino2023-p2 的「Exclusion criteria were (a) refusal…」
+			// 就是这样被下一行的「…tion to iodine-based…」污染的。上下标的本质
+			// 是**字号更小**,这一点不会被行盒的成长带偏。
+			if (itemFont > 0 && rowFontSize(r) > 0 && itemFont < rowFontSize(r) * 0.75) {
+				const overlap = Math.min(r.top, item.rect[3]) - Math.max(r.bottom, item.rect[1]);
+				return overlap >= height * 0.5;
 			}
 			return Math.abs((r.top + r.bottom) / 2 - centre) <= height * 0.6;
 		});
@@ -345,7 +389,7 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 			newColumn: next.rect[3] > line.rect[3] + size
 				|| !linesShareColumn(line.rect, next.rect),
 			indented: next.rect[0] > margins.left + size * 0.8,
-			fontJump: size > 0 && next.fontSize > 0 && Math.abs(next.fontSize - size) / size > 0.2,
+			fontJump: size > 0 && next.fontSize > 0 && Math.abs(next.fontSize - size) / size >= FONT_JUMP_RATIO,
 			listStart: looksLikeListStart(lineText(next)),
 			shortLine: medianLineWidth > 0
 				&& (line.rect[2] - line.rect[0]) < medianLineWidth * 0.7
@@ -644,7 +688,16 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			}
 		}
 		else {
-			if (p.type !== 'title' && p.type !== 'heading' && isMetadataBlock(p.text, p.rect, pageWidth, { fontSize: p.fontSize, bodySize })) {
+			// 图表说明豁免元数据过滤 (2.5.4, chen2023-p3 语料实证): 图 1 说明整段
+			// 消失 —— 这篇的队列名就是医院名(「Huaian set = Affiliated Huaian
+			// No. 1 People's Hospital of Nanjing Medical University set; PUMCH
+			// set = Peking Union Medical College Hospital set」),looksLikeAffiliation
+			// 数到 ≥2 个机构词 + ≥3 个逗号就判作者单位,连同全部缩写定义一起丢掉。
+			// caption/table 这两个类型只由「Figure N/Table N」开头产生 —— 那是
+			// 内容的自证,作者单位块永远不会这样起头,所以按 title/heading 一样豁免。
+			const isFigureOrTableCaption = p.type === 'caption' || p.type === 'table';
+			if (p.type !== 'title' && p.type !== 'heading' && !isFigureOrTableCaption
+				&& isMetadataBlock(p.text, p.rect, pageWidth, { fontSize: p.fontSize, bodySize })) {
 				continue;
 			}
 			// Running heads and page-foot lines repeat the journal's furniture on

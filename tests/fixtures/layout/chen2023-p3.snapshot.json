@@ -1,0 +1,38 @@
+[
+	{
+		"type": "caption",
+		"column": -1,
+		"readingIndex": 0,
+		"text": "Figure 1: Study flowchart. Huaian set = "
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "In study 1, the area under the curve (AU"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 2,
+		"text": "Cox regression to determine prognostic v"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 3,
+		"text": "Results"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 4,
+		"text": "Study Sample Characteristics"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 5,
+		"text": "Details of the patient selection procedu"
+	}
+]

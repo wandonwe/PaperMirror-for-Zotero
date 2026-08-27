@@ -1,0 +1,688 @@
+{
+"source": "chen2023",
+"page": 3,
+"pageWidth": 594,
+"pageHeight": 783,
+"items": [
+{
+"text": "Chen and Pan et al",
+"rect": [
+486.76757812500006,
+744.7089807987214,
+545.6054717302322,
+752.7070330381393
+],
+"fontSize": 7.998052239417916
+},
+{
+"text": "Radiology:",
+"rect": [
+47.95898795127869,
+21.603517413139407,
+77.34375,
+28.605468750000053
+],
+"fontSize": 7.001951336860646
+},
+{
+"text": "Volume 307: Number 2—April 2023",
+"rect": [
+79.05273735523224,
+21.603517413139407,
+174.4042932987213,
+28.605468750000053
+],
+"fontSize": 7.001951336860646
+},
+{
+"text": "■",
+"rect": [
+176.87500119209292,
+22.40430879592895,
+179.5312464237213,
+26.808603286743104
+],
+"fontSize": 4.404294490814152
+},
+{
+"text": "radiology.rsna.org",
+"rect": [
+181.73829317092896,
+21.603517413139407,
+229.7168076038361,
+28.605468750000053
+],
+"fontSize": 7.001951336860646
+},
+{
+"text": "3",
+"rect": [
+541.3183450698853,
+21.38869929313659,
+546.1327940225601,
+29.38674259185788
+],
+"fontSize": 7.998043298721292
+},
+{
+"text": "In study 1, the area under the curve (AUC), accuracy, sen-",
+"rect": [
+59.94140803813934,
+325.8613096475602,
+288.7207120656967,
+335.8613090515137
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "sitivity, and specificity of the RS and anatomic plaque parame-",
+"rect": [
+47.95898795127869,
+313.8886796236038,
+288.7304663658142,
+323.8886790275574
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "ters were calculated for identifying vulnerable plaques, with in-",
+"rect": [
+47.95898795127869,
+301.90625059604645,
+288.7695372104645,
+311.90625000000006
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "travascular US as the reference standard. The incremental value",
+"rect": [
+47.95898795127869,
+289.8554788827896,
+288.7304663658142,
+299.8554782867432
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "of the RS for vulnerable plaque discrimination beyond HRP",
+"rect": [
+47.95898795127869,
+277.87304985523224,
+288.7890636920929,
+287.8730492591858
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "and quantitative plaque parameters was assessed by compar-",
+"rect": [
+47.95898795127869,
+265.9003840684891,
+288.7109398841858,
+275.9003834724427
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "ing the receiver operating characteristic curve and precision-",
+"rect": [
+47.95898795127869,
+253.91795504093173,
+288.69139552116394,
+263.91795444488525
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "recall curve. The optimal cut-off value of RS to define high-risk",
+"rect": [
+47.95898795127869,
+241.8671743869782,
+288.7890636920929,
+251.86718273162842
+],
+"fontSize": 10.000008344650212
+},
+{
+"text": "(hereafter, RS-positive) versus low-risk (hereafter, RS-negative)",
+"rect": [
+47.95898795127869,
+229.88475430011746,
+288.75977396965027,
+239.88475370407107
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "lesion groups was selected by using the Youden index. For",
+"rect": [
+47.95898795127869,
+217.91212427616117,
+288.7890636920929,
+227.91212368011477
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "lesion-level analysis, generalized estimating equations with an",
+"rect": [
+47.95898795127869,
+205.93945848941806,
+288.75001072883606,
+215.93945789337158
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "exchangeable working correlation matrix were used to account",
+"rect": [
+47.95898795127869,
+193.87888777256012,
+288.74024748802185,
+203.87888717651364
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "for lesion correlations within one patient.",
+"rect": [
+47.95898795127869,
+181.90625774860382,
+208.06640982627871,
+191.9062571525574
+],
+"fontSize": 9.99999940395358
+},
+{
+"text": "In study 2, for each patient, the RS and plaque volume",
+"rect": [
+59.94140803813934,
+169.92382872104648,
+288.75976502895355,
+179.923828125
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "for the entire coronary tree were summed to generate the",
+"rect": [
+47.95898795127869,
+157.95116293430328,
+288.70115876197815,
+167.9511623382568
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "per-patient risk categorization (19). The optimal RS thresh-",
+"rect": [
+47.95898795127869,
+145.89066374301908,
+288.75977396965027,
+155.89066314697268
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "old value for defining RS-positive versus RS-negative patient",
+"rect": [
+47.95898795127869,
+133.9179979562759,
+288.7793004512787,
+143.91799736022952
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "groups was determined from maximally selected rank statistics",
+"rect": [
+47.95898795127869,
+121.93553316593169,
+288.75001072883606,
+131.93553256988528
+],
+"fontSize": 9.999999403953595
+},
+{
+"text": "for MACE. The minimum lumen area and maximum plaque",
+"rect": [
+47.95898795127869,
+109.96286737918851,
+288.7695372104645,
+119.96286678314212
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "burden of lesions were selected to represent the disease burden",
+"rect": [
+47.95898795127869,
+97.91209566593167,
+288.75001072883606,
+107.91209506988528
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "of one patient. Patients with at least one HRP were classified",
+"rect": [
+47.95898795127869,
+85.92970240116121,
+288.7304663658142,
+95.92970180511473
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "as HRP positive (6,7). Kaplan-Meier survival curves were plot-",
+"rect": [
+47.95898795127869,
+73.95703661441803,
+288.75001072883606,
+83.95703601837155
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "ted and compared using the overall log-rank test. Anatomic",
+"rect": [
+47.95898795127869,
+61.97457182407381,
+288.74024748802185,
+71.97457122802741
+],
+"fontSize": 9.999999403953602
+},
+{
+"text": "plaque features and clinical variables were both adjusted using",
+"rect": [
+47.95898795127869,
+49.92380011081698,
+288.70115876197815,
+59.923799514770586
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "Cox regression to",
+"rect": [
+305.7909965515137,
+325.8613096475602,
+374.12107586860657,
+335.8613090515137
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "determine prognostic variables. Univariable",
+"rect": [
+376.8457174301148,
+325.8613096475602,
+546.2207078933716,
+335.8613090515137
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "predictors associated with",
+"rect": [
+305.7909965515137,
+313.8886796236038,
+406.0351341962815,
+323.8886790275574
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "P",
+"rect": [
+408.66211652755743,
+313.8886796236038,
+414.21875953674316,
+323.8886790275574
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "< .05 were entered into the mul-",
+"rect": [
+417.2070264816284,
+313.8886796236038,
+546.1132764816284,
+323.8886790275574
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "tivariable analysis. The interaction between FFR",
+"rect": [
+305.7909965515137,
+301.90625059604645,
+492.4511432647705,
+311.90625000000006
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "CT ",
+"rect": [
+491.69923067092896,
+299.66015088558197,
+502.3242294788361,
+305.4902272224426
+],
+"fontSize": 5.830076336860657
+},
+{
+"text": "and CCTA",
+"rect": [
+502.38282680511475,
+301.90625059604645,
+545.8203345537186,
+311.90625000000006
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "on MACE was explored.",
+"rect": [
+305.7909965515137,
+289.8554788827896,
+405.61521649360657,
+299.8554782867432
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "Noncardiac deaths were treated as",
+"rect": [
+409.18943881988525,
+289.8554788827896,
+546.0937321186067,
+299.8554782867432
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "a competing event, and the cumulative event was estimated",
+"rect": [
+305.7909965515137,
+277.87304985523224,
+546.5917825698853,
+287.8730492591858
+],
+"fontSize": 9.999999403953552
+},
+{
+"text": "using the cumulative incidence function. The competing risk",
+"rect": [
+305.7909965515137,
+265.9003840684891,
+546.6113090515137,
+275.9003834724427
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "analysis according to the Fine-Gray method of proportional",
+"rect": [
+305.7909965515137,
+253.91795504093173,
+546.6210722923279,
+263.91795444488525
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "subdistribution hazards for events was performed and adjusted",
+"rect": [
+305.7909965515137,
+241.8671743869782,
+546.5722560882568,
+251.86718273162842
+],
+"fontSize": 10.000008344650212
+},
+{
+"text": "for the same set of variables as the standard Cox analysis. The",
+"rect": [
+305.7909965515137,
+229.88475430011746,
+546.5722560882568,
+239.88475370407107
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "prognostic values of RS, traditional cardiovascular risk, and",
+"rect": [
+305.7909965515137,
+217.91212427616117,
+546.6015458106995,
+227.91212368011477
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "anatomic plaque parameters were evaluated with the Harrell",
+"rect": [
+305.7909965515137,
+205.93945848941806,
+546.5234220027924,
+215.93945789337158
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "C index and AUC. A likelihood ratio test was performed to",
+"rect": [
+305.7909965515137,
+193.87888777256012,
+546.6113090515137,
+203.87888717651364
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "investigate the improvement of goodness of fit. Calibration",
+"rect": [
+305.7909965515137,
+181.90625774860382,
+546.6503620147705,
+191.9062571525574
+],
+"fontSize": 9.99999940395358
+},
+{
+"text": "curves were plotted to evaluate the predictive performance of",
+"rect": [
+305.7909965515137,
+169.92382872104648,
+546.5234220027924,
+179.923828125
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "each model. Two-tailed",
+"rect": [
+305.7909965515137,
+157.95116293430328,
+397.6659983396531,
+167.9511623382568
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "P",
+"rect": [
+400.7031440734863,
+157.95116293430328,
+406.2597870826721,
+167.9511623382568
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "< .05 was considered to",
+"rect": [
+409.72656011581427,
+157.95116293430328,
+504.48242425918585,
+167.9511623382568
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "indicate a",
+"rect": [
+507.53906965255743,
+157.95116293430328,
+545.7226663827896,
+167.9511623382568
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "statistically significant difference. All statistical",
+"rect": [
+305.7909965515137,
+145.89066374301908,
+490.33201932907104,
+155.89066314697268
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "analyses were",
+"rect": [
+493.47656965255743,
+145.89066374301908,
+545.7714915275574,
+155.89066314697268
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "performed using R software (version 4.1.1;",
+"rect": [
+305.7909965515137,
+133.9179979562759,
+469.9414014816285,
+143.91799736022952
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "www.R-project.org",
+"rect": [
+471.4550971984863,
+133.9179979562759,
+540.1660323143005,
+143.91799736022952
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": ").",
+"rect": [
+539.892590045929,
+133.9179979562759,
+545.6152439117432,
+143.91799736022952
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "Results",
+"rect": [
+305.7909965515137,
+111.79883944988248,
+337.9784971475601,
+123.80078601837162
+],
+"fontSize": 12.001946568489146
+},
+{
+"text": "Study Sample Characteristics",
+"rect": [
+305.7909965515137,
+86.24219763278958,
+421.0156112909317,
+96.24219703674319
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "Details of the patient selection procedure are available in",
+"rect": [
+305.7909965515137,
+73.95703661441803,
+546.5136408805847,
+83.95703601837155
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "Appendix S6. Tables 1 and 2 summarize the patient demographic",
+"rect": [
+305.7909965515137,
+61.97457182407381,
+546.6113090515137,
+71.97457122802741
+],
+"fontSize": 9.999999403953602
+},
+{
+"text": "and clinical characteristics in studies 1 and 2, respectively. The",
+"rect": [
+305.7909965515137,
+49.92380011081698,
+546.5527296066284,
+59.923799514770586
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "Figure 1:",
+"rect": [
+47.95898795127869,
+384.15235447883606,
+79.89258170127869,
+392.1503977775574
+],
+"fontSize": 7.9980432987213135
+},
+{
+"text": "Study flowchart. Huaian set = Affiliated Huaian No. 1 People’s Hospital of Nanjing Medical University set; PUMCH set = Peking Union Medical College",
+"rect": [
+87.6660168170929,
+384.15235447883606,
+534.1992080211639,
+392.1503977775574
+],
+"fontSize": 7.9980432987213135
+},
+{
+"text": "Hospital set. * = Lost to follow-up was defined as failure to contact participants at scheduled (90-day, 1-year and 3-year) telephone visits and no relevant medical records",
+"rect": [
+47.95898795127869,
+374.1327928304672,
+543.9355552196503,
+382.13084506988525
+],
+"fontSize": 7.99805223941803
+},
+{
+"text": "available after enrollment. CCTA = coronary CT angiography, MACE = major adverse cardiac events, PCI = percutaneous coronary intervention.",
+"rect": [
+47.95898795127869,
+364.1132848262787,
+470.7226574420929,
+372.111328125
+],
+"fontSize": 7.9980432987213135
+}
+]
+}

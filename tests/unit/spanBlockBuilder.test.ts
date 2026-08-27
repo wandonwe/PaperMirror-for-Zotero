@@ -413,3 +413,115 @@ test('下沉首字规则不影响上标与普通行', () => {
 	assert.equal(rows.length, 1);
 	assert.deepEqual(rows[0]!.map(i => i.text), ['myocardial infarction', '12']);
 });
+
+// ---- 图表说明豁免元数据过滤 (2.5.4) ----------------------------------------
+
+test('说明文字里出现医院/大学名,不得被当作者单位丢掉', () => {
+	// chen2023-p3 实证: 这篇的队列名就是医院名,于是整段图注(连同全部缩写
+	// 定义)被 looksLikeAffiliation 判成作者单位丢弃。caption 只由「Figure N」
+	// 开头产生 —— 那是内容的自证。
+	const caption = lines([
+		'Figure 1: Study flowchart. Huaian set = Affiliated Huaian No. 1 People’s Hospital of',
+		'Nanjing Medical University set; PUMCH set = Peking Union Medical College Hospital set.',
+		'CCTA = coronary CT angiography, MACE = major adverse cardiac events, PCI = percutaneous.'
+	], 48, 400, 8, 10, 490);
+	// 正文若干行,让 bodySize 判成 10
+	const body = lines([
+		'In study 1, the area under the curve, accuracy, sensitivity, and specificity of the',
+		'radiomic signature and anatomic plaque parameters were calculated for identifying',
+		'vulnerable plaques, with intravascular US as the reference standard. The incremental',
+		'value of the signature for vulnerable plaque discrimination beyond high-risk plaque',
+		'and quantitative plaque parameters was assessed by comparing the characteristic curve.'
+	], 48, 340, 10, 12, 490);
+	const { blocks } = buildBlocksFromSpans([...caption, ...body], {
+		pageIndex: 2, pageHeight: PAGE_HEIGHT, pageWidth: 594
+	});
+	const captionBlock = blocks.find(b => b.sourceText.startsWith('Figure 1:'));
+	assert.ok(captionBlock, '图注必须留下来 —— 这是真·内容丢失,不是噪声过滤');
+	assert.equal(captionBlock!.type, 'caption');
+	assert.match(captionBlock!.sourceText, /PCI = percutaneous/, '整段都要在,不能只留头一行');
+});
+
+test('真正的作者单位块照旧丢弃', () => {
+	// 对照组: 同样密集的机构名 + 逗号,但不以「Figure N」起头。
+	const affiliation = lines([
+		'From the Departments of Radiology (Q.C., H.X., G.X., X.Y.) and Cardiology (T.P., X.G.),',
+		'Nanjing First Hospital, Nanjing Medical University, Nanjing, China; Department of',
+		'Radiology, Peking Union Medical College Hospital, Chinese Academy of Medical Sciences.'
+	], 48, 400, 8, 10, 490);
+	const body = lines([
+		'In study 1, the area under the curve, accuracy, sensitivity, and specificity of the',
+		'radiomic signature and anatomic plaque parameters were calculated for identifying',
+		'vulnerable plaques, with intravascular US as the reference standard. The incremental',
+		'value of the signature for vulnerable plaque discrimination beyond high-risk plaque',
+		'and quantitative plaque parameters was assessed by comparing the characteristic curve.'
+	], 48, 340, 10, 12, 490);
+	const { blocks } = buildBlocksFromSpans([...affiliation, ...body], {
+		pageIndex: 2, pageHeight: PAGE_HEIGHT, pageWidth: 594
+	});
+	assert.equal(
+		blocks.some(b => b.sourceText.includes('Departments of Radiology')),
+		false,
+		'豁免只给 caption/table,不能顺手把作者单位也放进来'
+	);
+});
+
+// ---- 字号跳变的边界 (2.5.4) -------------------------------------------------
+
+test('10pt 正文接 12pt 小节标题必须断段 —— 判据的边界正好卡在这一档', () => {
+	// 原判据是 `> 0.2`,而 sizeOf 把字号按半点分桶,10→12 算出来恰好 0.2、
+	// 不大于,于是期刊最常见的一档标题级差从来断不开段:chen2023-p3 的
+	// "Results" 被焊在「…(version 4.1.1;www.R-project.org).」尾巴上。
+	const body = lines([
+		'performed using R software (version 4.1.1; www.R-project.org).'
+	], 306, 144, 10, 12, 240);
+	const heading = lines(['Results'], 306, 124, 12, 12, 32);
+	const after = lines([
+		'Details of the patient selection procedure are available in Appendix S6.',
+		'Tables 1 and 2 summarize the patient demographic characteristics in the'
+	], 306, 96, 10, 12, 240);
+	const { blocks } = buildBlocksFromSpans([...body, ...heading, ...after], {
+		pageIndex: 2, pageHeight: PAGE_HEIGHT, pageWidth: 594
+	});
+	const own = blocks.find(b => b.sourceText.trim() === 'Results');
+	assert.ok(own, '"Results" 必须自成一块,而不是黏在上一段末尾');
+	assert.equal(
+		blocks.some(b => /www\.R-project\.org\)\.\s*Results/.test(b.sourceText)),
+		false,
+		'上一段不得把标题吞进去'
+	);
+});
+
+// ---- 上下标归行 (2.5.4) -----------------------------------------------------
+
+test('下标并入它所属的那一行,不再自成一行劈开段落', () => {
+	// chen2023-p2 真实坐标: FFR 的下标 CT 高 4.9pt、字号 5,盒心离本行中心
+	// 3.7、离下一行中心 5.8 —— 按自身高度 ±2.9 两边都够不着,于是自成一行,
+	// 输出成了「MACE = major adverseCT cardiac events」。
+	const lineA: SpanItem = { text: 'coronary CT angiography, FFR', rect: [53.9, 692.7, 155.4, 701.2], fontSize: 8.5 };
+	const sub: SpanItem = { text: 'CT ', rect: [155.4, 690.8, 164.3, 695.7], fontSize: 5 };
+	const tail: SpanItem = { text: '= CT-derived fractional flow reserve,', rect: [164.3, 692.7, 281.9, 701.2], fontSize: 8.5 };
+	const lineB: SpanItem = { text: 'HR = hazard ratio, MACE = major adverse', rect: [53.9, 683.2, 281.9, 691.7], fontSize: 8.5 };
+	const rows = groupIntoRows([lineA, sub, tail, lineB]);
+	assert.equal(rows.length, 2, '下标不得自成一行');
+	assert.deepEqual(
+		rows[0]!.map(i => i.text),
+		['coronary CT angiography, FFR', 'CT ', '= CT-derived fractional flow reserve,'],
+		'下标属于它上面那一行,且位置在 FFR 之后'
+	);
+	assert.deepEqual(rows[1]!.map(i => i.text), ['HR = hazard ratio, MACE = major adverse']);
+});
+
+test('同字号的行内碎片仍按盒心配对 —— 不受上下标规则影响', () => {
+	// aquino2023-p2 实证的反例: 「Exclusion criteria were (a) refusal to consent,
+	// (b)」全是 10pt 同基线的碎片。若判据取「比行盒矮」,行盒一旦被高 glyph
+	// 撑大,这些正常碎片就会走上宽松的重叠匹配,被下一行的文字污染。
+	const a: SpanItem = { text: 'Exclusion criteria were', rect: [306, 724.73, 392.37, 734.73], fontSize: 10 };
+	const b: SpanItem = { text: '(a)', rect: [395.45, 724.73, 406.09, 734.73], fontSize: 10 };
+	const c: SpanItem = { text: 'refusal to consent,', rect: [409.17, 724.73, 478.92, 734.73], fontSize: 10 };
+	const next: SpanItem = { text: 'tion to iodine-based contrast media, and', rect: [306, 712.73, 462.29, 722.73], fontSize: 10 };
+	const rows = groupIntoRows([a, b, c, next]);
+	assert.equal(rows.length, 2);
+	assert.deepEqual(rows[0]!.map(i => i.text), ['Exclusion criteria were', '(a)', 'refusal to consent,']);
+	assert.deepEqual(rows[1]!.map(i => i.text), ['tion to iodine-based contrast media, and']);
+});

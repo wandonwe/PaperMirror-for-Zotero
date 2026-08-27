@@ -1,0 +1,203 @@
+[
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 0,
+		"text": "X.W.T., P.P.X., L.J.Z.; clinical studies"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "References"
+	},
+	{
+		"type": "list",
+		"column": 0,
+		"readingIndex": 2,
+		"mode": "preserve",
+		"text": "1. Bhatt DL, Lopes RD, Harrington RA. Di"
+	},
+	{
+		"type": "list",
+		"column": 0,
+		"readingIndex": 3,
+		"mode": "preserve",
+		"text": "2. Khan MH, Rochlani Y, Yandrapalli S, A"
+	},
+	{
+		"type": "list",
+		"column": 0,
+		"readingIndex": 4,
+		"mode": "preserve",
+		"text": "3. Johnson TW, Räber L, di Mario C, et a"
+	},
+	{
+		"type": "list",
+		"column": 0,
+		"readingIndex": 5,
+		"mode": "preserve",
+		"text": "4. Yamagishi M, Terashima M, Awano K, et"
+	},
+	{
+		"type": "list",
+		"column": 0,
+		"readingIndex": 6,
+		"mode": "preserve",
+		"text": "5. Shishikura D, Kataoka Y, Di Giovanni "
+	},
+	{
+		"type": "list",
+		"column": 0,
+		"readingIndex": 7,
+		"mode": "preserve",
+		"text": "6. Williams MC, Moss AJ, Dweck M, et al."
+	},
+	{
+		"type": "list",
+		"column": 0,
+		"readingIndex": 8,
+		"mode": "preserve",
+		"text": "7. Ferencik M, Mayrhofer T, Bittner DO, "
+	},
+	{
+		"type": "list",
+		"column": 0,
+		"readingIndex": 9,
+		"mode": "preserve",
+		"text": "8. Williams MC, Kwiecinski J, Doris M, e"
+	},
+	{
+		"type": "list",
+		"column": 0,
+		"readingIndex": 10,
+		"mode": "preserve",
+		"text": "9. Maurovich-Horvat P, Schlett CL, Alkad"
+	},
+	{
+		"type": "list",
+		"column": 0,
+		"readingIndex": 11,
+		"mode": "preserve",
+		"text": "10. Kolossváry M, Park J, Bang J-I, et a"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 12,
+		"mode": "preserve",
+		"text": "11. Xu P, Xue Y, Schoepf UJ, et al. Radi"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 13,
+		"mode": "preserve",
+		"text": "12. Kolossváry M, Karády J, Kikuchi Y, e"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 14,
+		"mode": "preserve",
+		"text": "13. Qiao HY, Tang CX, Schoepf UJ, et al."
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 15,
+		"mode": "preserve",
+		"text": "14. van Rosendael AR, Bax AM, Smit JM, e"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 16,
+		"mode": "preserve",
+		"text": "15. Han D, Lin A, Kuronuma K, et al. Ass"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 17,
+		"mode": "preserve",
+		"text": "16. Shaw LJ, Blankstein R, Bax JJ, et al"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 18,
+		"mode": "preserve",
+		"text": "17. Kolossváry M, Szilveszter B, Merkely"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 19,
+		"mode": "preserve",
+		"text": "18. Wu X, Mintz GS, Xu K, et al. The rel"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 20,
+		"mode": "preserve",
+		"text": "19. Lin A, Kolossváry M, Cadet S, et al."
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 21,
+		"mode": "preserve",
+		"text": "20. Aerts HJ. The potential of radiomic-"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 22,
+		"mode": "preserve",
+		"text": "21. Chen Q, Pan T, Yin X, et al. CT text"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 23,
+		"mode": "preserve",
+		"text": "22. Matsumura M, Mintz GS, Kang SJ, et a"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 24,
+		"mode": "preserve",
+		"text": "23. Pu J, Mintz GS, Biro S, et al. Insig"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 25,
+		"mode": "preserve",
+		"text": "24. Erlinge D, Maehara A, Ben-Yehuda O, "
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 26,
+		"mode": "preserve",
+		"text": "25. Prati F, Romagnoli E, Gatto L, et al"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 27,
+		"mode": "preserve",
+		"text": "26. Ahmadi A, Argulian E, Leipsic J, New"
+	},
+	{
+		"type": "list",
+		"column": 1,
+		"readingIndex": 28,
+		"mode": "preserve",
+		"text": "27. Tomaszewski MR, Gillies RJ. The biol"
+	}
+]

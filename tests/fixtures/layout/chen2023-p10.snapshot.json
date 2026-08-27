@@ -1,0 +1,602 @@
+[
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 0,
+		"text": "Note.—Data in parentheses are 95% CIs. T"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "Univariate Analyses"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "HR"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "P Value"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 4,
+		"text": "Variable"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 5,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Segment involvement score 1.17 (1.04, 1."
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 6,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "(per one increment)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 7,
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Segment stenosis score (per one incremen"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 8,
+		"tableRow": 3,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Significant stenosis present 2.0 (1.17, "
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 9,
+		"tableRow": 4,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Minimum lumen area 0.82 (0.72, 0.94) .00"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 10,
+		"tableRow": 5,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "(per 1-mm2 increment)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 11,
+		"tableRow": 6,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "HRP present 2.5 (1.5, 4.4) .001"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 12,
+		"tableRow": 7,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Plaque burden (per 1% increment) 1.03 (1"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 13,
+		"tableRow": 8,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Calcified plaque volume 1 (0.99, 1.00) ."
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 14,
+		"tableRow": 9,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "(per 1-mm3 increment)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 15,
+		"tableRow": 10,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Noncalcified plaque volume 1 (1.001, 1.0"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 16,
+		"tableRow": 11,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "(per 1-mm3 increment)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 17,
+		"tableRow": 12,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Necrotic core volume (per 1-mm3 1 (0.99,"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 18,
+		"tableRow": 13,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "increment)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 19,
+		"tableRow": 14,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "RS (per 0.01 increment) 2.0 (1.5, 2.6) <"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 20,
+		"text": "Multivariate Analysis P Value HR†"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 21,
+		"text": "HR*"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 22,
+		"text": "P Value"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 23,
+		"tableRow": 0,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "1.05 (0.92, 1.20) .45"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 24,
+		"tableRow": 0,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "0.92 (0.73, 1.17) .53"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 25,
+		"tableRow": 2,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "1.15 (0.86, 1.56) .44"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 26,
+		"tableRow": 2,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "1.08 (0.68, 1.73) .74"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 27,
+		"tableRow": 3,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "1.3 (0.74, 2.3) .36"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 28,
+		"tableRow": 3,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "1.2 (0.56, 2.6) .65"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 29,
+		"tableRow": 4,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "0.94 (0.84–1.06) .30"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 30,
+		"tableRow": 4,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "0.84 (0.69, 1.04) .10"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 31,
+		"tableRow": 6,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "2.3 (1.3, 4.0) .005"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 32,
+		"tableRow": 6,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "2.0 (1.1, 3.5) .03"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 33,
+		"tableRow": 7,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "1.03 (0.99, 1.04) .34"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 34,
+		"tableRow": 7,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "1.00 (0.99 1.00) .88"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 35,
+		"tableRow": 8,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "NA …"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 36,
+		"tableRow": 8,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "NA …"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 37,
+		"tableRow": 10,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "1.001 (0.99, .22"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 38,
+		"tableRow": 10,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "0.99 (0.99, 1.002) .27"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 39,
+		"tableRow": 11,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "1.004)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 40,
+		"tableRow": 12,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "NA …"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 41,
+		"tableRow": 12,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "NA …"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 42,
+		"tableRow": 14,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "1.7 (1.2, 2.3) .001"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 43,
+		"tableRow": 14,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "2.0 (1.2, 3.3) .005"
+	},
+	{
+		"type": "table",
+		"column": -1,
+		"readingIndex": 44,
+		"text": "Table 5: Results of Univariate and Multi"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 45,
+		"text": "Note.—Data in parentheses are the 95% CI"
+	},
+	{
+		"type": "list",
+		"column": -1,
+		"readingIndex": 46,
+		"text": "* HR was adjusted for clinical variables"
+	},
+	{
+		"type": "table",
+		"column": 0,
+		"readingIndex": 47,
+		"text": "Table 6: Incremental Prognostic Value of"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 48,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Prediction Model"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 49,
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "C Index"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 50,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Model 1: traditional cardiovascular risk"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 51,
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "0.64 (0.57, 0.71)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 52,
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Model 2: model 1 + CT anatomic parameter"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 53,
+		"tableRow": 2,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "0.69 (0.63, 0.76)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 54,
+		"tableRow": 3,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Model 3: model 2 + radiomic signature"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 55,
+		"tableRow": 3,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "0.72 (0.65, 0.78)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 56,
+		"text": "P Value"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 57,
+		"tableRow": 0,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "Model 1 vs"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 58,
+		"tableRow": 0,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "Model 2 vs"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 59,
+		"tableRow": 0,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "Model 3 vs"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 60,
+		"tableRow": 1,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "…"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 61,
+		"tableRow": 1,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "<.001"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 62,
+		"tableRow": 1,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": "<.001"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 63,
+		"tableRow": 2,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "<.001"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 64,
+		"tableRow": 2,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "…"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 65,
+		"tableRow": 2,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": ".009"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 66,
+		"tableRow": 3,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "<.001"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 67,
+		"tableRow": 3,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": ".009"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 68,
+		"tableRow": 3,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": "…"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 69,
+		"text": "† HR was adjusted for RS and conventiona"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 70,
+		"text": "noncalcified plaque, and necrotic core v"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 71,
+		"text": "In conclusion, this study presents a rad"
+	}
+]

@@ -1,0 +1,56 @@
+[
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 0,
+		"tableRow": 0,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "External Test Set (n = 31)"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 1,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Note.—Unless otherwise specified, data a"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "NSTEMI = non-ST elevation myocardial inf"
+	},
+	{
+		"type": "list",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "* Data are means ± SDs. † Data in parent"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 4,
+		"text": "RS development set included 225 patients"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 5,
+		"text": "Model Development and Validation (Study "
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 6,
+		"text": "Lesion characteristics.—Of the 419 lesio"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 7,
+		"text": "correlation coefficient analysis. Three "
+	}
+]

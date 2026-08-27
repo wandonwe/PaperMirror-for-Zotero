@@ -1,0 +1,708 @@
+{
+"source": "chen2023",
+"page": 9,
+"pageWidth": 594,
+"pageHeight": 783,
+"items": [
+{
+"text": "Chen and Pan et al",
+"rect": [
+486.76757812500006,
+744.7089807987214,
+545.6054717302322,
+752.7070330381393
+],
+"fontSize": 7.998052239417916
+},
+{
+"text": "Radiology:",
+"rect": [
+47.95898795127869,
+21.603517413139407,
+77.34375,
+28.605468750000053
+],
+"fontSize": 7.001951336860646
+},
+{
+"text": "Volume 307: Number 2—April 2023",
+"rect": [
+79.05273735523224,
+21.603517413139407,
+174.4042932987213,
+28.605468750000053
+],
+"fontSize": 7.001951336860646
+},
+{
+"text": "■",
+"rect": [
+176.87500119209292,
+22.40430879592895,
+179.5312464237213,
+26.808603286743104
+],
+"fontSize": 4.404294490814152
+},
+{
+"text": "radiology.rsna.org",
+"rect": [
+181.73829317092896,
+21.603517413139407,
+229.7168076038361,
+28.605468750000053
+],
+"fontSize": 7.001951336860646
+},
+{
+"text": "9",
+"rect": [
+541.3183450698853,
+21.38869929313659,
+546.1327940225601,
+29.38674259185788
+],
+"fontSize": 7.998043298721292
+},
+{
+"text": "RS offered incremental discriminative capability over the current",
+"rect": [
+47.95898795127869,
+314.6699087619782,
+288.75001072883606,
+324.6699171066284
+],
+"fontSize": 10.000008344650212
+},
+{
+"text": "qualitative and quantitative plaque parameters, indicating that",
+"rect": [
+47.95898795127869,
+302.68748867511755,
+288.75001072883606,
+312.68748807907104
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "comprehensive CCTA-based plaque analysis integrating con-",
+"rect": [
+47.95898795127869,
+290.6367169618607,
+288.7793004512787,
+300.6367163658142
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "ventional parameters with radiomic features may improve our",
+"rect": [
+47.95898795127869,
+278.6542879343033,
+288.74024748802185,
+288.6542873382568
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "understanding of vulnerable plaques.",
+"rect": [
+47.95898795127869,
+266.6816221475601,
+187.15820610523224,
+276.68162155151373
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "In this study, 16 radiomic features were finally selected to",
+"rect": [
+59.94140803813934,
+254.7089921236038,
+288.68164122104645,
+264.70899152755743
+],
+"fontSize": 9.999999403953638
+},
+{
+"text": "build the RS for detecting attenuated or echolucent plaques at",
+"rect": [
+47.95898795127869,
+242.6484571695328,
+288.75977396965027,
+252.64845657348633
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "intravascular US, including two shape features and 14 textural",
+"rect": [
+47.95898795127869,
+230.6757913827896,
+288.7109398841858,
+240.67579078674314
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "features but not first-order Hounsfield unit–based metrics. His-",
+"rect": [
+47.95898795127869,
+218.69336235523227,
+288.75001072883606,
+228.6933617591858
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "tologic studies have shown that attenuated plaque and echolu-",
+"rect": [
+47.95898795127869,
+206.7206965684891,
+288.7890636920929,
+216.72069597244263
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "cent plaque consist of complex and heterogeneous components,",
+"rect": [
+47.95898795127869,
+194.66016161441803,
+288.75001072883606,
+204.6601610183716
+],
+"fontSize": 9.99999940395358
+},
+{
+"text": "which may not be identified by means of conventional qualita-",
+"rect": [
+47.95898795127869,
+182.68748688697815,
+288.7695372104645,
+192.68749523162845
+],
+"fontSize": 10.000008344650297
+},
+{
+"text": "tive and quantitative Hounsfield unit–based plaque parameters",
+"rect": [
+47.95898795127869,
+170.7051025629044,
+288.75977396965027,
+180.7051019668579
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "on CT scans (22,23). In an ex vivo study, Kolossváry et al (12)",
+"rect": [
+47.95898795127869,
+158.7324367761612,
+288.7890636920929,
+168.73243618011472
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "found that radiomic features outperformed visual and histo-",
+"rect": [
+47.95898795127869,
+146.6718660593033,
+288.7695372104645,
+156.67186546325684
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "gram-based assessment of advanced atherosclerotic lesions on",
+"rect": [
+47.95898795127869,
+134.69920027256015,
+288.70115876197815,
+144.69919967651367
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "CCTA images. Our results are in keeping with a recent study by",
+"rect": [
+47.95898795127869,
+122.72653448581697,
+288.7793004512787,
+132.7265338897705
+],
+"fontSize": 9.999999403953538
+},
+{
+"text": "Lin et al (19), who found that an RS comprised of textural and",
+"rect": [
+47.95898795127869,
+110.66603529453276,
+288.75001072883606,
+120.66603469848637
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "geometric features can provide incremental discriminatory value",
+"rect": [
+47.95898795127869,
+98.69336950778958,
+288.7109398841858,
+108.69336891174319
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "to detect culprit lesions over conventional CT metrics. Thus, our",
+"rect": [
+47.95898795127869,
+86.71097624301912,
+288.7793004512787,
+96.71097564697264
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "analysis validates previous findings that radiomics could discern",
+"rect": [
+47.95898795127869,
+74.73831045627601,
+288.75977396965027,
+84.73830986022946
+],
+"fontSize": 9.999999403953453
+},
+{
+"text": "the complex spatial distribution and localization of different",
+"rect": [
+47.95898795127869,
+62.67773973941799,
+288.7793004512787,
+72.67773914337158
+],
+"fontSize": 9.999999403953595
+},
+{
+"text": "plaque components in vulnerable plaques.",
+"rect": [
+47.95898795127869,
+50.705065011978185,
+206.73828721046448,
+60.70507335662841
+],
+"fontSize": 10.000008344650226
+},
+{
+"text": "Vulnerable plaques have been shown to be associated with",
+"rect": [
+317.78318881988525,
+314.6699087619782,
+546.4941143989563,
+324.6699171066284
+],
+"fontSize": 10.000008344650212
+},
+{
+"text": "subsequent adverse cardiovascular events in patients with CAD",
+"rect": [
+305.7909965515137,
+302.68748867511755,
+546.5624928474426,
+312.68748807907104
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "(24,25). Our study further assessed the prognostic value of the",
+"rect": [
+305.7909965515137,
+290.6367169618607,
+546.5722560882568,
+300.6367163658142
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "RS in a prospective cohort and found that the RS was indepen-",
+"rect": [
+305.7909965515137,
+278.6542879343033,
+546.6113090515137,
+288.6542873382568
+],
+"fontSize": 9.999999403953495
+},
+{
+"text": "dently associated with worse clinical outcomes after adjusting",
+"rect": [
+305.7909965515137,
+266.6816221475601,
+546.5722560882568,
+276.68162155151373
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "for clinical variables (eg, sex, hypertension, diabetes mellitus)",
+"rect": [
+305.7909965515137,
+254.7089921236038,
+546.6015458106995,
+264.70899152755743
+],
+"fontSize": 9.999999403953638
+},
+{
+"text": "(HR, 1.69) or CT parameters (eg, segment stenosis score, seg-",
+"rect": [
+305.7909965515137,
+242.6484571695328,
+546.582019329071,
+252.64845657348633
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "ment involvement score, plaque volumes) (HR, 2.01). Similar",
+"rect": [
+305.7909965515137,
+230.6757913827896,
+546.6308355331421,
+240.67579078674314
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "results were observed when using noncardiac deaths as com-",
+"rect": [
+305.7909965515137,
+218.69336235523227,
+546.5624928474426,
+228.6933617591858
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "peting events. These results suggest that the proposed RS is a",
+"rect": [
+305.7909965515137,
+206.7206965684891,
+546.6210722923279,
+216.72069597244263
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "reliable marker of plaque vulnerability and that lesions with",
+"rect": [
+305.7909965515137,
+194.66016161441803,
+546.5917825698853,
+204.6601610183716
+],
+"fontSize": 9.99999940395358
+},
+{
+"text": "an adverse RS are potential culprit lesions for future MACE.",
+"rect": [
+305.7909965515137,
+182.68748688697815,
+546.5917825698853,
+192.68749523162845
+],
+"fontSize": 10.000008344650297
+},
+{
+"text": "Furthermore, the RS demonstrated incremental prognostic",
+"rect": [
+305.7909965515137,
+170.7051025629044,
+546.5917825698853,
+180.7051019668579
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "value beyond traditional cardiovascular risk factors and the CT",
+"rect": [
+305.7909965515137,
+158.7324367761612,
+546.5624928474426,
+168.73243618011472
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "anatomic parameters for predicting MACE. However, in our",
+"rect": [
+305.7909965515137,
+146.6718660593033,
+546.5917825698853,
+156.67186546325684
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "study, only 43 of 357 patients with a high RS (12%) experi-",
+"rect": [
+305.7909965515137,
+134.69920027256015,
+546.6699063777924,
+144.69919967651367
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "enced MACE, which indicates a low positive predictive value",
+"rect": [
+305.7909965515137,
+122.72653448581697,
+546.5429484844208,
+132.7265338897705
+],
+"fontSize": 9.999999403953538
+},
+{
+"text": "of the RS. This was in line with the well-known theory of dy-",
+"rect": [
+305.7909965515137,
+110.66603529453276,
+546.6015458106995,
+120.66603469848637
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "namic change of vulnerable plaques, which may stabilize with",
+"rect": [
+305.7909965515137,
+98.69336950778958,
+546.6015458106995,
+108.69336891174319
+],
+"fontSize": 9.999999403953609
+},
+{
+"text": "or without subclinical rupture, rather than cause a clinically",
+"rect": [
+305.7909965515137,
+86.71097624301912,
+546.5917825698853,
+96.71097564697264
+],
+"fontSize": 9.999999403953524
+},
+{
+"text": "apparent acute coronary syndrome (26).",
+"rect": [
+305.7909965515137,
+74.73831045627601,
+461.1621022224427,
+84.73830986022946
+],
+"fontSize": 9.999999403953453
+},
+{
+"text": "Our study had limitations. First, this was a retrospec-",
+"rect": [
+317.78318881988525,
+62.67773973941799,
+546.5527296066284,
+72.67773914337158
+],
+"fontSize": 9.999999403953595
+},
+{
+"text": "tive study design and selection bias could not be avoided.",
+"rect": [
+305.7909965515137,
+50.705065011978185,
+546.5917825698853,
+60.70507335662841
+],
+"fontSize": 10.000008344650226
+},
+{
+"text": "Figure 5:",
+"rect": [
+47.95898795127869,
+383.68361163139343,
+79.89258170127869,
+391.6816549301148
+],
+"fontSize": 7.99804329872137
+},
+{
+"text": "Kaplan-Meier curves show prognostic value of the radiomic signature (RS).",
+"rect": [
+87.6660168170929,
+383.68361163139343,
+305.4687559604645,
+391.6816549301148
+],
+"fontSize": 7.99804329872137
+},
+{
+"text": "(A)",
+"rect": [
+306.8066596984863,
+383.68361163139343,
+318.0078327655792,
+391.6816549301148
+],
+"fontSize": 7.99804329872137
+},
+{
+"text": "Curves for major adverse cardiac events (MACE) stratified according to RS.",
+"rect": [
+319.68748569488525,
+383.68361163139343,
+540.3320074081421,
+391.6816549301148
+],
+"fontSize": 7.99804329872137
+},
+{
+"text": "RS+ = RS positive, RS– = RS negative.",
+"rect": [
+47.95898795127869,
+373.65428674221045,
+157.32421875,
+381.6523389816284
+],
+"fontSize": 7.998052239417973
+},
+{
+"text": "(B, C)",
+"rect": [
+158.82811546325684,
+373.65428674221045,
+178.08592915534973,
+381.6523389816284
+],
+"fontSize": 7.998052239417973
+},
+{
+"text": "Estimates stratified by the presence (+) or absence (",
+"rect": [
+179.78514432907104,
+373.65428674221045,
+329.3847531080246,
+381.6523389816284
+],
+"fontSize": 7.998052239417973
+},
+{
+"text": "−",
+"rect": [
+329.00390625,
+373.4199063777924,
+333.51562321186066,
+381.4179496765137
+],
+"fontSize": 7.998043298721257
+},
+{
+"text": ") of",
+"rect": [
+332.91993141174316,
+373.65428674221045,
+342.6953226327896,
+381.6523389816284
+],
+"fontSize": 7.998052239417973
+},
+{
+"text": "(B)",
+"rect": [
+344.3750023841858,
+373.65428674221045,
+354.8437535762787,
+381.6523389816284
+],
+"fontSize": 7.998052239417973
+},
+{
+"text": "high RS and high-risk plaque (HRP) and",
+"rect": [
+356.54296875000006,
+373.65428674221045,
+471.9140589237213,
+381.6523389816284
+],
+"fontSize": 7.998052239417973
+},
+{
+"text": "(C)",
+"rect": [
+473.41797351837164,
+373.65428674221045,
+483.65235328674316,
+381.6523389816284
+],
+"fontSize": 7.998052239417973
+},
+{
+"text": "high RS and signifi-",
+"rect": [
+485.3417873382569,
+373.65428674221045,
+541.1230355501175,
+381.6523389816284
+],
+"fontSize": 7.998052239417973
+},
+{
+"text": "cant stenosis (SS).",
+"rect": [
+47.95898795127869,
+363.6347787380219,
+100.00000298023224,
+371.63282203674316
+],
+"fontSize": 7.998043298721257
+},
+{
+"text": "(D)",
+"rect": [
+101.61134004592896,
+363.6347787380219,
+112.69531846046449,
+371.63282203674316
+],
+"fontSize": 7.998043298721257
+},
+{
+"text": "Cumulative incidence function curves for a cardiac hard event and other cause death stratified by the RS. High versus low RS in patients was defined",
+"rect": [
+114.37500715255737,
+363.6347787380219,
+544.0722584724426,
+371.63282203674316
+],
+"fontSize": 7.998043298721257
+},
+{
+"text": "using an optimal cut-off value of 1.07 (range, 0.46–3.17). HRP was defined as a lesion with at least two features of adverse plaque characteristics, including positive",
+"rect": [
+47.95898795127869,
+353.6933677196503,
+527.0312368869781,
+361.6914110183716
+],
+"fontSize": 7.998043298721257
+},
+{
+"text": "remodeling, low-attenuation plaque, spotty calcification, and napkin-ring sign. Significant stenosis was defined as 50% diameter stenosis or greater in any coronary artery.",
+"rect": [
+47.95898795127869,
+343.6738418340683,
+541.0351574420929,
+351.6718940734864
+],
+"fontSize": 7.998052239418087
+}
+]
+}
