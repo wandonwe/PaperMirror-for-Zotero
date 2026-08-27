@@ -126,7 +126,81 @@ export function detectColumns(rects: Rect[], pageWidth: number, pageHeight = 0):
 	// flow) instead of promoting the slivers: a page-number band as "the
 	// column" made every line read as wrapped/indented.
 	const significant = bands.filter(b => b.right - b.left >= width * 0.12);
+	// 满幅前言压倒双栏正文时的兜底 (2.5.0, 由 radiology-radiomics2023-p1 实证)。
+	// 上面的贪心链条按 x 投影,而**满幅段落的末行天然短**(封面页的作者串、单位、
+	// 摘要末行都是 250–350pt),躲过 FULL_WIDTH_RATIO 混进投影,横跨白槽把左右栏
+	// 焊成一栏 —— 该页 43 行宽行里只有 12 行看得见白槽,反焊接的 10% 侵入配额被
+	// 10+ 行桥接行击穿。只在**一栏都没分出来**时才跑,已经分对的页面逐字节不变。
+	if (significant.length < 2) {
+		const byLeft = columnsByLeftEdge(pool, width);
+		if (byLeft.length >= 2) {
+			return byLeft;
+		}
+	}
 	return significant;
+}
+
+/**
+ * 左边缘聚类分栏 — `detectColumns` 的兜底。
+ *
+ * 关键洞察:满幅前言和左栏**共用左边缘**(都从版心左界起排),靠宽度分不开;
+ * 但右栏的左边缘是独立的强信号 —— 一堆行整齐地从版心中部起排,只可能是第二栏。
+ * 所以按左边缘聚类,而**栏的右边界只由「不越过下一栏左缘」的成员决定**:满幅行
+ * 会伸过去,于是自动被排除在右边界之外,再也焊不动两栏。
+ *
+ * 三道闸,缺一不可(全部由 14 页语料实测定标):
+ *  - 每簇 ≥6 个成员:零星的缩进行不能立栏;
+ *  - 相邻簇中位左缘相距 ≥15% 版心宽:那是分栏,不是首行缩进(缩进只有 1em);
+ *  - **均衡性**:最窄栏 ≥ 最宽栏的 60% —— 真分栏各栏宽度相近,而 4:1 的
+ *    「窄标签列 + 宽内容列」是表格,横向切开它会毁掉表格的阅读序。
+ */
+function columnsByLeftEdge(rects: Rect[], width: number): ColumnBand[] {
+	if (rects.length < 12) {
+		return [];
+	}
+	const tolerance = width * 0.06;
+	const sorted = [...rects].sort((a, b) => a[0] - b[0]);
+	const clusters: { seed: number; members: Rect[] }[] = [];
+	for (const r of sorted) {
+		const last = clusters[clusters.length - 1];
+		if (last && r[0] - last.seed <= tolerance) {
+			last.members.push(r);
+			last.seed = r[0];
+		}
+		else {
+			clusters.push({ seed: r[0], members: [r] });
+		}
+	}
+	const big = clusters.filter(c => c.members.length >= 6);
+	if (big.length < 2) {
+		return [];
+	}
+	const centres = big.map((c) => {
+		const lefts = c.members.map(r => r[0]).sort((a, b) => a - b);
+		return lefts[Math.floor(lefts.length / 2)]!;
+	});
+	const out: ColumnBand[] = [];
+	for (let i = 0; i < big.length; i++) {
+		const left = centres[i]!;
+		const nextLeft = i + 1 < big.length ? centres[i + 1]! : Infinity;
+		if (i + 1 < big.length && nextLeft - left < width * 0.15) {
+			return []; // 簇挨得太近 —— 是缩进,不是分栏
+		}
+		const inColumn = big[i]!.members.filter(r => r[2] <= nextLeft - 2);
+		if (!inColumn.length) {
+			return [];
+		}
+		out.push({ left, right: Math.max(...inColumn.map(r => r[2])) });
+	}
+	const kept = out.filter(b => b.right - b.left >= width * 0.12);
+	if (kept.length < 2) {
+		return [];
+	}
+	const widths = kept.map(b => b.right - b.left);
+	if (Math.min(...widths) < Math.max(...widths) * 0.6) {
+		return []; // 宽度悬殊 → 表格的标签列,不是分栏
+	}
+	return kept;
 }
 
 interface BandSegment {

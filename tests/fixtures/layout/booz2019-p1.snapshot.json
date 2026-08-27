@@ -1,278 +1,50 @@
 [
 	{
 		"type": "title",
-		"column": 0,
+		"column": -1,
 		"readingIndex": 0,
 		"text": "Virtual Noncalcium Dual-Energy CT: Detec"
 	},
 	{
-		"type": "paragraph",
-		"column": 0,
+		"type": "title",
+		"column": -1,
 		"readingIndex": 1,
+		"text": "Lumbar Disk Herniation in Comparison wit"
+	},
+	{
+		"type": "title",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "Gray-Scale CT"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 3,
+		"text": "From the Division of Experimental and Tr"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 4,
 		"text": "Purpose: To assess the diagnostic perfor"
 	},
 	{
 		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 2,
-		"text": "Lumbar disk herniation is a frequent deg"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 3,
-		"text": "with application of iterative reconstruc"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 4,
-		"text": "substantial social and economic burden ("
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
+		"column": -1,
 		"readingIndex": 5,
-		"text": "challenging because of low contrast betw"
+		"text": "Conclusion: Color-coded dual-energy CT v"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 6,
-		"text": "cations such as compressions of the spin"
+		"text": "Lumbar disk herniation is a frequent deg"
 	},
 	{
 		"type": "paragraph",
-		"column": 0,
+		"column": 1,
 		"readingIndex": 7,
-		"text": "disk and cerebrospinal fluid."
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 8,
-		"text": "nerve root can result in irreversible mo"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 9,
-		"text": "Dual-energy CT has opened perspectives i"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 10,
-		"text": "fore, fast and accurate diagnosis is nec"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 11,
-		"text": "due to its ability for material characte"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 12,
-		"text": "tiation of optimal therapy and to avoid "
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 13,
-		"text": "In musculoskeletal dual-energy CT, virtu"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 14,
-		"text": "MRI is the preferred diagnostic imaging "
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 15,
-		"text": "(VNCa) images have been shown to allow f"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 16,
-		"text": "to its ability to provide excellent dema"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 17,
-		"text": "tion of bone marrow edema (15–18). Such "
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 18,
-		"text": "intervertebral disk and cerebrospinal fl"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 19,
-		"text": "VNCa reconstructions have also been appl"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 20,
-		"text": "there are several potential limitations "
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 21,
-		"text": "energy CT arthrography (13,19) and impro"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 22,
-		"text": "The availability of MRI is usually limit"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 23,
-		"text": "tion of bone marrow infiltration in pati"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 24,
-		"text": "working hours. There are certain absolut"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 25,
-		"text": "ple myeloma (20). With the advent of thi"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 26,
-		"text": "traindications, including cochlear impla"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 27,
-		"text": "dual-source, dual-energy CT, VNCa recons"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 28,
-		"text": "claustrophobia, or the inability to lie "
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 29,
-		"text": "algorithms have been integrated in the p"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 30,
-		"text": "MRI is relatively time-consuming and exp"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 31,
-		"text": "software. Thereby, a novel VNCa postproc"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 32,
-		"text": "patients with severe back pain often ini"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 33,
-		"text": "rithm optimized for colored imaging of l"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 34,
-		"text": "instead of MRI (8)."
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 35,
-		"text": "by using two different color lookup tabl"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 36,
-		"text": "A large meta-analysis from 2012 (8) show"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 37,
-		"text": "established."
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 38,
-		"text": "sensitivity and specificity of standard "
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 39,
-		"text": "We hypothesized that color-coded VNCa im"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 40,
-		"text": "of lumbar disk herniation. More recently"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 41,
-		"text": "constructed from third-generation, dual-"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 42,
-		"text": "et al (9) demonstrated improved results "
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 43,
-		"text": "energy CT may substantially improve diag"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 44,
-		"text": "agnostic accuracy of single-energy CT co"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 45,
-		"text": "and confidence for the detection of lumb"
+		"text": "with application of iterative reconstruc"
 	}
 ]

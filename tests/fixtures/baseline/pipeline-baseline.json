@@ -48,27 +48,27 @@
 		"dupBlocks": 0
 	},
 	"booz2019-p1": {
-		"blocks": 46,
-		"translatable": 46,
+		"blocks": 8,
+		"translatable": 8,
 		"tableCells": 0,
-		"modules": 1,
-		"chunks": 2,
-		"fastChunks": 2,
+		"modules": 4,
+		"chunks": 1,
+		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 24,
-		"payloadChars": 4343,
+		"maxBlocksPerChunk": 8,
+		"payloadChars": 4519,
 		"dupBlocks": 0
 	},
 	"chen2023-p1": {
-		"blocks": 26,
-		"translatable": 26,
+		"blocks": 9,
+		"translatable": 9,
 		"tableCells": 0,
 		"modules": 1,
-		"chunks": 2,
-		"fastChunks": 2,
+		"chunks": 1,
+		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 24,
-		"payloadChars": 3701,
+		"maxBlocksPerChunk": 9,
+		"payloadChars": 3765,
 		"dupBlocks": 0
 	},
 	"hakime2007-p2": {
@@ -117,6 +117,18 @@
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 8,
 		"payloadChars": 3795,
+		"dupBlocks": 0
+	},
+	"jacc-ccta2020-p1": {
+		"blocks": 14,
+		"translatable": 14,
+		"tableCells": 0,
+		"modules": 6,
+		"chunks": 1,
+		"fastChunks": 1,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 14,
+		"payloadChars": 4127,
 		"dupBlocks": 0
 	},
 	"nejm-defuse3-p7": {
