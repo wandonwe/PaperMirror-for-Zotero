@@ -21,6 +21,8 @@
  * which rejoins a fragment that ends mid-sentence with the one that follows.
  */
 
+import { endsMidSentence } from './metaFilter';
+
 /** [x1, y1, x2, y2] in PDF coordinates (origin bottom-left, y grows upward). */
 export type Rect = [number, number, number, number];
 
@@ -634,6 +636,13 @@ export function planMerges<T extends MergeableParagraph>(paragraphs: T[]): numbe
 		}
 		const prev = paragraphs[current[current.length - 1]!]!;
 		const bodyOnly = (prev.type ?? 'paragraph') === 'paragraph' && (p.type ?? 'paragraph') === 'paragraph';
+		// 断词连字符是唯一无歧义的续接信号 (2.5.7): 一段以「photon-」收尾、
+		// 下一段以「counting detector scans…」起头,这不可能是两段东西。图注
+		// 被版面切开时(horst2024-p5 的图 6 说明就断在 photon-/counting 之间)
+		// bodyOnly 会挡住修复,而恰好在这里放行不会带来别的风险 —— 标题、
+		// 列表项都不会以连字符收尾。
+		const hyphenSplit = /\p{L}-$/u.test(prev.text.trim())
+			&& (p.type ?? 'paragraph') === 'paragraph';
 		// A genuine over-split leaves the two fragments on CONSECUTIVE lines.
 		// Anything separated by real whitespace was a deliberate break.
 		const size = prev.fontSize && prev.fontSize > 0 ? prev.fontSize : 10;
@@ -659,9 +668,15 @@ export function planMerges<T extends MergeableParagraph>(paragraphs: T[]): numbe
 		// A fragment ending in a comma/colon is mid-sentence no matter how the
 		// next fragment begins — "…阻塞的患者中，" + "CCTA可以…" must rejoin
 		// even though the continuation starts with an uppercase acronym.
-		const danglingEnd = /[,，、;；:：]$/.test(prev.text.trim());
+		// 行尾停在虚词或连字符上同样是"话没说完" (2.5.7): jacc-ccta2020-p1 的
+		// 摘要末行被 shortLine 撕成独立块,前一块正好收在「…on behalf of the」——
+		// 逗号判据看不见这种收尾,于是摘要在译文页上断在半句话上。复用 2.5.1
+		// 的行尾判据。前一块若已经收了句号,endsSentence 早就把合并挡掉了,
+		// 所以这条只会作用在真正被拆开的段落上。
+		const danglingEnd = /[,，、;；:：]$/.test(prev.text.trim())
+			|| endsMidSentence(prev.text);
 		const mergeable = sameColumn
-			&& bodyOnly
+			&& (bodyOnly || hyphenSplit)
 			&& adjacent
 			&& !endsSentence(prev.text)
 			&& !looksLikeListStart(p.text)

@@ -6,6 +6,7 @@ import {
 	groupIntoParagraphs,
 	groupIntoRows,
 	lineText,
+	pageBodySize,
 	type SpanItem
 } from '../../src/reader/spanBlockBuilder';
 import { detectColumns } from '../../src/reader/paragraphHeuristics';
@@ -595,4 +596,63 @@ test('两端对齐拉出的词距仍然不会被误切', () => {
 	const b: SpanItem = { text: 'Boston Scientific, CeloNova, Cook Medical', rect: [304, 133, 474, 139], fontSize: 6 };
 	const lines = groupIntoLines([a, b], 576);
 	assert.equal(lines.length, 1, '4pt 的词距不是栏边界');
+});
+
+// ---- 全页正文字号 (2.5.7) ---------------------------------------------------
+
+test('前置信息字符数压过摘要时,正文字号取那档份量可观的更大字号', () => {
+	// jacc-ccta2020-p1 实证: 6pt 的单位/利益声明占 57.8% 字符、27 行,7.5pt 的
+	// 摘要只有 33.1% / 17 行 —— 按众数正文就是 6pt,于是页面上任何比 6pt 大的
+	// 东西 ratio 都 ≥ 1.1: 摘要末行被撕下来当标题,摘要因此断在「on behalf of
+	// the」,栏目条与副题也够上了 title 门槛。
+	const frontMatter = lines(
+		Array.from({ length: 27 }, (_, i) => `Department of Radiology, Institution ${i}, City, Country; and more disclosure text here`),
+		48, 300, 6, 8, 400
+	);
+	const abstract = lines(
+		Array.from({ length: 17 }, () => 'Evaluation of coronary artery disease using computed tomography has seen a shift'),
+		48, 600, 7.5, 10, 400
+	);
+	const all = groupIntoLines([...frontMatter, ...abstract], 594);
+	assert.equal(pageBodySize(all), 7.5, '小字是脚注,正文不会比脚注还小');
+});
+
+test('只有一行的字号档当不了正文 —— 否则标题会顶替正文', () => {
+	// 反例的形状来自既有单测「a large short line is classified as a title」:
+	// 25 字的 20pt 标题按字符数能压过三行 7 字的 10pt 正文。
+	const title = lines(['Attention Is All You Need'], 50, 740, 20);
+	const body = lines(['x x x x', 'y y y y', 'z z z z'], 50, 660, 10);
+	const all = groupIntoLines([...title, ...body], 612);
+	assert.equal(pageBodySize(all), 10);
+});
+
+test('普通版面不受影响: 正文既是众数又没有更大的成片字号', () => {
+	const body = lines(
+		Array.from({ length: 20 }, () => 'Coronary CT angiography is now a first-line noninvasive imaging modality'),
+		48, 600, 10, 12, 400
+	);
+	const heading = lines(['Materials and Methods'], 48, 340, 12, 12, 120);
+	const all = groupIntoLines([...body, ...heading], 594);
+	assert.equal(pageBodySize(all), 10, '12pt 标题只占几个百分点,够不上 25%');
+});
+
+test('正文字号真的接到了 classify 上 —— 栏目条不再冒充标题', () => {
+	// 端到端锁住接线: pageBodySize 若被换回按行数取众数,bodySize 掉回 6pt,
+	// 9pt 的栏目条 ratio 变成 1.5、越过 title 的 1.35 门槛,一页于是冒出三个
+	// title。正文取 7.5pt 时它是 1.2,老老实实落在 heading。
+	const frontMatter = lines(
+		Array.from({ length: 27 }, (_, i) => `Department of Radiology, Institution ${i}, City, Country; and further disclosure text`),
+		48, 300, 6, 8, 400
+	);
+	const abstract = lines(
+		Array.from({ length: 17 }, () => 'Evaluation of coronary artery disease using computed tomography has seen a shift'),
+		48, 600, 7.5, 10, 400
+	);
+	const banner = lines(['THE PRESENT AND FUTURE'], 48, 700, 9, 12, 140);
+	const { blocks } = buildBlocksFromSpans([...banner, ...abstract, ...frontMatter], {
+		pageIndex: 0, pageHeight: PAGE_HEIGHT, pageWidth: 576
+	});
+	const b = blocks.find(x => x.sourceText.trim() === 'THE PRESENT AND FUTURE');
+	assert.ok(b, '栏目条必须还在');
+	assert.equal(b!.type, 'heading', 'bodySize 判成 6pt 时它会变成 title');
 });

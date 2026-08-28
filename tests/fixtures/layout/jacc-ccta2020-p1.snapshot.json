@@ -1,6 +1,6 @@
 [
 	{
-		"type": "title",
+		"type": "heading",
 		"column": 0,
 		"readingIndex": 0,
 		"text": "THE PRESENT AND FUTURE"
@@ -36,15 +36,9 @@
 		"text": "Evaluation of coronary artery disease (C"
 	},
 	{
-		"type": "heading",
-		"column": 0,
-		"readingIndex": 6,
-		"text": "American College of Cardiology Foundatio"
-	},
-	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 7,
+		"readingIndex": 6,
 		"text": "Listen to this manuscript’s audio summar"
 	}
 ]

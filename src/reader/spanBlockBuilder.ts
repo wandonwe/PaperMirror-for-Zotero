@@ -176,6 +176,63 @@ function rowFontSize(row: { items: SpanItem[] }): number {
 	return max;
 }
 
+/**
+ * 全页正文字号 —— classify 里 `ratio = fontSize / bodySize` 的分母 (2.5.7)。
+ *
+ * `dominantFontSize` 按**行数**取众数,而这个分母问的是「正文有多大」。封面页
+ * 上两者会分道扬镳:jacc-ccta2020-p1 的 6pt 前置信息(单位、利益声明)占了
+ * **57.8% 的字符 / 27 行**,7.5pt 的摘要只有 33.1% / 17 行 —— 众数判成 6pt,
+ * 于是页面上**任何**比 6pt 大的东西 ratio 都 ≥ 1.1:摘要末行「American College
+ * of Cardiology Foundation.」被撕下来当标题(摘要因此断在「on behalf of the」),
+ * 栏目条与副题也一并够上了 title 的门槛。2.4.7 曾把 heading 臂的长度上限从
+ * 160 收到 70 来压住症状,病灶一直没动。
+ *
+ * 两条修正:① 按**字符数**计权,一行长正文不该和一行两字的标签同票;
+ * ② 众数之上若还有一档**份量可观**的更大字号(≥25% 字符且大出 15% 以上),
+ * 取它 —— 小字是脚注,正文不会比脚注还小。份量门槛挡住的是标题:标题只占
+ * 百分之几的字符,永远够不上 25%。
+ */
+export function pageBodySize(lines: SpanLine[]): number {
+	const weight = new Map<number, number>();
+	const lineCount = new Map<number, number>();
+	let total = 0;
+	for (const line of lines) {
+		const size = line.fontSize;
+		if (!(Number.isFinite(size) && size > 0)) {
+			continue;
+		}
+		const chars = Math.max(1, lineText(line).trim().length);
+		const bucket = Math.round(size * 2) / 2;
+		weight.set(bucket, (weight.get(bucket) ?? 0) + chars);
+		lineCount.set(bucket, (lineCount.get(bucket) ?? 0) + 1);
+		total += chars;
+	}
+	if (!total) {
+		return 0;
+	}
+	// 正文按定义是**多行**的。只有一行的字号档不能当正文 —— 否则一个 25 字的
+	// 标题就能压过三行短正文(单测「a large short line is classified as a
+	// title」正是这个形状)。没有任何一档够两行时退回全部参与,聊胜于无。
+	const eligible = [...weight].filter(([bucket]) => (lineCount.get(bucket) ?? 0) >= 2);
+	const pool = eligible.length ? eligible : [...weight];
+	let mode = 0;
+	let modeWeight = -1;
+	for (const [bucket, w] of pool) {
+		// 同票取大者 —— 与 dominantFontSize 一致(正文压过一串下标)。
+		if (w > modeWeight || (w === modeWeight && bucket > mode)) {
+			mode = bucket;
+			modeWeight = w;
+		}
+	}
+	let best = mode;
+	for (const [bucket, w] of pool) {
+		if (bucket > best && bucket >= mode * 1.15 && w >= total * 0.25) {
+			best = bucket;
+		}
+	}
+	return best;
+}
+
 export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 	const usable = items.filter((i) => {
 		if (!i.text.trim().length || !Number.isFinite(i.rect[1]) || !Number.isFinite(i.rect[3])) {
@@ -595,7 +652,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// 中位数落在 8.5 —— 于是每一行 10pt 正文 ratio=1.176 ≥ 1.1 全部被判成
 	// heading,逐行走 heading 通道后大面积 unrecovered,译文页整栏保留英文。
 	// 众数(0.5pt 桶、平票取大)正确取到 10。
-	const bodySize = dominantFontSize(lines.map(l => l.fontSize));
+	const bodySize = pageBodySize(lines);
 
 	// 表格行先摘出去 (1.2.0): 数值表的行/列本是网格,但 groupIntoParagraphs 是给
 	// 散文设计的 —— 它把标签列跨行黏成一堵墙、把数字列纵向并块,等 structureTableCells

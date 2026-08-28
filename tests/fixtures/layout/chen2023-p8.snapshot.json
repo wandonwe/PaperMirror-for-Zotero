@@ -204,13 +204,13 @@
 		"text": "High-risk plaque 119 (12)"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 23,
 		"text": "RS-negative Lesions"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 24,
 		"text": "RS-positive Lesions"

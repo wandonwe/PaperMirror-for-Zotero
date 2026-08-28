@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "PaperMirror 文镜 for Zotero",
-  "version": "2.5.6",
+  "version": "2.5.7",
   "description": "PaperMirror 文镜 — 在 Zotero PDF 阅读器里中英对照阅读 (bilingual side-by-side reading for the Zotero PDF reader)",
   "author": "PaperMirror Contributors",
   "homepage_url": "https://github.com/wandonwe/PaperMirror-for-Zotero",

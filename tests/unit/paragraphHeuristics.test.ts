@@ -408,3 +408,32 @@ test('版心左侧的页边内容自成一栏,右侧的不动 (2.5.6)', () => {
 	// P 值列在 510 开外,而栏带只到 485),判成页边内容会把整张表的阅读序打乱。
 	assert.equal(columnOf([510, 130, 536, 139], bands, 576), 0, '版心右侧保持原兜底');
 });
+
+test('planMerges 把停在虚词上的碎片接回去 (2.5.7)', () => {
+	// jacc-ccta2020-p1: 摘要末行被 shortLine 撕成独立块,前一块收在
+	// 「…Published by Elsevier on behalf of the」—— 逗号判据看不见这种收尾,
+	// 摘要于是断在半句话上。
+	assert.deepEqual(planMerges([
+		{ text: '(J Am Coll Cardiol 2020;76:1226–43) Published by Elsevier on behalf of the', column: 0, type: 'paragraph', gapAfter: 3, fontSize: 7.5 },
+		{ text: 'American College of Cardiology Foundation.', column: 0, type: 'paragraph' }
+	]), [[0, 1]]);
+	// horst2024-p5: 停在连字符上同理。
+	assert.deepEqual(planMerges([
+		{ text: 'Noncontrast chest photon-', column: 0, type: 'paragraph', gapAfter: 2, fontSize: 8 },
+		{ text: 'counting detector scans (Flash + ultrahigh resolution)', column: 0, type: 'paragraph' }
+	]), [[0, 1]]);
+});
+
+test('planMerges 允许图注在断词连字符处接回下一段 (2.5.7)', () => {
+	// bodyOnly 本来会挡住 caption + paragraph 的合并,可断词连字符是唯一无歧义
+	// 的续接信号 —— horst2024-p5 的图 6 说明就断在 photon-/counting 之间。
+	assert.deepEqual(planMerges([
+		{ text: 'Figure 6: Noncontrast chest photon-', column: 0, type: 'caption', gapAfter: 2, fontSize: 8 },
+		{ text: 'counting detector scans (Flash + ultrahigh resolution)', column: 0, type: 'paragraph' }
+	]), [[0, 1]]);
+	// 没有连字符时照旧不跨类型合并。
+	assert.deepEqual(planMerges([
+		{ text: 'Figure 6: Noncontrast chest scans and', column: 0, type: 'caption', gapAfter: 2, fontSize: 8 },
+		{ text: 'the following body paragraph starts here', column: 0, type: 'paragraph' }
+	]), [[0], [1]]);
+});
