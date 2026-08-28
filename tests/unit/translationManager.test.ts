@@ -1892,3 +1892,47 @@ test('被导航取消、仍在解绕的页任务不再挡回重新排期 (2.5.8)
 	assert.equal(state?.translations.size, 2);
 	manager.dispose();
 });
+
+test('段落写盘不再占着调度槽,但 resetAllAndWait 仍等得到 (2.5.9)', async () => {
+	// 页完成路径上的写盘坐在调度槽里,而落盘有 500ms 的合并节流窗口 —— await
+	// 它等于每页白占一个槽至少半秒。改成登记而不等待;2.0.7 (审核 P2-3) 那条
+	// 「写盘与清盘竞态、被丢弃的译文复活」的防线由 resetAllAndWait 接手。
+	let releaseWrite!: () => void;
+	let writeStarted = false;
+	let writeFinished = false;
+	const { deps } = makeDeps({
+		writeSegments: async () => {
+			writeStarted = true;
+			await new Promise<void>(r => { releaseWrite = r; });
+			writeFinished = true;
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+
+	await manager.ensurePage(0, 10);
+	assert.equal(manager.getPageState(0)?.status, 'done', '页任务已经结算');
+	assert.equal(writeStarted, true, '写盘确实发出去了');
+	assert.equal(writeFinished, false, '但页任务没有为它挂着 —— 槽位已经交还');
+
+	// 清盘前必须收口: resetAllAndWait 要等到这笔写真正落地。
+	let resetDone = false;
+	const reset = manager.resetAllAndWait().then(() => { resetDone = true; });
+	await new Promise(r => setTimeout(r, 10));
+	assert.equal(resetDone, false, '写还没落地,清盘不能先跑');
+	releaseWrite();
+	await reset;
+	assert.equal(writeFinished, true);
+	assert.equal(resetDone, true);
+	manager.dispose();
+});
+
+test('写盘失败不影响翻译结果 (2.5.9)', async () => {
+	const { deps } = makeDeps({
+		writeSegments: async () => { throw new Error('disk full'); }
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	assert.equal(manager.getPageState(0)?.status, 'done');
+	await manager.resetAllAndWait(); // 不得因为那次 reject 而抛
+	manager.dispose();
+});

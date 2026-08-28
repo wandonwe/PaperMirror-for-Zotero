@@ -29,7 +29,7 @@ import {
 	longEnglishResidueSpans,
 	looksLikeAuthorNameList
 } from './residueRules';
-import { matchRules, mergeGlossaries } from './glossary';
+import { capLearnedRules, matchRules, mergeGlossaries } from './glossary';
 import { DocumentMemory, extractTermPairs } from './docMemory';
 import { RequestScheduler } from './requestScheduler';
 import { RequestGate } from './requestGate';
@@ -445,6 +445,18 @@ export class TranslationManager {
 	 *  服务商在途请求收到 ≈ 其页面并发上限,当前页请求优先出手。 */
 	private requestGate = new RequestGate();
 	private pages = new Map<number, PageTranslationState>();
+	/**
+	 * 已发出、尚未落盘的段落写入 (2.5.9)。
+	 *
+	 * 页完成路径上的段落写盘此前是 `await` 的,而它坐在**调度槽里面**:
+	 * 落盘有 500ms 的合并节流窗口,于是每页翻完都要白占一个槽至少半秒,再加
+	 * 整库序列化与落盘 —— 全局并发只有个位数时,这笔账很可观。
+	 *
+	 * 但也不能简单丢掉 await:2.0.7 (审核 P2-3) 记着,fire-and-forget 会让写盘
+	 * 悬在队列里与「刷新全部」的清盘竞态,被丢弃的译文复活。所以改成**登记而
+	 * 不等待** —— 任务立刻交还槽位,而 resetAllAndWait / dispose 仍能等到它。
+	 */
+	private pendingWrites = new Set<Promise<void>>();
 	private disposed = false;
 	private currentPage = 0;
 	private prefetchEnabled = true;
@@ -494,9 +506,16 @@ export class TranslationManager {
 	 */
 	private docMemory = new DocumentMemory();
 
-	/** matched 注入: user glossary + document memory, hits only. */
+	/** matched 注入: user glossary + document memory, hits only, 学得部分有上限。 */
 	private glossaryFor(texts: string[]): GlossaryRule[] {
-		return matchRules(mergeGlossaries(this.deps.getGlossary(), this.docMemory.rules()), texts);
+		const user = this.deps.getGlossary();
+		const matched = matchRules(mergeGlossaries(user, this.docMemory.rules()), texts);
+		// 上限只对**学得**的术语生效 (2.5.9): 用户词汇表是权威且条目有限,一条
+		// 都不能裁;而 docMemory 攒到 200 条后,长文末尾一次请求可能多出两百行
+		// 提示词。判断依据是「是不是用户那份里的」,不是 mode —— 用户自己也可以
+		// 把某条设成 suggested。
+		const userSources = new Set(user.map(r => r.source.toLowerCase()));
+		return capLearnedRules(matched, userSources, texts);
 	}
 
 	/** 不译词字面量 for the placeholder mask. */
@@ -785,13 +804,15 @@ export class TranslationManager {
 					// translation that already failed placement once.
 					if (this.deps.writeSegments) {
 						const byId = new Map(blocks.map(b => [b.id, b]));
-						await this.deps.writeSegments(pageIndex, [...accepted]
+						// 同上 (2.5.9): 压缩任务跑在**前台 lane** 上,更不该拿
+						// 槽位去等落盘。
+						this.trackWrite(this.deps.writeSegments(pageIndex, [...accepted]
 							.filter(([id]) => byId.has(id))
 							.map(([id, text]) => ({
 								hash: segmentHash(byId.get(id)!.sourceText, source, target),
 								translatedText: text
 							}))
-						).catch(() => { /* best effort */ });
+						));
 					}
 				}
 			}, { foreground: true, lane: this.laneFor(pageIndex) }); // compress serves the VISIBLE page's layout
@@ -1027,6 +1048,9 @@ export class TranslationManager {
 	 */
 	async resetAllAndWait(): Promise<void> {
 		await this.scheduler.cancelAllAndWait();
+		// 已发出但还没落盘的段落写入也要等 (2.5.9): 它们不再阻塞调度槽,
+		// 清盘前必须在这里收口,否则就是 2.0.7 修过的那条竞态。
+		await this.flushPendingWrites();
 		this.pages.clear();
 		this.unstableFired.clear();
 		this.docMemory.clear();
@@ -1165,6 +1189,21 @@ export class TranslationManager {
 			catch (e) {
 				logger.warn(MODULE, 'onPageUpdate handler failed', e);
 			}
+		}
+	}
+
+	/** 登记一笔写盘: 不阻塞调用方,但 flushPendingWrites 等得到。 */
+	private trackWrite(p: Promise<void>): void {
+		const tracked = p.catch(() => { /* best effort — 缓存失败不该影响翻译 */ });
+		this.pendingWrites.add(tracked);
+		void tracked.finally(() => { this.pendingWrites.delete(tracked); });
+	}
+
+	/** 等所有已发出的写盘真正落地(清盘/切配置前必须调用)。 */
+	private async flushPendingWrites(): Promise<void> {
+		// while: 等待期间可能又有新的写入登记进来。
+		while (this.pendingWrites.size) {
+			await Promise.all([...this.pendingWrites]);
 		}
 	}
 
@@ -2229,9 +2268,12 @@ export class TranslationManager {
 		// below requires completeness.
 		if (this.deps.writeSegments && results.length) {
 			const byId = new Map(activeBlocks.map(b => [b.id, b]));
-			await this.deps.writeSegments(pageIndex, results
+			// 登记而不等待 (2.5.9): 这一笔坐在调度槽里,await 它就是白占半秒
+			// 以上(落盘有 500ms 合并窗口)。登记后 resetAllAndWait/dispose 仍
+			// 等得到,2.0.7 的清盘竞态防线不受影响。
+			this.trackWrite(this.deps.writeSegments(pageIndex, results
 				.map(r => ({ hash: segHash(byId.get(r.id)!), translatedText: r.translatedText }))
-			).catch(e => logger.warn(MODULE, 'segment write failed', e));
+			).catch(e => { logger.warn(MODULE, 'segment write failed', e); }));
 		}
 		// Only a COMPLETE page enters the cache. Caching a partial page would
 		// freeze the mixed-language rendering: every revisit would hit the

@@ -236,3 +236,30 @@ test('复写一条老段落会刷新它的位置，不会被当成最旧的淘�
 	}
 	finally { io.teardown(); }
 });
+
+test('stat 拿不到指纹时留下一条警告,且只留一条 (2.5.9)', async () => {
+	// 整个解析缓存都建立在 stat 能给出 size + lastModified 之上。任一缺失,
+	// 连刚解析好的库都会被丢掉 —— 每页整库重解析,2.5.3 修掉的 O(N²) 原样复活,
+	// 而此前一行日志都没有,只表现为"莫名其妙又变慢了"。
+	const io = installIO();
+	try {
+		const { writeSegments, readSegments, setSegmentFlushDelayMs, resetStatStampWarning } =
+			await import('../../src/cache/cacheManager');
+		const logger = await import('../../src/utils/logger');
+		setSegmentFlushDelayMs(0);
+		resetStatStampWarning();
+		const before = logger.recentProblems().length;
+		const parts = partsFor('K-warn');
+		await writeSegments(parts, [{ hash: 'h', translatedText: '译' }]);
+		// 老版本 / 异常平台: stat 不给 lastModified
+		(globalThis as Record<string, any>).IOUtils.stat = async () => ({ type: 'regular', size: 0 });
+		await readSegments(parts, ['h']);
+		await readSegments(parts, ['h']);
+		await readSegments(parts, ['h']);
+		const added = logger.recentProblems().slice(before);
+		const warnings = added.filter(l => l.includes('re-parse the whole store'));
+		assert.equal(warnings.length, 1, '要留记号,但只留一条 —— 不刷屏');
+		resetStatStampWarning();
+	}
+	finally { io.teardown(); }
+});

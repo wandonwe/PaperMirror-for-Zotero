@@ -243,17 +243,39 @@ function dropStoreCache(pathPrefix?: string): void {
 }
 
 /** 文件指纹;拿不到可用的 size+lastModified 就返回 null(= 无法证明缓存有效)。 */
+/**
+ * 平台给不出指纹时只警告一次 (2.5.9)。
+ *
+ * 整个解析缓存都建立在 stat 能给出 size + lastModified 之上。任一缺失,
+ * statStamp 返回 null,连**刚解析好**的库都会被丢掉 —— 于是每页整库重解析,
+ * 2.5.3 修掉的 O(N²) 原样复活,而此前**一行日志都没有**,只会表现为"莫名其妙
+ * 又变慢了"。每进程一次,不刷屏。
+ */
+let statStampWarned = false;
+
 async function statStamp(path: string): Promise<string | null> {
 	try {
 		const st = await (IOUtils as unknown as { stat?(p: string): Promise<{ size?: number; lastModified?: number }> }).stat?.(path);
 		if (typeof st?.size === 'number' && typeof st?.lastModified === 'number') {
 			return `${st.size}:${st.lastModified}`;
 		}
+		if (!statStampWarned) {
+			statStampWarned = true;
+			logger.warn(MODULE, 'IOUtils.stat gave no size/lastModified — the parsed segment-store cache is disabled, every page will re-parse the whole store');
+		}
 	}
 	catch {
-		// stat 失败 = 说不清,按缓存未命中处理
+		// stat 抛错**不**告警: 库文件还不存在时(首次写入前的合并基底探测)
+		// 每次都会抛 ENOENT,那是正常流程,不是平台能力缺失。真正需要提醒的是
+		// 上面那种「stat 回了对象却没有 size/lastModified」—— 那才说明这个平台
+		// 给不出指纹,解析缓存会整体失效。
 	}
 	return null;
+}
+
+/** 仅供测试: 复位"只警告一次"的闩。 */
+export function resetStatStampWarning(): void {
+	statStampWarned = false;
 }
 
 type StoreLoad =
