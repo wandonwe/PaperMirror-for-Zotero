@@ -30,6 +30,8 @@ import {
 	columnOf,
 	detectColumns,
 	detectGutters,
+	detectGuttersBanded,
+	bandedColumnStamp,
 	dominantFontSize,
 	replacementFontSize,
 	joinFragments,
@@ -44,6 +46,7 @@ import {
 	planMerges,
 	reachesRightMargin,
 	shouldBreak,
+	type BandedGutter,
 	type ColumnBand,
 	type Rect
 } from './paragraphHeuristics';
@@ -314,10 +317,30 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 	if (!rows.length) {
 		return [];
 	}
-	const gutters = detectGutters(rows.map(row => row.map(i => i.rect)), pageWidth);
+	// 分带栏沟 (2.5.10): a page whose column count changes down the page — a
+	// two-column body over a three-column reference list — cannot be split by a
+	// single page-wide gutter vote (the reference middle column covers the body
+	// gutter, so the body columns weld and the whole two-column body's
+	// translation is lost). Only when such a regime shift is actually present do
+	// we switch to y-aware banded gutters; every uniform page keeps the exact
+	// page-wide detectGutters vote, so its line splitting is byte-identical.
+	const rowRects = rows.map(row => row.map(i => i.rect));
+	const gutters: BandedGutter[] = bandedColumnStamp(rowRects, pageWidth, pageHeight)
+		? detectGuttersBanded(rowRects, pageWidth)
+		: detectGutters(rowRects, pageWidth).map(x => ({ x, top: Infinity, bottom: -Infinity }));
 
 	const lines: SpanLine[] = [];
 	for (const row of rows) {
+		let rowTop = -Infinity;
+		let rowBottom = Infinity;
+		for (const it of row) {
+			rowTop = Math.max(rowTop, it.rect[3]);
+			rowBottom = Math.min(rowBottom, it.rect[1]);
+		}
+		const rowMid = (rowTop + rowBottom) / 2;
+		// Only the gutters whose vertical channel spans this row apply (2pt
+		// tolerance so a row exactly at a band edge still counts).
+		const rowGutters = gutters.filter(g => rowMid <= g.top + 2 && rowMid >= g.bottom - 2);
 		let current: SpanItem[] = [];
 		const flush = (): void => {
 			if (current.length) {
@@ -335,7 +358,7 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 				// strictly before the gutter centre let that single line bridge the
 				// two columns into one scrambled line (三栏页连字符悬垂焊行).
 				const slack = Math.min(6, size * 0.6);
-				const crossesGutter = gutters.some(g => previous.rect[2] <= g + slack && item.rect[0] >= g);
+				const crossesGutter = rowGutters.some(g => previous.rect[2] <= g.x + slack && item.rect[0] >= g.x);
 				if (crossesGutter || gap > columnGapThreshold(size)) {
 					flush();
 				}
@@ -784,6 +807,18 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// whose union rect overhangs the gutter re-welds two columns at the stamping
 	// step even after line-level detection got them right (三栏首页回归).
 	const columnBands = detectColumns(lines.map(l => l.rect), pageWidth, options.pageHeight);
+	// 分带栏归属 (2.5.10): non-null only when the column count changes down the
+	// page (2-col body over 3-col references). On every uniform page it is null
+	// and the detectColumns/columnOf path below is used unchanged. Fed with the
+	// PRE-SPLIT rows (glyph rects per baseline) — the banded gutter vote needs
+	// the full-width rows, which the already-column-split `lines` no longer are.
+	const bandedStamp = bandedColumnStamp(
+		groupIntoRows(filteredItems).map(row => row.map(i => i.rect)),
+		pageWidth,
+		options.pageHeight
+	);
+	const stampColumn = (rect: Rect, isTableLine: boolean): number =>
+		bandedStamp && !isTableLine ? bandedStamp(rect) : columnOf(rect, columnBands, pageWidth);
 	const blocks: SourceBlock[] = [];
 	let order = 0;
 	for (const p of [...merged, ...tableParas]) {
@@ -844,7 +879,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			},
 			lineRectsPdf: p.group.map(l => [...l.rect] as Rect),
 			fontSize: p.fontSize,
-			column: columnOf(p.rect, columnBands, pageWidth),
+			column: stampColumn(p.rect, !!p.isTableLine),
 			isReference: isRef,
 			...(preserveReference ? { translationMode: 'preserve' as const } : {})
 		});

@@ -4,6 +4,8 @@ import {
 	columnOf,
 	detectColumns,
 	detectGutters,
+	detectGuttersBanded,
+	bandedColumnStamp,
 	dominantFontSize,
 	endsSentence,
 	joinFragments,
@@ -107,6 +109,73 @@ test('detectGutters reports nothing for a single-column page', () => {
 
 test('detectGutters abstains when there are too few rows to vote', () => {
 	assert.deepEqual(detectGutters([twoColumnRow(700), twoColumnRow(688)], PAGE_W), []);
+});
+
+// ---- 分带栏检测: 2-col body over 3-col references (2.5.10) -------------------
+
+/** A page whose top half is a 2-column body (gutter ~306) and whose bottom
+ *  half is a 3-column reference list (gutters ~211, ~412). The reference
+ *  middle column sits on top of the body gutter, so a single page-wide vote
+ *  cannot see the body gutter. y is PDF bottom-origin (larger = higher). */
+function bodyOverRefsRows(): Rect[][] {
+	const rows: Rect[][] = [];
+	// 2-col body: y 760 → 420 (top half).
+	for (let y = 760; y >= 420; y -= 12) {
+		rows.push([[54, y - 10, 292, y], [320, y - 10, 558, y]]);
+	}
+	// 3-col references: y 380 → 40 (bottom half).
+	for (let y = 380; y >= 40; y -= 10) {
+		rows.push([[54, y - 8, 200, y], [220, y - 8, 398, y], [418, y - 8, 558, y]]);
+	}
+	return rows;
+}
+
+test('detectGuttersBanded finds body and reference gutters over their own y-spans', () => {
+	const gutters = detectGuttersBanded(bodyOverRefsRows(), PAGE_W);
+	const body = gutters.find(g => g.x > 292 && g.x < 320);
+	const refLeft = gutters.find(g => g.x > 200 && g.x < 220);
+	const refRight = gutters.find(g => g.x > 398 && g.x < 418);
+	assert.ok(body, 'the 2-column body gutter is found');
+	assert.ok(refLeft && refRight, 'both 3-column reference gutters are found');
+	// The body gutter holds only over the top (body) band, not the references.
+	assert.ok(body!.bottom > 380, `body gutter must not reach into the references: ${JSON.stringify(body)}`);
+	// The reference gutters hold only over the bottom band.
+	assert.ok(refLeft!.top < 420, 'reference gutter must not reach into the body');
+});
+
+test('bandedColumnStamp orders body columns before reference columns', () => {
+	const stamp = bandedColumnStamp(bodyOverRefsRows(), PAGE_W, 792);
+	assert.ok(stamp, 'a 2-col-over-3-col page activates the banded stamp');
+	// Body left/right → 0/1; reference columns → a higher band (100+).
+	assert.equal(stamp!([54, 600, 292, 610]), 0, 'body left column');
+	assert.equal(stamp!([320, 600, 558, 610]), 1, 'body right column');
+	assert.ok(stamp!([54, 200, 200, 208]) >= 100, 'reference column 1 sorts after the body');
+	assert.ok(stamp!([220, 200, 398, 208]) > stamp!([54, 200, 200, 208]), 'reference columns keep left-to-right order');
+	assert.ok(stamp!([418, 200, 558, 208]) > stamp!([220, 200, 398, 208]), 'reference column 3 last');
+});
+
+test('bandedColumnStamp stays null for a uniform two-column page', () => {
+	const rows: Rect[][] = [];
+	for (let y = 760; y >= 40; y -= 12) {
+		rows.push([[54, y - 10, 292, y], [320, y - 10, 558, y]]);
+	}
+	assert.equal(bandedColumnStamp(rows, PAGE_W, 792), null);
+});
+
+test('bandedColumnStamp ignores a data table over a body (≥4 columns is not a prose regime)', () => {
+	const rows: Rect[][] = [];
+	// A 5-column table in the top band.
+	for (let y = 760; y >= 440; y -= 12) {
+		rows.push([
+			[54, y - 10, 140, y], [160, y - 10, 250, y], [270, y - 10, 360, y],
+			[380, y - 10, 470, y], [490, y - 10, 558, y]
+		]);
+	}
+	// A 2-column body below.
+	for (let y = 400; y >= 40; y -= 12) {
+		rows.push([[54, y - 10, 292, y], [320, y - 10, 558, y]]);
+	}
+	assert.equal(bandedColumnStamp(rows, PAGE_W, 792), null);
 });
 
 // ---- the wrapped-line guard -------------------------------------------------

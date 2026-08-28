@@ -366,6 +366,306 @@ export function detectGutters(rows: Rect[][], pageWidth: number): number[] {
 	return gutters;
 }
 
+/** A gutter channel with the vertical span over which it actually holds. */
+export interface BandedGutter {
+	/** x centre of the channel (PDF user space). */
+	x: number;
+	/** Highest (top) y the channel spans; PDF bottom-origin, so top > bottom. */
+	top: number;
+	/** Lowest (bottom) y the channel spans. */
+	bottom: number;
+}
+
+/**
+ * 分带栏沟检测 (2.5.10, JACC 尾页实证): the global {@link detectGutters} takes
+ * ONE page-wide vote, which is structurally wrong for a page whose column count
+ * changes down the page — the classic journal end page with a **two-column
+ * body over a three-column reference list**. There the reference middle column
+ * sits right on top of the body gutter, so the body channel never reaches
+ * quorum and the two body columns weld into one scrambled line (translation of
+ * the whole two-column body then fails). This variant finds each gutter as a
+ * vertical CHANNEL that persists over a run of consecutive wide rows, and
+ * returns the y-span over which it holds, so a caller splits a row only at the
+ * gutters that actually exist at that row's height.
+ *
+ * Same coverage model as detectGutters (2pt cells, rounded glyph marking, a
+ * gap must be ≥6pt wide and sit inside the middle 76% of the page). A channel
+ * counts only where ≥MIN_RUN consecutive wide rows leave it uncovered.
+ */
+export function detectGuttersBanded(rows: Rect[][], pageWidth: number): BandedGutter[] {
+	const width = pageWidth > 0 ? pageWidth : 612;
+	const STEP = 2;
+	const cells = Math.ceil(width / STEP);
+	if (cells <= 0) {
+		return [];
+	}
+	/** A gutter must hold over at least this many wide rows to be real — the
+	 *  vertical analogue of detectGutters' 60% quorum, but LOCAL so a channel
+	 *  present in only part of the page still counts there. */
+	const MIN_RUN = 5;
+	/** A channel tolerates up to this many CONSECUTIVE covered rows (a heading
+	 *  or a hyphen-overhang welding rect crossing the gutter) without ending —
+	 *  but a regime change (a whole band of rows covering the gutter) far
+	 *  exceeds it, so bands stay distinct. */
+	const HOLE_TOL = 2;
+	/** …and across the whole span the uncovered rows must stay a clear majority,
+	 *  so a scatter of short-line gaps down a justified column never accretes
+	 *  into a phantom gutter. */
+	const MIN_DENSITY = 0.6;
+	interface WideRow { top: number; bottom: number; gap: boolean[]; }
+	const wide: WideRow[] = [];
+	for (const row of rows) {
+		if (!row.length) {
+			continue;
+		}
+		let rowLeft = Infinity;
+		let rowRight = -Infinity;
+		let top = -Infinity;
+		let bottom = Infinity;
+		for (const r of row) {
+			rowLeft = Math.min(rowLeft, r[0]);
+			rowRight = Math.max(rowRight, r[2]);
+			top = Math.max(top, r[3]);
+			bottom = Math.min(bottom, r[1]);
+		}
+		if (!Number.isFinite(rowLeft) || rowRight - rowLeft < width * 0.5) {
+			continue;
+		}
+		const covered = new Array<boolean>(cells).fill(false);
+		for (const r of row) {
+			const from = Math.max(0, Math.round(r[0] / STEP));
+			const to = Math.min(cells - 1, Math.round(r[2] / STEP) - 1);
+			for (let k = from; k <= to; k++) {
+				covered[k] = true;
+			}
+		}
+		const gap = new Array<boolean>(cells).fill(false);
+		const from = Math.max(0, Math.ceil(rowLeft / STEP));
+		const to = Math.min(cells - 1, Math.floor(rowRight / STEP));
+		for (let k = from; k <= to; k++) {
+			gap[k] = !covered[k];
+		}
+		wide.push({ top, bottom, gap });
+	}
+	if (wide.length < MIN_RUN) {
+		return [];
+	}
+	// Rows top-of-page first (higher y first) so a run's [top, bottom] reads
+	// naturally; the input is usually already in this order, but don't rely on it.
+	wide.sort((a, b) => b.top - a.top);
+	// For each x-cell, the vertical runs of consecutive wide rows that leave it
+	// uncovered. A qualifying run (≥MIN_RUN) is a per-cell gutter candidate.
+	interface Cand { cell: number; top: number; bottom: number; }
+	const cands: Cand[] = [];
+	for (let k = 0; k < cells; k++) {
+		// Maximal runs of wide rows uncovered at cell k, bridging up to HOLE_TOL
+		// consecutive covered rows. runStart/lastGap track the first and last
+		// UNCOVERED row of the current run; uncovered counts its uncovered rows.
+		let runStart = -1;
+		let lastGap = -1;
+		let uncovered = 0;
+		let holes = 0;
+		const close = (): void => {
+			if (runStart >= 0 && uncovered >= MIN_RUN) {
+				const span = lastGap - runStart + 1;
+				if (uncovered / span >= MIN_DENSITY) {
+					cands.push({ cell: k, top: wide[runStart]!.top, bottom: wide[lastGap]!.bottom });
+				}
+			}
+			runStart = -1;
+			lastGap = -1;
+			uncovered = 0;
+			holes = 0;
+		};
+		for (let i = 0; i < wide.length; i++) {
+			if (wide[i]!.gap[k]!) {
+				if (runStart < 0) {
+					runStart = i;
+				}
+				lastGap = i;
+				uncovered++;
+				holes = 0;
+			}
+			else if (runStart >= 0) {
+				holes++;
+				if (holes > HOLE_TOL) {
+					close();
+				}
+			}
+		}
+		close();
+	}
+	if (!cands.length) {
+		return [];
+	}
+	// Merge horizontally-contiguous candidate cells whose vertical spans overlap
+	// into one channel. Cells of the same physical gutter share the same run, so
+	// their spans coincide; the overlap test keeps two different-height gutters
+	// at nearby x (rare) apart.
+	cands.sort((a, b) => a.cell - b.cell || b.top - a.top);
+	const result: BandedGutter[] = [];
+	let startCell = cands[0]!.cell;
+	let endCell = cands[0]!.cell;
+	let top = cands[0]!.top;
+	let bottom = cands[0]!.bottom;
+	const flush = (): void => {
+		const startX = startCell * STEP;
+		const endX = (endCell + 1) * STEP;
+		if (endX - startX >= 6 && startX > width * 0.12 && endX < width * 0.88) {
+			result.push({ x: (startX + endX) / 2, top, bottom });
+		}
+	};
+	for (let i = 1; i < cands.length; i++) {
+		const c = cands[i]!;
+		const overlaps = c.cell <= endCell + 1 && c.bottom <= top && c.top >= bottom;
+		if (overlaps) {
+			endCell = Math.max(endCell, c.cell);
+			top = Math.max(top, c.top);
+			bottom = Math.min(bottom, c.bottom);
+		}
+		else {
+			flush();
+			startCell = endCell = c.cell;
+			top = c.top;
+			bottom = c.bottom;
+		}
+	}
+	flush();
+	return result;
+}
+
+/**
+ * 分带栏归属 (2.5.10): a page whose column count changes down the page — a
+ * two-column body over a three-column reference list — has NO single set of
+ * column bands. {@link detectColumns} collapses it to one wrong band and every
+ * block stamps to column 0, so the canonical reading order can't separate the
+ * columns and the two-column body reads line-interleaved (left line, right
+ * line, …), scrambling its translation.
+ *
+ * This derives vertical REGIMES from the banded gutters (each regime = a set of
+ * gutters that share a vertical span) and returns a stamp that assigns each
+ * block a COMPOSITE column index `regimeRank * 100 + localColumn`. Ordering by
+ * that index then emits every column of the upper regime (top band) before any
+ * column of the lower one, each column top-to-bottom — the correct reading
+ * order without needing a full-width separator between the bands.
+ *
+ * Returns `null` when the page has ≤1 regime (the overwhelmingly common case:
+ * one uniform 1/2/3-column flow), so the caller keeps the existing
+ * detectColumns/columnOf path and every uniform page is byte-for-byte
+ * unchanged.
+ */
+export function bandedColumnStamp(
+	rows: Rect[][],
+	pageWidth: number,
+	pageHeight: number
+): ((rect: Rect) => number) | null {
+	// A page-level column REGIME spans a large fraction of the page. Short
+	// channels — a header-band or footnote gutter tens of points tall — must not
+	// define a regime (they made ordinary two-column pages with a distinct
+	// header band read as multi-regime). Splitting still uses every channel;
+	// only this page-structure decision drops the short ones.
+	const minSpan = (pageHeight > 0 ? pageHeight : 792) * 0.2;
+	const gutters = detectGuttersBanded(rows, pageWidth).filter(g => g.top - g.bottom >= minSpan);
+	if (gutters.length < 2) {
+		return null;
+	}
+	// Group gutters that overlap vertically into regimes.
+	const sorted = [...gutters].sort((a, b) => b.top - a.top);
+	interface Regime { top: number; bottom: number; xs: number[]; }
+	// A gutter joins a regime only when it SUBSTANTIALLY overlaps it vertically
+	// (≥50% of the shorter span). A body gutter that a hole-bridge stretched a
+	// row or two into the reference zone still touches the reference regime, but
+	// that sliver is far below 50%, so the two-column body band and the
+	// three-column reference band stay distinct.
+	const overlaps = (r: Regime, g: BandedGutter): boolean => {
+		const lo = Math.max(r.bottom, g.bottom);
+		const hi = Math.min(r.top, g.top);
+		const inter = hi - lo;
+		if (inter <= 0) {
+			return false;
+		}
+		const shorter = Math.min(r.top - r.bottom, g.top - g.bottom);
+		return shorter <= 0 || inter >= shorter * 0.5;
+	};
+	const regimes: Regime[] = [];
+	for (const g of sorted) {
+		const host = regimes.find(r => overlaps(r, g));
+		if (host) {
+			host.top = Math.max(host.top, g.top);
+			host.bottom = Math.min(host.bottom, g.bottom);
+			host.xs.push(g.x);
+		}
+		else {
+			regimes.push({ top: g.top, bottom: g.bottom, xs: [g.x] });
+		}
+	}
+	// A regime with three or more gutters (≥4 columns) is a data TABLE, not a
+	// prose column band — tables have their own structuring pass, and letting a
+	// table define a page regime made table-bearing pages re-split. Prose
+	// columns are 1–3 wide (≤2 gutters).
+	const proseRegimes = regimes.filter(r => r.xs.length <= 2);
+	if (proseRegimes.length < 2) {
+		return null;
+	}
+	regimes.length = 0;
+	regimes.push(...proseRegimes);
+	// Rank regimes top-of-page first (higher y first).
+	regimes.sort((a, b) => b.top - a.top);
+	for (const r of regimes) {
+		r.xs.sort((a, b) => a - b);
+	}
+	// Only a genuine change in column STRUCTURE down the page justifies the
+	// banded path. If every regime has the same gutter x's (a single uniform
+	// multi-column flow whose gutter merely broke around a mid-page heading and
+	// re-formed at the same x), there is one column regime — defer to the plain
+	// detectColumns/columnOf path so that page stays byte-identical.
+	const signature = (r: Regime): string => r.xs.map(x => Math.round(x / 8)).join(',');
+	const sig0 = signature(regimes[0]!);
+	if (regimes.every(r => signature(r) === sig0)) {
+		return null;
+	}
+	const width = pageWidth > 0 ? pageWidth : 612;
+	return (rect: Rect): number => {
+		const midY = (rect[1] + rect[3]) / 2;
+		const midX = (rect[0] + rect[2]) / 2;
+		// The regime containing this block's mid-y; when a hole-bridged gutter
+		// makes two regimes' spans overlap, the one whose centre is nearest wins,
+		// so a reference row inside the body gutter's leaked tail still lands in
+		// the reference regime.
+		let rank = -1;
+		let bestDist = Infinity;
+		for (let i = 0; i < regimes.length; i++) {
+			const r = regimes[i]!;
+			if (midY <= r.top + 2 && midY >= r.bottom - 2) {
+				const dist = Math.abs(midY - (r.top + r.bottom) / 2);
+				if (dist < bestDist) {
+					bestDist = dist;
+					rank = i;
+				}
+			}
+		}
+		// Outside every regime (page furniture above the top band, a heading in
+		// the transition gap between two bands): treat as a full-width separator
+		// so reading order flushes the band above before the band below.
+		if (rank < 0) {
+			return -1;
+		}
+		const r = regimes[rank]!;
+		// A block that straddles one of this regime's gutters spans the whole
+		// band width — a section heading or full-width line — and separates.
+		if (r.xs.some(x => rect[0] < x - 2 && rect[2] > x + 2)) {
+			return -1;
+		}
+		let local = 0;
+		for (const x of r.xs) {
+			if (midX > x) {
+				local++;
+			}
+		}
+		return rank * 100 + local;
+	};
+}
+
 /**
  * Which column a rect belongs to. Returns -1 for a full-width rect (it spans
  * every column and must not be grouped with either one's neighbours).
