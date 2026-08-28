@@ -314,3 +314,76 @@ test('cancelAllAndWait: 全部任务解绕后才返回', async () => {
 	await Promise.all(ps);
 	scheduler.dispose();
 });
+
+test('cap 为 1 的前台 lane 仍然允许后台任务启动 (2.5.8)', async () => {
+	// 差一位: `laneActive >= cap - 1` 在 cap === 1 时是 `laneActive >= 0` ——
+	// 恒真,哪怕调度器完全空闲。而 cap === 1 正是默认配置(默认引擎 bing-free
+	// 属 free 类,band 固定 {min:1, initial:1, max:1}),单服务商时所有页共用
+	// 这条 lane、它又恒等于 foregroundLane —— 预取因此从来没跑起来过。
+	const scheduler = new RequestScheduler({ maxConcurrent: 8, reservedForeground: 1, delayFn: noDelay });
+	scheduler.configureLanes({ free: { min: 1, initial: 1, max: 1 } });
+	scheduler.setForegroundLane('free');
+	let started = false;
+	const job = scheduler.enqueue('page-5', 1, async () => { started = true; }, { lane: 'free', foreground: false });
+	await new Promise(r => setTimeout(r, 5));
+	assert.equal(scheduler.laneCap('free'), 1);
+	assert.equal(started, true, '容量为 1 的 lane 没有"多留一个"的余地,保留槽在这里无意义');
+	await job;
+});
+
+test('cap ≥ 2 时前台保留槽照旧生效 (2.5.8 不放松原有保护)', async () => {
+	const scheduler = new RequestScheduler({ maxConcurrent: 8, reservedForeground: 1, delayFn: noDelay });
+	scheduler.configureLanes({ L: 2 });
+	scheduler.setForegroundLane('L');
+	const running = new Set<string>();
+	const hold = (k: string) => scheduler.enqueue(k, 1, async () => {
+		running.add(k); await new Promise(r => setTimeout(r, 30)); running.delete(k);
+	}, { lane: 'L', foreground: false });
+	const bg1 = hold('bg1');
+	const bg2 = hold('bg2');
+	await new Promise(r => setTimeout(r, 5));
+	assert.equal(running.size, 1, 'cap 2 的 lane 上后台仍只能占 1 个,给当前页留一个');
+	await Promise.all([bg1, bg2]);
+});
+
+test('isAbortedActive 把"正在解绕的僵尸"与"真在跑"分开 (2.5.8)', async () => {
+	// cancel() 对运行中的任务只发信号,它要等 run() 结算才离开 active。这期间
+	// isScheduled 仍为真 —— 调用方据此早退,该页就既不结束也无法重新排期。
+	const scheduler = new RequestScheduler({ maxConcurrent: 2, delayFn: noDelay });
+	let release!: () => void;
+	const job = scheduler.enqueue('page-3', 1, async (signal) => {
+		await new Promise<void>(r => { release = r; });
+		if (signal.aborted) {
+			throw new PaperMirrorError('CANCELLED', 'aborted');
+		}
+	});
+	await new Promise(r => setTimeout(r, 5));
+	assert.equal(scheduler.isScheduled('page-3'), true);
+	assert.equal(scheduler.isAbortedActive('page-3'), false, '真在跑');
+
+	scheduler.cancel('page-3');
+	assert.equal(scheduler.isScheduled('page-3'), true, '仍留在 active —— 这正是会挡回重排的状态');
+	assert.equal(scheduler.isAbortedActive('page-3'), true, '但它已经是僵尸了');
+
+	release();
+	await job.catch(() => { /* 预期被取消 */ });
+	assert.equal(scheduler.isScheduled('page-3'), false, '解绕完就离开 active');
+	assert.equal(scheduler.isAbortedActive('page-3'), false);
+});
+
+test('cancelAndWait 之后同名任务可以立刻重新排期 (2.5.8)', async () => {
+	const scheduler = new RequestScheduler({ maxConcurrent: 2, delayFn: noDelay });
+	let release!: () => void;
+	const first = scheduler.enqueue('page-3', 1, async () => {
+		await new Promise<void>(r => { release = r; });
+	});
+	await new Promise(r => setTimeout(r, 5));
+	scheduler.cancel('page-3');
+	const waited = scheduler.cancelAndWait('page-3');
+	release();
+	await waited;
+	await first.catch(() => {});
+	let reran = false;
+	await scheduler.enqueue('page-3', 1, async () => { reran = true; });
+	assert.equal(reran, true, '僵尸让位之后,这一页必须能重新排上');
+});

@@ -122,6 +122,18 @@ export class RequestScheduler {
 		return this.queue.some(job => job.key === key);
 	}
 
+	/**
+	 * 已被 abort、但还没解绕完的运行中任务 (2.5.8)。
+	 *
+	 * `cancel()` 对运行中的任务只发信号,任务要等自己的 run() 结算才离开
+	 * `active`(见 cancelAndWait 的说明)。这段时间里 `isScheduled` 仍为真,
+	 * 而调用方据此早退,该页就既不结束也无法重新排期。调用方需要能把「真在跑」
+	 * 和「正在解绕的僵尸」区分开。
+	 */
+	isAbortedActive(key: string): boolean {
+		return this.active.get(key)?.controller.signal.aborted ?? false;
+	}
+
 	/** Set the GLOBAL concurrent page-task cap. */
 	setGlobalMax(n: number): void {
 		this.options.maxConcurrent = Math.max(1, Math.floor(n));
@@ -348,9 +360,19 @@ export class RequestScheduler {
 			// Per-lane foreground reserve: the visible page's lane keeps ONE slot
 			// free so the current page can always start, even amid same-lane
 			// prefetch. Only applies when the lane has a finite cap.
+			//
+			// `cap > 1` 是必须的 (2.5.8): cap === 1 时 `laneActive >= cap - 1` 就是
+			// `laneActive >= 0` —— **恒真**,哪怕调度器完全空闲,该 lane 上的后台
+			// 任务也一个都启动不了。而 cap === 1 恰恰是默认配置:默认引擎
+			// bing-free 属于 free 类,band 固定 { min: 1, initial: 1, max: 1 }
+			// (providerPool laneBandFor,unknown 类同);LLM lane 也会被两次 429
+			// 从 3 折半衰减到 min = 1。单服务商时所有页共用一条 lane,那条 lane
+			// 恒等于 foregroundLane —— 于是**预取从来没跑起来过**,队列里堆的全是
+			// 永远起不来的任务。一条容量为 1 的 lane 本就没有"多留一个"的余地,
+			// 保留槽在这里无意义。
 			if (job.lane && job.lane === this.foregroundLane) {
 				const cap = this.laneCapOf(job.lane);
-				if (Number.isFinite(cap) && laneActive >= cap - 1) {
+				if (Number.isFinite(cap) && cap > 1 && laneActive >= cap - 1) {
 					return false;
 				}
 			}

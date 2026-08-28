@@ -14,6 +14,8 @@
  * 被取消的请求在轮到它时立即 reject 并释放名额,不会泄漏。
  */
 
+import { PaperMirrorError } from '../types/models';
+
 interface Waiter {
 	foreground: boolean;
 	resolve: () => void;
@@ -53,9 +55,21 @@ export class RequestGate {
 		return this.peak.get(lane) ?? 0;
 	}
 
-	/** 取得名额 → 跑 fn → 无论成败释放名额。 */
-	async run<T>(lane: string, foreground: boolean, fn: () => Promise<T>): Promise<T> {
-		await this.acquire(lane, foreground);
+	/**
+	 * 取得名额 → 跑 fn → 无论成败释放名额。
+	 *
+	 * `signal` 是 2.5.8 补上的:在此之前**等待本身不可中断** —— 模块开头写着
+	 * 「abort 交由 fn 自身处理」,但被 abort 的请求只有轮到它时才 reject,在此
+	 * 之前它一直挂在这里。后果不在闸内而在闸外:`run` 是在 `try` **之前**
+	 * await 取名额的,页任务停在这里 → `translatePage` 挂着 → RequestScheduler
+	 * `execute` 的 finally 不可达 → 该 job 一直留在 `active`,既占着全局与 lane
+	 * 的槽位,又让 `isScheduled('page-N')` 恒为真;而 `ensurePage` 一见
+	 * `isScheduled` 就早退、`promote` 又只对**排队中**的任务生效 —— 于是导航
+	 * 取消或空闲看门狗 abort 过的那一页既不结束、也无法重新排期,用户翻回去
+	 * 只看到原文,后面的页还起不来。现在 abort 会立刻把等待者摘出队列并 reject。
+	 */
+	async run<T>(lane: string, foreground: boolean, fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+		await this.acquire(lane, foreground, signal);
 		try {
 			return await fn();
 		}
@@ -64,15 +78,55 @@ export class RequestGate {
 		}
 	}
 
-	private acquire(lane: string, foreground: boolean): Promise<void> {
+	private acquire(lane: string, foreground: boolean, signal?: AbortSignal): Promise<void> {
+		if (signal?.aborted) {
+			// 已经取消了就别再占名额 —— 占了也只是马上还回来。
+			return Promise.reject(new PaperMirrorError('CANCELLED', 'Cancelled before acquiring a request slot.'));
+		}
 		const cur = this.inFlight.get(lane) ?? 0;
 		if (cur < this.capOf(lane)) {
 			this.bump(lane, cur + 1);
 			return Promise.resolve();
 		}
-		return new Promise<void>(resolve => {
+		return new Promise<void>((resolve, reject) => {
 			const q = this.waiters.get(lane) ?? [];
-			const w: Waiter = { foreground, resolve };
+			// settled 同时防两件事: drain 唤醒后又收到 abort(此时名额已记在
+			// 账上,交给 fn 自己去 reject 并释放),以及 abort 之后再被唤醒。
+			let settled = false;
+			const cleanup = (): void => {
+				if (signal) {
+					signal.removeEventListener('abort', onAbort);
+				}
+			};
+			const onAbort = (): void => {
+				if (settled) {
+					return;
+				}
+				settled = true;
+				cleanup();
+				const list = this.waiters.get(lane);
+				if (list) {
+					const i = list.indexOf(w);
+					if (i >= 0) {
+						list.splice(i, 1);
+					}
+				}
+				reject(new PaperMirrorError('CANCELLED', 'Cancelled while waiting for a request slot.'));
+			};
+			const w: Waiter = {
+				foreground,
+				resolve: () => {
+					if (settled) {
+						return;
+					}
+					settled = true;
+					cleanup();
+					resolve();
+				}
+			};
+			if (signal) {
+				signal.addEventListener('abort', onAbort, { once: true } as AddEventListenerOptions);
+			}
 			if (foreground) {
 				// 前台插到第一个后台等待者之前(不越过其他前台,保序公平)。
 				const idx = q.findIndex(x => !x.foreground);

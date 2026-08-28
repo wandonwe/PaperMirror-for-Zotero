@@ -65,3 +65,74 @@ test('不同 lane 互不阻塞;setCap 收窄后续放行', async () => {
 	await Promise.all(rc);
 	assert.equal(peak, 3);
 });
+
+// ---- 等待可中断 (2.5.8) ----------------------------------------------------
+
+test('abort 立刻把等待者摘出队列并 reject,不必等轮到它', async () => {
+	// 在此之前等待本身不可中断: 被 abort 的请求只有轮到它时才 reject。而
+	// `run` 是在 try **之前** await 取名额的 —— 页任务停在这里,调度器
+	// execute 的 finally 就不可达,job 一直留在 active,该页既不结束也无法
+	// 重新排期(isScheduled 恒真、promote 只对排队中的任务生效)。
+	const gate = new RequestGate(1);
+	gate.setCap('L', 1);
+	let releaseHolder!: () => void;
+	const holder = gate.run('L', true, () => new Promise<void>(r => { releaseHolder = r; }));
+	await new Promise(r => setTimeout(r, 0));
+	const ac = new AbortController();
+	let ran = false;
+	const waiter = gate.run('L', false, async () => { ran = true; }, ac.signal);
+	await new Promise(r => setTimeout(r, 0));
+	assert.equal(gate.pendingOf('L'), 1, '先确实排上了队');
+	ac.abort();
+	await assert.rejects(waiter, /Cancelled while waiting/);
+	assert.equal(ran, false, 'fn 一次都不该跑');
+	assert.equal(gate.pendingOf('L'), 0, '等待者要从队列里摘掉,不能留成幽灵');
+	// 名额记账没被打乱: 持有者释放后新请求照常放行。
+	releaseHolder();
+	await holder;
+	let after = false;
+	await gate.run('L', true, async () => { after = true; });
+	assert.equal(after, true);
+	assert.equal(gate.inFlightOf('L'), 0);
+});
+
+test('入闸前就已 abort 的请求不占名额', async () => {
+	const gate = new RequestGate(1);
+	gate.setCap('L', 1);
+	const ac = new AbortController();
+	ac.abort();
+	let ran = false;
+	await assert.rejects(
+		gate.run('L', true, async () => { ran = true; }, ac.signal),
+		/Cancelled before acquiring/
+	);
+	assert.equal(ran, false);
+	assert.equal(gate.inFlightOf('L'), 0, '占了也只是马上还回来,索性别占');
+});
+
+test('已经拿到名额之后再 abort,由 fn 自己收尾,名额照常释放', async () => {
+	const gate = new RequestGate(1);
+	gate.setCap('L', 1);
+	const ac = new AbortController();
+	const p = gate.run('L', true, async () => {
+		ac.abort();
+		throw new Error('aborted inside fn');
+	}, ac.signal);
+	await assert.rejects(p, /aborted inside fn/);
+	assert.equal(gate.inFlightOf('L'), 0, 'finally 释放了名额');
+	assert.equal(gate.pendingOf('L'), 0);
+});
+
+test('不传 signal 时行为与旧版一致', async () => {
+	const gate = new RequestGate(1);
+	gate.setCap('L', 1);
+	const order: string[] = [];
+	let release!: () => void;
+	const holder = gate.run('L', true, () => new Promise<void>(r => { release = r; }));
+	await new Promise(r => setTimeout(r, 0));
+	const queued = gate.run('L', false, async () => { order.push('queued'); });
+	release();
+	await holder;
+	await queued;
+	assert.deepEqual(order, ['queued']);
+});

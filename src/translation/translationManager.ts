@@ -741,7 +741,7 @@ export class TranslationManager {
 					})),
 					glossary: this.glossaryFor(blocks.map(b => b.sourceText))
 				};
-				const response = await this.requestGate.run(this.laneFor(pageIndex), true, () => this.deps.translateRequest(request, signal));
+				const response = await this.requestGate.run(this.laneFor(pageIndex), true, () => this.deps.translateRequest(request, signal), signal);
 				for (const t of response.translations) {
 					const pb = protectedBlocks.find(p => p.block.id === t.id);
 					if (!pb || !t.translatedText.trim()) {
@@ -886,7 +886,7 @@ export class TranslationManager {
 					previousContext: '',
 					blocks: [{ id: block.id, type: block.type, text }],
 					glossary: this.glossaryFor([block.sourceText])
-				}, signal));
+				}, signal), signal);
 				const hit = resp.translations.find(t =>
 					looksTranslated(block.sourceText, t.translatedText, target)
 					&& reg.ok(t.translatedText));
@@ -1172,6 +1172,20 @@ export class TranslationManager {
 		if (this.disposed) {
 			return;
 		}
+		const jobKey = `page-${pageIndex}`;
+		// 「正在解绕的僵尸」必须先于所有早退判据识别出来 (2.5.8)。cancel() 对
+		// 运行中的任务只发 abort 信号,它要等自己的 run() 结算才离开
+		// scheduler.active —— 这期间页状态仍停在 'translating'、isScheduled 仍
+		// 为真,下面每一条早退都会把它当成"正在好好跑"。于是导航取消过的那一页
+		// 既不结束、也无法重新排期(promote 只对**排队中**的任务生效),用户翻
+		// 回去只看到原文,而它还占着全局与 lane 的槽位。这里等它真正解绕完,
+		// 再照常往下走。
+		if (this.scheduler.isAbortedActive(jobKey)) {
+			await this.scheduler.cancelAndWait(jobKey);
+			if (this.disposed) {
+				return;
+			}
+		}
 		const existing = this.pages.get(pageIndex);
 		if (existing && (existing.status === 'done' || existing.status === 'translating')) {
 			return;
@@ -1183,7 +1197,7 @@ export class TranslationManager {
 			&& Date.now() - (existing.extractingSince ?? Date.now()) < this.extractTimeoutMs * 2) {
 			return;
 		}
-		if (this.scheduler.isScheduled(`page-${pageIndex}`)) {
+		if (this.scheduler.isScheduled(jobKey)) {
 			return;
 		}
 
@@ -1479,7 +1493,7 @@ export class TranslationManager {
 				const lane = this.laneFor(pageIndex);
 				try {
 					const response = await this.requestGate.run(
-						lane, pageIndex === this.currentPage, () => this.deps.translateRequest(request, sig));
+						lane, pageIndex === this.currentPage, () => this.deps.translateRequest(request, sig), sig);
 					beat(); // progress: a request finished → re-arm the idle watchdog
 					this.scheduler.laneFeedback(lane, 'success');
 					return response;

@@ -1854,3 +1854,41 @@ test('同页同文块只翻译一次,其余镜像共享译文', async () => {
 	assert.equal(state.translations.get('page-0-block-2'), state.translations.get('page-0-block-0'), '重复块镜像代表块的译文');
 	manager.dispose();
 });
+
+test('被导航取消、仍在解绕的页任务不再挡回重新排期 (2.5.8)', async () => {
+	// cancel() 对运行中的任务只发 abort 信号,它要等自己的 run() 结算才离开
+	// scheduler.active。此前 ensurePage 一见 isScheduled 就早退,于是那一页
+	// 既不结束、也无法重新排期(promote 只对排队中的任务生效),用户翻回去
+	// 只看到原文。
+	let releaseFirst!: () => void;
+	let translateCalls = 0;
+	const { deps } = makeDeps({
+		translateRequest: async (request: TranslationRequest, signal?: AbortSignal): Promise<TranslationResponse> => {
+			translateCalls++;
+			if (translateCalls === 1) {
+				// 第一次请求挂住,模拟"停在闸上/在飞"的那一刻
+				await new Promise<void>(r => { releaseFirst = r; });
+				throw new Error('aborted in flight');
+			}
+			void signal;
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '译:' + b.text })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	const first = manager.ensurePage(3, 10);
+	await new Promise(r => setTimeout(r, 20));
+
+	// 用户翻走 → 这一页被取消,但它还挂在第一次请求上,没离开 active。
+	manager.cancelPage(3);
+	// 用户又翻回来。
+	const second = manager.ensurePage(3, 10, { foreground: true });
+	await new Promise(r => setTimeout(r, 5));
+	releaseFirst();
+	await first.catch(() => { /* 预期被取消 */ });
+	await second;
+
+	const state = manager.getPageState(3);
+	assert.equal(state?.status, 'done', '翻回来必须真的重新翻译,而不是被僵尸挡回');
+	assert.equal(state?.translations.size, 2);
+	manager.dispose();
+});
