@@ -73,7 +73,14 @@ function columnGapThreshold(fontSize: number): number {
 	// made the old threshold 25pt — left/right columns sharing a baseline were
 	// concatenated. A justified inter-word space stays under ~1.3em, so 1.6em
 	// still never splits inside a sentence.
-	return Math.max(fontSize * 1.6, 12);
+	//
+	// 下限 12 → 8 (2.5.6, jacc-ccta2020-p1 实证): 该页脚注是 **6pt**,页边那条
+	// 音频摘要小栏(x 24–99)与正文脚注(x 110–)之间只有 11pt —— 1.6em 本该
+	// 是 9.6pt、足以切开,却被 12 的下限抬过了头,于是那一行两栏文字焊成一句:
+	// 「Listen to this manuscript's Michael A. Wiener Cardiovascular Institute…」。
+	// 下限只对 7.5pt 以下的小字生效,而 1.6em 对 6pt 字仍远超任何两端对齐能
+	// 拉出的词距(约 0.6em),不会在句子中间误切。
+	return Math.max(fontSize * 1.6, 8);
 }
 
 function union(a: Rect, b: Rect): Rect {

@@ -255,3 +255,44 @@ test('虚词收尾规则不放过真正的页眉页脚', () => {
 	// 纯页码不受影响
 	assert.equal(isRunningHeadOrFoot([290, 23, 312, 33], H, 1, '451'), true);
 });
+
+// ---- 作者单位: 密度判据取代长度上限 (2.5.6) ---------------------------------
+
+test('20 位作者的长单位块必须被丢弃 —— 长度上限原先恰好在这里失效', () => {
+	// jacc-ccta2020-p1 实证: 这块 1647 字符、26 个机构词、49 个逗号,却因为
+	// 「> 600 字符即放弃」被原样翻译,连同利益声明共约 2700 字符前置信息。
+	const affiliation = [
+		'From the aNational Heart, Lung, and Blood Institute, National Institutes of Health, Bethesda, Maryland;',
+		'bDepartment of Pathology, CVPath Institute, Gaithersburg, Maryland;',
+		'cVascular Sciences Section, National Heart and Lung Institute, Imperial College London, London, United Kingdom;',
+		'dDivision of Cardiology and Department of Radiology, The George Washington University School of Medicine, Washington, DC;',
+		'eDepartment of Radiology, New York–Presbyterian Hospital and Weill Cornell Medicine, New York, New York;',
+		'fBritish Heart Foundation Centre for Cardiovascular Science, University of Edinburgh, Edinburgh, United Kingdom;',
+		'gEdinburgh Imaging, Queen’s Medical Research Institute University of Edinburgh, Edinburgh, United Kingdom;',
+		'hElucid Bioimaging, Boston, Massachusetts; iHeartFlow Inc., Redwood City, California;',
+		'jDivision of Cardiology, Emory University School of Medicine, Atlanta, Georgia;',
+		'kDivision of Cardiovascular Medicine, Radcliffe Department of Medicine, University of Oxford, Oxford, United Kingdom.'
+	].join(' ');
+	assert.ok(affiliation.length > 600, '这就是原上限拦不住的长度区间');
+	assert.equal(isMetadataBlock(affiliation), true);
+});
+
+test('正文段落偶尔提到两所机构,不能被当作者单位丢掉', () => {
+	// aquino2023-p2 实证的真·内容丢失: 589 字符、两处 “center”、3 个逗号,
+	// 正好落在旧规则(≤600 且 ≥2 机构词 ≥3 逗号)里,整段方法学开篇被丢弃 ——
+	// 快照只记前 40 字,块干脆不存在,所以一直没被发现。
+	const body = 'The protocol of this prospective, single-center, Health Insurance Portability '
+		+ 'and Accountability Act–compliant study was approved by the local institutional review '
+		+ 'board at this academic medical center, and written informed consent was obtained from '
+		+ 'each participant. Consecutive participants undergoing cardiac MRI for various indications '
+		+ 'were recruited for a same-day research photon-counting detector CT examination between '
+		+ 'July 2021 and January 2022. All participants underwent CT immediately after the '
+		+ 'cardiovascular MRI examination was finished.';
+	assert.ok(body.length < 600 && body.length > 400, '就在旧上限的射程之内');
+	assert.equal(isMetadataBlock(body), false, '机构词密度远低于单位块');
+});
+
+test('短单位块照旧丢弃 —— 密度判据不放松近距离的防守', () => {
+	const short = 'Department of Diagnostic Radiology, Jinling Hospital, Medical School of Nanjing University, Nanjing, China';
+	assert.equal(isMetadataBlock(short), true);
+});

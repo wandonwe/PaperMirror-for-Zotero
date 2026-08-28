@@ -574,3 +574,25 @@ test('标题式判据不误伤作者行、表格行标签与被截断的碎片',
 	assert.notEqual(typeOf('Clinical presentation'), 'heading', '实词没全大写,不是标题');
 	assert.notEqual(typeOf('Valentin Fuster'), 'heading', '停在虚词上的碎片不是标题');
 });
+
+// ---- 小字号页面的分栏间距 (2.5.6) ------------------------------------------
+
+test('6pt 脚注里 11pt 的间距要切开两栏 —— 下限 12 曾把它抬过头', () => {
+	// jacc-ccta2020-p1 实证: 页边那条音频摘要小栏(x 24–99)与正文脚注
+	// (x 110–)之间只有 11pt。1.6em 对 6pt 字是 9.6pt、足以切开,却被
+	// `Math.max(fontSize * 1.6, 12)` 的下限抬到 12,于是那一行焊成一句:
+	// 「Listen to this manuscript's Michael A. Wiener Cardiovascular Institute…」。
+	const sidebar: SpanItem = { text: 'Listen to this manuscript’s', rect: [24, 133, 99, 139], fontSize: 6 };
+	const body: SpanItem = { text: 'Michael A. Wiener Cardiovascular Institute, Marie-Josée and Henry R. Kravis Center', rect: [110, 133, 474, 139], fontSize: 6 };
+	const lines = groupIntoLines([sidebar, body], 576);
+	assert.equal(lines.length, 2, '两栏必须切开');
+	assert.equal(lineText(lines[0]!).trim(), 'Listen to this manuscript’s');
+});
+
+test('两端对齐拉出的词距仍然不会被误切', () => {
+	// 1.6em 对 6pt 字是 9.6pt,而两端对齐能拉出的词距约 0.6em(3.6pt)。
+	const a: SpanItem = { text: 'and has been a consultant to Abbott Vascular,', rect: [110, 133, 300, 139], fontSize: 6 };
+	const b: SpanItem = { text: 'Boston Scientific, CeloNova, Cook Medical', rect: [304, 133, 474, 139], fontSize: 6 };
+	const lines = groupIntoLines([a, b], 576);
+	assert.equal(lines.length, 1, '4pt 的词距不是栏边界');
+});

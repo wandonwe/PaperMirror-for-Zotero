@@ -61,26 +61,32 @@
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 10,
+		"text": "The protocol of this prospective, single"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 11,
 		"text": "Exclusion criteria were (a) refusal to c"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 11,
+		"readingIndex": 12,
 		"text": "Cardiac MRI Acquisition"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 12,
+		"readingIndex": 13,
 		"text": "Study participants were scanned on a 1.5"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 13,
+		"readingIndex": 14,
 		"text": "Flowchart shows inclusion of patients sc"
 	}
 ]

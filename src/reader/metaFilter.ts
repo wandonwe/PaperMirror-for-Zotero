@@ -112,15 +112,21 @@ function hasDegreeRoster(text: string): boolean {
 
 /** Affiliation line: institutions strung together with commas. */
 function looksLikeAffiliation(text: string): boolean {
-	if (text.length > 600) {
-		return false;
-	}
 	if (RE_AFFILIATION_HEAD.test(text)) {
 		return true;
 	}
 	const institutions = (text.match(INSTITUTION_WORDS) ?? []).length;
 	const commas = (text.match(/,/g) ?? []).length;
-	return institutions >= 2 && commas >= 3;
+	if (institutions < 2 || commas < 3) {
+		return false;
+	}
+	// 密度判据取代长度上限 (2.5.6, jacc-ccta2020-p1 语料实证)。原先是
+	// `text.length > 600 → 不是单位块`,可 20 位作者的单位块有 **1647 字符** ——
+	// 恰好在它最像作者单位的时候被这条上限否掉,连同利益声明共约 2700 字符的
+	// 前置信息被原样翻译。上限本意是防长正文段误伤,但长度本身分不开两者:
+	// 该页单位块 **26 个机构词 / 49 个逗号**,摘要 **1 个机构词 / 10 个逗号**。
+	// 改看密度 —— 机构词要随篇幅一起长,正文段偶尔提两所大学不会满足。
+	return institutions >= text.length / 200;
 }
 
 /**

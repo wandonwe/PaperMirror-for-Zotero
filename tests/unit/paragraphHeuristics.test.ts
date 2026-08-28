@@ -397,3 +397,14 @@ test('planMerges 仍容忍上下标造成的轻微重叠 (2.5.5)', () => {
 		{ text: 'noncardiac deaths were treated as a competing event.', column: 0, type: 'paragraph' }
 	]), [[0, 1]]);
 });
+
+test('版心左侧的页边内容自成一栏,右侧的不动 (2.5.6)', () => {
+	// jacc-ccta2020-p1: 版心 110–452,页边音频摘要小栏在 x 24–99。原先兜底
+	// 一律判 0 栏,小栏就与正文按 y 交错,把利益声明切成六块并夹在中间。
+	const bands = [{ left: 110, right: 452 }];
+	assert.equal(columnOf([24, 130, 99, 139], bands, 576), 1, '版心左侧 = 独立的一栏');
+	assert.equal(columnOf([110, 130, 474, 139], bands, 576), 0, '版心之内照旧');
+	// 只认左边: 右侧在语料里全是栏带没认全的表格单元格(chen2023-p5 的
+	// P 值列在 510 开外,而栏带只到 485),判成页边内容会把整张表的阅读序打乱。
+	assert.equal(columnOf([510, 130, 536, 139], bands, 576), 0, '版心右侧保持原兜底');
+});
