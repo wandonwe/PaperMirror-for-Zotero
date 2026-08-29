@@ -457,17 +457,29 @@ export class TranslationPane {
 				menu.appendChild(this.el('div', 'pm-bar-menu-title', section.title));
 			}
 			for (const item of section.items) {
-				const row = this.el('button', 'pm-bar-menu-item');
+				// div 而非 button (2.6.2): Zotero 阅读器文档里 HTML button 的内部
+				// 布局不随折行内容长高 —— 2.6.1 让标签折行后,行与行叠印、菜单
+				// 底部截字。div 没有 UA 内部盒,折行即长高;键盘可达性用
+				// tabindex + Enter/Space 补回。
+				const row = this.el('div', 'pm-bar-menu-item');
 				row.setAttribute('role', 'menuitemradio');
+				row.setAttribute('tabindex', '0');
 				row.setAttribute('aria-checked', String(item.checked));
 				if (item.badge) {
 					row.appendChild(item.badge);
 				}
 				row.appendChild(this.el('span', 'pm-bar-menu-label', item.label));
-				row.addEventListener('click', (event) => {
+				const pick = (event: Event): void => {
 					event.stopPropagation();
 					this.closeBarMenu();
 					item.onPick();
+				};
+				row.addEventListener('click', pick);
+				row.addEventListener('keydown', (event) => {
+					if ((event as KeyboardEvent).key === 'Enter' || (event as KeyboardEvent).key === ' ') {
+						(event as KeyboardEvent).preventDefault();
+						pick(event);
+					}
 				});
 				menu.appendChild(row);
 			}
