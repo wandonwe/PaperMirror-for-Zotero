@@ -183,3 +183,28 @@ test('正文 "PM2.5" 不得满足 ⟦PM2⟧ 的裸形态: 丢失照实报告,res
 	const bareRestored = restoreFormulas(bareText, [placeholders[1]] as never);
 	assert.ok(bareRestored.includes('$\\beta_1$'), '真实裸形态照常回填');
 });
+
+// ---- 2.5.12: 中位数[IQR] 不当引用 (wu2026 摘要实证) --------------------------
+
+test('a bracket group after a bare number is DATA, not a citation (Likert 中位数[IQR])', () => {
+	const input = 'higher scores for overall quality (5 [4, 5] vs. 3 [3, 4]), sharpness (5 [4, 5] vs. 3 [1, 4])';
+	const { text, placeholders } = protectFormulas(input);
+	// None of the [a, b] groups may be masked — each follows a bare number.
+	assert.ok(text.includes('[4, 5]'), 'median[IQR] must stay in the request text');
+	assert.ok(text.includes('[3, 4]'));
+	assert.equal(placeholders.filter(p => p.original.startsWith('[')).length, 0);
+});
+
+test('bracket citations after a WORD are still masked', () => {
+	const { text, placeholders } = protectFormulas('improve early intervention outcomes [8, 9]. Prior work [15] agrees.');
+	assert.ok(!text.includes('[8, 9]'));
+	assert.ok(!text.includes('[15]'));
+	assert.equal(placeholders.filter(p => p.original.startsWith('[')).length, 2);
+});
+
+test('paren citations keep the same digit-context rule', () => {
+	const masked = protectFormulas('as shown in previous studies (12).');
+	assert.ok(!masked.text.includes('(12)'), 'word-preceded paren citation masked');
+	const data = protectFormulas('a median score of 3 (1–5) was observed.');
+	assert.ok(data.text.includes('(1–5)'), 'number-preceded paren group is data, not a citation');
+});

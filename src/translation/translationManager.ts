@@ -240,6 +240,17 @@ export function hasEnglishResidue(text: string): boolean {
 				return true;
 			}
 		}
+		// 中性 token 不打断连跑 (2.5.12, wu2026-p4 实证): "with a standard ROI
+		// area of 3 mm² for polyps ≥5 mm in diameter" 这段典型残留被 'a'(单字母
+		// 不满足 {2,})、'ROI'(全大写)、'3'(纯数字)各重置一次,6 词连跑永远
+		// 凑不满,夹生译文年久失修。数字/符号、单字母 (a, I)、全大写缩写
+		// (ROI, CT, PCD-CT) 本就同时出现在残留英文与合格译文里,不是"已翻译"
+		// 的证据 —— 既不计数也不重置。含 CJK 的 token 仍然重置: 中文字符才是
+		// 真正的翻译证据,否则整段中文里零星散布的 6 个英文虚词会被误连成跑。
+		else if (!/[㐀-鿿]/.test(tok)
+			&& (w === '' || /^[A-Za-z]$/.test(w) || /^[A-Z]{2,}(?:-[A-Z0-9]+)*$/.test(w))) {
+			// neutral: keep the run
+		}
 		else {
 			run = 0;
 		}
@@ -2168,14 +2179,43 @@ export class TranslationManager {
 						glossary: this.glossaryFor([block.sourceText]),
 						plain: true
 					}, signal);
-					const hit = resp.translations.find(t =>
-						looksTranslated(block.sourceText, t.translatedText, target)
-						&& pb.reg.ok(t.translatedText));
+					const translatedHit = resp.translations.find(t =>
+						looksTranslated(block.sourceText, t.translatedText, target));
+					const hit = translatedHit && pb.reg.ok(translatedHit.translatedText) ? translatedHit : undefined;
 					if (hit) {
 						const restored = pb.reg.restore(hit.translatedText);
 						state.translations.set(block.id, restored);
 						results.push({ id: block.id, translatedText: restored });
 						logger.info(MODULE, `Page ${pageIndex + 1}: plain-mode recovery rescued ${block.id}`);
+					}
+					else if (translatedHit && pb.reg.count > 0 && canSpendFinal()) {
+						// 占位符降级重试 (2.5.12, wu2026 摘要实证): 译文本身合格
+						// (looksTranslated 通过),只是占位符清单被模型排坏 ——
+						// 掩码密集的块 (Likert 中位数 + 引用 + 统计式混在一段)
+						// 每一轮都死在 reg.ok 上,整段永远留英。链路最后一环改为
+						// 【不掩码】重发一次: 引用与统计式直接交给模型原样保留,
+						// 只验 looksTranslated。这一块失去公式逐字节保证,但另一
+						// 边的代价是整段不翻;只在掩码链已经失败后才走到这里。
+						const bare = await countedTranslate({
+							pageIndex,
+							sourceLanguage: source,
+							targetLanguage: target,
+							documentTitle: this.deps.getDocumentTitle(),
+							previousContext: '',
+							blocks: [{ id: block.id, type: block.type, text: block.sourceText }],
+							glossary: this.glossaryFor([block.sourceText]),
+							plain: true
+						}, signal);
+						const bareHit = bare.translations.find(t =>
+							looksTranslated(block.sourceText, t.translatedText, target));
+						if (bareHit) {
+							state.translations.set(block.id, bareHit.translatedText);
+							results.push({ id: block.id, translatedText: bareHit.translatedText });
+							logger.info(MODULE, `Page ${pageIndex + 1}: unmasked plain recovery rescued ${block.id} (placeholder chain had failed)`);
+						}
+						else {
+							state.rejectReasons?.set(block.id, 'plain-placeholder');
+						}
 					}
 					else if (resp.translations.length) {
 						state.rejectReasons?.set(block.id, 'plain-validator');
