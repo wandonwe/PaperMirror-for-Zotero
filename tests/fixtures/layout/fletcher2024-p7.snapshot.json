@@ -1,0 +1,44 @@
+[
+	{
+		"type": "caption",
+		"column": -1,
+		"readingIndex": 0,
+		"text": "Figure 5: CT images in an 87-year-old ma"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 1,
+		"text": "examined radiomic feature stability acro"
+	},
+	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 2,
+		"text": "Contrast-enhanced"
+	},
+	{
+		"type": "caption",
+		"column": -1,
+		"readingIndex": 3,
+		"text": "Figure 6:CT image (reconstruction kernel"
+	},
+	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 4,
+		"text": "Multienergy CT Imaging"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 5,
+		"text": "Previous studies have established the cl"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 6,
+		"text": "High-pitch multienergy imaging can be pe"
+	}
+]

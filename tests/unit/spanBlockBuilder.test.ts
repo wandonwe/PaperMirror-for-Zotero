@@ -693,3 +693,29 @@ test('字号不同或相距过远的 title 块不合并 (期刊刊头 vs 文章�
 	assert.ok(main);
 	assert.ok(!main!.sourceText.includes('RADIOLOGY JOURNAL'), '不同字号/远距的块绝不合并');
 });
+
+test('全局沟按分带证据限定纵向作用域 (2.6.3, fletcher2024-p5 图注切裂)', () => {
+	// 页面主体是双栏 (全局投票找得到沟 ~300),顶部图注横贯栏沟;注首行
+	// "Figure 3:" 与注文之间恰有词隙落在沟 x 上。不限 y 的全局沟会把这一行
+	// 拦腰切开 —— 分带知道沟的通道只在正文段,图注行必须保持一行。
+	const items: SpanItem[] = [];
+	// 图注区 (y 740..700): 全宽行 + 一行带 297 处词隙。
+	items.push(span('Figure 3:', 258, 740, 37, 8));
+	items.push(span('Energy-integrating detector CT images in a patient', 300, 740, 246, 8));
+	for (let i = 1; i < 4; i++) {
+		items.push(span('caption body line crossing the gutter with more words here', 258, 740 - i * 10, 288, 8));
+	}
+	// 双栏正文 (y 660..40)。
+	for (let y = 660; y >= 40; y -= 12) {
+		items.push(span('left column body text line with words', 48, y, 244, 10));
+		items.push(span('right column body text line with words', 306, y, 240, 10));
+	}
+	const lines = groupIntoLines(items, 594, 792);
+	const capLine = lines.find(l => lineText(l).startsWith('Figure 3:'));
+	assert.ok(capLine, 'caption line exists');
+	assert.ok(lineText(capLine!).includes('Energy-integrating'),
+		`the caption label must stay joined to its text: "${lineText(capLine!)}"`);
+	// 正文行仍按沟分开。
+	const bodyRow = lines.filter(l => lineText(l).includes('body text line'));
+	assert.ok(bodyRow.every(l => l.rect[2] - l.rect[0] < 260), 'body columns stay split at the gutter');
+});

@@ -681,42 +681,12 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 80,
-		"text": "5 mm), PCD-CT"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 81,
-		"text": "showed mark-"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 82,
 		"text": "edly improved sensitivity [71.4% (95% CI"
 	},
 	{
 		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 83,
-		"text": "52.9%-84.7%);"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 84,
-		"text": "20/28] compared to EID-CT"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 85,
-		"text": "[17.9% (95% CI: 6.8%-37.6%);"
-	},
-	{
-		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 86,
+		"readingIndex": 81,
 		"tableRow": 8,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -725,7 +695,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 87,
+		"readingIndex": 82,
 		"tableRow": 9,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -734,7 +704,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 88,
+		"readingIndex": 83,
 		"tableRow": 10,
 		"tableCol": 5,
 		"mode": "translate",
@@ -743,7 +713,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 89,
+		"readingIndex": 84,
 		"tableRow": 11,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -752,7 +722,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 90,
+		"readingIndex": 85,
 		"tableRow": 13,
 		"tableCol": 5,
 		"mode": "translate",
@@ -761,7 +731,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 91,
+		"readingIndex": 86,
 		"tableRow": 14,
 		"tableCol": 5,
 		"mode": "translate",
@@ -770,13 +740,13 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 92,
+		"readingIndex": 87,
 		"text": "for both small polyps (≤5 mm: median 3 ["
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 93,
+		"readingIndex": 88,
 		"tableRow": 10,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -785,7 +755,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 94,
+		"readingIndex": 89,
 		"tableRow": 14,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -794,13 +764,13 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 95,
+		"readingIndex": 90,
 		"text": "confidence"
 	},
 	{
 		"type": "title",
 		"column": 2,
-		"readingIndex": 96,
+		"readingIndex": 91,
 		"text": "1 3"
 	}
 ]

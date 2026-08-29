@@ -331,9 +331,21 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 	// 网格化只能看到跨列碎片。行还不存在,带数用原始 span 矩形近似 —— 只作
 	// 触发判据,真正的分栏证据仍是分带栏沟本身。
 	const rawBands = detectColumns(items.map(i => i.rect), pageWidth, pageHeight);
+	// 全局沟按分带证据限定纵向作用域 (2.6.3, fletcher2024-p5 实证): 全局投票
+	// 的沟从前不限 y,整页每一行都按它切 —— 图注横贯栏沟的页上,注文行恰有
+	// 词间隙落在沟 x 处就被拦腰切开("Figure 3:" 被切离注文,注文并进邻栏
+	// 正文,译文注文叠印原文)。分带检测知道这条沟的真实纵向通道
+	// ([433..21],图注区不在内): 有 ±20pt 对得上的分带沟就用它的跨度(同
+	// 一 x 被打断成多段时逐段生效),分带没看见的沟保持不限 (老行为兜底)。
+	const bandedAll = detectGuttersBanded(rowRects, pageWidth);
 	const gutters: BandedGutter[] = bandedColumnStamp(rowRects, pageWidth, pageHeight, rawBands.length)
-		? detectGuttersBanded(rowRects, pageWidth)
-		: detectGutters(rowRects, pageWidth).map(x => ({ x, top: Infinity, bottom: -Infinity }));
+		? bandedAll
+		: detectGutters(rowRects, pageWidth).flatMap((x): BandedGutter[] => {
+			const matches = bandedAll.filter(g => Math.abs(g.x - x) <= 20);
+			return matches.length
+				? matches.map(g => ({ x, top: g.top, bottom: g.bottom }))
+				: [{ x, top: Infinity, bottom: -Infinity }];
+		});
 
 	const lines: SpanLine[] = [];
 	for (const row of rows) {

@@ -568,3 +568,25 @@ test('planMerges 允许图注在断词连字符处接回下一段 (2.5.7)', () =
 		{ text: 'the following body paragraph starts here', column: 0, type: 'paragraph' }
 	]), [[0], [1]]);
 });
+
+test('bandedColumnStamp rescues a single-gutter page under a full-width block (2.6.3, fletcher2024-p7)', () => {
+	// 上半页全宽内容 (图/图注,盖死全局投票),下半页双栏正文 —— 分带只找到
+	// 一条合格沟。2.6.2 前的早门 (gutters.length < 2) 直接判 null,整节逐行
+	// 拉链;现在单沟页走触发判定,globalMissed (全局 0 < 1) 抢救。
+	const rows: Rect[][] = [];
+	for (let y = 760; y >= 470; y -= 12) {
+		rows.push([[54, y - 10, 558, y]]); // 全宽行,盖住栏沟
+	}
+	for (let y = 450; y >= 40; y -= 12) {
+		rows.push([[54, y - 10, 292, y], [320, y - 10, 558, y]]);
+	}
+	const stamp = bandedColumnStamp(rows, PAGE_W, 792);
+	assert.ok(stamp, 'single-gutter rescue must activate');
+	assert.equal(stamp!([54, 200, 292, 210]), 0, 'body left column');
+	assert.equal(stamp!([320, 200, 558, 210]), 1, 'body right column');
+	assert.equal(stamp!([54, 600, 558, 610]), -1, 'full-width top zone separates');
+	// 近邻并入 (2.6.3): regime 顶界外 ≤24pt 的不跨沟块并入 (左栏先起笔的头行);
+	// 更远的仍是 -1。
+	assert.equal(stamp!([54, 452, 292, 462]), 0, 'a left line just above the regime joins it');
+	assert.equal(stamp!([54, 500, 292, 510]), -1, 'far above the regime stays a separator');
+});

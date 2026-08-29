@@ -7,26 +7,20 @@
 	},
 	{
 		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 1,
-		"text": "Marilyn J. Siegel, MD • Juan Carlos Rami"
-	},
-	{
-		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 2,
+		"readingIndex": 1,
 		"text": "Performing CT in children comes with uni"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 3,
+		"readingIndex": 2,
 		"text": "The operational efficiency of CT, combin"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 4,
+		"readingIndex": 3,
 		"text": "In contrast, PCD CT uses semiconductors "
 	}
 ]

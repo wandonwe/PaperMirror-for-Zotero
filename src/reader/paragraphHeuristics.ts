@@ -570,7 +570,12 @@ export function bandedColumnStamp(
 	// only this page-structure decision drops the short ones.
 	const minSpan = (pageHeight > 0 ? pageHeight : 792) * 0.2;
 	const gutters = detectGuttersBanded(rows, pageWidth).filter(g => g.top - g.bottom >= minSpan);
-	if (gutters.length < 2) {
+	// 2.6.3 (fletcher2024-p7 实证): 门槛 <2 → 0。此前"只有一条合格分带沟"
+	// 直接退全局,但 p7 正是【单条正文沟 + 全局投票全盲 (detectGutters=[]) +
+	// detectColumns 焊成单带】—— 两个抢救触发都会命中,却死在这道早门上,
+	// 底部双栏正文整节逐行拉链。单沟页走到下面的触发判定: 均匀页在那里
+	// 照旧 null (全局看得见沟 → 不抢救),逐字节不变。
+	if (!gutters.length) {
 		return null;
 	}
 	// Group gutters that overlap vertically into regimes.
@@ -689,8 +694,29 @@ export function bandedColumnStamp(
 		// Outside every regime (page furniture above the top band, a heading in
 		// the transition gap between two bands): treat as a full-width separator
 		// so reading order flushes the band above before the band below.
+		// 近邻并入 (2.6.3, fletcher2024-p7 实证): 栏沟通道要两侧都有字才测得到,
+		// 双栏区左栏先于右栏起笔的头一两行落在 regime 顶界之外,骑界块被判 -1
+		// 插进阅读序中间。距 regime 边界 ≤24pt (约两行) 且不跨该 regime 任何
+		// 栏沟的块并入该 regime;更远的 (表格区、页面家具) 仍是 -1 分隔,
+		// p11 Table 4 的 -1 语义不受影响。
 		if (rank < 0) {
-			return -1;
+			let nearDist = Infinity;
+			let nearRank = -1;
+			for (let i = 0; i < regimes.length; i++) {
+				const r = regimes[i]!;
+				const d = midY > r.top ? midY - r.top : r.bottom - midY;
+				if (d < nearDist) {
+					nearDist = d;
+					nearRank = i;
+				}
+			}
+			if (nearRank >= 0 && nearDist <= 24
+				&& !regimes[nearRank]!.xs.some(x => rect[0] < x - 8 && rect[2] > x + 8)) {
+				rank = nearRank;
+			}
+			else {
+				return -1;
+			}
 		}
 		const r = regimes[rank]!;
 		// A block that straddles one of this regime's gutters spans the whole

@@ -1,0 +1,1138 @@
+{
+ "source": "fletcher2024",
+ "page": 5,
+ "pageWidth": 594,
+ "pageHeight": 783,
+ "items": [
+  {
+   "text": "Fletcher et al",
+   "rect": [
+    506.02274114435363,
+    744.715913252397,
+    545.7954649491743,
+    752.7159056230024
+   ],
+   "fontSize": 7.999992370605469
+  },
+  {
+   "text": "Radiology:",
+   "rect": [
+    47.97727411443536,
+    21.693195689808217,
+    77.53408605402166,
+    28.69319291548298
+   ],
+   "fontSize": 6.999997225674765
+  },
+  {
+   "text": "Volume 310: Number 3�March 2024",
+   "rect": [
+    79.10226995294742,
+    21.693195689808217,
+    179.67045177112925,
+    28.69319291548298
+   ],
+   "fontSize": 6.999997225674765
+  },
+  {
+   "text": "■",
+   "rect": [
+    182.9090881347656,
+    23.70454684170811,
+    185.02272865988988,
+    27.20454545454544
+   ],
+   "fontSize": 3.4999986128373273
+  },
+  {
+   "text": "radiology.rsna.org",
+   "rect": [
+    188.54544899680394,
+    21.693195689808217,
+    236.76135323264378,
+    28.69319291548298
+   ],
+   "fontSize": 6.999997225674765
+  },
+  {
+   "text": "5",
+   "rect": [
+    541.6022560813209,
+    21.4773080999201,
+    546.4204372059214,
+    29.477300470525602
+   ],
+   "fontSize": 7.999992370605501
+  },
+  {
+   "text": "estimation of airway wall thickness over EID CT.",
+   "rect": [
+    47.97727411443536,
+    722.2045419866387,
+    240.29544483531603,
+    732.2045454545454
+   ],
+   "fontSize": 10.000003467906708
+  },
+  {
+   "text": "Another phantom study demonstrated that chronic",
+   "rect": [
+    47.97727411443536,
+    710.2272699529474,
+    240.29544483531603,
+    720.227273420854
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "obstructive pulmonary disease biomarker quantifi-",
+   "rect": [
+    47.97727411443536,
+    698.1818223433061,
+    240.27272311123932,
+    708.1818154074928
+   ],
+   "fontSize": 9.999993064186697
+  },
+  {
+   "text": "cation was substantially more accurate with PCCT",
+   "rect": [
+    47.97727411443536,
+    686.2045503096147,
+    240.28408397327766,
+    696.2045433738014
+   ],
+   "fontSize": 9.999993064186697
+  },
+  {
+   "text": "(53). Collectively, these findings underscore the po-",
+   "rect": [
+    47.97727411443536,
+    674.2272678722035,
+    240.29544483531603,
+    684.22727134011
+   ],
+   "fontSize": 10.000003467906481
+  },
+  {
+   "text": "tential of PCCT to improve respiratory diagnostics,",
+   "rect": [
+    47.97727411443536,
+    662.249995838512,
+    240.25000138716263,
+    672.2499993064185
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "particularly emphasizing its ability to depict and",
+   "rect": [
+    47.97727411443536,
+    650.1931769631125,
+    240.2272796630859,
+    660.1931804310191
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "quantify airways in the context of chronic obstruc-",
+   "rect": [
+    47.97727411443536,
+    638.215904929421,
+    240.30680569735438,
+    648.2159083973277
+   ],
+   "fontSize": 10.000003467906708
+  },
+  {
+   "text": "tive pulmonary disease.",
+   "rect": [
+    47.97727411443536,
+    626.2386328957297,
+    135.93181956898079,
+    636.2386363636363
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "PCCT for Evaluation of Lung",
+   "rect": [
+    47.97727411443536,
+    604.124995838512,
+    181.48863705721766,
+    616.1249999999999
+   ],
+   "fontSize": 12.000004161487936
+  },
+  {
+   "text": "Parenchyma",
+   "rect": [
+    47.97727411443536,
+    592.0795378251509,
+    106.4545440673828,
+    604.079531582919
+   ],
+   "fontSize": 11.999993757768152
+  },
+  {
+   "text": "High-spatial-resolution CT is essential to accu-",
+   "rect": [
+    47.97727411443536,
+    578.2613587812943,
+    240.23864052512425,
+    588.2613622492008
+   ],
+   "fontSize": 10.000003467906481
+  },
+  {
+   "text": "rately diagnose ILDs (54). Given recent advances",
+   "rect": [
+    47.97727411443536,
+    566.2045607133344,
+    240.32954822887072,
+    576.2045537775213
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "in",
+   "rect": [
+    47.97727411443536,
+    554.2386391379615,
+    55.761368491432876,
+    564.2386322021483
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "ILD",
+   "rect": [
+    62.704540599476196,
+    554.2386391379615,
+    79.3750034679066,
+    564.2386322021483
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "therapy,",
+   "rect": [
+    86.22727827592328,
+    554.2386391379615,
+    116.57955863259053,
+    564.2386322021483
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "including",
+   "rect": [
+    123.45453435724428,
+    554.2386391379615,
+    159.89771409468216,
+    564.2386322021483
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "antifibrotic",
+   "rect": [
+    166.80681402033022,
+    554.2386391379615,
+    209.29544969038525,
+    564.2386322021483
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "agents",
+   "rect": [
+    216.10228105024854,
+    554.2386391379615,
+    239.90910269997332,
+    564.2386322021483
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "(55,56), accurate noninvasive diagnosis of ILDs",
+   "rect": [
+    47.97727411443536,
+    542.2613567005503,
+    240.32954822887072,
+    552.2613497647371
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "has become paramount (57). Using CT-pathologic",
+   "rect": [
+    47.97727411443536,
+    530.2840950705788,
+    240.29544483531603,
+    540.2840881347656
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "correlations, patterns of ILDs at CT have been well",
+   "rect": [
+    47.97727411443536,
+    518.2272657914594,
+    240.32954822887072,
+    528.2272588556463
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "studied and described, often obviating the need for",
+   "rect": [
+    47.97727411443536,
+    506.2500041614878,
+    240.28408397327766,
+    516.2499972256746
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "invasive lung biopsy. However, at EID CT, dif-",
+   "rect": [
+    47.97727411443536,
+    494.2727425315163,
+    240.29544483531603,
+    504.272735595703
+   ],
+   "fontSize": 9.999993064186697
+  },
+  {
+   "text": "ferentiation of these patterns can be difficult even",
+   "rect": [
+    47.97727411443536,
+    482.2954496903852,
+    240.27272311123932,
+    492.29545315829176
+   ],
+   "fontSize": 10.000003467906538
+  },
+  {
+   "text": "among ILD experts (58).",
+   "rect": [
+    47.97727411443536,
+    470.25001248446375,
+    143.69318181818178,
+    480.2500055486505
+   ],
+   "fontSize": 9.999993064186754
+  },
+  {
+   "text": "PCCT can potentially improve ILD diagnostic",
+   "rect": [
+    59.97726787220347,
+    458.2727300470525,
+    240.27273351495913,
+    468.27272311123926
+   ],
+   "fontSize": 9.999993064186754
+  },
+  {
+   "text": "accuracy by increasing the conspicuity of subtle",
+   "rect": [
+    47.97727411443536,
+    446.2954476096413,
+    240.25000138716263,
+    456.29544067382807
+   ],
+   "fontSize": 9.999993064186754
+  },
+  {
+   "text": "ILD findings. Several recent studies have found",
+   "rect": [
+    47.97727411443536,
+    434.3181859796697,
+    240.32954822887072,
+    444.3181790438565
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "improved visualization of reticulations, ground-glass opacities,",
+   "rect": [
+    47.97727411443536,
+    422.2613567005504,
+    288.38634837757456,
+    432.2613497647372
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "traction bronchiectasis, and mosaic attenuation for multiple",
+   "rect": [
+    47.97727411443536,
+    410.29544552889735,
+    288.3749875155362,
+    420.29544899680394
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "thoracic radiologists (Figs 3, 4) (30,32,33). More importantly,",
+   "rect": [
+    47.97727411443536,
+    398.31819430264557,
+    288.4204517711292,
+    408.3181873668323
+   ],
+   "fontSize": 9.999993064186754
+  },
+  {
+   "text": "enhanced visibility and improved confidence in classifying im-",
+   "rect": [
+    47.97727411443536,
+    386.34093267267394,
+    288.3977300470525,
+    396.34092573686075
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "aging abnormalities have led to a reduction of indeterminate",
+   "rect": [
+    47.97727411443536,
+    374.28410339355463,
+    288.4204517711292,
+    384.28409645774144
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "cases (32) and disease reclassification (30). Inoue et al (32) as-",
+   "rect": [
+    47.97727411443536,
+    362.30684176358307,
+    288.4318334406072,
+    372.3068348277698
+   ],
+   "fontSize": 9.999993064186754
+  },
+  {
+   "text": "sessed three thoracic radiologists� confidence in evaluating 30",
+   "rect": [
+    47.97727411443536,
+    350.3295385187322,
+    288.38634837757456,
+    360.329531582919
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "patients with suspected ILD using same-day PCCT and EID",
+   "rect": [
+    47.97727411443536,
+    338.3522768887606,
+    288.4204517711292,
+    348.3522699529474
+   ],
+   "fontSize": 9.999993064186754
+  },
+  {
+   "text": "CT and found a lower number of patients classified as hav-",
+   "rect": [
+    47.97727411443536,
+    326.30679806795985,
+    288.38634837757456,
+    336.30680153586644
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "ing indeterminate usual interstitial pneumonia and a higher",
+   "rect": [
+    47.97727411443536,
+    314.3295364379882,
+    288.3977300470525,
+    324.3295399058948
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "number of patients with probable usual interstitial pneumonia",
+   "rect": [
+    47.97727411443536,
+    302.3522852117365,
+    288.38634837757456,
+    312.35227827592325
+   ],
+   "fontSize": 9.999993064186754
+  },
+  {
+   "text": "at PCCT. Gaillandre et al (30) compared baseline dual-source",
+   "rect": [
+    47.97727411443536,
+    290.3750235817648,
+    288.4204517711292,
+    300.37501664595163
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "EID CT with dual-source PCCT at 10�23-month follow-up",
+   "rect": [
+    47.97727411443536,
+    278.31819430264557,
+    288.4999986128373,
+    288.3181873668324
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "in 112 patients with stable ILD. In addition to PCCT demon-",
+   "rect": [
+    47.97727411443536,
+    266.34093267267394,
+    288.38634837757456,
+    276.34092573686075
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "strating significantly improved visualization of micronodules,",
+   "rect": [
+    47.97727411443536,
+    254.37497988614163,
+    288.38634837757456,
+    264.37498335404825
+   ],
+   "fontSize": 10.000003467906623
+  },
+  {
+   "text": "linear opacities, intralobular reticulation, bronchiectasis, bron-",
+   "rect": [
+    47.97727411443536,
+    242.39771825617007,
+    288.44319430264557,
+    252.39772172407672
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "chiolectasis, and honeycombing, the authors reported reclas-",
+   "rect": [
+    47.97727411443536,
+    230.3408889770507,
+    288.44319430264557,
+    240.34089244495735
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "sification of four patients from nonfibrotic to fibrotic ILD.",
+   "rect": [
+    47.97727411443536,
+    218.36362734707916,
+    288.4204517711292,
+    228.36363081498578
+   ],
+   "fontSize": 10.000003467906623
+  },
+  {
+   "text": "PCCT improved feature visualization despite a 27% lower ra-",
+   "rect": [
+    47.97727411443536,
+    206.3863761208274,
+    288.44319430264557,
+    216.38636918501422
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "diation dose. In 61 patients with rheumatoid arthritis�related",
+   "rect": [
+    47.97727411443536,
+    194.40911449085576,
+    288.3977300470525,
+    204.40910755504257
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "ILD, Marton et al (33) found that ultrahigh-spatial-resolution",
+   "rect": [
+    47.97727411443536,
+    182.36363567005498,
+    288.4545551646839,
+    192.36363913796163
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "PCCT at 0.2-mm section thickness (using routine radiation dose)",
+   "rect": [
+    47.97727411443536,
+    170.3863740400834,
+    288.4090909090909,
+    180.38637750799006
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "displayed reticulation and bronchiectasis (but not ground-glass",
+   "rect": [
+    47.97727411443536,
+    158.40907079523254,
+    288.38634837757456,
+    168.4090742631392
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "opacities and honeycombing) better than routine-resolution",
+   "rect": [
+    47.97727411443536,
+    146.43180916526097,
+    288.4204517711292,
+    156.43181263316762
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "but low-radiation-dose PCCT at 0.4-mm section thickness.",
+   "rect": [
+    47.97727411443536,
+    134.37497988614172,
+    278.03410616787994,
+    144.37498335404825
+   ],
+   "fontSize": 10.000003467906538
+  },
+  {
+   "text": "In addition to improving conventional ILD imaging, PCCT",
+   "rect": [
+    59.97726787220347,
+    122.39771825617005,
+    288.40908050537104,
+    132.3977217240767
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "may also enhance visualization of post�COVID-19 lung ab-",
+   "rect": [
+    47.97727411443536,
+    110.4318174882368,
+    288.46591602672225,
+    120.43182095614344
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "normalities. Prayer et al (34) studied 20 patients with post�",
+   "rect": [
+    47.97727411443536,
+    98.37498820911755,
+    288.38634837757456,
+    108.37499167702418
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "COVID-19 symptoms with same-day PCCT (1.0-, 0.4-, and",
+   "rect": [
+    47.97727411443536,
+    86.39772657914598,
+    288.46591602672225,
+    96.39773004705252
+   ],
+   "fontSize": 10.000003467906538
+  },
+  {
+   "text": "0.2-mm section thicknesses) and EID CT (1.0-mm section",
+   "rect": [
+    47.97727411443536,
+    74.42042333429511,
+    288.44319430264557,
+    84.42042680220175
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "thickness) and demonstrated that PCCT revealed additional",
+   "rect": [
+    47.97727411443536,
+    62.44316170432355,
+    288.3977300470525,
+    72.44316517223008
+   ],
+   "fontSize": 10.00000346790653
+  },
+  {
+   "text": "lung abnormalities in 50%. The most frequent additional",
+   "rect": [
+    47.97727411443536,
+    50.38633242520418,
+    288.4204517711292,
+    60.38633589311082
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "lung abnormalities detected with PCCT were bronchiolectasis",
+   "rect": [
+    305.9545482288707,
+    422.57953366366297,
+    546.3977258855646,
+    432.57953713156957
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "and reticulations (in 50% and 35% of patients, respectively).",
+   "rect": [
+    305.9545482288707,
+    410.60227203369135,
+    546.3863650235262,
+    420.60227550159794
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "Fine reticulations were observed at PCCT in areas classified as",
+   "rect": [
+    305.9545482288707,
+    398.6250104037197,
+    546.3636224920099,
+    408.6250138716264
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "ground-glass opacities at EID CT in 30% of patients.",
+   "rect": [
+    305.9545482288707,
+    386.5681811246004,
+    507.73864746093744,
+    396.56818459250707
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "Jungblut et al (35) performed an important study addressing",
+   "rect": [
+    317.95453158291895,
+    374.6022803566672,
+    546.3522616299715,
+    384.6022838245738
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "the ability of PCCT to diagnose ILD at lower radiation doses.",
+   "rect": [
+    305.9545482288707,
+    362.6250187266956,
+    546.3636224920099,
+    372.6250221946022
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "They compared dual-source EID CT at baseline with PCCT at",
+   "rect": [
+    305.9545482288707,
+    350.6477154818448,
+    546.454551003196,
+    360.6477189497514
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "follow-up. Single-tube image reconstruction was used to pro-",
+   "rect": [
+    305.9545482288707,
+    338.59092781760467,
+    546.3977258855646,
+    348.5909312855113
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "duce EID CT images at 33% and 66% of the original dose.",
+   "rect": [
+    305.9545482288707,
+    326.61362457275385,
+    546.4090867476028,
+    336.61362804066044
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "The radiation dose of PCCT was similar to the 33% CT image,",
+   "rect": [
+    305.9545482288707,
+    314.6363629427822,
+    546.4204684170809,
+    324.6363664106889
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "but the image noise, image quality, and diagnostic accuracy were",
+   "rect": [
+    305.9545482288707,
+    302.67046217484904,
+    546.4204684170809,
+    312.67046564275563
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "similar compared with full-dose EID CT in 80 patients with",
+   "rect": [
+    305.9545482288707,
+    290.61363289572967,
+    546.3522616299715,
+    300.6136363636363
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "systemic sclerosis. This is important in the setting of recurring",
+   "rect": [
+    305.9545482288707,
+    278.63637126575816,
+    546.3295399058948,
+    288.63637473366475
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "CT follow-up for patients with ILD and is in harmony with",
+   "rect": [
+    305.9545482288707,
+    266.6591096357866,
+    546.4090867476028,
+    276.65911310369313
+   ],
+   "fontSize": 10.000003467906538
+  },
+  {
+   "text": "previously cited studies (30,32).",
+   "rect": [
+    305.9545482288707,
+    254.6818063909357,
+    426.03409507057876,
+    264.6818098588423
+   ],
+   "fontSize": 10.000003467906623
+  },
+  {
+   "text": "Emphysema may benefit from the higher spatial resolution",
+   "rect": [
+    317.95453158291895,
+    242.62501872669566,
+    546.3409007679331,
+    252.62502219460228
+   ],
+   "fontSize": 10.000003467906623
+  },
+  {
+   "text": "of PCCT (Fig 1). Compared with EID CT, in a phantom study,",
+   "rect": [
+    305.9545482288707,
+    230.65907634388319,
+    546.454551003196,
+    240.65907981178972
+   ],
+   "fontSize": 10.000003467906538
+  },
+  {
+   "text": "a prototype PCCT scanner showed more consistent and repro-",
+   "rect": [
+    305.9545482288707,
+    218.68181471391154,
+    546.4090867476028,
+    228.68181818181816
+   ],
+   "fontSize": 10.000003467906623
+  },
+  {
+   "text": "ducible CT numbers for normal lung and emphysema over a",
+   "rect": [
+    305.9545482288707,
+    206.70455308393997,
+    546.3977258855646,
+    216.7045565518466
+   ],
+   "fontSize": 10.000003467906623
+  },
+  {
+   "text": "range of decreasing radiation doses (59). Another study found",
+   "rect": [
+    305.9545482288707,
+    194.6477238048206,
+    546.4431901411575,
+    204.64772727272722
+   ],
+   "fontSize": 10.000003467906623
+  },
+  {
+   "text": "that two of three radiologists significantly favored PCCT over",
+   "rect": [
+    305.9545482288707,
+    182.67046217484904,
+    546.3977258855646,
+    192.6704656427557
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "EID CT for emphysema evaluation because of clearer delinea-",
+   "rect": [
+    305.9545482288707,
+    170.69320054487747,
+    546.4659118652343,
+    180.69320401278412
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "tion of the septa and bulla border in paraseptal emphysema (36).",
+   "rect": [
+    305.9545482288707,
+    158.7158973000266,
+    546.4090867476028,
+    168.71590076793325
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "Jungblut et al (37) found significant difference between virtual",
+   "rect": [
+    305.9545482288707,
+    146.67042888294566,
+    546.3750041614878,
+    156.67043235085228
+   ],
+   "fontSize": 10.000003467906623
+  },
+  {
+   "text": "noncontrast images derived from arterial and venous phases",
+   "rect": [
+    305.9545482288707,
+    134.6931672529741,
+    546.3750041614878,
+    144.69317072088063
+   ],
+   "fontSize": 10.000003467906538
+  },
+  {
+   "text": "compared with true noncontrast images in PCCT evaluation of",
+   "rect": [
+    305.9545482288707,
+    122.71590562300243,
+    546.4090867476028,
+    132.71590909090907
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "emphysema quantification. In another study, however, contrast-",
+   "rect": [
+    305.9545482288707,
+    110.73864399303086,
+    546.4204684170809,
+    120.7386474609375
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "enhanced imaging led to systematic and significant underestima-",
+   "rect": [
+    305.9545482288707,
+    98.6818147139116,
+    546.3750041614878,
+    108.68181818181814
+   ],
+   "fontSize": 10.000003467906538
+  },
+  {
+   "text": "tion of emphysema at VMI energies below 80 keV compared",
+   "rect": [
+    305.9545482288707,
+    86.71592434969818,
+    546.4318292791193,
+    96.7159174138849
+   ],
+   "fontSize": 9.999993064186711
+  },
+  {
+   "text": "with virtual noncontrast images (38).",
+   "rect": [
+    305.9545482288707,
+    74.73861070112748,
+    446.2272678722034,
+    84.73861416903412
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "To our knowledge, no study to date has assessed the ef-",
+   "rect": [
+    317.95453158291895,
+    62.76134907115592,
+    546.3977050781249,
+    72.76135253906246
+   ],
+   "fontSize": 10.000003467906538
+  },
+  {
+   "text": "fects of PCCT on machine learning evaluation of diffuse lung",
+   "rect": [
+    305.9545482288707,
+    50.70451979203656,
+    546.4090867476028,
+    60.704523259943194
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "Figure 3:",
+   "rect": [
+    257.8522838245738,
+    535.4659174138849,
+    292.6818258112127,
+    543.9659229625355
+   ],
+   "fontSize": 8.50000554865062
+  },
+  {
+   "text": "Energy-integrating detector (EID) CT (third-generation dual-source CT system) and",
+   "rect": [
+    300.4317959872158,
+    535.5681755759498,
+    545.5795149369673,
+    543.5681679465553
+   ],
+   "fontSize": 7.999992370605469
+  },
+  {
+   "text": "photon-counting CT (PCCT) images in a 70-year-old female patient with obstructive lung disease and",
+   "rect": [
+    257.8522838245738,
+    525.6249972256747,
+    545.5454739657314,
+    533.6249999999999
+   ],
+   "fontSize": 8.00000277432514
+  },
+  {
+   "text": "bronchiectasis.",
+   "rect": [
+    257.8522838245738,
+    515.6136224920098,
+    299.51137889515263,
+    523.6136252663351
+   ],
+   "fontSize": 8.000002774325367
+  },
+  {
+   "text": "(A)",
+   "rect": [
+    301.443204012784,
+    515.6136224920098,
+    312.44320262562144,
+    523.6136252663351
+   ],
+   "fontSize": 8.000002774325367
+  },
+  {
+   "text": "Axial EID CT image (reconstruction kernel Qr54, 0.75-mm section thickness, 512",
+   "rect": [
+    314.26137750799,
+    515.6136224920098,
+    545.6363608620383,
+    523.6136252663351
+   ],
+   "fontSize": 8.000002774325367
+  },
+  {
+   "text": "matrix) shows a part of the linear margin between normal and hyperlucent lung parenchyma (solid",
+   "rect": [
+    257.8522838245738,
+    505.5909077037464,
+    545.5795565518465,
+    513.5909104780717
+   ],
+   "fontSize": 8.00000277432531
+  },
+  {
+   "text": "arrows), but the other part of the margin is ambiguous (dashed arrows).",
+   "rect": [
+    257.8522838245738,
+    495.6477189497513,
+    457.3295454545454,
+    503.6477217240766
+   ],
+   "fontSize": 8.000002774325253
+  },
+  {
+   "text": "(B)",
+   "rect": [
+    458.98864746093744,
+    495.6477189497513,
+    469.25001317804504,
+    503.6477217240766
+   ],
+   "fontSize": 8.000002774325253
+  },
+  {
+   "text": "Axial PCCT image (recon-",
+   "rect": [
+    470.750011097301,
+    495.6477189497513,
+    545.7272789695045,
+    503.6477217240766
+   ],
+   "fontSize": 8.000002774325253
+  },
+  {
+   "text": "struction kernel Qr76, 0.6-mm section thickness, 1024 matrix) demonstrates a complete and clearly",
+   "rect": [
+    257.8522838245738,
+    485.6363650235262,
+    545.4886488481001,
+    493.63636779785156
+   ],
+   "fontSize": 8.000002774325367
+  },
+  {
+   "text": "demarcated margin between normal and hyperlucent lung parenchyma (arrows), potentially improving",
+   "rect": [
+    257.8522838245738,
+    475.6136398315429,
+    545.5227522416548,
+    483.6136322021484
+   ],
+   "fontSize": 7.999992370605469
+  },
+  {
+   "text": "reader confidence in the presence and degree of mosaic attenuation. Also note improved delineation",
+   "rect": [
+    257.8522838245738,
+    465.59091463955957,
+    545.6477425315163,
+    473.5909174138849
+   ],
+   "fontSize": 8.00000277432531
+  },
+  {
+   "text": "of bronchial walls at PCCT. All images were reconstructed with an iterative reconstruction strength of 3.",
+   "rect": [
+    257.8522838245738,
+    455.64772588556457,
+    545.5000097101384,
+    463.6477286598899
+   ],
+   "fontSize": 8.00000277432531
+  }
+ ]
+}
