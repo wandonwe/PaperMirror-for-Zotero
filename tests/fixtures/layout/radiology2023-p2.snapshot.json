@@ -1,0 +1,179 @@
+[
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 0,
+		"text": "Abbreviations"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "CNR = contrast-to-noise ratio, DECT = du"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "Summary"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "Photon-counting CT offers improved spati"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 4,
+		"text": "Essentials"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 5,
+		"text": "■ CT systems equipped with photon-counti"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 6,
+		"text": "binding energy of the K shell. Availabil"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 7,
+		"text": "spectral images is provided together wit"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 8,
+		"text": "Cardiac Applications"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 9,
+		"text": "Calcifications and Coronary Artery Calci"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 10,
+		"text": "Coronary Stents"
+	},
+	{
+		"type": "heading",
+		"column": 100,
+		"readingIndex": 11,
+		"text": "Terminology and Technical Summary"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 12,
+		"text": "Coronary stents have been imaged with PC"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 13,
+		"text": "Important general terms used in this art"
+	},
+	{
+		"type": "table",
+		"column": -1,
+		"readingIndex": 14,
+		"text": "Table 1: Definition of General Terms Use"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 15,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Term Dual-energy CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 16,
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Abbreviation DECT"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 17,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Energy-integrating detector CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 18,
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "EID CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 19,
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Spectral"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 20,
+		"tableRow": 2,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": ""
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 21,
+		"tableRow": 0,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "Definition All CT systems equipped with "
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 22,
+		"tableRow": 1,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "All CT scanners equipped with EID that d"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 23,
+		"tableRow": 2,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "All images other than conventional ones "
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 24,
+		"text": "Note.DECT = dual-energy CT, EID = energ"
+	}
+]

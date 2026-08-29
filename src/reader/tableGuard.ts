@@ -87,6 +87,73 @@ export function looksTabularSeed(text: string): boolean {
 	return proseWords < 3;
 }
 
+/**
+ * 标题锚判据 (2.6.0): 明确的表标题形态 —— "Table 2:", "Table 4.", "表 3:",
+ * 或已被分类为 table 类型的 "Table N …" 标题行。正文里 "Table 3 lists …"
+ * 这类【指代】在行级 (type 还是 paragraph) 不带标点,不作锚;块级它可能被
+ * classify 误标 table,但锚定后还有网格验收兜底 —— 标题下是正文就一个块
+ * 也不收。
+ */
+export function isTableCaptionAnchor(text: string, type?: string): boolean {
+	const t = text.trim();
+	if (/^(table|表)\s*(\d+|[IVXLC]+)\s*[.:：]/i.test(t)) {
+		return true;
+	}
+	return type === 'table' && /^(table|表)\s*(\d+|[IVXLC]+)\b/i.test(t) && t.length <= 160;
+}
+
+/**
+ * 文本表网格验收 (2.6.0): 锚定扫掠收进来的块必须自己长成网格,否则一个也
+ * 不收 (悬空标题下的正文绝不能被吞)。三条都要过:
+ *  - ≥2 个左缘列簇 (每簇 ≥2 块): 表格列左对齐;
+ *  - 存在【标签列】—— 某个 ≥3 块的列簇里最宽的块也不超过区宽的 35%。
+ *    这是表格与"标题悬空、下方是双栏正文"最硬的区别: 正文栏的行宽
+ *    ≈ 半区宽 (~50%),表格的词条/缩写列天然窄 (radiology2023 实测
+ *    9%–28%)。行组间隙判据在紧排表格上不可用 (行距 4pt < 任何 em 阈),
+ *    这条不依赖行距;
+ *  - ≥3 个跨列【基线级】对齐的行顶 (不同列簇的块顶边差 ≤ em*0.3):
+ *    表格行顶对齐是排版硬几何,精确到基线。
+ */
+function textGridValid(members: GuardItem[], em: number): boolean {
+	// 左缘列簇。
+	const sorted = [...members].sort((a, b) => a.box.left - b.box.left);
+	const clusters: GuardItem[][] = [];
+	for (const m of sorted) {
+		const last = clusters[clusters.length - 1];
+		if (last && m.box.left - last[0]!.box.left <= em * 1.2) {
+			last.push(m);
+		}
+		else {
+			clusters.push([m]);
+		}
+	}
+	const cols = clusters.filter(c => c.length >= 2);
+	if (cols.length < 2) {
+		return false;
+	}
+	const zoneLeft = Math.min(...members.map(m => m.box.left));
+	const zoneRight = Math.max(...members.map(m => m.box.left + m.box.width));
+	const zoneWidth = zoneRight - zoneLeft;
+	if (zoneWidth <= 0) {
+		return false;
+	}
+	const hasLabelCol = cols.some(c =>
+		c.length >= 3 && Math.max(...c.map(m => m.box.width)) <= zoneWidth * 0.35);
+	if (!hasLabelCol) {
+		return false;
+	}
+	// 跨列基线对齐的行顶。
+	const tol = Math.max(1.5, em * 0.3);
+	let aligned = 0;
+	const [first, ...rest] = cols;
+	for (const m of first!) {
+		if (rest.some(col => col.some(n => Math.abs(n.box.top - m.box.top) <= tol))) {
+			aligned++;
+		}
+	}
+	return aligned >= 3;
+}
+
 function vGap(a: TableRegion, b: GuardItem['box']): number {
 	if (b.top >= a.top + a.height) {
 		return b.top - (a.top + a.height);
@@ -240,7 +307,7 @@ export function detectTableRegions(
 	items: GuardItem[],
 	emPx: number,
 	obstacles: GuardItem['box'][] = []
-): { excluded: Set<string>; regions: TableRegion[] } {
+): { excluded: Set<string>; regions: TableRegion[]; textRegions: TableRegion[] } {
 	const em = Math.max(6, emPx);
 	const cells = items.filter(i => looksTabularSeed(i.text));
 	const captions = items.filter(i => i.type === 'table');
@@ -399,5 +466,63 @@ export function detectTableRegions(
 		}
 		regions.push(region);
 	}
-	return { excluded, regions };
+
+	// 标题锚定文本表 (2.6.0, radiology2023 Table 2/4 实证): 定义/综述表的格子
+	// 是整句散文,一个数字种子都没有,种子聚类永远探不到 —— 整张表被当散文
+	// 逐行切碎、跨列交错翻译。但它们有两样铁证: 顶上一条 "Table N:" 标题,
+	// 和标题下方按列带+行带对齐的窄块阵。锚定扫掠: 从标题往下收集横向落在
+	// 生长区域内的块,遇到"墙"(≥15 个普通词的全宽行 —— Note.— 脚注或正文
+	// 段落)、另一条表标题、或已有的种子表区域即止;收完用 textGridValid
+	// 验收 —— 不过就一个块也不收,页面与从前逐字节一致。
+	const textRegions: TableRegion[] = [];
+	const anchors = items.filter(i => isTableCaptionAnchor(i.text, i.type));
+	for (const cap of anchors) {
+		if (excluded.has(cap.id)) {
+			continue;
+		}
+		// 数值种子路径已在这条标题旁接手 → 不重复建区。
+		if (regions.some(r => vGap(r, cap.box) <= em * 3 && hOverlaps(r, cap.box, em * 2.5))) {
+			continue;
+		}
+		const capBottom = cap.box.top + cap.box.height;
+		// 硬墙: 下方的其他表标题与种子表区域顶边。
+		const hardWall = Math.min(
+			Infinity,
+			...anchors.filter(a => a !== cap && a.box.top > capBottom).map(a => a.box.top),
+			...regions.filter(r => r.top > capBottom).map(r => r.top)
+		);
+		let zone: TableRegion = { ...cap.box };
+		const members: GuardItem[] = [];
+		const below = items
+			.filter(i => i.id !== cap.id && !excluded.has(i.id) && !isTableCaptionAnchor(i.text, i.type))
+			.filter(i => i.box.top >= capBottom - em * 0.5 && i.box.top < hardWall)
+			.sort((a, b) => a.box.top - b.box.top);
+		for (const it of below) {
+			if (vGap(zone, it.box) > em * 2.8 || !hOverlaps(zone, it.box, em * 2.5)) {
+				continue;
+			}
+			const proseWords = (it.text.match(/[A-Za-z一-鿿]{2,}/g) ?? []).length;
+			// 墙: 全宽长散文行 (正文段落),或表尾脚注 ("Note.— CNR = …"/"注:") ——
+			// 脚注逐【行】进扫掠时每行词数常不足长散文阈值 (radiology2023-p11
+			// 实证: "Note.CNR = contrast-to-noise ratio, FDA = …" 只有 ~10 词),
+			// 全宽的它一旦入格,列带推断整个被焊死,按标记词单独判墙。
+			const isFootnote = /^(note|notes)\s*[.:—–-]/i.test(it.text.trim()) || /^注[.:：]/.test(it.text.trim());
+			if (isFootnote || (it.box.width >= zone.width * 0.7 && proseWords >= 15)) {
+				break;
+			}
+			members.push(it);
+			zone = grow(zone, it.box);
+		}
+		if (members.length < 6 || !textGridValid(members, em)) {
+			continue;
+		}
+		// 标题本身不入格 —— 仍作 caption 块按图表说明翻译。
+		let region: TableRegion | null = null;
+		for (const m of members) {
+			excluded.add(m.id);
+			region = region ? grow(region, m.box) : { ...m.box };
+		}
+		textRegions.push(region!);
+	}
+	return { excluded, regions, textRegions };
 }

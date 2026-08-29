@@ -215,6 +215,138 @@ export function buildTableModel(
 	return { region, rowCount: rowBands.length, colCount: colBands.length, cells };
 }
 
+/** 连字符续拼: 文本格由多行拼成,"quanti-"/"tatively" 要接回一个词。 */
+function joinCellText(parts: string[]): string {
+	let out = '';
+	for (const p of parts) {
+		const t = p.trim();
+		if (!t) {
+			continue;
+		}
+		if (!out) {
+			out = t;
+		}
+		else if (/[A-Za-z]-$/.test(out) && /^[a-z]/.test(t)) {
+			out = out.slice(0, -1) + t;
+		}
+		else {
+			out += ' ' + t;
+		}
+	}
+	return out;
+}
+
+/**
+ * 文本表 Row/Cell 模型 (2.6.0, radiology2023 Table 2/4 实证)。
+ *
+ * 定义/综述表的格子是多行整句散文,buildTableModel 的行带推断按【行】分带,
+ * 一个三行的描述格会碎成三行三格,逐格无语境翻译。这里按文本表的几何组格:
+ *  - 列带同 inferBands (窄格先落座);
+ *  - 每列内部先把竖向间隙 ≤ em*0.8 的块并成【格组】(格内行距远小于行距);
+ *  - 行起点 = 全部格组顶边聚类 (表格行顶对齐是硬几何),组按顶边归行;
+ *  - 跨列带的全宽块 (小节子标题) 单独成行,有词就翻译;
+ *  - 格 kind: 有词的散文格 text,数字/符号格沿用 looksTabular → data。
+ */
+export function buildTextTableModel(
+	pageIndex: number,
+	tableIndex: number,
+	region: Box,
+	members: CellMember[],
+	em: number
+): TableModel {
+	if (!members.length) {
+		return { region, rowCount: 0, colCount: 0, cells: [] };
+	}
+	// 列带只由【窄】成员推断 (2.6.0, radiology2023-p11 实证): 一个全宽成员
+	// (漏网脚注行/跨列子标题) 参与推断会把首列带撑到全区宽,后续所有成员
+	// 与它的重叠都不小于与本列带的重叠,整张表焊进 c0。宽成员仍参与归格
+	// (assignBand 判 straddle → 独立全宽行)。
+	const narrow = members.filter(m => m.box.width <= region.width * 0.5);
+	const bandSource = narrow.length >= 2 ? narrow : members;
+	const colBands = inferBands(bandSource.map(m => ({ start: m.box.left, end: m.box.left + m.box.width })), 0.4);
+	interface Group { members: CellMember[]; top: number; col: number; straddles: boolean }
+	const byCol: CellMember[][] = colBands.map(() => []);
+	const groups: Group[] = [];
+	for (const m of members) {
+		const a = assignBand(m.box.left, m.box.left + m.box.width, colBands);
+		if (a.straddles) {
+			groups.push({ members: [m], top: m.box.top, col: a.index, straddles: true });
+		}
+		else {
+			byCol[a.index]!.push(m);
+		}
+	}
+	byCol.forEach((colMembers, col) => {
+		const sorted = [...colMembers].sort((x, y) => x.box.top - y.box.top);
+		let cur: CellMember[] = [];
+		let bottom = -Infinity;
+		const flush = (): void => {
+			if (cur.length) {
+				groups.push({ members: cur, top: cur[0]!.box.top, col, straddles: false });
+				cur = [];
+			}
+		};
+		for (const m of sorted) {
+			if (cur.length && m.box.top - bottom > em * 0.8) {
+				flush();
+			}
+			cur.push(m);
+			bottom = Math.max(bottom, m.box.top + m.box.height);
+		}
+		flush();
+	});
+	// 行起点聚类 (顶对齐)。组只用来【发现】行起点 —— 短内容列 (标签列) 的
+	// 行距大、分组干净,给出可靠起点;长内容列 (整句描述列) 的格子上下顶着,
+	// 常并成一个纵贯多行的大组,行归属绝不能跟着组走。
+	const rowStarts: number[] = [];
+	for (const t of groups.map(g => g.top).sort((a, b) => a - b)) {
+		if (!rowStarts.length || t > rowStarts[rowStarts.length - 1]! + em * 0.8) {
+			rowStarts.push(t);
+		}
+	}
+	const rowOf = (top: number): number => {
+		let r = 0;
+		for (let i = 0; i < rowStarts.length; i++) {
+			if (top >= rowStarts[i]! - em * 0.8) {
+				r = i;
+			}
+		}
+		return r;
+	};
+	// 行归属按【成员】逐个判 (2.6.0): 大组里第 k 行的行首行落在 rowStarts[k]
+	// 上,后续折行落在 k 与 k+1 之间 → 同归 k;到 k+1 行首自然切换。这样
+	// 标签列发现的行界把邻列的长文格也切对。
+	const slots = new Map<string, { members: CellMember[]; straddles: boolean }>();
+	for (const g of groups) {
+		for (const m of g.members) {
+			const key = `${rowOf(m.box.top)}:${g.col}`;
+			const slot = slots.get(key) ?? { members: [], straddles: false };
+			slot.members.push(m);
+			slot.straddles = slot.straddles || g.straddles;
+			slots.set(key, slot);
+		}
+	}
+	const cells: TableCell[] = [];
+	for (const [key, slot] of slots) {
+		const [row, col] = key.split(':').map(Number) as [number, number];
+		const ordered = [...slot.members].sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left);
+		const text = joinCellText(ordered.map(m => m.text));
+		const hasWord = /[A-Za-z一-鿿]{2,}/.test(text);
+		const tinySymbol = text.length <= 4 && !hasWord;
+		const kind: TableCell['kind'] =
+			!text || !hasWord || tinySymbol ? 'data'
+				: !slot.straddles && (looksTabular(text) || text.length < 3) ? 'data' : 'text';
+		cells.push({
+			id: `page-${pageIndex}-table-${tableIndex}-r${row}-c${col}`,
+			memberIds: ordered.map(m => m.id),
+			box: unionBox(ordered.map(m => m.box)),
+			text, row, col, kind
+		});
+	}
+	cells.sort((a, b) => a.row - b.row || a.col - b.col);
+	return { region, rowCount: rowStarts.length, colCount: colBands.length, cells };
+}
+
 /**
  * If a column is overwhelmingly data (a numbers column with one stray word),
  * keep the whole column original so its alignment is never broken. The header
@@ -261,13 +393,19 @@ export function structureTableCells(blocks: SourceBlock[], pageIndex: number, em
 		box: { left: b.boundingBox.x, top: b.boundingBox.y, width: b.boundingBox.width, height: b.boundingBox.height },
 		fontSize: b.fontSize
 	})), Math.max(6, em));
-	if (!guard.regions.length) {
+	if (!guard.regions.length && !guard.textRegions.length) {
 		return blocks;
 	}
 
 	const consumed = new Set<string>();
 	const cells: SourceBlock[] = [];
-	guard.regions.forEach((region, tableIndex) => {
+	// 文本表区域接在种子区域之后编号 (2.6.0) —— 渲染端按同样顺序重建,格 id
+	// 两端必须一致。
+	const allRegions = [
+		...guard.regions.map(region => ({ region, text: false })),
+		...guard.textRegions.map(region => ({ region, text: true }))
+	];
+	allRegions.forEach(({ region, text: isTextTable }, tableIndex) => {
 		const members = geometric.filter(b => contained({
 			left: b.boundingBox.x, top: b.boundingBox.y,
 			width: b.boundingBox.width, height: b.boundingBox.height
@@ -277,7 +415,9 @@ export function structureTableCells(blocks: SourceBlock[], pageIndex: number, em
 			text: b.sourceText,
 			fontSize: b.fontSize
 		}));
-		const model = buildTableModel(pageIndex, tableIndex, region, members);
+		const model = isTextTable
+			? buildTextTableModel(pageIndex, tableIndex, region, members, Math.max(6, em))
+			: buildTableModel(pageIndex, tableIndex, region, members);
 		for (const cell of model.cells) {
 			const originals = cell.memberIds.map(id => originalById.get(id)).filter((b): b is SourceBlock => !!b);
 			if (!originals.length) continue;

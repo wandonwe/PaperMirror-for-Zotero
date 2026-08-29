@@ -30,8 +30,8 @@ import { isMetadataBlock } from '../reader/metaFilter';
 import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
 import { detectTableRegions } from '../reader/tableGuard';
-import { buildTableModel, type CellMember } from '../reader/tableStructure';
-import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, type AuditBox, type AuditObstacles } from './layoutSafety';
+import { buildTableModel, buildTextTableModel, type CellMember } from '../reader/tableStructure';
+import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, planOverlapClips, type AuditBox, type AuditObstacles } from './layoutSafety';
 import { parseStyledSegments } from '../reader/styleRuns';
 import {
 	inkFor,
@@ -539,14 +539,22 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const consumedMemberIds = new Set<string>();
 	let tableIntentional = 0;
 	let tableFailed = 0;
-	guard.regions.forEach((region, tableIndex) => {
+	// 文本表区域接在种子区域之后编号 (2.6.0) —— 与 structureTableCells 的
+	// 编号顺序一致,两端格 id 必须相同。
+	const allGuardRegions = [
+		...guard.regions.map(region => ({ region, text: false })),
+		...guard.textRegions.map(region => ({ region, text: true }))
+	];
+	allGuardRegions.forEach(({ region, text: isTextTable }, tableIndex) => {
 		const members: CellMember[] = geometric
 			.filter(b => containedFraction(pxOf.get(b.id)!, region) >= 0.5 && b.lineRectsPdf?.length)
 			.map(b => ({ id: b.id, box: pxOf.get(b.id)!, text: b.sourceText, fontSize: b.fontSize }));
 		if (!members.length) {
 			return;
 		}
-		const model = buildTableModel(input.pageIndex, tableIndex, region, members);
+		const model = isTextTable
+			? buildTextTableModel(input.pageIndex, tableIndex, region, members, Math.max(6, bodyPt * pxPerPoint))
+			: buildTableModel(input.pageIndex, tableIndex, region, members);
 		for (const cell of model.cells) {
 			for (const mid of cell.memberIds) {
 				consumedMemberIds.add(mid); // handled here, not as a normal block
@@ -667,7 +675,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// A block overlapping a detected table REGION that the cell model did
 		// NOT turn into a cell (e.g. a paragraph the extractor stitched across
 		// cells) stays original — never stamped in Chinese across the table.
-		if (area > 0 && guard.regions.some(r => intersectArea(box, r as unknown as PixelBox) > area * 0.15)) {
+		if (area > 0 && [...guard.regions, ...guard.textRegions].some(r => intersectArea(box, r as unknown as PixelBox) > area * 0.15)) {
 			tableIntentional++;
 			continue;
 		}
@@ -825,10 +833,25 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		/** Gave up — stays original, never to be shown translated. */
 		abandoned: boolean;
 	}
+	// 提取级盒重叠裁剪 (2.6.0, radiology2023 p4/p9 实证): L 形图注(首行横贯
+	// 图宽、尾行只占左栏)的联合外接盒斜压进邻栏正文的盒里 —— 两块的【行
+	// 矩形】互不相交,但译文 div 按外接盒铺排,注文译文直接叠印在未遮罩的
+	// 正文原文上。几何审计的基准是"原始盒已有的重叠不追责",对这种提取级
+	// 重叠天生失明。处置: 行级几乎无重叠而盒级重叠显著的可替换块对,把
+	// 【自家行矩形基本不进重叠区】的一方沿损失最小的边裁掉重叠区 —— 遮罩
+	// 按行矩形绘制不受影响,译文只是排进更诚实的盒子。
+	const clippedBox = planOverlapClips(replaceable.map(b => ({
+		id: b.id,
+		box: pixelBox(b, render, 1),
+		lineBoxes: ((b.lineRectsPdf ?? []) as Rect[]).map(r => rectToPixels(r, render, 1))
+	})));
+	if (clippedBox.size) {
+		logger.debug(MODULE, `page ${input.pageIndex + 1}: clipped ${clippedBox.size} extraction-born box overlap(s)`);
+	}
 	const items: StrictItem[] = [];
 	const byId = new Map<string, StrictItem>();
 	for (const block of replaceable) {
-		const box = pixelBox(block, render, 1);
+		const box = clippedBox.get(block.id) ?? pixelBox(block, render, 1);
 		const node = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
 		node.className = 'pm-repage-block';
 		node.setAttribute('data-pm-block', block.id);

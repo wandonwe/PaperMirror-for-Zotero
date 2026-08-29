@@ -143,3 +143,64 @@ test('violationStillPresent: occludes-preserved 与 out-of-page 按当前盒重�
 	const vo = { id: 'o', kind: 'out-of-page' as const, area: 2500 };
 	assert.equal(violationStillPresent(vo, [off], { images: [], preserved: [] }, 1000, 1000), true);
 });
+
+// ---- 2.6.0 提取级盒重叠裁剪 -------------------------------------------------
+
+import { planOverlapClips, type ClipCandidate } from '../../src/ui/layoutSafety';
+
+test('planOverlapClips: L 形图注的外接盒裁掉压进正文的部分 (radiology2023-p4)', () => {
+	// 图注: 首行横贯 47..408,尾行只到 287 —— 外接盒 [47..408]×[221..279]。
+	// 正文: [305..545]×[230..383]。重叠区 [305..408]×[230..279] ≈ 5000px²,
+	// 图注的行矩形不进重叠区 (首行在 y221..229),正文的行铺满自己的盒。
+	const caption: ClipCandidate = {
+		id: 'cap',
+		box: { left: 47, top: 221, width: 361, height: 58 },
+		lineBoxes: [
+			{ left: 47, top: 221, width: 361, height: 9 },
+			{ left: 47, top: 233, width: 240, height: 9 },
+			{ left: 47, top: 245, width: 240, height: 9 },
+			{ left: 47, top: 257, width: 240, height: 9 },
+			{ left: 47, top: 269, width: 235, height: 9 }
+		]
+	};
+	const body: ClipCandidate = {
+		id: 'body',
+		box: { left: 305, top: 230, width: 240, height: 153 },
+		lineBoxes: Array.from({ length: 13 }, (_, k) => ({ left: 305, top: 230 + k * 12, width: 240, height: 9 }))
+	};
+	const clips = planOverlapClips([caption, body]);
+	assert.ok(clips.has('cap'), 'the caption (lines outside the zone) is the one clipped');
+	assert.ok(!clips.has('body'));
+	const clipped = clips.get('cap')!;
+	// 右裁: 宽度收到重叠区左缘,不再压正文。
+	assert.ok(clipped.left + clipped.width <= 305 + 0.001, `clipped box must clear the body: ${JSON.stringify(clipped)}`);
+	assert.ok(clipped.width >= 40 && clipped.height >= 12);
+});
+
+test('planOverlapClips: 双方行矩形都真在重叠区的块对不裁 (非提取级形态)', () => {
+	const a: ClipCandidate = {
+		id: 'a',
+		box: { left: 50, top: 100, width: 200, height: 60 },
+		lineBoxes: [{ left: 50, top: 100, width: 200, height: 60 }]
+	};
+	const b: ClipCandidate = {
+		id: 'b',
+		box: { left: 150, top: 120, width: 200, height: 60 },
+		lineBoxes: [{ left: 150, top: 120, width: 200, height: 60 }]
+	};
+	assert.equal(planOverlapClips([a, b]).size, 0);
+});
+
+test('planOverlapClips: 轻微重叠 (渲染噪声级) 不裁', () => {
+	const a: ClipCandidate = {
+		id: 'a',
+		box: { left: 50, top: 100, width: 200, height: 60 },
+		lineBoxes: []
+	};
+	const b: ClipCandidate = {
+		id: 'b',
+		box: { left: 245, top: 100, width: 200, height: 60 },
+		lineBoxes: [{ left: 245, top: 100, width: 200, height: 60 }]
+	};
+	assert.equal(planOverlapClips([a, b]).size, 0);
+});
