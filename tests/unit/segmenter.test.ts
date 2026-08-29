@@ -202,3 +202,31 @@ test('planChunks never packs table cells into the same request as body prose', (
 	const cellChunk = chunks.find(c => c.blocks.some(b => b.id === 'c1'));
 	assert.deepEqual(cellChunk!.blocks.map(b => b.id), ['c1', 'c2', 'c3', 'c4']);
 });
+
+// ---- 2.5.13: 表格标题作为单元格语境 (wu2026-p3 实证) -------------------------
+
+test('table cells get the table caption as moduleContext (2.5.13)', async () => {
+	const { planChunks } = await import('../../src/translation/segmenter');
+	const { buildLayoutModules } = await import('../../src/reader/layoutModules');
+	const mk = (id: string, type: string, text: string, extra: object = {}): SourceBlock => ({
+		id, pageIndex: 2, order: 0, type: type as SourceBlock['type'], sourceText: text,
+		boundingBox: { x: 0, y: 0, width: 100, height: 10 }, column: 0, ...extra
+	});
+	const caption = mk('cap', 'table', 'Table 1 The CT image acquisition and reconstruction protocols');
+	const cells = [
+		mk('c1', 'paragraph', 'Detector collimation (mm)', { tableRow: 0, tableCol: 0 }),
+		mk('c2', 'paragraph', 'Pitch', { tableRow: 1, tableCol: 0 }),
+		mk('c3', 'paragraph', 'Tube voltage (kV)', { tableRow: 2, tableCol: 0 })
+	];
+	const blocks = [caption, ...cells];
+	const modules = buildLayoutModules(blocks);
+	// riskOf 把 caption (type 'table') 抽进 slow 道 —— 单元格批次没有它。
+	const chunks = planChunks(blocks, modules, { riskOf: b => b.type === 'table' });
+	const cellChunk = chunks.find(c => c.blocks.some(b => b.id === 'c2'));
+	assert.ok(cellChunk, 'cells are chunked');
+	assert.ok(cellChunk!.moduleContext.includes('CT image acquisition'),
+		`cells must carry the table caption as context, got: "${cellChunk!.moduleContext}"`);
+	// caption 自己的 slow chunk 不用自己的文本当语境。
+	const capChunk = chunks.find(c => c.blocks.some(b => b.id === 'cap'));
+	assert.equal(capChunk!.moduleContext, '');
+});

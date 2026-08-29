@@ -7,6 +7,34 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.5.13] — 2026-08-29
+
+**结构与专名**。审核第三批:标题焊段、表格标签语境、人名保护。
+
+### Fixed
+
+- **字号跳变判据不对称,小节标题向下焊进正文**(wu2026-p4 "Polyp detection
+  rate and reader confidence" 实证:标题带首段焊成一块,标题结构在译文页消失,
+  又因原文首句与标题同词开头,读起来像"标题重复")。原式除以【当前行】字号:
+  10pt 正文接 12pt 标题 = 0.20 能断,12pt 标题接 10pt 正文 = 0.167 断不了 ——
+  标题恰好接近满栏宽时 wrapped 守卫又拦掉兜底的间距断段,焊死。除数改为两行
+  字号的较小者(对称),spanBlockBuilder 与 blockBuilder 同修。28 个既有快照
+  零改动 —— 只救此前漏网的形态。
+- **表格标签格无语境逐格翻译**("Pitch"→沥青、"DoseRight"→正确剂量 的根因)。
+  caption 块 (type 'table') 被 riskOf 隔进 slow 单块道,单元格批次里连表格标题
+  的影子都没有。现在 caption 文本作为 moduleContext 随同表格的每个单元格批次
+  下发(caption 自身除外),"Table 1 The CT image acquisition and reconstruction
+  protocols" 正是 Pitch→螺距 需要的领域提示。
+- **署名行与联系人信息不再被猜成汉字**("Weifeng Han"→韩伟峰、"Yuxi Ge" 同页
+  两处两套汉字)。三层: ① `looksLikeAuthorList` 分隔符增加间隔号 '·' ——
+  Springer 系署名行 ("Xiaofei Wu1 · Huiqing Gao2 · …") 此前整行漏网; ② 联系
+  人表格里含 email 的格、以及同表的纯 TitleCase 人名格按数据格 preserve 原样
+  保留(判据要求表内存在 email 格,数据表不受影响); ③ 系统提示新增规则:
+  人名(作者、被致谢者、被引研究者)一律原样保留,禁止音译或转写 —— 兜住
+  正文句子里的人名 ("Dr. Joo Myung Lee"→李柱明 一类)。
+- 新增 wu2026-p1(署名行 + 联系人表)与 wu2026-p4(对称跳变标题分离)布局
+  夹具。874 测试全绿,五处变异验证全部命中,既有快照零改动。
+
 ## [2.5.12] — 2026-08-29
 
 **验证链不再冤杀译文**。修 wu2026 摘要整段留英与第 4 页夹生译文漏检 —— 三处

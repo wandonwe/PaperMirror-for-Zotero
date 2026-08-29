@@ -1,0 +1,266 @@
+[
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 0,
+		"text": "RESEARCH"
+	},
+	{
+		"type": "title",
+		"column": -1,
+		"readingIndex": 1,
+		"text": "Diagnostic performance of photon-countin"
+	},
+	{
+		"type": "title",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "phantom study"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "Abstract"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 4,
+		"text": "assessed using ICC and kappa statistics."
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 5,
+		"text": "Weifeng Han"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 6,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "hanweifeng1981@163.com"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 7,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Yuxi Ge"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 8,
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "gmy1986@126.com"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 9,
+		"tableRow": 3,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Xiaofei Wu"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 10,
+		"tableRow": 3,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "1"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 11,
+		"tableRow": 4,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "wxf2000811@163.com"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 12,
+		"tableRow": 5,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Huiqing Gao"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 13,
+		"tableRow": 5,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 14,
+		"tableRow": 6,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "gaohuiqin2011@163.com"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 15,
+		"tableRow": 7,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Yuanyuan Gao"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 16,
+		"tableRow": 7,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "3"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 17,
+		"tableRow": 8,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "gaoyy042@163.com"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 18,
+		"tableRow": 9,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Huimin Zha"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 19,
+		"tableRow": 9,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "4"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 20,
+		"tableRow": 10,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "ZHM20250325@163.com"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 21,
+		"text": "Xinyi Zhou"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 22,
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "xin_13.40@126.com"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 23,
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "Shudong Hu"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 24,
+		"tableRow": 2,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "hsd2001054@163.com"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 25,
+		"tableRow": 3,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Department of Radiology, Affiliated Hosp"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 26,
+		"tableRow": 4,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "University, wuxi, China"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 27,
+		"tableRow": 5,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Department of Radiology, The Fifth Peopl"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 28,
+		"tableRow": 6,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Wujiang District, suzhou, China"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 29,
+		"tableRow": 7,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Department of Pathology, Affiliated Hosp"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 30,
+		"tableRow": 8,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "University, wuxi, China"
+	},
+	{
+		"type": "title",
+		"column": 1,
+		"readingIndex": 31,
+		"text": "1 3"
+	}
+]

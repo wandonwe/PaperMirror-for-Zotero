@@ -170,6 +170,9 @@ export function buildTableModel(
 	}
 
 	const cells: TableCell[] = [];
+	// 表级 email 探测 (2.5.13): 纯人名格保留规则的前提 —— 见下方 nameOnly。
+	const tableHasEmail = [...slots.values()].some(sl =>
+		sl.members.some(m => /\b[\w.+-]+@[\w-]+\.[A-Za-z]{2,}\b/.test(m.text)));
 	for (const [key, slot] of slots) {
 		const [row, col] = key.split(':').map(Number) as [number, number];
 		const ordered = [...slot.members].sort((a, b) =>
@@ -185,8 +188,18 @@ export function buildTableModel(
 		// ("R²"、"n=5"、"±SD")翻译无意义 —— 送去只会被验收拒掉再计入 tableFailed,
 		// 白费请求。直接归 data/preserve。
 		const tinySymbol = text.length <= 4 && !/[A-Za-z一-鿿]{2,}/.test(text);
+		// 联系人格保留 (2.5.13, wu2026-p1 实证): 含 email 的格是通讯信息
+		// ("Weifeng Han hanweifeng1981@163.com"),翻译只会把人名猜成汉字、
+		// 邮箱被改写 —— 按数据格 preserve,原样保留。同一张表里的纯人名格
+		// ("Weifeng Han" 单独一格、email 在下一格) 一并保留: 判据是【表内
+		// 存在 email 格】+ 该格全部 token 是 TitleCase 名形态 —— 数据表没有
+		// email,不受影响。
+		const hasEmail = /\b[\w.+-]+@[\w-]+\.[A-Za-z]{2,}\b/.test(text);
+		const nameOnly = tableHasEmail && text.length <= 40
+			&& text.split(/\s+/).filter(Boolean).length >= 2
+			&& text.split(/\s+/).filter(Boolean).every(w => /^[A-Z][a-zA-Z'’.-]*$/.test(w));
 		const kind: TableCell['kind'] =
-			slot.straddles || !text ? 'data'
+			slot.straddles || !text || hasEmail || nameOnly ? 'data'
 				: row === 0 && hasWord && !isPureNumeric ? 'text'
 					: looksTabular(text) || text.length < 3 || tinySymbol ? 'data' : 'text';
 		cells.push({

@@ -1,0 +1,86 @@
+[
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 0,
+		"text": "Qualitative CT image analysis"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "Subjective image quality evaluation for "
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "Quantitative CT image analysis"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "The SNR and CNR of all polyps were evalu"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 4,
+		"text": "SNR = HUpolyp/SDsaline"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 5,
+		"text": "CNR = (HUpolyp − HUsaline)/SDsaline"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 6,
+		"text": "HUpolyp refer to the attenuation of the "
+	},
+	{
+		"type": "title",
+		"column": 0,
+		"readingIndex": 7,
+		"text": "1 3"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 8,
+		"text": "Polyp detection rate and reader confiden"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 9,
+		"text": "Polyp detection rate and reader confiden"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 10,
+		"text": "Sensitivity analysis on reconstruction p"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 11,
+		"text": "To further validate the robustness of ou"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 12,
+		"text": "Statistical analysis"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 13,
+		"text": "All analyses were performed using SPSS v"
+	}
+]

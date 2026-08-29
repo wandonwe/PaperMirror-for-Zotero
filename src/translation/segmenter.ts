@@ -167,9 +167,45 @@ export function planChunks(
 					headingOf.set(id, heading);
 				}
 			}
+			// 表格标题作为单元格语境 (2.5.13, wu2026-p3 实证): 标签格 ("Pitch"、
+			// "Tube voltage") 是孤立短词,没有表格标题的领域提示时被译成日常
+			// 词义 ("Pitch"→沥青)。caption 块 (type 'table') 自身被 riskOf 隔进
+			// slow 道,单元格批次里连它的影子都没有 —— 把 caption 文本作为
+			// moduleContext 发给同表格的每个单元格 (caption 自己除外)。
+			else if (mod.anchorType === 'table') {
+				const cap = mod.memberIds.map(id => byId.get(id)).find(b => b?.type === 'table');
+				if (cap) {
+					for (const id of mod.memberIds) {
+						if (id !== cap.id) {
+							headingOf.set(id, cap.sourceText);
+						}
+					}
+				}
+			}
 		}
+		// 内层递归看不到被抽走的 caption (byId 只有 fast 块),表格单元格批次的
+		// moduleContext 在这里补填 —— 用外层完整 byId 找 caption。
+		const captionByModule = new Map<string, string>();
+		for (const mod of modules) {
+			if (mod.anchorType === 'table') {
+				const cap = mod.memberIds.map(id => byId.get(id)).find(b => b?.type === 'table');
+				if (cap) {
+					captionByModule.set(mod.id, cap.sourceText);
+				}
+			}
+		}
+		const fastWithCaptions = fast.map((c) => {
+			if (c.moduleContext) {
+				return c;
+			}
+			const mid = c.blocks[0]?.moduleId;
+			const ctx = mid ? captionByModule.get(mid) : undefined;
+			return ctx && !c.blocks.some(b => b.type === 'table' || b.sourceText === ctx)
+				? { ...c, moduleContext: ctx }
+				: c;
+		});
 		return [
-			...fast,
+			...fastWithCaptions,
 			...slowBlocks.map(b => ({
 				blocks: [b],
 				moduleContext: headingOf.get(b.id) ?? '',
@@ -186,6 +222,14 @@ export function planChunks(
 		anchorOf.set(mod.id, mod.anchorId);
 		if (mod.anchorType === 'heading') {
 			headingOf.set(mod.id, byId.get(mod.anchorId)?.sourceText ?? '');
+		}
+		// 表格标题作为单元格语境 (2.5.13): 与上面 risk-split 路径同规则 ——
+		// caption 常被 riskOf 隔离,单元格批次没有它就没有领域提示。
+		else if (mod.anchorType === 'table') {
+			const cap = mod.memberIds.map(id => byId.get(id)).find(b => b?.type === 'table');
+			if (cap) {
+				headingOf.set(mod.id, cap.sourceText);
+			}
 		}
 		for (const id of mod.memberIds) {
 			moduleOf.set(id, mod.id);
@@ -213,10 +257,13 @@ export function planChunks(
 			return '';
 		}
 		// Only a CONTINUATION (the heading block landed in an earlier chunk) needs
-		// the heading echoed as context.
+		// the heading echoed as context. 表格模块按 caption 是否在本批判断 ——
+		// 锚可以是首个单元格 (caption 在表格下方或被 riskOf 抽走时),不能拿它
+		// 当"语境已在场"的证据 (2.5.13)。
 		const anchorId = anchorOf.get(mid);
-		const hasAnchor = chunkBlocks.some(b => b.id === anchorId);
-		return hasAnchor ? '' : (headingOf.get(mid) ?? '');
+		const context = headingOf.get(mid) ?? '';
+		const contextPresent = chunkBlocks.some(b => b.id === anchorId || b.sourceText === context);
+		return contextPresent ? '' : context;
 	};
 
 	const chunks: PlannedChunk[] = [];
