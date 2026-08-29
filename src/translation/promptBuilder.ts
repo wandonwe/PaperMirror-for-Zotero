@@ -62,7 +62,9 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 		// 人名保护 (2.5.13, wu2026 实证): "Weifeng Han"→韩伟峰(猜字)、"Yuxi Ge"
 		// 同页两处两套汉字、"Joo Myung Lee"→李柱明。人名一律原样保留 —— 音译
 		// 只能猜,拼音名猜汉字必错。
-		'- Keep person names (authors, acknowledged people, cited researchers) EXACTLY as written in the source. Never transliterate a name or convert it into target-language characters.'
+		// 机构/产品名并入同一条 (2.6.0, radiology2023 实证): "MARS Bioimaging"
+		// →"火星生物成像"、厂商与型号名被意译 —— 专有名词只认原文。
+		'- Keep proper names EXACTLY as written in the source: person names (authors, acknowledged people, cited researchers), company/manufacturer names, institutions, and product/model names (e.g. scanner or software names). Never transliterate them or convert them into target-language characters.'
 	];
 	if (hasPlaceholders) {
 		lines.push('- Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation UNCHANGED and in a natural position.');

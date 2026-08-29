@@ -1,0 +1,1118 @@
+{
+ "source": "radiology2023",
+ "page": 2,
+ "pageWidth": 594,
+ "pageHeight": 783,
+ "items": [
+  {
+   "text": "Clinical Applications of Photon-counting CT: Review of Pioneer Studies and a Glimpse into the Future",
+   "rect": [
+    47.96875,
+    744.71875,
+    362.3541641235352,
+    752.7187519073486
+   ],
+   "fontSize": 8.000001907348633
+  },
+  {
+   "text": "2",
+   "rect": [
+    47.96875,
+    21.687467575073253,
+    52.781248092651374,
+    29.68746948242185
+   ],
+   "fontSize": 8.000001907348597
+  },
+  {
+   "text": "radiology.rsna.org",
+   "rect": [
+    350.78125,
+    21.9062213897705,
+    398.7291622161866,
+    28.90621948242185
+   ],
+   "fontSize": 6.999998092651349
+  },
+  {
+   "text": "■",
+   "rect": [
+    402.37499237060547,
+    23.927114486694293,
+    404.48957443237305,
+    27.427108764648448
+   ],
+   "fontSize": 3.499994277954155
+  },
+  {
+   "text": "Radiology:",
+   "rect": [
+    408.0208206176758,
+    21.9062213897705,
+    437.39582061767584,
+    28.90621948242185
+   ],
+   "fontSize": 6.999998092651349
+  },
+  {
+   "text": "Volume 309: Number 1October 2023",
+   "rect": [
+    439.1354370117188,
+    21.9062213897705,
+    545.4479312896729,
+    28.90621948242185
+   ],
+   "fontSize": 6.999998092651349
+  },
+  {
+   "text": "spectral images is provided together with a short explanation.",
+   "rect": [
+    305.89584350585943,
+    722.2187500000001,
+    545.8958435058595,
+    732.21875
+   ],
+   "fontSize": 9.999999999999886
+  },
+  {
+   "text": "Table 3 lists the prototype and currently available commercial",
+   "rect": [
+    305.89584350585943,
+    710.1666622161866,
+    545.9166717529297,
+    720.1666622161865
+   ],
+   "fontSize": 9.999999999999886
+  },
+  {
+   "text": "PCCT systems. Insights into the latest technological advances of",
+   "rect": [
+    305.89584350585943,
+    698.1979160308838,
+    545.9062576293945,
+    708.1979160308838
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "PCCT are provided in Appendix S1.",
+   "rect": [
+    305.89584350585943,
+    686.229169845581,
+    444.13542747497564,
+    696.2291698455812
+   ],
+   "fontSize": 10.000000000000114
+  },
+  {
+   "text": "Cardiac Applications",
+   "rect": [
+    305.89584350585943,
+    662.0833377838135,
+    403.40625762939453,
+    674.0833358764648
+   ],
+   "fontSize": 11.999998092651367
+  },
+  {
+   "text": "Calcifications and Coronary Artery Calcium Assessment",
+   "rect": [
+    305.89584350585943,
+    636.5416698455812,
+    521.8021011352539,
+    646.541669845581
+   ],
+   "fontSize": 9.999999999999886
+  },
+  {
+   "text": "Research on the benefits of PCCT for imaging of vascular",
+   "rect": [
+    305.89584350585943,
+    624.2500000000001,
+    545.8958435058595,
+    634.25
+   ],
+   "fontSize": 9.999999999999886
+  },
+  {
+   "text": "calcifications has shown that, compared with EID CT, the",
+   "rect": [
+    305.89584350585943,
+    612.2812538146973,
+    545.9166717529297,
+    622.2812538146973
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "estimated volume of calcifications at PCCT is closer to the",
+   "rect": [
+    305.89584350585943,
+    600.2291564941406,
+    545.9270858764648,
+    610.2291564941406
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "physical volume of the anthropomorphic phantom (19,20)",
+   "rect": [
+    305.89584350585943,
+    588.2604293823243,
+    545.8958435058595,
+    598.2604293823242
+   ],
+   "fontSize": 9.999999999999886
+  },
+  {
+   "text": "and to that estimated with micro-CT in cadaveric speci-",
+   "rect": [
+    305.89584350585943,
+    576.28125,
+    545.9166717529297,
+    586.28125
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "mens (21). This improvement is thought to mainly be due",
+   "rect": [
+    305.89584350585943,
+    564.3125038146973,
+    545.8958435058595,
+    574.3125038146973
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "to improved spatial resolution and the reduction of bloom-",
+   "rect": [
+    305.89584350585943,
+    552.2604064941406,
+    545.8646011352539,
+    562.2604064941407
+   ],
+   "fontSize": 10.000000000000114
+  },
+  {
+   "text": "ing artifacts (1921). With PCCT, blooming artifacts can",
+   "rect": [
+    305.89584350585943,
+    540.2916793823242,
+    545.8750152587891,
+    550.2916793823242
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "be further reduced on VMIs at high energies (22), as has",
+   "rect": [
+    305.89584350585943,
+    528.3125,
+    545.9270858764648,
+    538.3125
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "already been demonstrated with DECT (23). In addition,",
+   "rect": [
+    305.89584350585943,
+    516.3437538146973,
+    545.8958435058595,
+    526.3437538146973
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "PCCT is capable of detecting smaller (as small as 0.5-mm)",
+   "rect": [
+    305.89584350585943,
+    504.2916564941406,
+    545.8750152587891,
+    514.2916564941406
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "and less-dense calcifications, shows an increased contrast-",
+   "rect": [
+    305.89584350585943,
+    492.3229293823243,
+    545.8958435058595,
+    502.3229293823243
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "to-noise ratio (CNR) (eg, from 4.5 to 5.0 for inserts of",
+   "rect": [
+    305.89584350585943,
+    480.35416412353516,
+    545.8854293823242,
+    490.3541641235352
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "200 HU), and allows visibility of dense calcifications at a",
+   "rect": [
+    305.89584350585943,
+    468.37500381469727,
+    545.8646011352539,
+    478.37500381469727
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "lower radiation dose compared with EID CT (19,24,25).",
+   "rect": [
+    305.89584350585943,
+    456.3229064941406,
+    545.9270858764648,
+    466.3229064941407
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "Although coronary artery calcium assessment with the tra-",
+   "rect": [
+    305.89584350585943,
+    444.3541793823242,
+    545.8958435058595,
+    454.35417938232416
+   ],
+   "fontSize": 9.999999999999943
+  },
+  {
+   "text": "ditional Agatston score is comparable between PCCT and",
+   "rect": [
+    305.89584350585943,
+    432.3854141235352,
+    545.9062576293945,
+    442.38541412353516
+   ],
+   "fontSize": 9.999999999999943
+  },
+  {
+   "text": "EID CT (20), broader use of PCCT might result in the",
+   "rect": [
+    305.89584350585943,
+    420.4062347412109,
+    545.8750152587891,
+    430.40623474121094
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "definition of new scores that, for example, include the newly",
+   "rect": [
+    305.89584350585943,
+    408.3645706176757,
+    545.8958435058595,
+    418.3645706176758
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "detectable and less-dense calcifications. Furthermore, in-",
+   "rect": [
+    305.89584350585943,
+    396.3854293823242,
+    545.8854293823242,
+    406.3854293823243
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "creased use of PCCT could lead to changes in acquisition",
+   "rect": [
+    305.89584350585943,
+    384.41666412353516,
+    545.9062576293945,
+    394.41666412353516
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "protocols, such as lowering the radiation dose needed for",
+   "rect": [
+    305.89584350585943,
+    372.4479370117188,
+    545.8750152587891,
+    382.44793701171875
+   ],
+   "fontSize": 9.999999999999943
+  },
+  {
+   "text": "accurate imaging. However, at present, coronary artery cal-",
+   "rect": [
+    305.89584350585943,
+    360.3958206176758,
+    545.8750152587891,
+    370.3958206176758
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "cium score studies with PCCT in humans remain limited,",
+   "rect": [
+    305.89584350585943,
+    348.4166793823242,
+    545.9270858764648,
+    358.4166793823242
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "and those that have been performed did not use electrocar-",
+   "rect": [
+    305.89584350585943,
+    336.4479141235351,
+    545.8750152587891,
+    346.44791412353516
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "diographic gating (22,25).",
+   "rect": [
+    305.89584350585943,
+    324.4791870117188,
+    412.27084159851074,
+    334.47918701171875
+   ],
+   "fontSize": 9.999999999999943
+  },
+  {
+   "text": "Coronary Stents",
+   "rect": [
+    305.89584350585943,
+    300.77084350585943,
+    368.6145973205567,
+    310.7708435058594
+   ],
+   "fontSize": 9.999999999999943
+  },
+  {
+   "text": "Coronary stents have been imaged with PCCT in vitro in differ-",
+   "rect": [
+    305.89584350585943,
+    288.47916412353516,
+    545.9270858764648,
+    298.4791641235352
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "ent experimental settings. All these studies reported similar main",
+   "rect": [
+    305.89584350585943,
+    276.4270858764648,
+    545.8750152587891,
+    286.42708587646484
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "findings: Compared with EID CT, PCCT depicted the structure",
+   "rect": [
+    305.89584350585943,
+    264.4583206176758,
+    545.9062576293945,
+    274.4583206176757
+   ],
+   "fontSize": 9.999999999999943
+  },
+  {
+   "text": "of the stent better, estimated strut dimensions closer to the true",
+   "rect": [
+    305.89584350585943,
+    252.48959350585935,
+    545.9270858764648,
+    262.48959350585943
+   ],
+   "fontSize": 10.000000000000085
+  },
+  {
+   "text": "dimensions, enabled easier detection of calcifications adjacent to",
+   "rect": [
+    305.89584350585943,
+    240.51041412353516,
+    545.9270858764648,
+    250.5104141235351
+   ],
+   "fontSize": 9.999999999999943
+  },
+  {
+   "text": "the stent, and reduced the artifacts inside the stent, allowing for",
+   "rect": [
+    305.89584350585943,
+    228.45833587646482,
+    545.8854293823242,
+    238.45833587646487
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "improved assessment of intrastent stenosis (2630). Boccalini",
+   "rect": [
+    305.89584350585943,
+    216.48957061767578,
+    545.9062576293945,
+    226.48957061767575
+   ],
+   "fontSize": 9.999999999999972
+  },
+  {
+   "text": "and Si-Mohamed et al (9) conducted an objective analysis that",
+   "rect": [
+    305.89584350585943,
+    204.52084350585935,
+    545.8958435058595,
+    214.5208435058594
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "binding energy of the K shell. Availability of K-edge imag-",
+   "rect": [
+    47.96875,
+    398.4270935058594,
+    288.0104064941406,
+    408.4270935058594
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "ing could prompt the development of new contrast materials,",
+   "rect": [
+    47.96875,
+    386.3750152587891,
+    287.99999237060547,
+    396.37501525878906
+   ],
+   "fontSize": 9.999999999999943
+  },
+  {
+   "text": "possibly allowing for an earlier and more specific detection of",
+   "rect": [
+    47.96875,
+    374.3958358764649,
+    287.93750762939453,
+    384.39583587646484
+   ],
+   "fontSize": 9.999999999999943
+  },
+  {
+   "text": "pathologic abnormalities as well as for the broadening of the",
+   "rect": [
+    47.96875,
+    362.4270706176758,
+    287.9895782470703,
+    372.42707061767584
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "spectrum of diseases detectable with CT.",
+   "rect": [
+    47.96875,
+    350.4583435058594,
+    208.03125381469727,
+    360.4583435058594
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "While all major manufacturers are currently developing PCCT",
+   "rect": [
+    59.96874809265137,
+    338.4062652587891,
+    287.9479122161865,
+    348.40626525878906
+   ],
+   "fontSize": 9.999999999999943
+  },
+  {
+   "text": "systems, to our knowledge, only the Siemens and Philips systems",
+   "rect": [
+    47.96875,
+    326.4375,
+    287.99999237060547,
+    336.43750000000006
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "have been clinically investigated in the literature. This review ar-",
+   "rect": [
+    47.96875,
+    314.4583206176758,
+    287.9895782470703,
+    324.4583206176757
+   ],
+   "fontSize": 9.999999999999943
+  },
+  {
+   "text": "ticle reports the clinical benefits of this technology in cardiovascu-",
+   "rect": [
+    47.96875,
+    302.4895935058594,
+    287.93750762939453,
+    312.48959350585943
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "lar, lung, musculoskeletal, and temporal bone applications. It also",
+   "rect": [
+    47.96875,
+    290.437515258789,
+    287.9479217529297,
+    300.43751525878906
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "discusses the possible benefits of using this imaging modality for",
+   "rect": [
+    47.96875,
+    278.46875,
+    287.95833587646484,
+    288.46874999999994
+   ],
+   "fontSize": 9.999999999999943
+  },
+  {
+   "text": "other applications as well as future directions related to the use of",
+   "rect": [
+    47.96875,
+    266.4895706176758,
+    287.95833587646484,
+    276.4895706176758
+   ],
+   "fontSize": 10
+  },
+  {
+   "text": "new K-edgebased contrast materials with PCCT.",
+   "rect": [
+    47.96875,
+    254.52084350585938,
+    231.18749618530273,
+    264.5208435058593
+   ],
+   "fontSize": 9.999999999999943
+  },
+  {
+   "text": "Terminology and Technical Summary",
+   "rect": [
+    47.96875,
+    230.37500190734863,
+    218.73958587646487,
+    242.37500000000006
+   ],
+   "fontSize": 11.999998092651424
+  },
+  {
+   "text": "Important general terms used in this article are defined in",
+   "rect": [
+    47.96875,
+    216.48957061767578,
+    287.95833587646484,
+    226.48957061767575
+   ],
+   "fontSize": 9.999999999999972
+  },
+  {
+   "text": "Table 1. In Table 2, a list of terms referring to different types of",
+   "rect": [
+    47.96875,
+    204.52084350585935,
+    287.9895782470703,
+    214.5208435058594
+   ],
+   "fontSize": 10.000000000000057
+  },
+  {
+   "text": "Abbreviations",
+   "rect": [
+    53.968753814697266,
+    714.1979198455812,
+    99.10416603088379,
+    726.1979179382324
+   ],
+   "fontSize": 11.999998092651254
+  },
+  {
+   "text": "CNR = contrast-to-noise ratio, DECT = dual-energy CT, EID",
+   "rect": [
+    53.968753814697266,
+    702.1979122161865,
+    251.49999618530273,
+    710.6979160308838
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "= energy-integrating detector, PCCT = photon-counting CT,",
+   "rect": [
+    53.968753814697266,
+    692.7291660308838,
+    251.52082443237308,
+    701.229169845581
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "PCD = photon-counting detector, VMI = virtual monoener-",
+   "rect": [
+    53.968753814697266,
+    683.1875019073487,
+    251.5312385559082,
+    691.6874961853027
+   ],
+   "fontSize": 8.499994277953988
+  },
+  {
+   "text": "getic image, VNC = virtual noncontrast",
+   "rect": [
+    53.968753814697266,
+    673.7187461853027,
+    181.05208396911624,
+    682.21875
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "Summary",
+   "rect": [
+    53.968753814697266,
+    654.1770820617676,
+    86.32291793823242,
+    666.177080154419
+   ],
+   "fontSize": 11.999998092651367
+  },
+  {
+   "text": "Photon-counting CT offers improved spatial resolution and spectral",
+   "rect": [
+    53.968753814697266,
+    642.2604160308838,
+    270.6458473205567,
+    650.760419845581
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "reconstructions, yielding advantages for cardiac, vascular, thoracic, and",
+   "rect": [
+    53.968753814697266,
+    632.7187519073486,
+    278.63542556762695,
+    641.2187461853027
+   ],
+   "fontSize": 8.499994277954102
+  },
+  {
+   "text": "musculoskeletal CT imaging.",
+   "rect": [
+    53.968753814697266,
+    623.2499961853027,
+    147.58333206176758,
+    631.75
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "Essentials",
+   "rect": [
+    53.968753814697266,
+    603.7812595367432,
+    85.87499618530275,
+    615.7812576293945
+   ],
+   "fontSize": 11.999998092651367
+  },
+  {
+   "text": "■",
+   "rect": [
+    53.968753814697266,
+    591.791675567627,
+    59.104166030883796,
+    600.2916793823242
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "CT systems equipped with photon-counting detectors, referred to",
+   "rect": [
+    62.989587783813484,
+    591.791675567627,
+    278.3437442779541,
+    600.2916793823242
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "as photon-counting CT (PCCT), provide advantages in clinical",
+   "rect": [
+    62.989587783813484,
+    582.2500019073486,
+    270.74999809265137,
+    590.7499961853028
+   ],
+   "fontSize": 8.499994277954215
+  },
+  {
+   "text": "cardiac, vascular, thoracic, and musculoskeletal applications.",
+   "rect": [
+    62.989587783813484,
+    572.7812461853028,
+    259.47916984558105,
+    581.2812500000001
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "■",
+   "rect": [
+    53.968753814697266,
+    560.2604274749756,
+    59.104166030883796,
+    568.7604217529297
+   ],
+   "fontSize": 8.499994277954102
+  },
+  {
+   "text": "All these applications benefit from the improved spatial resolution",
+   "rect": [
+    62.989587783813484,
+    560.2604274749756,
+    278.6250019073487,
+    568.7604217529297
+   ],
+   "fontSize": 8.499994277954102
+  },
+  {
+   "text": "as well as noise and artifact reduction offered by PCCT and allow",
+   "rect": [
+    62.989587783813484,
+    550.7916526794434,
+    277.23958015441895,
+    559.2916564941406
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "detection of smaller structures, more subtle anomalies, and signs",
+   "rect": [
+    62.989587783813484,
+    541.322925567627,
+    273.0104160308838,
+    549.8229293823242
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "of pathologic abnormalities.",
+   "rect": [
+    62.989587783813484,
+    531.7708377838135,
+    154.66666221618652,
+    540.2708320617676
+   ],
+   "fontSize": 8.499994277954102
+  },
+  {
+   "text": "■",
+   "rect": [
+    53.968753814697266,
+    519.3333320617676,
+    59.104166030883796,
+    527.8333358764648
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "Spectral PCCT allows for a wide range of additional reconstruc-",
+   "rect": [
+    62.989587783813484,
+    519.3333320617676,
+    272.57290840148926,
+    527.8333358764648
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "tions from a single acquisition, thereby enabling a reduction in",
+   "rect": [
+    62.989587783813484,
+    509.7812633514405,
+    268.0833339691162,
+    518.2812576293945
+   ],
+   "fontSize": 8.499994277954045
+  },
+  {
+   "text": "the radiation and contrast material dose for the patient, as well as",
+   "rect": [
+    62.989587783813484,
+    500.31248855590826,
+    275.8645725250244,
+    508.8124923706055
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "supplementary information from which quantitative and func-",
+   "rect": [
+    62.989587783813484,
+    490.7708244323731,
+    268.0624866485596,
+    499.27082824707037
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "tional",
+   "rect": [
+    62.989587783813484,
+    481.30208778381353,
+    81.87500000000001,
+    489.80208206176763
+   ],
+   "fontSize": 8.499994277954102
+  },
+  {
+   "text": "information can be extracted.",
+   "rect": [
+    84.01041984558107,
+    481.30208778381353,
+    180.40624618530276,
+    489.80208206176763
+   ],
+   "fontSize": 8.499994277954102
+  },
+  {
+   "text": "■",
+   "rect": [
+    53.968753814697266,
+    468.78125000000006,
+    59.104166030883796,
+    477.2812538146973
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "K-edge imaging, a material-specific type of imaging possible with",
+   "rect": [
+    62.989587783813484,
+    468.78125000000006,
+    275.90624809265137,
+    477.2812538146973
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "PCCT, due to its capacity to separate more than two energetic",
+   "rect": [
+    62.989587783813484,
+    459.31251335144043,
+    266.1354160308838,
+    467.8125076293946
+   ],
+   "fontSize": 8.499994277954158
+  },
+  {
+   "text": "levels, opens the door to the exploration of new contrast materials",
+   "rect": [
+    62.989587783813484,
+    449.8437385559082,
+    277.9895877838135,
+    458.34374237060547
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "and unprecedented CT applications.",
+   "rect": [
+    62.989587783813484,
+    440.302074432373,
+    182.70833015441897,
+    448.80207824707026
+   ],
+   "fontSize": 8.500003814697266
+  },
+  {
+   "text": "Table 1: Definition of General Terms Used in This Review",
+   "rect": [
+    53.968753814697266,
+    165.80207633972165,
+    277.96875,
+    174.30207061767578
+   ],
+   "fontSize": 8.49999427795413
+  },
+  {
+   "text": "Term",
+   "rect": [
+    53.968753814697266,
+    142.68751907348636,
+    72.48958587646484,
+    151.68751525878906
+   ],
+   "fontSize": 8.999996185302706
+  },
+  {
+   "text": "Abbreviation",
+   "rect": [
+    198.90625,
+    142.68751907348636,
+    243.94791603088382,
+    151.68751525878906
+   ],
+   "fontSize": 8.999996185302706
+  },
+  {
+   "text": "Definition",
+   "rect": [
+    279.4687652587891,
+    142.68751907348636,
+    315.9583568572998,
+    151.68751525878906
+   ],
+   "fontSize": 8.999996185302706
+  },
+  {
+   "text": "Dual-energy CT",
+   "rect": [
+    53.968753814697266,
+    128.6771183013916,
+    111.54166221618652,
+    137.67712402343744
+   ],
+   "fontSize": 9.000005722045842
+  },
+  {
+   "text": "DECT",
+   "rect": [
+    198.90625,
+    128.6771183013916,
+    223.41666221618655,
+    137.67712402343744
+   ],
+   "fontSize": 9.000005722045842
+  },
+  {
+   "text": "All CT systems equipped with EID detectors and dual-energy capabilities",
+   "rect": [
+    279.4687652587891,
+    128.6771183013916,
+    534.6146011352539,
+    137.67712402343744
+   ],
+   "fontSize": 9.000005722045842
+  },
+  {
+   "text": "regardless of the exploited technology (dual-source, dual-layer, etc)",
+   "rect": [
+    288.49998474121094,
+    117.64586257934566,
+    519.4791412353516,
+    126.64585876464847
+   ],
+   "fontSize": 8.999996185302805
+  },
+  {
+   "text": "Energy-integrating detector CT",
+   "rect": [
+    53.968753814697266,
+    106.14584732055664,
+    164.13541793823242,
+    115.14584350585936
+   ],
+   "fontSize": 8.99999618530272
+  },
+  {
+   "text": "EID CT",
+   "rect": [
+    198.90625,
+    106.14584732055664,
+    228.7187480926514,
+    115.14584350585936
+   ],
+   "fontSize": 8.99999618530272
+  },
+  {
+   "text": "All CT scanners equipped with EID that do not feature dual-energy",
+   "rect": [
+    279.4687652587891,
+    106.14584732055664,
+    515.7395935058594,
+    115.14584350585936
+   ],
+   "fontSize": 8.99999618530272
+  },
+  {
+   "text": "capabilities",
+   "rect": [
+    288.49998474121094,
+    95.1875190734863,
+    326.8541431427002,
+    104.18751525878902
+   ],
+   "fontSize": 8.99999618530272
+  },
+  {
+   "text": "Spectral",
+   "rect": [
+    53.968753814697266,
+    83.68750381469728,
+    81.52083396911621,
+    92.6875
+   ],
+   "fontSize": 8.99999618530272
+  },
+  {
+   "text": "",
+   "rect": [
+    198.90625,
+    83.68750381469728,
+    207.90624618530276,
+    92.6875
+   ],
+   "fontSize": 8.99999618530272
+  },
+  {
+   "text": "All images other than conventional ones that can be obtained with DECT",
+   "rect": [
+    279.4687652587891,
+    83.68750381469728,
+    536.9895935058594,
+    92.6875
+   ],
+   "fontSize": 8.99999618530272
+  },
+  {
+   "text": "and PCCT",
+   "rect": [
+    288.49998474121094,
+    72.64586257934572,
+    327.1458148956299,
+    81.64585876464844
+   ],
+   "fontSize": 8.99999618530272
+  },
+  {
+   "text": "Note.DECT = dual-energy CT, EID = energy-integrating detector, PCCT = photon-counting CT.",
+   "rect": [
+    53.968753814697266,
+    57.15627479553219,
+    404.8750114440918,
+    66.15628051757812
+   ],
+   "fontSize": 9.000005722045934
+  }
+ ]
+}

@@ -6,51 +6,45 @@
 		"text": "Myocardial Characterization with Extrace"
 	},
 	{
-		"type": "title",
-		"column": 0,
-		"readingIndex": 1,
-		"text": "CT with MRI Reference"
-	},
-	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 1,
 		"text": "Supported by Siemens Healthineers. D.B. "
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 3,
+		"readingIndex": 2,
 		"text": "Background: Photon-counting detector (PC"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 4,
+		"readingIndex": 3,
 		"text": "Purpose: To compare ECV quantification f"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 5,
+		"readingIndex": 4,
 		"text": "Materials and Methods: In this single-ce"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 6,
+		"readingIndex": 5,
 		"text": "Supplemental material is available for t"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 7,
+		"readingIndex": 6,
 		"text": "Late gadolinium enhancement (LGE) MRI is"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 8,
+		"readingIndex": 7,
 		"text": "implemented over the last decade with a "
 	}
 ]

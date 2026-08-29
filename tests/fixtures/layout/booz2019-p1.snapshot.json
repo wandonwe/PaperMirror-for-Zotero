@@ -6,45 +6,33 @@
 		"text": "Virtual Noncalcium Dual-Energy CT: Detec"
 	},
 	{
-		"type": "title",
-		"column": -1,
-		"readingIndex": 1,
-		"text": "Lumbar Disk Herniation in Comparison wit"
-	},
-	{
-		"type": "title",
-		"column": 0,
-		"readingIndex": 2,
-		"text": "Gray-Scale CT"
-	},
-	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 3,
+		"readingIndex": 1,
 		"text": "From the Division of Experimental and Tr"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 4,
+		"readingIndex": 2,
 		"text": "Purpose: To assess the diagnostic perfor"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 5,
+		"readingIndex": 3,
 		"text": "Conclusion: Color-coded dual-energy CT v"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 6,
+		"readingIndex": 4,
 		"text": "Lumbar disk herniation is a frequent deg"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 7,
+		"readingIndex": 5,
 		"text": "with application of iterative reconstruc"
 	}
 ]

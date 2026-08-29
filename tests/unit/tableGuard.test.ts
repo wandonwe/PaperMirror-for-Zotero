@@ -181,3 +181,68 @@ test('a stats paragraph beside a real table is not swept in as "row labels" (续
 		assert.ok(excluded.has(`lab${row}`), 'real row labels still swept in');
 	}
 });
+
+// ---- 2.6.0 标题锚定文本表 --------------------------------------------------
+
+import { isTableCaptionAnchor } from '../../src/reader/tableGuard';
+
+test('isTableCaptionAnchor: 标题形态锚定,正文指代不锚定 (2.6.0)', () => {
+	assert.equal(isTableCaptionAnchor('Table 2: Spectral Reconstructions'), true);
+	assert.equal(isTableCaptionAnchor('Table 4. Summary of Materials'), true);
+	assert.equal(isTableCaptionAnchor('表 3: 系统特征'), true);
+	// 正文里的指代 (行级 type 仍是 paragraph) 不锚。
+	assert.equal(isTableCaptionAnchor('Table 3 lists the scanners currently available'), false);
+	// 块级被 classify 标为 table 的无标点标题锚 (wu2026 形态)。
+	assert.equal(isTableCaptionAnchor('Table 3 Quantitative assessment of image quality', 'table'), true);
+});
+
+/** 一张 3 列文本定义表: 标签列窄、描述列宽、行顶跨列对齐。 */
+function textTableItems(): GuardItem[] {
+	const items: GuardItem[] = [
+		item('cap', 'Table 2: Definition of Terms Used in This Review', 54, 80, 300, 12, 'table')
+	];
+	const rows = [110, 150, 190, 230];
+	rows.forEach((y, r) => {
+		items.push(item(`lab${r}`, 'Iodine maps', 54, y, 70, 11));
+		items.push(item(`d1-${r}`, 'Images showing the iodine content of the', 150, y, 170, 11));
+		items.push(item(`d2-${r}`, 'voxels in milligrams per milliliter today', 150, y + 13, 168, 11));
+		items.push(item(`b1-${r}`, 'Quantification of iodine concentration now', 340, y, 175, 11));
+	});
+	return items;
+}
+
+test('标题锚定: 无数字种子的文本表被收进 textRegions (2.6.0, radiology2023)', () => {
+	const { excluded, regions, textRegions } = detectTableRegions(textTableItems(), 10);
+	assert.equal(regions.length, 0, 'no numeric seeds — the old path finds nothing');
+	assert.equal(textRegions.length, 1, 'the caption-anchored pass finds the text table');
+	for (let r = 0; r < 4; r++) {
+		assert.ok(excluded.has(`lab${r}`) && excluded.has(`d1-${r}`) && excluded.has(`b1-${r}`),
+			`row ${r} cells excluded`);
+	}
+	assert.ok(!excluded.has('cap'), 'the caption itself stays a caption block');
+});
+
+test('标题锚定: 悬空标题下的双栏正文一个块也不收 (网格验收兜底)', () => {
+	// "Table 2" 的表在下一页 —— 标题下是普通双栏正文: 每栏行宽 ≈ 半区宽,
+	// 没有窄标签列,验收必须拒绝。
+	const items: GuardItem[] = [
+		item('cap', 'Table 2: Continued on the Next Page', 54, 80, 300, 12, 'table')
+	];
+	for (let r = 0; r < 6; r++) {
+		items.push(item(`L${r}`, 'left column body prose line with many ordinary words here', 54, 110 + r * 13, 230, 11));
+		items.push(item(`R${r}`, 'right column body prose line with many ordinary words too', 310, 110 + r * 13, 230, 11));
+	}
+	const { excluded, textRegions } = detectTableRegions(items, 10);
+	assert.equal(textRegions.length, 0, 'two prose columns are not a text table');
+	assert.equal(excluded.size, 0);
+});
+
+test('标题锚定: Note.— 脚注是墙,扫掠到它即止 (radiology2023-p11 列带焊死根因)', () => {
+	const items = textTableItems();
+	// 表尾全宽脚注行 (逐行看词数不足长散文阈值)。
+	items.push(item('note', 'Note.CNR = contrast-to-noise ratio, FDA = U.S. Food', 54, 280, 460, 11));
+	items.push(item('note2', 'and Drug Administration, PCCT = photon-counting CT', 54, 293, 440, 11));
+	const { excluded, textRegions } = detectTableRegions(items, 10);
+	assert.equal(textRegions.length, 1, 'the table above the footnote still detects');
+	assert.ok(!excluded.has('note') && !excluded.has('note2'), 'footnote lines stay prose');
+});

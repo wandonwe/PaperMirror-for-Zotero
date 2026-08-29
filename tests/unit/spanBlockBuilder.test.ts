@@ -656,3 +656,40 @@ test('正文字号真的接到了 classify 上 —— 栏目条不再冒充标�
 	assert.ok(b, '栏目条必须还在');
 	assert.equal(b!.type, 'heading', 'bodySize 判成 6pt 时它会变成 title');
 });
+
+test('标题折行按几何链合并成一个 title 块 (2.6.0, radiology2023/booz2019 实证)', () => {
+	// 20pt 大标题两行: 第一行较窄 (columnOf 会判进第 0 栏),第二行全宽 (-1)
+	// —— 阅读序把它们隔开,数组邻接靠不住,必须按几何链。
+	const title = [
+		span('Clinical Applications of Photon-counting CT:', 72, 739, 340, 20),
+		span('A Review of Pioneer Studies and a Glimpse into the Future', 72, 716, 418, 20)
+	];
+	const body = lines(
+		Array.from({ length: 12 }, () => 'CT systems equipped with photon-counting detectors have shown promise'),
+		72, 600, 10, 12, 420
+	);
+	const { blocks } = buildBlocksFromSpans([...title, ...body], {
+		pageIndex: 0, pageHeight: PAGE_HEIGHT, pageWidth: 576
+	});
+	const titles = blocks.filter(b => b.type === 'title');
+	assert.equal(titles.length, 1, `two title lines must merge into one block, got: ${titles.map(t => t.sourceText).join(' | ')}`);
+	assert.ok(/^Clinical Applications of Photon-counting CT: A Review of Pioneer Studies/.test(titles[0]!.sourceText),
+		`merged in visual order: ${titles[0]!.sourceText}`);
+});
+
+test('字号不同或相距过远的 title 块不合并 (期刊刊头 vs 文章标题)', () => {
+	const masthead = [span('RADIOLOGY JOURNAL', 72, 770, 200, 14)];
+	const title = [span('Clinical Applications of Photon-counting CT in Practice', 72, 700, 400, 20)];
+	const body = lines(
+		Array.from({ length: 12 }, () => 'CT systems equipped with photon-counting detectors have shown promise'),
+		72, 600, 10, 12, 420
+	);
+	const { blocks } = buildBlocksFromSpans([...masthead, ...title, ...body], {
+		pageIndex: 0, pageHeight: PAGE_HEIGHT, pageWidth: 576
+	});
+	const titleBlocks = blocks.filter(b => b.type === 'title');
+	// 刊头可能被过滤或另判类型 —— 只要求文章标题没有把别的东西吞进来。
+	const main = titleBlocks.find(b => b.sourceText.includes('Clinical Applications'));
+	assert.ok(main);
+	assert.ok(!main!.sourceText.includes('RADIOLOGY JOURNAL'), '不同字号/远距的块绝不合并');
+});

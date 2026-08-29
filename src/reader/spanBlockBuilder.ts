@@ -325,7 +325,13 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 	// we switch to y-aware banded gutters; every uniform page keeps the exact
 	// page-wide detectGutters vote, so its line splitting is byte-identical.
 	const rowRects = rows.map(row => row.map(i => i.rect));
-	const gutters: BandedGutter[] = bandedColumnStamp(rowRects, pageWidth, pageHeight)
+	// 2.6.0 (radiology2023-p3): 闸门同样喂 plainBandCount —— 表格格子把
+	// detectColumns 的 x 投影焊成假单带时 (plainCollapsed),不换分带栏沟就会把
+	// "Virtual monoenergetic│Images based on…" 这类相邻列的行焊成一条,后续
+	// 网格化只能看到跨列碎片。行还不存在,带数用原始 span 矩形近似 —— 只作
+	// 触发判据,真正的分栏证据仍是分带栏沟本身。
+	const rawBands = detectColumns(items.map(i => i.rect), pageWidth, pageHeight);
+	const gutters: BandedGutter[] = bandedColumnStamp(rowRects, pageWidth, pageHeight, rawBands.length)
 		? detectGuttersBanded(rowRects, pageWidth)
 		: detectGutters(rowRects, pageWidth).map(x => ({ x, top: Infinity, bottom: -Infinity }));
 
@@ -657,7 +663,7 @@ function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em: numbe
 		left: r[0], top: pageHeight - r[3], width: r[2] - r[0], height: r[3] - r[1]
 	}));
 	const guard = detectTableRegions(items, em, obstacleBoxes);
-	if (!guard.regions.length) {
+	if (!guard.regions.length && !guard.textRegions.length) {
 		return out;
 	}
 	for (const id of guard.excluded) {
@@ -782,6 +788,60 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		});
 	}
 
+	// 标题折行合并 (2.6.0, radiology2023-p1 / booz2019-p1 实证): 大标题折成
+	// 多行时,窄行被 columnOf 判进第 0 栏、全宽行判 -1,阅读序把它们隔开,
+	// 每行成了独立 title 块分开翻译 —— 上半句与下半句各自无语境,中文里连
+	// 不成一句。按【几何】不按数组邻接: 全部 title 块按页面自上而下排,
+	// 同字号 (±10%)、竖向紧邻 (≤1.3em) 的链合并为一个块,文本按视觉行序拼接。
+	{
+		const titles = merged.map((p, i) => ({ p, i })).filter(x => x.p.type === 'title');
+		if (titles.length >= 2) {
+			const sorted = [...titles].sort((x, y) => y.p.rect[3] - x.p.rect[3]);
+			const chains: typeof sorted[] = [];
+			let chain = [sorted[0]!];
+			for (let k = 1; k < sorted.length; k++) {
+				const prev = chain[chain.length - 1]!.p;
+				const next = sorted[k]!.p;
+				const em = Math.max(prev.fontSize, 6);
+				const gap = prev.rect[1] - next.rect[3];
+				const sizeClose = Math.abs(prev.fontSize - next.fontSize)
+					<= Math.max(prev.fontSize, next.fontSize) * 0.1;
+				if (gap >= -em * 1.2 && gap <= em * 1.3 && sizeClose) {
+					chain.push(sorted[k]!);
+				}
+				else {
+					chains.push(chain);
+					chain = [sorted[k]!];
+				}
+			}
+			chains.push(chain);
+			const remove = new Set<number>();
+			for (const c of chains) {
+				if (c.length < 2) {
+					continue;
+				}
+				const head = c.reduce((x, y) => (x.i < y.i ? x : y));
+				let rect = c[0]!.p.rect;
+				let text = '';
+				const group: SpanLine[] = [];
+				for (const part of c) {
+					rect = union(rect, part.p.rect);
+					text = joinFragments(text, part.p.text);
+					group.push(...part.p.group);
+				}
+				merged[head.i] = { ...head.p, rect, text, group };
+				for (const part of c) {
+					if (part.i !== head.i) {
+						remove.add(part.i);
+					}
+				}
+			}
+			for (const i of [...remove].sort((x, y) => y - x)) {
+				merged.splice(i, 1);
+			}
+		}
+	}
+
 	// Table lines rejoin here as one-line blocks (never through prose grouping,
 	// planMerges or caption reunification), so structureTableCells sees a clean
 	// per-cell grid — labels included — instead of a collapsed wall.
@@ -822,7 +882,10 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	const bandedStamp = bandedColumnStamp(
 		groupIntoRows(filteredItems).map(row => row.map(i => i.rect)),
 		pageWidth,
-		options.pageHeight
+		options.pageHeight,
+		// 2.6.0 第二触发: detectColumns 已在上一行算出,把它认出的显著带数
+		// 递进去 —— 表格格子把 x 投影焊成假单带时只有分带检测能救。
+		columnBands.length
 	);
 	const stampColumn = (rect: Rect, isTableLine: boolean): number =>
 		bandedStamp && !isTableLine ? bandedStamp(rect) : columnOf(rect, columnBands, pageWidth);

@@ -1,14 +1,14 @@
 {
 	"Aquino_-_2023_-_Myocardial_Characterization_with_Extracellular_Volume_Mapping_with_a_First-Generation_Photon-countin-p1": {
-		"blocks": 9,
-		"translatable": 9,
+		"blocks": 8,
+		"translatable": 8,
 		"tableCells": 0,
-		"modules": 3,
+		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 9,
-		"payloadChars": 3649,
+		"maxBlocksPerChunk": 8,
+		"payloadChars": 3650,
 		"dupBlocks": 0
 	},
 	"Aquino_-_2023_-_Myocardial_Characterization_with_Extracellular_Volume_Mapping_with_a_First-Generation_Photon-countin-p2": {
@@ -24,15 +24,15 @@
 		"dupBlocks": 0
 	},
 	"aquino2023-p1": {
-		"blocks": 9,
-		"translatable": 9,
+		"blocks": 8,
+		"translatable": 8,
 		"tableCells": 0,
-		"modules": 3,
+		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 9,
-		"payloadChars": 3649,
+		"maxBlocksPerChunk": 8,
+		"payloadChars": 3650,
 		"dupBlocks": 0
 	},
 	"aquino2023-p2": {
@@ -48,15 +48,15 @@
 		"dupBlocks": 0
 	},
 	"booz2019-p1": {
-		"blocks": 8,
-		"translatable": 8,
+		"blocks": 6,
+		"translatable": 6,
 		"tableCells": 0,
-		"modules": 4,
+		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 8,
-		"payloadChars": 4517,
+		"maxBlocksPerChunk": 6,
+		"payloadChars": 4519,
 		"dupBlocks": 0
 	},
 	"chen2023-p1": {
@@ -204,15 +204,15 @@
 		"dupBlocks": 0
 	},
 	"horst2024-p1": {
-		"blocks": 6,
-		"translatable": 6,
+		"blocks": 5,
+		"translatable": 5,
 		"tableCells": 0,
-		"modules": 3,
+		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 6,
-		"payloadChars": 4568,
+		"maxBlocksPerChunk": 5,
+		"payloadChars": 4567,
 		"dupBlocks": 0
 	},
 	"horst2024-p11": {
@@ -251,6 +251,18 @@
 		"payloadChars": 1359,
 		"dupBlocks": 0
 	},
+	"jacc2020-p15": {
+		"blocks": 20,
+		"translatable": 20,
+		"tableCells": 0,
+		"modules": 7,
+		"chunks": 1,
+		"fastChunks": 1,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 20,
+		"payloadChars": 5522,
+		"dupBlocks": 0
+	},
 	"nejm-defuse3-p7": {
 		"blocks": 70,
 		"translatable": 25,
@@ -263,6 +275,42 @@
 		"payloadChars": 4242,
 		"dupBlocks": 0
 	},
+	"radiology2023-p11": {
+		"blocks": 58,
+		"translatable": 53,
+		"tableCells": 48,
+		"modules": 6,
+		"chunks": 4,
+		"fastChunks": 4,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 24,
+		"payloadChars": 3459,
+		"dupBlocks": 8
+	},
+	"radiology2023-p2": {
+		"blocks": 25,
+		"translatable": 23,
+		"tableCells": 9,
+		"modules": 10,
+		"chunks": 3,
+		"fastChunks": 3,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 14,
+		"payloadChars": 5060,
+		"dupBlocks": 0
+	},
+	"radiology2023-p3": {
+		"blocks": 92,
+		"translatable": 59,
+		"tableCells": 71,
+		"modules": 8,
+		"chunks": 4,
+		"fastChunks": 4,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 18,
+		"payloadChars": 4042,
+		"dupBlocks": 6
+	},
 	"sample-twocol-p1": {
 		"blocks": 5,
 		"translatable": 5,
@@ -274,5 +322,65 @@
 		"maxBlocksPerChunk": 5,
 		"payloadChars": 818,
 		"dupBlocks": 0
+	},
+	"wu2026-p1": {
+		"blocks": 31,
+		"translatable": 7,
+		"tableCells": 24,
+		"modules": 5,
+		"chunks": 2,
+		"fastChunks": 2,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 6,
+		"payloadChars": 2132,
+		"dupBlocks": 0
+	},
+	"wu2026-p3": {
+		"blocks": 61,
+		"translatable": 32,
+		"tableCells": 48,
+		"modules": 5,
+		"chunks": 3,
+		"fastChunks": 3,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 21,
+		"payloadChars": 3268,
+		"dupBlocks": 0
+	},
+	"wu2026-p4": {
+		"blocks": 14,
+		"translatable": 13,
+		"tableCells": 0,
+		"modules": 6,
+		"chunks": 1,
+		"fastChunks": 1,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 13,
+		"payloadChars": 4814,
+		"dupBlocks": 0
+	},
+	"wu2026-p5": {
+		"blocks": 24,
+		"translatable": 13,
+		"tableCells": 12,
+		"modules": 8,
+		"chunks": 3,
+		"fastChunks": 3,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 8,
+		"payloadChars": 4110,
+		"dupBlocks": 0
+	},
+	"wu2026-p6": {
+		"blocks": 97,
+		"translatable": 29,
+		"tableCells": 74,
+		"modules": 13,
+		"chunks": 9,
+		"fastChunks": 9,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 10,
+		"payloadChars": 1597,
+		"dupBlocks": 1
 	}
 }

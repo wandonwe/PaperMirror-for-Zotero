@@ -215,3 +215,65 @@ export function boxNewlyViolates(
 	const addedOut = outOfPageArea(self.box, pageW, pageH) - outOfPageArea(self.originalBox, pageW, pageH);
 	return addedOut > 12;
 }
+
+// ---- 提取级盒重叠裁剪 (2.6.0) ----------------------------------------------
+
+export interface ClipCandidate {
+	id: string;
+	box: PixelBox;
+	/** 该块的行矩形 (px)。 */
+	lineBoxes: PixelBox[];
+}
+
+/**
+ * 提取级盒重叠的裁剪计划 (2.6.0, radiology2023 p4/p9 实证)。
+ *
+ * L 形图注 (首行横贯图宽、尾行只占一栏) 的联合外接盒斜压进邻栏正文的盒里:
+ * 两块的【行矩形】互不相交,但译文 div 按外接盒铺排,注文译文直接叠印在
+ * 未遮罩的正文原文上。审计规则只报"新增"侵入,对原始盒自带的重叠天生失明。
+ *
+ * 处置: 盒级重叠显著 (> max(144px², 5% × 较小盒)) 而【一方的行矩形基本不进
+ * 重叠区】(< 15% 重叠面积) 的块对,把那一方沿损失最小的边裁掉重叠区。裁剩
+ * 的盒必须仍可排版 (宽 ≥ 40px、高 ≥ 12px),否则不裁。返回 id → 裁后盒。
+ */
+export function planOverlapClips(blocks: ClipCandidate[]): Map<string, PixelBox> {
+	const out = new Map<string, PixelBox>();
+	const boxOf = (b: ClipCandidate): PixelBox => out.get(b.id) ?? b.box;
+	for (let i = 0; i < blocks.length; i++) {
+		for (let j = i + 1; j < blocks.length; j++) {
+			const a = blocks[i]!;
+			const b = blocks[j]!;
+			const boxA = boxOf(a);
+			const boxB = boxOf(b);
+			const ov = inter(boxA, boxB);
+			if (ov <= Math.max(144, 0.05 * Math.min(boxA.width * boxA.height, boxB.width * boxB.height))) {
+				continue;
+			}
+			const left = Math.max(boxA.left, boxB.left);
+			const top = Math.max(boxA.top, boxB.top);
+			const zone: PixelBox = {
+				left, top,
+				width: Math.min(boxA.left + boxA.width, boxB.left + boxB.width) - left,
+				height: Math.min(boxA.top + boxA.height, boxB.top + boxB.height) - top
+			};
+			const coverA = a.lineBoxes.reduce((s, lr) => s + inter(lr, zone), 0);
+			const coverB = b.lineBoxes.reduce((s, lr) => s + inter(lr, zone), 0);
+			const [target, targetBox] = coverA <= coverB ? [a, boxA] : [b, boxB];
+			if (Math.min(coverA, coverB) > ov * 0.15) {
+				continue; // 双方的行都真在重叠区里 —— 不是提取级形态
+			}
+			const candidates: PixelBox[] = [
+				{ ...targetBox, width: zone.left - targetBox.left },
+				{ left: zone.left + zone.width, top: targetBox.top, width: targetBox.left + targetBox.width - (zone.left + zone.width), height: targetBox.height },
+				{ ...targetBox, height: zone.top - targetBox.top },
+				{ left: targetBox.left, top: zone.top + zone.height, width: targetBox.width, height: targetBox.top + targetBox.height - (zone.top + zone.height) }
+			].filter(c => c.width >= 40 && c.height >= 12);
+			if (!candidates.length) {
+				continue;
+			}
+			candidates.sort((x, y) => y.width * y.height - x.width * x.height);
+			out.set(target.id, candidates[0]!);
+		}
+	}
+	return out;
+}

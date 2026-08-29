@@ -70,4 +70,7 @@ test('人名保护规则进系统提示 (2.5.13)', async () => {
 	} as never);
 	assert.ok(/person names/i.test(system) && /transliterate/i.test(system),
 		'system prompt must forbid transliterating person names');
+	// 2.6.0: 机构/产品名并入同一条 (radiology2023 "MARS Bioimaging"→"火星生物成像")。
+	assert.ok(/company|manufacturer/i.test(system) && /product/i.test(system),
+		'system prompt must also protect company and product names');
 });

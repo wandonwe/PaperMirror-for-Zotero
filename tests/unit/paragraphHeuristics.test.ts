@@ -174,7 +174,7 @@ test('bandedColumnStamp stays null for a uniform two-column page', () => {
 	assert.equal(bandedColumnStamp(rows, PAGE_W, 792), null);
 });
 
-test('bandedColumnStamp ignores a data table over a body (≥4 columns is not a prose regime)', () => {
+test('bandedColumnStamp rescues a body under a full-width data table (2.6.0, radiology2023-p11)', () => {
 	const rows: Rect[][] = [];
 	// A 5-column table in the top band.
 	for (let y = 760; y >= 440; y -= 12) {
@@ -186,6 +186,56 @@ test('bandedColumnStamp ignores a data table over a body (≥4 columns is not a 
 	// A 2-column body below.
 	for (let y = 400; y >= 40; y -= 12) {
 		rows.push([[54, y - 10, 292, y], [320, y - 10, 558, y]]);
+	}
+	// 2.5.10 pinned null here (single prose regime → reject). 2.6.0 flips it:
+	// the table band covers the body gutter in the global vote, so the global
+	// path CANNOT stamp this page — the banded path is the only one that can.
+	const stamp = bandedColumnStamp(rows, PAGE_W, 792);
+	assert.ok(stamp, 'globalMissed rescue: the lone prose regime activates the stamp');
+	// Body columns stamp 0/1; the table band (its regime was dropped as a data
+	// table) is outside every prose regime and stamps -1 (translated in-order).
+	assert.equal(stamp!([54, 200, 292, 210]), 0, 'body left column');
+	assert.equal(stamp!([320, 200, 558, 210]), 1, 'body right column');
+	assert.equal(stamp!([160, 600, 250, 610]), -1, 'table-zone cell is outside the prose regime');
+	assert.equal(stamp!([54, 200, 558, 210]), -1, 'a spanning line still separates');
+});
+
+test('bandedColumnStamp rescues when detectColumns collapsed to one band (2.6.0, radiology2023-p3)', () => {
+	// A clean 3-column page: the banded stamp normally defers to the plain
+	// path (null — uniform structure). But when detectColumns's x-projection
+	// was welded into ONE band by table-cell rows (plainBandCount=1), the
+	// plain path would zipper the columns — the global-confirmed prose regime
+	// (3 cols > 1 band) rescues.
+	const rows: Rect[][] = [];
+	for (let y = 760; y >= 40; y -= 12) {
+		rows.push([[54, y - 10, 210, y], [228, y - 10, 384, y], [402, y - 10, 558, y]]);
+	}
+	const stamp = bandedColumnStamp(rows, PAGE_W, 792, 1);
+	assert.ok(stamp, 'plainCollapsed rescue: 3 prose columns vs 1 plain band');
+	assert.equal(stamp!([54, 400, 210, 410]), 0, 'left column');
+	assert.equal(stamp!([228, 400, 384, 410]), 1, 'middle column');
+	assert.equal(stamp!([402, 400, 558, 410]), 2, 'right column');
+	// With the plain path seeing all three bands, the stamp stays null (defer).
+	assert.equal(bandedColumnStamp(rows, PAGE_W, 792, 3), null);
+});
+
+test('bandedColumnStamp does NOT fire when the global vote sees the same gutter a few pt off (chen2023-p10 回归)', () => {
+	// A 7-column data table on top of a 2-column bottom zone whose gutter the
+	// global vote DOES find, merely centred ~9pt away (other-band rows bias the
+	// full-page vote). "Off by a few pt" is not "missed" — the plain path owns
+	// this page and the banded stamp must stay null (snapshot byte-identity).
+	const rows: Rect[][] = [];
+	for (let y = 700; y >= 500; y -= 12) {
+		rows.push([
+			[54, y - 10, 175, y], [187, y - 10, 268, y], [280, y - 10, 306, y],
+			[318, y - 10, 373, y], [385, y - 10, 409, y], [421, y - 10, 489, y],
+			[501, y - 10, 558, y]
+		]);
+	}
+	// Bottom 2-col zone: gutter 296-308 (centre ~302) — inside 20pt of wherever
+	// the global vote lands for the page-wide gap around x≈300.
+	for (let y = 460; y >= 40; y -= 12) {
+		rows.push([[54, y - 10, 296, y], [308, y - 10, 558, y]]);
 	}
 	assert.equal(bandedColumnStamp(rows, PAGE_W, 792), null);
 });

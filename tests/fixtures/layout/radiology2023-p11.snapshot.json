@@ -1,0 +1,494 @@
+[
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 0,
+		"text": "The Future of PCCT"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "We have summarized the improvements in i"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "General Considerations"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "This new technology will lead to data ch"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 4,
+		"text": "PCCT has the potential to be applicable "
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 5,
+		"text": "Possibly the most pressing and highly an"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 6,
+		"text": "tions. Handling the large amount of data"
+	},
+	{
+		"type": "caption",
+		"column": -1,
+		"readingIndex": 7,
+		"text": "Figure 11: (A) Ultrahigh-resolution phot"
+	},
+	{
+		"type": "table",
+		"column": -1,
+		"readingIndex": 8,
+		"text": "Table 4: Summary of Prominent Materials "
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 9,
+		"tableRow": 0,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "Examples of"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 10,
+		"tableRow": 1,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "Advantages"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 11,
+		"tableRow": 1,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "Disadvantages Publications"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 12,
+		"tableRow": 2,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "Clinical availability, prior clinical us"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 13,
+		"tableRow": 2,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "Allergic reactions, nonspecificity 68, 9"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 14,
+		"tableRow": 3,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "Clinical availability, prior clinical us"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 15,
+		"tableRow": 3,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "Concerns over brain retention 8385, 98,"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 16,
+		"tableRow": 4,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "High contrast production, extensive prec"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 17,
+		"tableRow": 4,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "Rapid clearance, 83, 87 nonspecificity"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 18,
+		"tableRow": 5,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "High contrast production, European appro"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 19,
+		"tableRow": 5,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "Safety and role as a CT agent 93, 100 ye"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 20,
+		"tableRow": 6,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "Extensive preclinical"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 21,
+		"tableRow": 6,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "Potentially high cost; excretion needs 5"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 22,
+		"tableRow": 7,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "use, synthetic control"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 23,
+		"tableRow": 7,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "to be solved, as gold nanoparticles"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 24,
+		"tableRow": 8,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "over shape and size"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 25,
+		"tableRow": 8,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "are slowly and incompletely"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 26,
+		"tableRow": 9,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "eliminated by the human body"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 27,
+		"tableRow": 10,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "Low cost, good"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 28,
+		"tableRow": 10,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "High K-edgelower K-edge image 90, 101"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 29,
+		"tableRow": 11,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "safety profile"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 30,
+		"tableRow": 11,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "CNR; more research needed on"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 31,
+		"tableRow": 12,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "safe and excretable agents"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 32,
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Clinical"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 33,
+		"tableRow": 0,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "K-edge"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 34,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Contrast Agent"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 35,
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Availability"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 36,
+		"tableRow": 1,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "Imaging"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 37,
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Iodinated small molecules"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 38,
+		"tableRow": 2,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Yes"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 39,
+		"tableRow": 2,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "No"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 40,
+		"tableRow": 3,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Gadolinium chelates"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 41,
+		"tableRow": 3,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Yes"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 42,
+		"tableRow": 3,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "Yes"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 43,
+		"tableRow": 4,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Tantalum oxide nanoparticles"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 44,
+		"tableRow": 4,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "No"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 45,
+		"tableRow": 4,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "Yes"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 46,
+		"tableRow": 5,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Hafnium oxide nanoparticles"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 47,
+		"tableRow": 5,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "In Europe"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 48,
+		"tableRow": 5,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "Yes"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 49,
+		"tableRow": 6,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Gold"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 50,
+		"tableRow": 6,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "No"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 51,
+		"tableRow": 6,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "Yes"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 52,
+		"tableRow": 7,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "nanoparticles"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 53,
+		"tableRow": 10,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Bismuth"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 54,
+		"tableRow": 10,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "No"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 55,
+		"tableRow": 10,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "Yes"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 56,
+		"tableRow": 11,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "nanoparticles"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 57,
+		"text": "Note.CNR = contrast-to-noise ratio, FDA"
+	}
+]

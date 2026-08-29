@@ -557,7 +557,11 @@ export function detectGuttersBanded(rows: Rect[][], pageWidth: number): BandedGu
 export function bandedColumnStamp(
 	rows: Rect[][],
 	pageWidth: number,
-	pageHeight: number
+	pageHeight: number,
+	/** detectColumns 在同一页认出的显著带数 (2.6.0): 满幅表格的格子行会把
+	 *  x 投影链焊成一条假单带,此时散文 regime 的栏结构只有分带检测知道 ——
+	 *  分带栏数超过普通路径带数即触发抢救。不传则不启用该触发。 */
+	plainBandCount?: number
 ): ((rect: Rect) => number) | null {
 	// A page-level column REGIME spans a large fraction of the page. Short
 	// channels — a header-band or footnote gutter tens of points tall — must not
@@ -604,7 +608,43 @@ export function bandedColumnStamp(
 	// table define a page regime made table-bearing pages re-split. Prose
 	// columns are 1–3 wide (≤2 gutters).
 	const proseRegimes = regimes.filter(r => r.xs.length <= 2);
-	if (proseRegimes.length < 2) {
+	if (!proseRegimes.length) {
+		return null;
+	}
+	// 散文 regime 抢救 (2.6.0, radiology2023 p3/p11 实证): 满幅数据表把全局
+	// detectGutters 的投票整个盖死 (quorum 永远不满,返回 []),正文栏沟只有
+	// 分带检测看得见 —— 但此前这里要求 ≥2 个散文 regime 才激活,「一个双栏
+	// 正文带 + 若干表格带」的页面被判 null 回退全局,左右栏的行按基线交错、
+	// 逐行成段,整节译文变成拉链。新触发: 哪怕只有一个散文 regime,只要
+	// 【全局投票漏掉了它的任何一条栏沟】(±8pt 内无全局沟),就必须走分带 ——
+	// 全局什么都没看见,不存在"回退到它"这回事。全局没漏时逐字节走老路。
+	// 「漏」的判据是【数量】+【位置】双条件:
+	// - 数量: 全局沟数 < regime 沟数 —— 全局投票在结构上撑不起这个 regime
+	//   的栏数,普通路径必然把某两栏拉成拉链。只看位置不看数量会误伤两类页:
+	//   chen2023-p10 (全局 301 vs 分带 292,同一条物理沟被跨带行拉偏 9pt,
+	//   全局其实看见了) 和 hakime2007-p2 (分带在第 2 栏中间多投出一条 338 的
+	//   假沟,全局 [222,391] 明明是对的 —— 按位置匹配反而判全局"漏")。
+	// - 位置: 容差 20pt (≠ 盖章的 ±8pt 骑缝容差),防跨带行把沟心拉偏。
+	const globalGutters = detectGutters(rows, pageWidth > 0 ? pageWidth : 612);
+	const globalMissed = proseRegimes.some(r =>
+		r.xs.length > globalGutters.length
+		&& r.xs.some(x => !globalGutters.some(g => Math.abs(g - x) <= 20)));
+	// 第二触发 (2.6.0, radiology2023-p3 实证): 全局沟虽在,detectColumns 的
+	// x 投影链却被表格格子行焊成一条假单带 —— 散文 regime 知道的栏数
+	// (沟数+1) 超过普通路径的带数时,普通盖章必然把两栏拉成拉链,同样只能
+	// 靠分带抢救。detectColumns 认出的带数不少于散文栏数的页面 (chen/wu 系
+	// 全部夹具) 不触发,逐字节走老路。
+	// 只信【全局也确认过的】regime: p3 的机理是分带和全局对沟的位置意见一致
+	// (297 vs 292/303),坏在 detectColumns 的 x 投影被表格格子行焊死;而
+	// wu2026-p6 里分带 regime 混进了全局根本不认的表格碎沟 (253/351/406),
+	// 按它的"栏数"去比 band 数是拿坏证据翻好判决 —— 含未确认沟的 regime
+	// 不参与本触发。
+	const confirmed = (r: Regime): boolean =>
+		r.xs.every(x => globalGutters.some(g => Math.abs(g - x) <= 20));
+	const plainCollapsed = plainBandCount !== undefined
+		&& proseRegimes.some(r => confirmed(r) && r.xs.length + 1 > plainBandCount);
+	const rescueNeeded = globalMissed || plainCollapsed;
+	if (proseRegimes.length < 2 && !rescueNeeded) {
 		return null;
 	}
 	regimes.length = 0;
@@ -615,13 +655,15 @@ export function bandedColumnStamp(
 		r.xs.sort((a, b) => a - b);
 	}
 	// Only a genuine change in column STRUCTURE down the page justifies the
-	// banded path. If every regime has the same gutter x's (a single uniform
-	// multi-column flow whose gutter merely broke around a mid-page heading and
-	// re-formed at the same x), there is one column regime — defer to the plain
-	// detectColumns/columnOf path so that page stays byte-identical.
+	// banded path — UNLESS the global vote missed the gutters entirely (then
+	// there is nothing to defer to). If every regime has the same gutter x's (a
+	// single uniform multi-column flow whose gutter merely broke around a
+	// mid-page heading and re-formed at the same x) AND the global vote sees
+	// those gutters, defer to the plain detectColumns/columnOf path so that
+	// page stays byte-identical.
 	const signature = (r: Regime): string => r.xs.map(x => Math.round(x / 8)).join(',');
 	const sig0 = signature(regimes[0]!);
-	if (regimes.every(r => signature(r) === sig0)) {
+	if (!rescueNeeded && regimes.every(r => signature(r) === sig0)) {
 		return null;
 	}
 	const width = pageWidth > 0 ? pageWidth : 612;

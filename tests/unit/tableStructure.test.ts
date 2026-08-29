@@ -168,3 +168,63 @@ test('tiny symbol-only cells (R², n=5, ±SD) are data — never sent to transla
 	assert.equal(kindOf(1, 0), 'text', 'Treatment arm 仍是文本格');
 	assert.equal(kindOf(1, 3), 'text', 'good outcome 仍是文本格');
 });
+
+// ---- 2.6.0 buildTextTableModel ---------------------------------------------
+
+import { buildTextTableModel } from '../../src/reader/tableStructure';
+
+function cm(id: string, text: string, left: number, top: number, width: number, height = 11): CellMember {
+	return { id, text, box: { left, top, width, height }, fontSize: 8 };
+}
+
+test('buildTextTableModel: 多行文本格按行起点归行,不逐行碎格 (2.6.0)', () => {
+	const region: Box = { left: 54, top: 100, width: 460, height: 120 };
+	const members: CellMember[] = [];
+	// 两行记录: 标签列 1 行,描述列 2 行 (第二行是折行,顶边不与任何行起点对齐)。
+	for (let r = 0; r < 2; r++) {
+		const y = 100 + r * 50;
+		members.push(cm(`lab${r}`, `Label ${r}`, 54, y, 70));
+		members.push(cm(`d1-${r}`, 'Images showing the iodine content of the', 150, y, 200));
+		members.push(cm(`d2-${r}`, 'voxels in milligrams per milliliter', 150, y + 13, 195));
+	}
+	const model = buildTextTableModel(0, 0, region, members, 10);
+	assert.equal(model.colCount, 2);
+	assert.equal(model.rowCount, 2);
+	const cell = model.cells.find(c => c.row === 0 && c.col === 1);
+	assert.ok(cell);
+	assert.equal(cell!.text, 'Images showing the iodine content of the voxels in milligrams per milliliter');
+	assert.equal(cell!.kind, 'text');
+});
+
+test('buildTextTableModel: 全宽漏网行不焊死列带 (2.6.0, radiology2023-p11 根因)', () => {
+	const region: Box = { left: 54, top: 100, width: 460, height: 160 };
+	const members: CellMember[] = [];
+	for (let r = 0; r < 3; r++) {
+		const y = 100 + r * 40;
+		members.push(cm(`a${r}`, `Agent ${r}`, 54, y, 60));
+		members.push(cm(`b${r}`, 'Yes', 160, y, 20));
+		members.push(cm(`c${r}`, 'Clinical availability today', 240, y, 130));
+	}
+	// 一条几乎全宽的漏网行 (跨列子标题/脚注碎行)。
+	members.push(cm('wide', 'Spanning stray line across all columns of the region', 54, 230, 440));
+	const model = buildTextTableModel(0, 0, region, members, 10);
+	assert.equal(model.colCount, 3, 'the wide member must not weld the column bands');
+	for (let r = 0; r < 3; r++) {
+		const agent = model.cells.find(c => c.memberIds.includes(`a${r}`))!;
+		const avail = model.cells.find(c => c.memberIds.includes(`b${r}`))!;
+		assert.notEqual(agent.col, avail.col, `row ${r}: label and value in different columns`);
+	}
+});
+
+test('buildTextTableModel: 连字符折行在格内接回', () => {
+	const region: Box = { left: 54, top: 100, width: 300, height: 40 };
+	const members = [
+		cm('l1', 'assessed quanti-', 54, 100, 120),
+		cm('l2', 'tatively today', 54, 113, 110),
+		cm('x1', 'Label', 250, 100, 40),
+		cm('x2', 'Other', 250, 130, 40)
+	];
+	const model = buildTextTableModel(0, 0, region, members, 10);
+	const cell = model.cells.find(c => c.memberIds.includes('l1'))!;
+	assert.equal(cell.text, 'assessed quantitatively today');
+});
