@@ -168,15 +168,15 @@
 		"dupBlocks": 0
 	},
 	"chen2023-p8": {
-		"blocks": 80,
+		"blocks": 79,
 		"translatable": 22,
-		"tableCells": 71,
+		"tableCells": 70,
 		"modules": 6,
 		"chunks": 4,
 		"fastChunks": 4,
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 11,
-		"payloadChars": 4065,
+		"payloadChars": 4066,
 		"dupBlocks": 0
 	},
 	"chen2023-p9": {
@@ -189,6 +189,30 @@
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 3,
 		"payloadChars": 3594,
+		"dupBlocks": 0
+	},
+	"fletcher2024-p5": {
+		"blocks": 6,
+		"translatable": 6,
+		"tableCells": 0,
+		"modules": 5,
+		"chunks": 2,
+		"fastChunks": 1,
+		"slowChunks": 1,
+		"maxBlocksPerChunk": 5,
+		"payloadChars": 5736,
+		"dupBlocks": 0
+	},
+	"fletcher2024-p7": {
+		"blocks": 7,
+		"translatable": 7,
+		"tableCells": 0,
+		"modules": 5,
+		"chunks": 1,
+		"fastChunks": 1,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 7,
+		"payloadChars": 4041,
 		"dupBlocks": 0
 	},
 	"hakime2007-p2": {
@@ -204,15 +228,15 @@
 		"dupBlocks": 0
 	},
 	"horst2024-p1": {
-		"blocks": 5,
-		"translatable": 5,
+		"blocks": 4,
+		"translatable": 4,
 		"tableCells": 0,
 		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 5,
-		"payloadChars": 4567,
+		"maxBlocksPerChunk": 4,
+		"payloadChars": 4509,
 		"dupBlocks": 0
 	},
 	"horst2024-p11": {
@@ -324,15 +348,15 @@
 		"dupBlocks": 0
 	},
 	"wu2026-p1": {
-		"blocks": 31,
-		"translatable": 7,
+		"blocks": 32,
+		"translatable": 8,
 		"tableCells": 24,
-		"modules": 5,
+		"modules": 4,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 6,
-		"payloadChars": 2132,
+		"maxBlocksPerChunk": 7,
+		"payloadChars": 2131,
 		"dupBlocks": 0
 	},
 	"wu2026-p3": {
@@ -372,15 +396,15 @@
 		"dupBlocks": 0
 	},
 	"wu2026-p6": {
-		"blocks": 97,
-		"translatable": 29,
+		"blocks": 92,
+		"translatable": 24,
 		"tableCells": 74,
 		"modules": 13,
 		"chunks": 9,
 		"fastChunks": 9,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 10,
-		"payloadChars": 1597,
+		"maxBlocksPerChunk": 5,
+		"payloadChars": 1600,
 		"dupBlocks": 1
 	}
 }

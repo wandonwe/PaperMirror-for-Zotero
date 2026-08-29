@@ -1,0 +1,848 @@
+{
+ "source": "fletcher2024",
+ "page": 7,
+ "pageWidth": 594,
+ "pageHeight": 783,
+ "items": [
+  {
+   "text": "Fletcher et al",
+   "rect": [
+    506.02274114435363,
+    744.7159444635564,
+    545.7954649491743,
+    752.7159368341618
+   ],
+   "fontSize": 7.999992370605355
+  },
+  {
+   "text": "Radiology:",
+   "rect": [
+    47.97727411443536,
+    21.69318528608839,
+    77.53408605402166,
+    28.69318251176315
+   ],
+   "fontSize": 6.999997225674761
+  },
+  {
+   "text": "Volume 310: Number 3�March 2024",
+   "rect": [
+    79.10226995294742,
+    21.69318528608839,
+    179.67045177112925,
+    28.69318251176315
+   ],
+   "fontSize": 6.999997225674761
+  },
+  {
+   "text": "■",
+   "rect": [
+    182.9090881347656,
+    23.70454684170811,
+    185.02272865988988,
+    27.20454545454544
+   ],
+   "fontSize": 3.4999986128373273
+  },
+  {
+   "text": "radiology.rsna.org",
+   "rect": [
+    188.54544899680394,
+    21.69318528608839,
+    236.76135323264378,
+    28.69318251176315
+   ],
+   "fontSize": 6.999997225674761
+  },
+  {
+   "text": "7",
+   "rect": [
+    541.6022560813209,
+    21.47727688876061,
+    546.4204372059214,
+    29.477269259366114
+   ],
+   "fontSize": 7.999992370605504
+  },
+  {
+   "text": "examined radiomic feature stability",
+   "rect": [
+    47.97727411443536,
+    470.0113823630592,
+    192.18181956898079,
+    480.0113858309658
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "across various organs in abdominal",
+   "rect": [
+    47.97727411443536,
+    458.0340791182084,
+    192.1477265791459,
+    468.034082586115
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "monoenergetic PCCT scans, includ-",
+   "rect": [
+    47.97727411443536,
+    446.0568174882368,
+    192.19318043101913,
+    456.05682095614344
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "ing part of the lungs. They found",
+   "rect": [
+    47.97727411443536,
+    434.01134907115585,
+    192.18181956898079,
+    444.01135253906244
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "that VMI features tended to be more",
+   "rect": [
+    47.97727411443536,
+    422.0340874411842,
+    192.19318043101913,
+    432.0340909090909
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "stable",
+   "rect": [
+    47.97727411443536,
+    410.05682581121266,
+    70.28408744118428,
+    420.05682927911926
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "compared",
+   "rect": [
+    79.15909507057883,
+    410.05682581121266,
+    118.05681402033024,
+    420.05682927911926
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "with",
+   "rect": [
+    126.89772865988988,
+    410.05682581121266,
+    144.62500138716263,
+    420.05682927911926
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "non-VMI",
+   "rect": [
+    153.5113594748757,
+    410.05682581121266,
+    192.0227258855646,
+    420.05682927911926
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "features, but certain features varied",
+   "rect": [
+    47.97727411443536,
+    398.07956418124104,
+    192.2045412930575,
+    408.0795676491477
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "between VMI energy levels. To our",
+   "rect": [
+    47.97727411443536,
+    386.0227349021217,
+    192.2045412930575,
+    396.0227383700284
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "knowledge, no study to date has spe-",
+   "rect": [
+    47.97727411443536,
+    374.04547327215016,
+    192.18181956898079,
+    384.04547674005676
+   ],
+   "fontSize": 10.000003467906595
+  },
+  {
+   "text": "cifically compared lung nodule ra-",
+   "rect": [
+    47.97727411443536,
+    362.0681700272993,
+    192.21591255881566,
+    372.06817349520594
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "diomic features between PCCT and",
+   "rect": [
+    47.97727411443536,
+    350.10226925936604,
+    192.19318043101913,
+    360.1022727272727
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "EID CT.",
+   "rect": [
+    47.97727411443536,
+    338.0454399802467,
+    83.05681748823685,
+    348.0454434481534
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "Contrast-enhanced",
+   "rect": [
+    47.97727411443536,
+    315.93180292302907,
+    139.17045593261716,
+    327.931807084517
+   ],
+   "fontSize": 12.000004161487936
+  },
+  {
+   "text": "Multienergy CT Imaging",
+   "rect": [
+    47.97727411443536,
+    303.95454129305745,
+    163.30681540749285,
+    315.95454545454544
+   ],
+   "fontSize": 12.000004161487993
+  },
+  {
+   "text": "Previous studies have established the",
+   "rect": [
+    47.97727411443536,
+    290.0681970769709,
+    192.1477265791459,
+    300.0681901411576
+   ],
+   "fontSize": 9.999993064186697
+  },
+  {
+   "text": "clinical applications and benefits of",
+   "rect": [
+    47.97727411443536,
+    278.09090423583984,
+    192.18181956898079,
+    288.0909077037464
+   ],
+   "fontSize": 10.000003467906538
+  },
+  {
+   "text": "multienergy CT in thoracic imaging",
+   "rect": [
+    47.97727411443536,
+    266.11362179842865,
+    192.18181956898079,
+    276.11362526633513
+   ],
+   "fontSize": 10.000003467906481
+  },
+  {
+   "text": "using dual-energy CT (70�73), with",
+   "rect": [
+    47.97727411443536,
+    254.13636016845697,
+    192.2045412930575,
+    264.1363636363636
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "material classification permitting the",
+   "rect": [
+    47.97727411443536,
+    242.0795308893377,
+    192.1477265791459,
+    252.07953435724434
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "reconstruction of VMIs and iodine",
+   "rect": [
+    47.97727411443536,
+    230.10226925936615,
+    192.19318043101913,
+    240.10227272727266
+   ],
+   "fontSize": 10.00000346790651
+  },
+  {
+   "text": "maps. Low-energy VMIs improve the signal of iodinated con-",
+   "rect": [
+    47.97727411443536,
+    218.12500762939447,
+    288.4090909090909,
+    228.12501109730113
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "trast media; high-energy VMIs decrease calcium and beam-",
+   "rect": [
+    47.97727411443536,
+    206.15908605402169,
+    288.44319430264557,
+    216.1590895219282
+   ],
+   "fontSize": 10.00000346790651
+  },
+  {
+   "text": "hardening artifacts; the use of iodine maps can assist lesion",
+   "rect": [
+    47.97727411443536,
+    194.1022879860618,
+    288.3409049294211,
+    204.1022810502486
+   ],
+   "fontSize": 9.999993064186782
+  },
+  {
+   "text": "characterization as a surrogate for pulmonary perfusion; and",
+   "rect": [
+    47.97727411443536,
+    182.12499514493075,
+    288.46591602672225,
+    192.12499861283737
+   ],
+   "fontSize": 10.000003467906623
+  },
+  {
+   "text": "virtual noncontrast images may eliminate the need for separate",
+   "rect": [
+    47.97727411443536,
+    170.14772311123937,
+    288.38634837757456,
+    180.14772657914588
+   ],
+   "fontSize": 10.00000346790651
+  },
+  {
+   "text": "noncontrast acquisition (eg, emphysema quantification) (37).",
+   "rect": [
+    47.97727411443536,
+    158.17045107754797,
+    285.15909368341613,
+    168.1704545454545
+   ],
+   "fontSize": 10.000003467906538
+  },
+  {
+   "text": "Yalynska et al (43) showed the benefit of PCCT VMIs for",
+   "rect": [
+    59.97726787220347,
+    146.12500346790657,
+    288.4204413674094,
+    156.12499653209338
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "pulmonary artery imaging, with optimal subjective pulmonary",
+   "rect": [
+    47.97727411443536,
+    134.1477314342152,
+    288.4318334406072,
+    144.147724498402
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "embolism visibility at 50 keV, while 70 keV provided less noise",
+   "rect": [
+    47.97727411443536,
+    122.1704594005238,
+    288.3977300470525,
+    132.1704524647106
+   ],
+   "fontSize": 9.999993064186796
+  },
+  {
+   "text": "and beam hardening. Using 50-keV VMIs can also reduce the",
+   "rect": [
+    47.97727411443536,
+    110.19317696311258,
+    288.4545551646839,
+    120.19318043101921
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "required dose of intravenous contrast material (44), which may",
+   "rect": [
+    47.97727411443536,
+    98.13636849143288,
+    288.4204517711292,
+    108.13636155561969
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "be helpful for patients with renal dysfunction. The quality of",
+   "rect": [
+    47.97727411443536,
+    86.15908605402166,
+    288.4318334406072,
+    96.1590895219283
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "lung perfusion images from PCCT is superior to dual-source",
+   "rect": [
+    47.97727411443536,
+    74.18181402033026,
+    288.3977300470525,
+    84.1818174882369
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "EID CT, with higher spatial resolution, fewer cardiac motion",
+   "rect": [
+    47.97727411443536,
+    62.215913252397016,
+    288.46591602672225,
+    72.21590631658383
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "artifacts, and 52% lower radiation dose (74).",
+   "rect": [
+    47.97727411443536,
+    50.15909437699748,
+    220.8522761951793,
+    60.15908744118429
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "High-pitch multienergy imaging can be performed at dual-",
+   "rect": [
+    317.8863664106888,
+    217.89772796630857,
+    546.3295399058948,
+    227.8977314342152
+   ],
+   "fontSize": 10.000003467906623
+  },
+  {
+   "text": "source PCCT, which is not possible in dual-source EID CT",
+   "rect": [
+    305.89774391867894,
+    205.84091949462885,
+    546.3409423828124,
+    215.8409229625355
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "(Fig 7). Euler et al (45) compared high-pitch dual-source PCCT",
+   "rect": [
+    305.89774391867894,
+    193.86363705721763,
+    546.3863858309658,
+    203.86364052512428
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "with high-pitch dual-source EID CT and found that PCCT",
+   "rect": [
+    305.89774391867894,
+    181.8863546198064,
+    546.4204684170809,
+    191.88635808771306
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "with multiple VMIs permitted greater aortic contrast-to-noise",
+   "rect": [
+    305.89774391867894,
+    169.90909298983485,
+    546.3181998512961,
+    179.90908605402166
+   ],
+   "fontSize": 9.99999306418681
+  },
+  {
+   "text": "ratio and similar image quality (Fig 8). Saeed et al (46) showed",
+   "rect": [
+    305.89774391867894,
+    157.86363497647375,
+    546.3068389892577,
+    167.86363844438026
+   ],
+   "fontSize": 10.00000346790651
+  },
+  {
+   "text": "that this technique facilitated a 42% reduction in contrast media",
+   "rect": [
+    305.89774391867894,
+    145.88636294278234,
+    546.329581520774,
+    155.88636641068888
+   ],
+   "fontSize": 10.000003467906538
+  },
+  {
+   "text": "dose without degradation of image quality. Pannenbecker et al",
+   "rect": [
+    305.89774391867894,
+    133.90909090909085,
+    546.3523032448508,
+    143.9090943769975
+   ],
+   "fontSize": 10.000003467906652
+  },
+  {
+   "text": "(75) recently demonstrated that high-pitch multienergy PCCT",
+   "rect": [
+    305.89774391867894,
+    121.93181887539946,
+    546.3409423828124,
+    131.9318223433061
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "pulmonary angiography could be performed at half the radiation",
+   "rect": [
+    305.89774391867894,
+    109.87500000000003,
+    546.3409423828124,
+    119.87500346790657
+   ],
+   "fontSize": 10.000003467906538
+  },
+  {
+   "text": "and iodine dose (down to 25 mL) compared with routine-pitch",
+   "rect": [
+    305.89774391867894,
+    97.89772796630854,
+    546.3863858309658,
+    107.89773143421517
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "dual-source dual-energy EID CT; however, prior studies have",
+   "rect": [
+    305.89774391867894,
+    85.93181679465556,
+    546.4318292791193,
+    95.9318202625621
+   ],
+   "fontSize": 10.000003467906538
+  },
+  {
+   "text": "demonstrated acceptable image quality at similar iodine doses",
+   "rect": [
+    305.89774391867894,
+    73.95454476096418,
+    546.2954781272193,
+    83.9545482288707
+   ],
+   "fontSize": 10.000003467906524
+  },
+  {
+   "text": "using high-pitch dual-source EID CT. PCCT may potentially",
+   "rect": [
+    305.89774391867894,
+    61.89772588556464,
+    546.3636641068891,
+    71.89772935347128
+   ],
+   "fontSize": 10.000003467906637
+  },
+  {
+   "text": "benefit the evaluation of chronic thromboembolic pulmonary",
+   "rect": [
+    305.89774391867894,
+    49.920453851873255,
+    546.3409423828124,
+    59.920457319779786
+   ],
+   "fontSize": 10.00000346790653
+  },
+  {
+   "text": "Figure 5:",
+   "rect": [
+    80.99999167702413,
+    556.5909305919299,
+    114.6022588556463,
+    565.0909257368608
+   ],
+   "fontSize": 8.499995144930836
+  },
+  {
+   "text": "CT images in an 87-year-old male patient with recurrent marginal zone lymphoma who underwent same-day energy-integrating detec-",
+   "rect": [
+    122.51137473366475,
+    556.7045392123134,
+    512.5454573197798,
+    564.704531582919
+   ],
+   "fontSize": 7.999992370605582
+  },
+  {
+   "text": "tor (EID) CT and photon-counting CT (PCCT) (using a prototype PCCT system) in a research study.",
+   "rect": [
+    80.99999167702413,
+    546.6817932128905,
+    364.9318209561434,
+    554.6817959872159
+   ],
+   "fontSize": 8.000002774325367
+  },
+  {
+   "text": "(A)",
+   "rect": [
+    366.76137750799,
+    546.6817932128905,
+    377.92046980424357,
+    554.6817959872159
+   ],
+   "fontSize": 8.000002774325367
+  },
+  {
+   "text": "Axial EID CT image with routine reconstruction",
+   "rect": [
+    379.5909118652343,
+    546.6817932128905,
+    512.7954587069423,
+    554.6817959872159
+   ],
+   "fontSize": 8.000002774325367
+  },
+  {
+   "text": "kernel and 512 matrix.",
+   "rect": [
+    80.99999167702413,
+    536.7386252663351,
+    146.15908189253372,
+    544.7386280406604
+   ],
+   "fontSize": 8.000002774325253
+  },
+  {
+   "text": "(B)",
+   "rect": [
+    147.6249972256747,
+    536.7386252663351,
+    158.04545662619847,
+    544.7386280406604
+   ],
+   "fontSize": 8.000002774325253
+  },
+  {
+   "text": "Axial EID CT image with the same reconstruction kernel and 1024 matrix.",
+   "rect": [
+    159.44318597966972,
+    536.7386252663351,
+    368.5113664106889,
+    544.7386280406604
+   ],
+   "fontSize": 8.000002774325253
+  },
+  {
+   "text": "(C)",
+   "rect": [
+    370.0909007679332,
+    536.7386252663351,
+    380.27271964333266,
+    544.7386280406604
+   ],
+   "fontSize": 8.000002774325253
+  },
+  {
+   "text": "Axial PCCT image with slightly sharper kernel,",
+   "rect": [
+    381.72729492187494,
+    536.7386252663351,
+    512.7159326726738,
+    544.7386280406604
+   ],
+   "fontSize": 8.000002774325253
+  },
+  {
+   "text": "1024 matrix, and noise reduction using a proprietary noise reduction algorithm. Note the increased conspicuity of internal image features of the right",
+   "rect": [
+    80.99999167702413,
+    526.7272921475496,
+    512.5340548428621,
+    534.7272949218749
+   ],
+   "fontSize": 8.000002774325253
+  },
+  {
+   "text": "lower lobe part-solid nodule (solid arrows) and increased sharpness of air bronchograms in the subpleural nodule (dashed arrows). In addition, the",
+   "rect": [
+    80.99999167702413,
+    516.7045565518466,
+    512.5909007679331,
+    524.7045593261719
+   ],
+   "fontSize": 8.000002774325253
+  },
+  {
+   "text": "nodule border appears sharper for both nodules. All images were reconstructed with an iterative reconstruction strength of 3.",
+   "rect": [
+    80.99999167702413,
+    506.7613573941316,
+    440.57951493696726,
+    514.7613497647372
+   ],
+   "fontSize": 7.999992370605639
+  },
+  {
+   "text": "Figure 6:",
+   "rect": [
+    209.86362804066047,
+    310.43181402033025,
+    243.80680431019172,
+    318.9318195689808
+   ],
+   "fontSize": 8.500005548650563
+  },
+  {
+   "text": "CT images in a 71-year-old female patient with metastatic thyroid cancer.",
+   "rect": [
+    251.73864191228688,
+    310.534082586115,
+    466.55683344060714,
+    318.5340853604403
+   ],
+   "fontSize": 8.00000277432531
+  },
+  {
+   "text": "(A)",
+   "rect": [
+    468.5568237304687,
+    310.534082586115,
+    479.7159160267222,
+    318.5340853604403
+   ],
+   "fontSize": 8.00000277432531
+  },
+  {
+   "text": "Axial photon-counting",
+   "rect": [
+    481.55681263316757,
+    310.534082586115,
+    545.7727120139381,
+    318.5340853604403
+   ],
+   "fontSize": 8.00000277432531
+  },
+  {
+   "text": "CT image (reconstruction kernel Qr56, 512 matrix) shows several apparently new 1-mm right lower lobe nodules",
+   "rect": [
+    209.86362804066047,
+    300.5113573941317,
+    545.4659063165838,
+    308.5113497647372
+   ],
+   "fontSize": 7.999992370605469
+  },
+  {
+   "text": "(white arrow).",
+   "rect": [
+    209.86362804066047,
+    290.57955030961466,
+    251.8636217984286,
+    298.5795426802202
+   ],
+   "fontSize": 7.999992370605526
+  },
+  {
+   "text": "(B)",
+   "rect": [
+    255.18181540749285,
+    290.57955030961466,
+    265.60227480801666,
+    298.5795426802202
+   ],
+   "fontSize": 7.999992370605526
+  },
+  {
+   "text": "Axial energy-integrating detector (EID) CT image (reconstruction kernel Qr51, 512 matrix)",
+   "rect": [
+    268.77273559570307,
+    290.57955030961466,
+    545.5000097101384,
+    298.5795426802202
+   ],
+   "fontSize": 7.999992370605526
+  },
+  {
+   "text": "acquired 3 months earlier. These new nodules were retrospectively seen on the EID CT image as probable vague",
+   "rect": [
+    209.86362804066047,
+    280.55680431019175,
+    545.5227106267755,
+    288.55680708451695
+   ],
+   "fontSize": 8.000002774325196
+  },
+  {
+   "text": "ground-glass nodules (white arrow), blending in with adjacent atelectasis. The patient was in fact responding favorably",
+   "rect": [
+    209.86362804066047,
+    270.5340895219282,
+    545.4999889026988,
+    278.53409229625356
+   ],
+   "fontSize": 8.000002774325367
+  },
+  {
+   "text": "to lenvatinib treatment with multiple other nodules, which were larger on the prior EID CT image, decreasing in size",
+   "rect": [
+    209.86362804066047,
+    260.60226162997157,
+    545.4999889026988,
+    268.6022644042968
+   ],
+   "fontSize": 8.000002774325253
+  },
+  {
+   "text": "(red arrows). An iterative reconstruction strength of 3 was used on both images.",
+   "rect": [
+    209.86362804066047,
+    250.57954684170804,
+    438.69317488236857,
+    258.5795496160334
+   ],
+   "fontSize": 8.000002774325338
+  }
+ ]
+}

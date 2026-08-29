@@ -1,0 +1,38 @@
+[
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 0,
+		"text": "estimation of airway wall thickness over"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "PCCT for Evaluation of Lung"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "Parenchyma"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "High-spatial-resolution CT is essential "
+	},
+	{
+		"type": "caption",
+		"column": 1,
+		"readingIndex": 4,
+		"text": "Figure 3: Energy-integrating detector (E"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 5,
+		"text": "lung abnormalities detected with PCCT we"
+	}
+]
