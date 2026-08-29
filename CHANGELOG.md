@@ -7,6 +7,17 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.6.2] — 2026-08-29
+
+### Fixed
+
+- **2.6.1 的菜单折行反而行行叠印**(用户截图实证:三项的折行文本互相压盖、
+  菜单底部截字)。根因:菜单行是 HTML `<button>`,在 Zotero 阅读器文档里
+  button 的 UA 内部盒不随折行内容长高,标签折出的第二行溢出到下一行行头。
+  行改为 `div[role=menuitemradio]`(键盘可达性以 tabindex + Enter/Space 补
+  回),折行即长高;菜单宽度上限再夹到宿主宽度内 (`min(340px, 100%-12px)`),
+  窄窗格里菜单永远整体可见。
+
 ## [2.6.1] — 2026-08-29
 
 ### Fixed

@@ -1387,9 +1387,10 @@
 	position: absolute;
 	z-index: 80;
 	min-width: 190px;
-	/* 2.6.1: 280→340px,最长的诊断项在常规窗格宽度下一行放得下;
-	   窄窗格里由 label 折行兜底。 */
-	max-width: 340px;
+	/* 2.6.1: 280→340px,最长的诊断项在常规窗格宽度下一行放得下;窄窗格里
+	   由 label 折行兜底。2.6.2: 上限再夹到宿主宽度内 —— 宽过窗格时左移
+	   兜底也救不回来,菜单永远整体可见。 */
+	max-width: min(340px, calc(100% - 12px));
 	max-height: 60vh;
 	overflow-y: auto;
 	padding: 5px;
@@ -1408,15 +1409,22 @@
 }
 
 .pm-bar-menu-item {
+	/* 2.6.2: 行是 div 不再是 button(button 的 UA 内部盒在阅读器文档里不随
+	   折行内容长高,2.6.1 的折行标签因此行行叠印)。div + 常规 flex,折行
+	   即长高;cursor/user-select 补回 button 的默认观感。 */
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	width: 100%;
+	box-sizing: border-box;
+	height: auto;
 	padding: 6px 9px;
 	border-radius: 6px;
 	font-size: 12px;
 	text-align: left;
 	color: var(--pm-ink);
+	cursor: pointer;
+	user-select: none;
 }
 
 .pm-bar-menu-item:hover {
