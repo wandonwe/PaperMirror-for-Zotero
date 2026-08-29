@@ -154,6 +154,18 @@ test('bandedColumnStamp orders body columns before reference columns', () => {
 	assert.ok(stamp!([418, 200, 558, 208]) > stamp!([220, 200, 398, 208]), 'reference column 3 last');
 });
 
+test('bandedColumnStamp keeps a hyphen-overhang block in its column (审核 2.5.10)', () => {
+	const stamp = bandedColumnStamp(bodyOverRefsRows(), PAGE_W, 792)!;
+	assert.ok(stamp);
+	// groupIntoLines allows a hyphenated line to overhang up to min(6, 0.6em)
+	// past the gutter centre (~306 here). Such a paragraph is still a LEFT
+	// column block — it must not stamp -1 and become a band separator.
+	assert.equal(stamp([54, 600, 310, 610]), 0, '+4pt overhang stays column 0');
+	assert.equal(stamp([54, 600, 312, 610]), 0, '+6pt overhang stays column 0');
+	// A genuine spanning line still separates.
+	assert.equal(stamp([54, 600, 558, 610]), -1);
+});
+
 test('bandedColumnStamp stays null for a uniform two-column page', () => {
 	const rows: Rect[][] = [];
 	for (let y = 760; y >= 40; y -= 12) {

@@ -1,0 +1,512 @@
+[
+	{
+		"type": "caption",
+		"column": 0,
+		"readingIndex": 0,
+		"text": "Fig. 1 Comparative imaging of colorectal"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "CT image acquisition and reconstruction"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "The phantom was scanned using two CT sys"
+	},
+	{
+		"type": "table",
+		"column": 1,
+		"readingIndex": 3,
+		"text": "Table 1 The CT image acquisition and rec"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 4,
+		"text": "PCD-CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 5,
+		"text": "EID-CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 6,
+		"text": "Scanning system Scanner model"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 7,
+		"text": "NAEOTOM Alpha IQon Spectral (Siemens"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 8,
+		"text": "CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 9,
+		"text": "Healthineers)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 10,
+		"text": "(Philips Healthcare)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 11,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Detector collimation (mm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 12,
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "120×0.2"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 13,
+		"tableRow": 0,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "64×0.625"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 14,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Gantry rotation time (s)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 15,
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "0.50"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 16,
+		"tableRow": 1,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "0.50"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 17,
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Pitch"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 18,
+		"tableRow": 2,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "0.50"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 19,
+		"tableRow": 2,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "0.60"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 20,
+		"tableRow": 3,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Tube voltage (kV)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 21,
+		"tableRow": 3,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "120"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 22,
+		"tableRow": 3,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "120"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 23,
+		"tableRow": 4,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Tube current modulation"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 24,
+		"tableRow": 4,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "CARE Dose4D"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 25,
+		"tableRow": 4,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "DoseRight"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 26,
+		"tableRow": 5,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "(IQ Level: 180)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 27,
+		"tableRow": 5,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "Index: 22"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 28,
+		"tableRow": 6,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "CTDIvol (mGy)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 29,
+		"tableRow": 6,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "5.5±0.1"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 30,
+		"tableRow": 6,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "6.0±0.3"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 31,
+		"tableRow": 7,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "DLP (mGy·cm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 32,
+		"tableRow": 7,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "35.3±4.5"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 33,
+		"tableRow": 7,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "56.8±3.1"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 34,
+		"tableRow": 8,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Reconstruction system"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 35,
+		"tableRow": 9,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Image type"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 36,
+		"tableRow": 9,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "VMI:70 keV"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 37,
+		"tableRow": 9,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "Conventional"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 38,
+		"tableRow": 10,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "Image"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 39,
+		"tableRow": 11,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Field of view (mm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 40,
+		"tableRow": 11,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "100"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 41,
+		"tableRow": 11,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "100"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 42,
+		"tableRow": 12,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Matrix size"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 43,
+		"tableRow": 12,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "512×512"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 44,
+		"tableRow": 12,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "512×512"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 45,
+		"tableRow": 13,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Slice thickness (mm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 46,
+		"tableRow": 13,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "0.4"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 47,
+		"tableRow": 13,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "0.8 (minimum"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 48,
+		"tableRow": 14,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "available)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 49,
+		"tableRow": 15,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Reconstruction increment"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 50,
+		"tableRow": 15,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "0.35"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 51,
+		"tableRow": 15,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "0.4"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 52,
+		"tableRow": 16,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "(mm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 53,
+		"tableRow": 17,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Reconstruction kernel"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 54,
+		"tableRow": 17,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "Qr40"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 55,
+		"tableRow": 17,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "Standard (B)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 56,
+		"tableRow": 18,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Iterative reconstruction"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 57,
+		"tableRow": 18,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "QIR4"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 58,
+		"tableRow": 18,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "iDose4"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 59,
+		"text": "EID-CT Energy integrating detector CT, P"
+	},
+	{
+		"type": "title",
+		"column": 1,
+		"readingIndex": 60,
+		"text": "1 3"
+	}
+]
