@@ -58,7 +58,11 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 		'- Translate each block faithfully. Do NOT add conclusions, summaries or facts that are not in the source.',
 		'- Use standard academic terminology in the target language.',
 		'- On first occurrence of a technical abbreviation, keep the original abbreviation in parentheses.',
-		'- Never alter numbers, P values, confidence intervals, units, DOIs, URLs, citation markers (e.g. [12], (Smith et al., 2020)), gene names, chemical formulas, variable names, or math.'
+		'- Never alter numbers, P values, confidence intervals, units, DOIs, URLs, citation markers (e.g. [12], (Smith et al., 2020)), gene names, chemical formulas, variable names, or math.',
+		// 人名保护 (2.5.13, wu2026 实证): "Weifeng Han"→韩伟峰(猜字)、"Yuxi Ge"
+		// 同页两处两套汉字、"Joo Myung Lee"→李柱明。人名一律原样保留 —— 音译
+		// 只能猜,拼音名猜汉字必错。
+		'- Keep person names (authors, acknowledged people, cited researchers) EXACTLY as written in the source. Never transliterate a name or convert it into target-language characters.'
 	];
 	if (hasPlaceholders) {
 		lines.push('- Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation UNCHANGED and in a natural position.');

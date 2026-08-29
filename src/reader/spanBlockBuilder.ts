@@ -476,7 +476,14 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 			newColumn: next.rect[3] > line.rect[3] + size
 				|| !linesShareColumn(line.rect, next.rect),
 			indented: next.rect[0] > margins.left + size * 0.8,
-			fontJump: size > 0 && next.fontSize > 0 && Math.abs(next.fontSize - size) / size >= FONT_JUMP_RATIO,
+			// 对称跳变 (2.5.13, wu2026-p4 实证): 除数取两行字号的较小者。原式
+			// 除以【当前行】字号,于是 10pt 正文接 12pt 标题 = 2/10 = 0.20 能断,
+			// 而 12pt 标题接 10pt 正文 = 2/12 = 0.167 断不了 —— 每个压在正文上
+			// 的小节标题都向下焊死(标题恰好接近满栏宽时,wrapped 守卫又拦掉
+			// 兜底的间距断段)。"Polyp detection rate and reader confidence"
+			// 就这样连标题带首段焊成一块,标题结构在译文页消失。
+			fontJump: size > 0 && next.fontSize > 0
+				&& Math.abs(next.fontSize - size) / Math.min(size, next.fontSize) >= FONT_JUMP_RATIO,
 			listStart: looksLikeListStart(lineText(next)),
 			shortLine: medianLineWidth > 0
 				&& (line.rect[2] - line.rect[0]) < medianLineWidth * 0.7

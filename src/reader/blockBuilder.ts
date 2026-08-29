@@ -273,8 +273,10 @@ export function buildParagraphs(chars: PdfChar[], lines: Line[], pageWidth = 612
 			newColumn: (next.rect[1] > line.rect[3] + 5 && next.rect[0] > line.rect[0] + 50)
 				|| !linesShareColumn(line.rect as Rect, next.rect as Rect),
 			indented: next.rect[0] > margins.left + size * 0.8,
+			// 对称跳变 (2.5.13, 与 spanBlockBuilder 同修): 除数取两行字号的较小
+			// 者,否则 12pt 标题接 10pt 正文 = 2/12 = 0.167 永远断不了段。
 			fontJump: line.fontSize > 0 && next.fontSize > 0
-				&& Math.abs(next.fontSize - line.fontSize) / line.fontSize > 0.2,
+				&& Math.abs(next.fontSize - line.fontSize) / Math.min(line.fontSize, next.fontSize) > 0.2,
 			listStart: looksLikeListStart(textForRange(chars, next.start, next.end)),
 			// BabelDOC 短行/目录行信号 (来源见 paragraphHeuristics 注释)。
 			shortLine: medianLineWidth > 0

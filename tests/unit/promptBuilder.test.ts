@@ -59,3 +59,15 @@ test('携带占位符/样式/上下文时对应规则一字不少 (行为不变,
 	const plainSys = buildSystemPrompt(plainBare as never);
 	assert.ok(!plainSys.includes('⟦PM0⟧'));
 });
+
+test('人名保护规则进系统提示 (2.5.13)', async () => {
+	const { buildSystemPrompt } = await import('../../src/translation/promptBuilder');
+	const system = buildSystemPrompt({
+		pageIndex: 0, sourceLanguage: 'en', targetLanguage: 'zh-CN',
+		documentTitle: 't', previousContext: '',
+		blocks: [{ id: 'b1', type: 'paragraph', text: 'The authors acknowledge Dr. Joo Myung Lee.' }],
+		glossary: []
+	} as never);
+	assert.ok(/person names/i.test(system) && /transliterate/i.test(system),
+		'system prompt must forbid transliterating person names');
+});

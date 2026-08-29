@@ -296,3 +296,12 @@ test('短单位块照旧丢弃 —— 密度判据不放松近距离的防守', 
 	const short = 'Department of Diagnostic Radiology, Jinling Hospital, Medical School of Nanjing University, Nanjing, China';
 	assert.equal(isMetadataBlock(short), true);
 });
+
+// ---- 2.5.13: Springer 间隔号署名行 (wu2026-p1 实证) --------------------------
+
+test('an interpunct-separated author byline is metadata (·-style, 2.5.13)', async () => {
+	const { isMetadataBlock } = await import('../../src/reader/metaFilter');
+	assert.equal(isMetadataBlock('Xiaofei Wu1· Huiqing Gao2· Yuanyuan Gao1· Huimin Zha1· Xinyi Zhou3· Shudong Hu1· Weifeng Han4· Yuxi Ge1'), true);
+	// Keywords 行同样用 · 分隔,但含小写普通词 —— 不是署名。
+	assert.equal(isMetadataBlock('Photon-counting detector · Computed tomography · Colorectal polyps · Image quality · Diagnostic performance'), false);
+});

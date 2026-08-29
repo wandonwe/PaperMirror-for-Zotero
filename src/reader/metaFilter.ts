@@ -89,7 +89,10 @@ function looksLikeAuthorList(text: string): boolean {
 	if (/[.!?。][\s]/.test(withoutInitials.slice(0, -6))) {
 		return false;
 	}
-	const commas = (text.match(/,/g) ?? []).length;
+	// 分隔符含 '·' (2.5.13, wu2026 实证): Springer 系署名行用间隔号分隔
+	// ("Xiaofei Wu1 · Huiqing Gao2 · …"),只数逗号时整行漏网,作者名被逐个
+	// 猜成汉字 (且同页两处两套猜法)。
+	const commas = (text.match(/[,·]/g) ?? []).length;
 	if (commas < 2) {
 		return false;
 	}
@@ -99,7 +102,7 @@ function looksLikeAuthorList(text: string): boolean {
 	}
 	// Names often carry their superscript affiliations inline once extracted
 	// ("Garg3," "Bax6,7,") — digits and marks are part of the roster look.
-	const nameLike = tokens.filter(t => /^[A-Z][a-zA-Z'’.-]*[\d,;*†‡§]*$/.test(t)).length;
+	const nameLike = tokens.filter(t => /^[A-Z][a-zA-Z'’.-]*[\d,;*†‡§·]*$/.test(t)).length;
 	const hasMarks = /[*†‡§]|\d/.test(text);
 	return hasMarks && nameLike / tokens.length >= 0.66;
 }
