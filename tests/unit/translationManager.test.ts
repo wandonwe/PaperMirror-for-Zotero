@@ -1936,3 +1936,51 @@ test('写盘失败不影响翻译结果 (2.5.9)', async () => {
 	await manager.resetAllAndWait(); // 不得因为那次 reject 而抛
 	manager.dispose();
 });
+
+test('hasEnglishResidue: 中性 token 不打断连跑 (2.5.12, wu2026-p4 夹生译文)', async () => {
+	const { hasEnglishResidue } = await import('../../src/translation/translationManager');
+	// 真实案例: 'a'(单字母)、'ROI'(缩写)、'3'(数字) 曾各重置一次连跑,漏检。
+	assert.equal(hasEnglishResidue('将圆形感兴趣区域(ROI)放置在息肉, with a standard ROI area of 3 mm² for polyps 的最大横截面轴向图像的中心'), true);
+	// 整段中文里零星散布的英文虚词: CJK token 重置连跑,不得误报。
+	assert.equal(hasEnglishResidue('的 with 的 of 的 for 的 and 的 to 的 in 的'), false);
+	// 合格译文: 缩写与统计式密集,但没有小写英文词连跑。
+	assert.equal(hasEnglishResidue('PCD-CT 在 SNR(42.4±5.4 对 17.5±2.8)与 CNR(31.5±5.6 对 12.6±2.6)上显著优于 EID-CT。'), false);
+});
+
+test('占位符降级重试: 掩码链失败后不掩码重发并接受 (2.5.12)', async () => {
+	// 源文本带引用占位符;JSON 链与掩码 plain 均返回「丢了占位符但翻译合格」的
+	// 译文 → reg.ok 永远失败;降级不掩码重发后接受。
+	const SRC = 'Early detection and removal of precancerous polyps constitute the cornerstone of effective prevention efforts [4]. This long paragraph keeps failing the placeholder audit each round.';
+	let bareSeen = 0;
+	const blocks: SourceBlock[] = [
+		{ id: 'good', pageIndex: 0, order: 0, type: 'paragraph', sourceText: 'This neighbouring paragraph translates fine on the first attempt.' },
+		{ id: 'phfail', pageIndex: 0, order: 1, type: 'paragraph', sourceText: SRC }
+	];
+	const { deps } = makeDeps({
+		extractPage: async () => blocks,
+		translateRequest: async (req) => {
+			if (req.plain && req.blocks.some(b => b.id === 'phfail' && !/⟦PM\d+⟧/.test(b.text))) {
+				// 不掩码降级重试: 原文直达,返回合格中文(引用原样保留)。
+				bareSeen++;
+				return { translations: [{ id: 'phfail', translatedText: '早期发现并切除癌前息肉是有效预防工作的基石 [4]。这段长文此前每一轮都死在占位符清单校验上。' }] };
+			}
+			// 掩码请求: phfail 返回「合格中文但丢占位符」→ looksTranslated 过、
+			// reg.ok 挂;邻居块正常成功,页面不因空结果整体报错。
+			return {
+				translations: req.blocks.map(b => ({
+					id: b.id,
+					translatedText: b.id === 'phfail'
+						? '早期发现并切除癌前息肉是有效预防工作的基石。这段长文此前每一轮都死在占位符清单校验上。'
+						: '邻居段落的完整中文译文内容示例。'
+				}))
+			};
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const state = manager.getPageState(0)!;
+	assert.ok(bareSeen >= 1, 'unmasked degraded retry must have been sent');
+	assert.ok(state.translations.get('phfail')?.includes('基石'), 'degraded retry result stored');
+	assert.ok(state.translations.get('phfail')?.includes('[4]'), 'citation survives unmasked');
+	manager.dispose();
+});

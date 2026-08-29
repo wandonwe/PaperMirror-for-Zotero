@@ -134,9 +134,25 @@ export function protectFormulas(text: string, extraLiterals: string[] = []): Pro
 		}
 		out = maskLiteral(out, t);
 	}
-	for (const pattern of CITATION_STAT_PATTERNS) {
-		out = out.replace(pattern, mask);
-	}
+	// 中位数[IQR] 不当引用 (2.5.12, wu2026 摘要实证): "5 [4, 5] vs. 3 [3, 4]"
+	// 是 Likert 中位数与四分位距,精确命中数字引用的形状 —— 一段摘要里被掩成
+	// 十几个占位符,模型必然错排,清单校验一遍遍否掉本可翻译的输出,整段
+	// unrecovered 留英。判别: 引用括号跟在【词】后 ("outcomes [8, 9]"),从不
+	// 紧跟裸数字;前邻非空白字符是数字的括号组是数据,不掩。只对方/圆括号引用
+	// 两式生效 (数组前两项),p 值/CI/±/n= 等统计式无此歧义,照旧全掩。
+	const precededByDigit = (source: string, at: number): boolean => {
+		let i = at - 1;
+		while (i >= 0 && /\s/.test(source[i]!)) {
+			i--;
+		}
+		return i >= 0 && /[0-9]/.test(source[i]!);
+	};
+	CITATION_STAT_PATTERNS.forEach((pattern, k) => {
+		out = k < 2
+			? out.replace(pattern, (match, offset: number, whole: string) =>
+				precededByDigit(whole, offset) ? match : mask(match))
+			: out.replace(pattern, mask);
+	});
 	for (const pattern of HEURISTIC_PATTERNS) {
 		out = out.replace(pattern, (match) => {
 			if (!isFormulaRun(match)) {
