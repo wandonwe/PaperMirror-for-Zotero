@@ -1387,7 +1387,9 @@
 	position: absolute;
 	z-index: 80;
 	min-width: 190px;
-	max-width: 280px;
+	/* 2.6.1: 280→340px,最长的诊断项在常规窗格宽度下一行放得下;
+	   窄窗格里由 label 折行兜底。 */
+	max-width: 340px;
 	max-height: 60vh;
 	overflow-y: auto;
 	padding: 5px;
@@ -1428,7 +1430,10 @@
 }
 
 .pm-bar-menu-label {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	/* 2.6.1: 完整显示,不再省略号截断 —— "诊断:复制脱敏指标 + 引擎自检
+	   (不含原文/密钥)" 超出 280px 菜单宽时被截成 "…密…",隐私说明恰好是
+	   被截掉的部分。改为折行: 任何标签在任何窗格宽度下都能看全。 */
+	overflow-wrap: anywhere;
+	white-space: normal;
+	line-height: 1.35;
 }
