@@ -7,6 +7,15 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.6.1] — 2026-08-29
+
+### Fixed
+
+- **「更多」菜单第二项被省略号截断**(用户截图实证:「诊断:复制脱敏指标 +
+  引擎自检(不含原文/密…」—— 恰好把隐私说明截掉)。菜单标签由
+  nowrap+ellipsis 改为折行 (`overflow-wrap: anywhere`),任何标签在任何窗格
+  宽度下都能显示完整;菜单 max-width 280→340px,常规宽度下最长项一行放下。
+
 ## [2.6.0] — 2026-08-29
 
 **版面结构三连**(radiology2023 PCCT 综述 14 页截图 + 诊断/语料实证):散文
