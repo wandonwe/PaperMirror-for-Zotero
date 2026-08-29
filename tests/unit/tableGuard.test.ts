@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectTableRegions, looksTabular, type GuardItem } from '../../src/reader/tableGuard';
+import { detectTableRegions, looksTabular, looksTabularSeed, type GuardItem } from '../../src/reader/tableGuard';
 
 function item(id: string, text: string, left: number, top: number, width = 60, height = 12, type = 'paragraph'): GuardItem {
 	return { id, text, type, box: { left, top, width, height }, fontSize: 9 };
@@ -138,4 +138,46 @@ test('wide table: unrelated numeric line NOT sharing the table rows stays out', 
 	const { excluded, regions } = detectTableRegions(items, 10);
 	assert.equal(regions.length, 1);
 	assert.ok(!excluded.has('stray'), 'a numeric fragment off the table rows is not swallowed');
+});
+
+// ---- 2.5.11: 统计密集正文不再伪装成表格 (wu2026-p5 实证) --------------------
+
+test('looksTabularSeed: stats-dense prose lines are NOT cluster seeds', () => {
+	// Narrow two-column journal Results lines — symbol density passes the 30%
+	// rule, but ≥3 ordinary lowercase words mark them as sentences.
+	assert.equal(looksTabularSeed('overall image quality (ICC=0.934; 95% CI: 0.8980.957)'), false);
+	assert.equal(looksTabularSeed('and sharpness (ICC=0.969; 95% CI: 0.9520.980), and'), false);
+	assert.equal(looksTabularSeed('good agreement for noise assessment (ICC=0.886; 95%'), false);
+	// Real cells keep seeding.
+	assert.equal(looksTabularSeed('3.42 ± 1.18'), true);
+	assert.equal(looksTabularSeed('3 [3,4]'), true);
+	assert.equal(looksTabularSeed('* -10.078 <0.001'), true);
+	assert.equal(looksTabularSeed('120×0.2'), true);
+	// looksTabular itself is UNCHANGED for these — structureTableCells' cell
+	// typing (data vs text) must keep its byte-identical semantics.
+	assert.equal(looksTabular('overall image quality (ICC=0.934; 95% CI: 0.8980.957)'), true);
+});
+
+test('a stats paragraph beside a real table is not swept in as "row labels" (续行闸)', () => {
+	const items: GuardItem[] = [];
+	// A real 3×3 table: labels + numeric cells.
+	const labels = ['Overall image quality', 'Sharpness', 'Noise'];
+	for (let row = 0; row < 3; row++) {
+		items.push(item(`lab${row}`, labels[row]!, 320, 200 + row * 16, 90));
+		items.push(item(`a${row}`, `${3 + row} [3,4]`, 420, 200 + row * 16, 34));
+		items.push(item(`b${row}`, `${5 + row} [4,5]`, 460, 200 + row * 16, 34));
+		items.push(item(`c${row}`, `-1${row}.078 <0.001`, 500, 200 + row * 16, 50));
+	}
+	// The NEIGHBOURING text column's justified lines: same heights, right edge
+	// ~1.5em from the table — continuation-shaped (lowercase start / hyphen end).
+	items.push(item('prose0', 'aged between readers. Inter-reader agreement was quanti-', 60, 200, 245));
+	items.push(item('prose1', 'tatively assessed as follows: for continuous variables', 60, 216, 245));
+	const { excluded } = detectTableRegions(items, 10);
+	assert.ok(!excluded.has('prose0'), 'lowercase-start body line must not be swept as a row label');
+	assert.ok(!excluded.has('prose1'), 'continuation body line must not be swept as a row label');
+	// The real table (cells + its labels) is still protected.
+	for (let row = 0; row < 3; row++) {
+		assert.ok(excluded.has(`a${row}`) && excluded.has(`b${row}`), 'numeric cells still excluded');
+		assert.ok(excluded.has(`lab${row}`), 'real row labels still swept in');
+	}
 });

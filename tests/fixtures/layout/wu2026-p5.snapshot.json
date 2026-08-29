@@ -1,0 +1,182 @@
+[
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 0,
+		"text": "10.4.0. For qualitative assessments, ide"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "Results"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "Qualitative image quality assessment"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "In the qualitative assessment, PCD-CT de"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 4,
+		"text": "Quantitative image quality assessment"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 5,
+		"text": "PCD-CT demonstrated significantly superi"
+	},
+	{
+		"type": "table",
+		"column": 1,
+		"readingIndex": 6,
+		"text": "Table 2 Qualitative assessment of image "
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 7,
+		"text": "Qualitative evaluation EID-CT PCD-CT Z"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 8,
+		"text": "P value"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 9,
+		"tableRow": 0,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "* -10.078 <0.001"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 10,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Overall image quality"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 11,
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "3 [3,4]"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 12,
+		"tableRow": 0,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "5 [4,5]"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 13,
+		"tableRow": 1,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "<0.001* -9.279"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 14,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Sharpness"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 15,
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "3 [1,4]"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 16,
+		"tableRow": 1,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "5 [4,5]"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 17,
+		"tableRow": 2,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "-11.188 <0.001*"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 18,
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Noise"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 19,
+		"tableRow": 2,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "3 [3,3]"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 20,
+		"tableRow": 2,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "5 [4,5]"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 21,
+		"text": "EID-CT Energy integrating detector CT, P"
+	},
+	{
+		"type": "caption",
+		"column": 1,
+		"readingIndex": 22,
+		"text": "Fig. 2 The stacked bar chart demonstrate"
+	},
+	{
+		"type": "title",
+		"column": 1,
+		"readingIndex": 23,
+		"text": "1 3"
+	}
+]

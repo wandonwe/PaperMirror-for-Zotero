@@ -61,6 +61,32 @@ export function looksTabular(text: string): boolean {
 	return words.length <= 3 && /[\d%±<>=/]/.test(t) && t.length <= 40;
 }
 
+/**
+ * 种子判定 = looksTabular + 散文词闸 (2.5.11, wu2026-p5 实证)。
+ *
+ * 窄双栏期刊的统计段落几乎每行都长成 "overall image quality (ICC=0.934;
+ * 95% CI: 0.898–0.957)" —— 行宽只有 50–60 字符,数字符号密度轻松过 30%,
+ * 于是 Results 整段被逐行判成单元格种子,聚成横跨左右两个正文栏的伪表格:
+ * 数字行按数据格 preserve 永久留英文,其余行逐格无语境翻译,连字符断词处
+ * ("quanti-"/"tatively") 被拦腰切开。
+ *
+ * 判据: 一行里有 ≥3 个带小写字母的 ≥3 字母普通词,它就是句子,不能当
+ * 聚类【种子】。真表格不受影响 —— 数值格零普通词(纯数字规则),而标签格
+ * ("Overall image quality") 本来就不靠种子进表,聚类成形后由区域扫掠按行
+ * 对齐收进来。
+ *
+ * 只收窄【种子】: `structureTableCells` 判定格子数据/文本仍用 looksTabular
+ * 本体,真表格里 "Significant stenosis present 2.0 (1.17, 3.42) .011" 这类
+ * 标签+数值复合行的 preserve 语义逐字节不变 (chen2023-p10 快照零改动)。
+ */
+export function looksTabularSeed(text: string): boolean {
+	if (!looksTabular(text)) {
+		return false;
+	}
+	const proseWords = (text.match(/[A-Za-z]{3,}/g) ?? []).filter(w => /[a-z]/.test(w)).length;
+	return proseWords < 3;
+}
+
 function vGap(a: TableRegion, b: GuardItem['box']): number {
 	if (b.top >= a.top + a.height) {
 		return b.top - (a.top + a.height);
@@ -216,7 +242,7 @@ export function detectTableRegions(
 	obstacles: GuardItem['box'][] = []
 ): { excluded: Set<string>; regions: TableRegion[] } {
 	const em = Math.max(6, emPx);
-	const cells = items.filter(i => looksTabular(i.text));
+	const cells = items.filter(i => looksTabularSeed(i.text));
 	const captions = items.filter(i => i.type === 'table');
 
 	// Greedy clustering of cell-like boxes, in reading order.
@@ -327,7 +353,18 @@ export function detectTableRegions(
 				}
 				const inside = containedRatio(item.box, region) >= 0.6;
 				let rowAligned = false;
-				if (!inside && item.text.trim().length <= 60) {
+				// 续行不当行标签 (2.5.11, wu2026-p5 实证): 相邻正文栏的两端对齐
+				// 行,行尾天然贴到栏沟边 (gap ≈ 1–2em),又与表行同高,规则 (b)
+				// 把它当"表侧行标签"整行收走、随表冻结为原文。判别: ≥3 个带
+				// 小写的普通词,且【小写开头】(接续上一行的句子) 或【连字符
+				// 结尾】(折行进下一行) —— 那是句子的续行,不是标签。真标签
+				// ("Left ventricular ejection fraction"、"Median infarct volume
+				// at 24 hr") 一律大写开头、不以连字符收尾,不受影响 (1.2.0 的
+				// NEJM 行标签用例仍然全绿)。
+				const trimmed = item.text.trim();
+				const sweepContinuation = (/^[a-z]/.test(trimmed) || /-$/.test(trimmed))
+					&& (trimmed.match(/[A-Za-z]{3,}/g) ?? []).filter(w => /[a-z]/.test(w)).length >= 3;
+				if (!inside && !sweepContinuation && trimmed.length <= 60) {
 					const vOverlap = Math.min(item.box.top + item.box.height, region.top + region.height)
 						- Math.max(item.box.top, region.top);
 					if (vOverlap >= item.box.height * 0.6) {

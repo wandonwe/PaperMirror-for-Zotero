@@ -653,7 +653,14 @@ export function bandedColumnStamp(
 		const r = regimes[rank]!;
 		// A block that straddles one of this regime's gutters spans the whole
 		// band width — a section heading or full-width line — and separates.
-		if (r.xs.some(x => rect[0] < x - 2 && rect[2] > x + 2)) {
+		// Margin 8pt, NOT 2pt (审核 2.5.10): groupIntoLines lets a hyphenated
+		// line overhang up to min(6, 0.6em) past the gutter centre, so an
+		// ordinary left-column paragraph can end ~6pt past x. With a 2pt margin
+		// that paragraph stamped -1 and became a band SEPARATOR mid-column —
+		// reading order then cut both columns at its height and the coalescer
+		// broke the paragraph mid-sentence. 8pt clears the maximum overhang; a
+		// genuine spanning heading extends far beyond 8pt on both sides.
+		if (r.xs.some(x => rect[0] < x - 8 && rect[2] > x + 8)) {
 			return -1;
 		}
 		let local = 0;
