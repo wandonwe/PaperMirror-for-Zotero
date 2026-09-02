@@ -719,3 +719,25 @@ test('全局沟按分带证据限定纵向作用域 (2.6.3, fletcher2024-p5 图�
 	const bodyRow = lines.filter(l => lineText(l).includes('body text line'));
 	assert.ok(bodyRow.every(l => l.rect[2] - l.rect[0] < 260), 'body columns stay split at the gutter');
 });
+
+test('弱沟: 分带通道外的短双栏区仍按全局沟切开 (审核 2.6.3)', () => {
+	// 主体双栏 (y 600..40) 让全局投票找到沟 ~298,分带通道也只覆盖这一段;
+	// 顶部一块 3 行的短双栏区 (不足 MIN_RUN,分带看不见),栏沟只有 12pt
+	// (1.2em < columnGapThreshold 的 1.6em) —— 限定作用域后它本会左右焊成一行。
+	const items: SpanItem[] = [];
+	for (let i = 0; i < 3; i++) {
+		items.push(span('short zone left affiliation line', 48, 740 - i * 12, 244, 10));
+		items.push(span('short zone right affiliation line', 304, 740 - i * 12, 242, 10));
+	}
+	// 4 行全宽分隔 (> HOLE_TOL=2): 短区不会被空洞桥接进主体通道。
+	for (let i = 0; i < 4; i++) {
+		items.push(span('A full-width separator line of body text spanning the page width here', 48, 690 - i * 12, 498, 10));
+	}
+	for (let y = 600; y >= 40; y -= 12) {
+		items.push(span('left column body text line with words', 48, y, 244, 10));
+		items.push(span('right column body text line with words', 304, y, 242, 10));
+	}
+	const lines = groupIntoLines(items, 594, 792);
+	const shortZone = lines.filter(l => lineText(l).includes('short zone'));
+	assert.equal(shortZone.length, 6, `3 rows × 2 columns must stay split: ${shortZone.map(lineText).join(' | ')}`);
+});
