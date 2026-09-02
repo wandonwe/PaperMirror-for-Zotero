@@ -590,3 +590,18 @@ test('bandedColumnStamp rescues a single-gutter page under a full-width block (2
 	assert.equal(stamp!([54, 452, 292, 462]), 0, 'a left line just above the regime joins it');
 	assert.equal(stamp!([54, 500, 292, 510]), -1, 'far above the regime stays a separator');
 });
+
+test('近邻并入的宽度门: 窄碎片不借近邻混进栏序 (审核 2.6.3)', () => {
+	const rows: Rect[][] = [];
+	for (let y = 760; y >= 470; y -= 12) {
+		rows.push([[54, y - 10, 558, y]]);
+	}
+	for (let y = 450; y >= 40; y -= 12) {
+		rows.push([[54, y - 10, 292, y], [320, y - 10, 558, y]]);
+	}
+	const stamp = bandedColumnStamp(rows, PAGE_W, 792)!;
+	assert.ok(stamp);
+	// 与 regime 顶界同距 (10pt): 一行正文并入,一个 40pt 宽的表尾碎片仍是 -1。
+	assert.equal(stamp([54, 452, 292, 462]), 0, 'a body-width line joins');
+	assert.equal(stamp([54, 452, 94, 462]), -1, 'a narrow fragment stays a separator');
+});

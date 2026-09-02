@@ -710,7 +710,12 @@ export function bandedColumnStamp(
 					nearRank = i;
 				}
 			}
+			// 宽度门 (审核 2.6.3): 并入的必须像一【行正文】—— 至少占本 regime 一栏
+			// 宽的 40%。未被探成表格的表尾格 (窄小碎片) 贴着正文 regime 时不能
+			// 借近邻并入混进栏序,仍作 -1 分隔。
+			const colW = width / (nearRank >= 0 ? regimes[nearRank]!.xs.length + 1 : 1);
 			if (nearRank >= 0 && nearDist <= 24
+				&& rect[2] - rect[0] >= colW * 0.4
 				&& !regimes[nearRank]!.xs.some(x => rect[0] < x - 8 && rect[2] > x + 8)) {
 				rank = nearRank;
 			}

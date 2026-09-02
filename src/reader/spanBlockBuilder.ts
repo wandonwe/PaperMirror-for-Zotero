@@ -338,7 +338,8 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 	// ([433..21],图注区不在内): 有 ±20pt 对得上的分带沟就用它的跨度(同
 	// 一 x 被打断成多段时逐段生效),分带没看见的沟保持不限 (老行为兜底)。
 	const bandedAll = detectGuttersBanded(rowRects, pageWidth);
-	const gutters: BandedGutter[] = bandedColumnStamp(rowRects, pageWidth, pageHeight, rawBands.length)
+	const bandedActive = !!bandedColumnStamp(rowRects, pageWidth, pageHeight, rawBands.length);
+	const gutters: BandedGutter[] = bandedActive
 		? bandedAll
 		: detectGutters(rowRects, pageWidth).flatMap((x): BandedGutter[] => {
 			const matches = bandedAll.filter(g => Math.abs(g.x - x) <= 20);
@@ -346,6 +347,13 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 				? matches.map(g => ({ x, top: g.top, bottom: g.bottom }))
 				: [{ x, top: Infinity, bottom: -Infinity }];
 		});
+	// 弱沟 (审核 2.6.3): 分带通道之外的行不是"这条沟不存在",而是"分带没
+	// 凑够 5 行连续证据"—— 一块不足 5 行的短双栏区 (图下两栏说明、双栏作者
+	// 单位) 若栏沟又窄于 columnGapThreshold (1.6em),限定作用域后就会左右焊成
+	// 一行,而 2.6.3 前不限 y 的全局沟是切开它的。折中: 通道外的行只在间隙
+	// ≥1.05em 时按全局沟切 —— 词间隙 (p5 "Figure 3:" 后 0.9em) 保持一行,
+	// 真栏沟 (≥1.1em) 照切。
+	const weakGutterXs: number[] = bandedActive ? [] : detectGutters(rowRects, pageWidth);
 
 	const lines: SpanLine[] = [];
 	for (const row of rows) {
@@ -376,7 +384,9 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 				// strictly before the gutter centre let that single line bridge the
 				// two columns into one scrambled line (三栏页连字符悬垂焊行).
 				const slack = Math.min(6, size * 0.6);
-				const crossesGutter = rowGutters.some(g => previous.rect[2] <= g.x + slack && item.rect[0] >= g.x);
+				const crossesGutter = rowGutters.some(g => previous.rect[2] <= g.x + slack && item.rect[0] >= g.x)
+					|| (gap >= size * 1.05
+						&& weakGutterXs.some(x => previous.rect[2] <= x + slack && item.rect[0] >= x));
 				if (crossesGutter || gap > columnGapThreshold(size)) {
 					flush();
 				}
