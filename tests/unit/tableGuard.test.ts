@@ -246,3 +246,69 @@ test('标题锚定: Note.— 脚注是墙,扫掠到它即止 (radiology2023-p11 
 	assert.equal(textRegions.length, 1, 'the table above the footnote still detects');
 	assert.ok(!excluded.has('note') && !excluded.has('note2'), 'footnote lines stay prose');
 });
+
+// ---- 2.7.2 批次 3: 表头向上扫掠 (C-1) ---------------------------------------
+
+/** 4 行 × 3 列数值格,顶边 top,列距 80。 */
+function numericGrid(items: GuardItem[], top: number, rows = 4): void {
+	for (let row = 0; row < rows; row++) {
+		for (let col = 0; col < 3; col++) {
+			items.push(item(`c${row}-${col}`, `${row}.${col} ± 0.2`, 60 + col * 80, top + row * 18));
+		}
+	}
+}
+
+test('表头扫掠 (d): 区域顶边上方的短列头并入区域 (2.7.2, radiology2023-p3)', () => {
+	const items: GuardItem[] = [];
+	numericGrid(items, 200);
+	// 两行堆叠列头,紧贴区域顶边之上 (gap 6pt / 24pt = 0.6em / 2.4em)。
+	items.push(item('h1-0', 'Detector', 60, 176, 50), item('h1-1', 'Energy', 140, 176, 50), item('h1-2', 'FOV (cm)', 220, 176, 50));
+	items.push(item('h0-0', 'Type', 60, 158, 50), item('h0-1', 'Thresholds', 140, 158, 50));
+	// 远在上方 (4em) 的正文短行不收。
+	items.push(item('far', 'Short line', 60, 120, 50));
+	const { excluded } = detectTableRegions(items, 10);
+	for (const id of ['h1-0', 'h1-1', 'h1-2', 'h0-0', 'h0-1']) {
+		assert.ok(excluded.has(id), `${id} 并入表头`);
+	}
+	assert.ok(!excluded.has('far'), '4em 之外的短行不收');
+});
+
+test('表头扫掠: 句末标点收尾的正文末行、>6 词的行、x 中心在区域之外的块都不收', () => {
+	const items: GuardItem[] = [];
+	numericGrid(items, 200);
+	items.push(item('sentence', 'reduced the dose.', 60, 176, 80));
+	items.push(item('long', 'one two three four five six seven', 140, 176, 100));
+	items.push(item('aside', 'Label', 400, 176, 40));
+	const { excluded } = detectTableRegions(items, 10);
+	assert.ok(!excluded.has('sentence'));
+	assert.ok(!excluded.has('long'));
+	assert.ok(!excluded.has('aside'));
+});
+
+test('表头扫掠天花板: "Table N" 标题之上的块一律不收 (wu2026-p6 脚注/上一张表)', () => {
+	const items: GuardItem[] = [];
+	numericGrid(items, 300);
+	items.push(item('hdr', 'Sensitivity', 140, 282, 50));
+	items.push(item('cap', 'Table 4 Comparison of polyp detection', 60, 266, 220, 12, 'table'));
+	// 标题之上 (距列头 2em,天花板不在时会被扫掠链带走): 上一张表的脚注
+	// (短、无句末标点、≤6 词)。
+	items.push(item('foot', 'Data are means±SDs', 60, 250, 80));
+	items.push(item('foot2', 'difference', 60, 234, 40));
+	const { excluded } = detectTableRegions(items, 10);
+	assert.ok(excluded.has('hdr'), '标题之下的列头照收');
+	assert.ok(!excluded.has('foot'), '标题之上的脚注不收');
+	assert.ok(!excluded.has('foot2'));
+});
+
+test('表头扫掠行伴: 同基线上有句子续行的孤词是标题续行,不是表头 (wu2026-p6 "size")', () => {
+	const items: GuardItem[] = [];
+	numericGrid(items, 300);
+	items.push(item('hdr', 'Sensitivity', 140, 282, 50));
+	// 标题第二行被分栏切成 "and PCD-CT stratified by polyp" + "size"。
+	items.push(item('cont', 'and PCD-CT stratified by polyp', 60, 264, 110));
+	items.push(item('size', 'size', 172, 264, 15));
+	const { excluded } = detectTableRegions(items, 10);
+	assert.ok(excluded.has('hdr'));
+	assert.ok(!excluded.has('size'), '标题续行的孤词不进表');
+	assert.ok(!excluded.has('cont'));
+});

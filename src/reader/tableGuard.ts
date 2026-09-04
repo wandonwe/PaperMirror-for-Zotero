@@ -402,6 +402,29 @@ export function detectTableRegions(
 		// with. Fixed from the seed cells, so growing the region leftward can't
 		// drift the anchor set.
 		const numericRowCentres = rowCentres(cluster.members);
+		// 向上生长的天花板 (2.7.2, wu2026-p6 实证): 表头扫掠 (d) 逐轮把区域顶边
+		// 抬高,没有上限就会顺着上一张表的脚注 ("Data are means±SDs")、图注一路
+		// 爬到上一张表里。表标题是硬天花板: 种子区域上方、横向相交的最近一条
+		// "Table N" 标题,其底边以上的块一律不收;没有标题时上限为种子顶边上方 6em。
+		const seedTop = region.top;
+		let ceiling = seedTop - em * 6;
+		for (const item of items) {
+			const bottom = item.box.top + item.box.height;
+			const hOverlap = Math.min(item.box.left + item.box.width, region.left + region.width)
+				- Math.max(item.box.left, region.left);
+			if (bottom <= seedTop + em * 0.3 && hOverlap > 0
+				&& isTableCaptionAnchor(item.text.trim(), item.type)) {
+				ceiling = Math.max(ceiling, bottom - em * 0.2);
+			}
+		}
+		// 同一基线上的"行伴": 表头行只由短格组成;若同行还有句子续行/长行/标题
+		// (标题第二行被表格分栏切出的孤词 "size"),这一行是标题续行,不是表头。
+		const isLongOrContinuation = (t: string): boolean => {
+			const trimmedT = t.trim();
+			const cont = (/^[a-z]/.test(trimmedT) || /-$/.test(trimmedT))
+				&& (trimmedT.match(/[A-Za-z]{3,}/g) ?? []).filter(w => /[a-z]/.test(w)).length >= 3;
+			return cont || trimmedT.length > 60;
+		};
 		// Sweep in the rest of the table the cell test misses: (a) anything
 		// substantially INSIDE the region; (b) short row labels/header cells
 		// BESIDE it — vertically aligned with the region's rows, horizontally
@@ -448,7 +471,31 @@ export function detectTableRegions(
 						rowAligned = nearSide || (inLeftGutter && alignsNumericRow);
 					}
 				}
-				if (inside || rowAligned) {
+				// (d) 表头向上扫掠 (2.7.2, 审核 C-1): 数值表的列头是多行堆叠的短文本
+				// ("Detector Type"、"No. of Energy Thresholds"),无数字、在区域【上方】、
+				// 与数据行不同高 —— (a)(b)(c) 三条都不沾,于是逃出网格成孤立单词块
+				// 无语境翻译 (radiology2023-p3 一页 11 个)。判据: 紧贴区域顶边之上
+				// (≤2.5em),x 中心落在区域横向范围内,≤6 词/≤60 字符,不以句末标点
+				// 收尾 (正文段落的末行会),不是表标题。逐轮生长把堆叠的上一行也收进来。
+				let headerAbove = false;
+				if (!inside && !rowAligned && !sweepContinuation && trimmed.length <= 60
+					&& !isTableCaptionAnchor(trimmed, item.type)
+					&& !/[.!?。]$/.test(trimmed)
+					&& (trimmed.match(/\S+/g) ?? []).length <= 6) {
+					const gapAbove = region.top - (item.box.top + item.box.height);
+					const centreX = item.box.left + item.box.width / 2;
+					const rowMateBlocks = items.some(o => o !== item && !excluded.has(o.id)
+						&& Math.abs(o.box.top - item.box.top) <= em * 0.3
+						&& (isLongOrContinuation(o.text) || isTableCaptionAnchor(o.text.trim(), o.type)));
+					headerAbove = gapAbove >= -em * 0.3 && gapAbove <= em * 2.5
+						&& centreX >= region.left - em && centreX <= region.left + region.width + em
+						&& !rowMateBlocks;
+				}
+				if ((rowAligned || headerAbove) && item.box.top < ceiling) {
+					rowAligned = false;
+					headerAbove = false;
+				}
+				if (inside || rowAligned || headerAbove) {
 					excluded.add(item.id);
 					const next = grow(region, item.box);
 					if (next.width !== region.width || next.height !== region.height) {

@@ -58,7 +58,7 @@
 		"column": 0,
 		"readingIndex": 9,
 		"tableRow": 0,
-		"tableCol": 4,
+		"tableCol": 5,
 		"mode": "translate",
 		"text": "Examples of"
 	},
@@ -78,30 +78,48 @@
 		"tableRow": 1,
 		"tableCol": 4,
 		"mode": "translate",
-		"text": "Disadvantages Publications"
+		"text": "Disadvantages"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 12,
-		"tableRow": 2,
-		"tableCol": 3,
+		"tableRow": 1,
+		"tableCol": 5,
 		"mode": "translate",
-		"text": "Clinical availability, prior clinical us"
+		"text": "Publications"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 13,
 		"tableRow": 2,
-		"tableCol": 4,
+		"tableCol": 3,
 		"mode": "translate",
-		"text": "Allergic reactions, nonspecificity 68, 9"
+		"text": "Clinical availability, prior clinical us"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 14,
+		"tableRow": 2,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "Allergic reactions, nonspecificity"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 15,
+		"tableRow": 2,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "68, 97"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 16,
 		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "translate",
@@ -110,16 +128,25 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 15,
+		"readingIndex": 17,
 		"tableRow": 3,
 		"tableCol": 4,
 		"mode": "translate",
-		"text": "Concerns over brain retention 8385, 98,"
+		"text": "Concerns over brain retention and other "
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 16,
+		"readingIndex": 18,
+		"tableRow": 3,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "8385, 98, 99"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 19,
 		"tableRow": 4,
 		"tableCol": 3,
 		"mode": "translate",
@@ -128,16 +155,25 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 17,
+		"readingIndex": 20,
 		"tableRow": 4,
 		"tableCol": 4,
 		"mode": "translate",
-		"text": "Rapid clearance, 83, 87 nonspecificity"
+		"text": "Rapid clearance, nonspecificity"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 18,
+		"readingIndex": 21,
+		"tableRow": 4,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "83, 87"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 22,
 		"tableRow": 5,
 		"tableCol": 3,
 		"mode": "translate",
@@ -146,16 +182,25 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 19,
+		"readingIndex": 23,
 		"tableRow": 5,
 		"tableCol": 4,
 		"mode": "translate",
-		"text": "Safety and role as a CT agent 93, 100 ye"
+		"text": "Safety and role as a CT agent yet to be "
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 20,
+		"readingIndex": 24,
+		"tableRow": 5,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "93, 100"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 25,
 		"tableRow": 6,
 		"tableCol": 3,
 		"mode": "translate",
@@ -164,7 +209,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 21,
+		"readingIndex": 26,
 		"tableRow": 6,
 		"tableCol": 4,
 		"mode": "translate",
@@ -173,92 +218,47 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 22,
-		"tableRow": 7,
-		"tableCol": 3,
-		"mode": "translate",
-		"text": "use, synthetic control"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 23,
-		"tableRow": 7,
-		"tableCol": 4,
-		"mode": "translate",
-		"text": "to be solved, as gold nanoparticles"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 24,
-		"tableRow": 8,
-		"tableCol": 3,
-		"mode": "translate",
-		"text": "over shape and size"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 25,
-		"tableRow": 8,
-		"tableCol": 4,
-		"mode": "translate",
-		"text": "are slowly and incompletely"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 26,
-		"tableRow": 9,
-		"tableCol": 4,
-		"mode": "translate",
-		"text": "eliminated by the human body"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
 		"readingIndex": 27,
-		"tableRow": 10,
+		"tableRow": 7,
 		"tableCol": 3,
 		"mode": "translate",
-		"text": "Low cost, good"
+		"text": "use, synthetic control over shape and si"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 28,
-		"tableRow": 10,
+		"tableRow": 7,
 		"tableCol": 4,
 		"mode": "translate",
-		"text": "High K-edgelower K-edge image 90, 101"
+		"text": "to be solved, as gold nanoparticles are "
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 29,
-		"tableRow": 11,
+		"tableRow": 8,
 		"tableCol": 3,
 		"mode": "translate",
-		"text": "safety profile"
+		"text": "Low cost, good safety profile"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 30,
-		"tableRow": 11,
+		"tableRow": 8,
 		"tableCol": 4,
 		"mode": "translate",
-		"text": "CNR; more research needed on"
+		"text": "High K-edgelower K-edge image CNR; more"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 31,
-		"tableRow": 12,
-		"tableCol": 4,
-		"mode": "translate",
-		"text": "safe and excretable agents"
+		"tableRow": 8,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "90, 101"
 	},
 	{
 		"type": "paragraph",
@@ -453,16 +453,16 @@
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 53,
-		"tableRow": 10,
+		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Bismuth"
+		"text": "Bismuth nanoparticles"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 54,
-		"tableRow": 10,
+		"tableRow": 8,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "No"
@@ -471,24 +471,15 @@
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 55,
-		"tableRow": 10,
+		"tableRow": 8,
 		"tableCol": 2,
 		"mode": "translate",
 		"text": "Yes"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 56,
-		"tableRow": 11,
-		"tableCol": 0,
-		"mode": "translate",
-		"text": "nanoparticles"
-	},
-	{
-		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 57,
+		"readingIndex": 56,
 		"text": "Note.CNR = contrast-to-noise ratio, FDA"
 	}
 ]

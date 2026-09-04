@@ -93,8 +93,19 @@ function inferBands(
 			const ov = overlap1D(band.start, band.end, v.start, v.end);
 			const minW = Math.min(band.end - band.start, v.end - v.start);
 			if (minW > 0 && ov > joinRatio * minW) {
-				band.start = Math.min(band.start, v.start);
-				band.end = Math.max(band.end, v.end);
+				// 带只在不吞并邻带时才扩张 (2.7.2, wu2026-p3 实证): 表头扫掠把
+				// 跨两列的 "NAEOTOM Alpha IQon Spectral" 收进表后,它并入左列带并
+				// 把带拉宽到盖住右列,右列的每个数字格都被分到左带 —— 两列熔成
+				// 一列。跨列成员照旧算"已落座"(不另开带),但扩张后若会盖住别的
+				// 带 (重叠超过该带宽的 joinRatio) 就保持原宽,由 assignBand 判 straddles。
+				const start = Math.min(band.start, v.start);
+				const end = Math.max(band.end, v.end);
+				const swallows = bands.some(other => other !== band
+					&& overlap1D(start, end, other.start, other.end) > joinRatio * (other.end - other.start));
+				if (!swallows) {
+					band.start = start;
+					band.end = end;
+				}
 				joined = true;
 				break;
 			}
@@ -173,6 +184,25 @@ export function buildTableModel(
 	// 表级 email 探测 (2.5.13): 纯人名格保留规则的前提 —— 见下方 nameOnly。
 	const tableHasEmail = [...slots.values()].some(sl =>
 		sl.members.some(m => /\b[\w.+-]+@[\w-]+\.[A-Za-z]{2,}\b/.test(m.text)));
+	// 表头深度 (2.7.2, chen2023-p5/p8 实证): 表头向上扫掠后表头常有两三行
+	// ("All Patients" / "(n = 708)"),只把 row 0 当表头会让第二行表头
+	// "(n = 708)"、"P Value" 落成 preserve。表头 = 首个含纯数字格的行之前的
+	// 全部行 (上限 3 行);没有数字行时沿用 row 0。
+	const headerDepth = (() => {
+		const pureNumeric = /^[\d\s.,%±()/<>=+\-·—–]+$/;
+		let first = -1;
+		for (const [key, slot] of slots) {
+			const row = Number(key.split(':')[0]);
+			const numeric = slot.members.some(m => {
+				const t = m.text.trim();
+				return t.length > 0 && pureNumeric.test(t) && /\d/.test(t);
+			});
+			if (numeric && (first < 0 || row < first)) {
+				first = row;
+			}
+		}
+		return first < 0 ? 1 : Math.max(1, Math.min(3, first));
+	})();
 	for (const [key, slot] of slots) {
 		const [row, col] = key.split(':').map(Number) as [number, number];
 		const ordered = [...slot.members].sort((a, b) =>
@@ -200,7 +230,7 @@ export function buildTableModel(
 			&& text.split(/\s+/).filter(Boolean).every(w => /^[A-Z][a-zA-Z'’.-]*$/.test(w));
 		const kind: TableCell['kind'] =
 			slot.straddles || !text || hasEmail || nameOnly ? 'data'
-				: row === 0 && hasWord && !isPureNumeric ? 'text'
+				: row < headerDepth && hasWord && !isPureNumeric ? 'text'
 					: looksTabular(text) || text.length < 3 || tinySymbol ? 'data' : 'text';
 		cells.push({
 			id: `page-${pageIndex}-table-${tableIndex}-r${row}-c${col}`,
@@ -209,7 +239,7 @@ export function buildTableModel(
 		});
 	}
 
-	coerceNumericColumns(cells, colBands.length);
+	coerceNumericColumns(cells, colBands.length, headerDepth);
 
 	cells.sort((a, b) => a.row - b.row || a.col - b.col);
 	return { region, rowCount: rowBands.length, colCount: colBands.length, cells };
@@ -298,8 +328,34 @@ export function buildTextTableModel(
 	// 行起点聚类 (顶对齐)。组只用来【发现】行起点 —— 短内容列 (标签列) 的
 	// 行距大、分组干净,给出可靠起点;长内容列 (整句描述列) 的格子上下顶着,
 	// 常并成一个纵贯多行的大组,行归属绝不能跟着组走。
+	// 跨列顶对齐行起点 (2.7.2, radiology2023-p11 Table 4 实证): 表头行与首个
+	// 数据行只隔 0.55em,每一列的表头都和首行并成一组,组顶给不出首行起点,
+	// 整张表的表头和第一行熔成一格。补一类起点: ≥3 个成员顶边对齐 (±0.3em)、
+	// 且各自贴着所在列带左沿 (悬挂缩进的折行不算) —— 那是行首的硬几何。
+	const alignedStarts: number[] = [];
+	{
+		const flush = members
+			.filter(m => !groups.some(g => g.straddles && g.members[0] === m))
+			.map(m => ({ top: m.box.top, atStart: m.box.left <= colBands[assignBand(m.box.left, m.box.left + m.box.width, colBands).index]!.start + em * 0.5 }))
+			.filter(m => m.atStart)
+			.sort((a, b) => a.top - b.top);
+		let run: number[] = [];
+		const commit = (): void => {
+			if (run.length >= 3) {
+				alignedStarts.push(Math.min(...run));
+			}
+			run = [];
+		};
+		for (const m of flush) {
+			if (run.length && m.top - run[0]! > em * 0.3) {
+				commit();
+			}
+			run.push(m.top);
+		}
+		commit();
+	}
 	const rowStarts: number[] = [];
-	for (const t of groups.map(g => g.top).sort((a, b) => a - b)) {
+	for (const t of [...groups.map(g => g.top), ...alignedStarts].sort((a, b) => a - b)) {
 		if (!rowStarts.length || t > rowStarts[rowStarts.length - 1]! + em * 0.8) {
 			rowStarts.push(t);
 		}
@@ -353,9 +409,9 @@ export function buildTextTableModel(
  * row (row 0) is left as classified — a numeric column can still have a prose
  * heading that should translate.
  */
-function coerceNumericColumns(cells: TableCell[], colCount: number): void {
+function coerceNumericColumns(cells: TableCell[], colCount: number, headerDepth = 1): void {
 	for (let c = 0; c < colCount; c++) {
-		const body = cells.filter(cell => cell.col === c && cell.row > 0);
+		const body = cells.filter(cell => cell.col === c && cell.row >= headerDepth);
 		if (body.length < 3) {
 			continue;
 		}

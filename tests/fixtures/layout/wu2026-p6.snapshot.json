@@ -9,97 +9,97 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 1,
-		"text": "SNR"
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Quantitative evaluation"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 2,
-		"text": "CNR"
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "SNR"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 3,
-		"tableRow": 0,
+		"tableRow": 1,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "CNR"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 4,
+		"tableRow": 2,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "17.5±2.8"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 5,
+		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "12.6±2.6"
 	},
 	{
 		"type": "paragraph",
-		"column": 2,
-		"readingIndex": 4,
-		"text": "PCD-CT"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 5,
-		"tableRow": 0,
-		"tableCol": 0,
-		"mode": "translate",
-		"text": "≤5 (mm) 17.5±2.8"
+		"column": 0,
+		"readingIndex": 6,
+		"tableRow": 4,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "42.4±5.4"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 6,
-		"tableRow": 2,
+		"readingIndex": 7,
+		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "31.5±5.6"
 	},
 	{
 		"type": "paragraph",
-		"column": 2,
-		"readingIndex": 7,
-		"tableRow": 1,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "EID-CT"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
+		"column": 0,
 		"readingIndex": 8,
-		"tableRow": 2,
-		"tableCol": 0,
+		"tableRow": 5,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "PCD-CT 42.4±5.4"
+		"text": "22.8"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 9,
-		"tableRow": 3,
+		"tableRow": 5,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "16.9"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
+		"column": 0,
 		"readingIndex": 10,
-		"tableRow": 3,
-		"tableCol": 0,
+		"tableRow": 6,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "t 22.8"
+		"text": "<0.001*/24.9"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 11,
-		"tableRow": 4,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "<0.001*/24.9 P value/differences (95% CI"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 12,
-		"tableRow": 4,
+		"tableRow": 6,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "<0.001*/18.9"
@@ -107,9 +107,18 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 13,
-		"tableRow": 5,
+		"readingIndex": 12,
+		"tableRow": 6,
 		"tableCol": 0,
+		"mode": "translate",
+		"text": "P value/differences (95% CI)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 13,
+		"tableRow": 7,
+		"tableCol": 1,
 		"mode": "preserve",
 		"text": "(22.727.2)"
 	},
@@ -117,7 +126,7 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 14,
-		"tableRow": 5,
+		"tableRow": 7,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "(16.621.1)"
@@ -126,79 +135,70 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 15,
-		"tableRow": 7,
+		"tableRow": 9,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "35.2±11.7"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 16,
+		"tableRow": 9,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "26.1±9.3"
 	},
 	{
 		"type": "paragraph",
-		"column": 2,
-		"readingIndex": 16,
-		"tableRow": 6,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "69 (mm)"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
+		"column": 0,
 		"readingIndex": 17,
-		"tableRow": 7,
-		"tableCol": 0,
+		"tableRow": 10,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "EID-CT 35.2±11.7"
+		"text": "51.4±14.2"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 18,
-		"tableRow": 8,
+		"tableRow": 10,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "41.9±11.3"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
+		"column": 0,
 		"readingIndex": 19,
-		"tableRow": 8,
-		"tableCol": 0,
+		"tableRow": 11,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "PCD-CT 51.4±14.2"
+		"text": "13.0"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 20,
-		"tableRow": 9,
+		"tableRow": 11,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "16.5"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
+		"column": 0,
 		"readingIndex": 21,
-		"tableRow": 9,
-		"tableCol": 0,
+		"tableRow": 12,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "t 13.0"
+		"text": "<0.001*/16.1"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 22,
-		"tableRow": 10,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "<0.001*/16.1 P value/differences (95% CI"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 23,
-		"tableRow": 10,
+		"tableRow": 12,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "<0.001*/15.8"
@@ -206,9 +206,18 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 24,
-		"tableRow": 11,
+		"readingIndex": 23,
+		"tableRow": 12,
 		"tableCol": 0,
+		"mode": "translate",
+		"text": "P value/differences (95% CI)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 24,
+		"tableRow": 13,
+		"tableCol": 1,
 		"mode": "preserve",
 		"text": "(13.618.7)"
 	},
@@ -216,7 +225,7 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 25,
-		"tableRow": 11,
+		"tableRow": 13,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "(13.817.7)"
@@ -225,124 +234,70 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 26,
-		"tableRow": 13,
+		"tableRow": 15,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "44.2±10.4"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 27,
+		"tableRow": 15,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "34.4±9.3"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 27,
-		"tableRow": 10,
-		"tableCol": 3,
-		"mode": "preserve",
-		"text": "Fig. 3 Sensitivity comparison of EID-CT "
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 28,
-		"tableRow": 11,
-		"tableCol": 3,
+		"tableRow": 16,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "colorectal polyps stratified by polyp si"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 29,
-		"tableRow": 13,
-		"tableCol": 3,
-		"mode": "preserve",
-		"text": "Table 5 Comparison of reader diagnostic "
-	},
-	{
-		"type": "paragraph",
-		"column": 2,
-		"readingIndex": 30,
-		"tableRow": 12,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "≥10 (mm)"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 31,
-		"tableRow": 13,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "EID-CT 44.2±10.4"
+		"text": "61.6±11.7"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 32,
-		"tableRow": 14,
+		"readingIndex": 29,
+		"tableRow": 16,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "50.7±9.4"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 33,
-		"tableRow": 14,
-		"tableCol": 3,
+		"column": 0,
+		"readingIndex": 30,
+		"tableRow": 17,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "and PCD-CT stratified by polyp size"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 34,
-		"tableRow": 14,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "PCD-CT 61.6±11.7"
+		"text": "17.4"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 35,
-		"tableRow": 15,
+		"readingIndex": 31,
+		"tableRow": 17,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "12.6"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 36,
-		"tableRow": 15,
-		"tableCol": 3,
+		"column": 0,
+		"readingIndex": 32,
+		"tableRow": 18,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "Polyp size EID-CT PCD-CT Z P value"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 37,
-		"tableRow": 15,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "t 17.4"
+		"text": "<0.001*/17.4"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 38,
-		"tableRow": 16,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "<0.001*/17.4 P value/differences (95% CI"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 39,
-		"tableRow": 16,
+		"readingIndex": 33,
+		"tableRow": 18,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "<0.001*/16.3"
@@ -350,17 +305,26 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 40,
-		"tableRow": 17,
+		"readingIndex": 34,
+		"tableRow": 18,
 		"tableCol": 0,
+		"mode": "translate",
+		"text": "P value/differences (95% CI)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 35,
+		"tableRow": 19,
+		"tableCol": 1,
 		"mode": "preserve",
 		"text": "(15.419.5)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 41,
-		"tableRow": 17,
+		"readingIndex": 36,
+		"tableRow": 19,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "(13.619.0)"
@@ -368,8 +332,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 42,
-		"tableRow": 18,
+		"readingIndex": 37,
+		"tableRow": 20,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "SNR Signal-to-noise ratio, CNR Contrast-"
@@ -377,8 +341,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 43,
-		"tableRow": 18,
+		"readingIndex": 38,
+		"tableRow": 20,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "ratio, differences"
@@ -386,8 +350,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 44,
-		"tableRow": 19,
+		"readingIndex": 39,
+		"tableRow": 21,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "(95% CI) present paired mean differences"
@@ -395,8 +359,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 45,
-		"tableRow": 19,
+		"readingIndex": 40,
+		"tableRow": 21,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "confidence inter-"
@@ -404,208 +368,262 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 46,
+		"readingIndex": 41,
+		"text": "Data are means±SDs t test statistics of "
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 42,
 		"text": "difference"
 	},
 	{
 		"type": "table",
 		"column": 0,
-		"readingIndex": 47,
+		"readingIndex": 43,
 		"text": "Table 4 Comparison of polyp detection pe"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 48,
+		"readingIndex": 44,
+		"text": "and PCD-CT stratified by polyp"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 45,
 		"text": "size"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
+		"readingIndex": 46,
+		"tableRow": 0,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "χ2"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 47,
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Sensitivity"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 48,
+		"tableRow": 0,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "P value"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
 		"readingIndex": 49,
-		"tableRow": 16,
-		"tableCol": 3,
-		"mode": "preserve",
-		"text": "Confidence Confidence"
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "EID-CT, %"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 50,
-		"tableRow": 17,
-		"tableCol": 3,
-		"mode": "preserve",
-		"text": "-3.487 <0.001* ≤5 (mm) 2 [1,2] 3 [2,3]"
+		"tableRow": 1,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "PCD-CT, %"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 51,
-		"tableRow": 18,
-		"tableCol": 3,
-		"mode": "preserve",
-		"text": "-3.824 <0.001* 69 (mm) 2 [1,2] 3 [2,3]"
+		"tableRow": 2,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "(95% CI)"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 52,
-		"tableRow": 19,
+		"tableRow": 2,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "(95% CI)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 53,
+		"tableRow": 3,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": "<0.001* *"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 54,
+		"tableRow": 3,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "17.9 (5/28)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 55,
+		"tableRow": 3,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "71.4 (20/28)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 56,
+		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
-		"text": "≥10 (mm) 3 [2,3] 3 [3,3] -0.922 0.285"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 53,
-		"text": "EID-CT Energy integrating detector CT, P"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 54,
-		"tableRow": 0,
-		"tableCol": 5,
-		"mode": "translate",
-		"text": "5/28; χ² = 16.258, P <0.001]. Similarly,"
-	},
-	{
-		"type": "paragraph",
-		"column": 2,
-		"readingIndex": 55,
-		"text": "val"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 56,
-		"tableRow": 0,
-		"tableCol": 0,
-		"mode": "translate",
-		"text": "χ2 Polyp size Sensitivity P value"
+		"text": "16.258"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 57,
-		"tableRow": 1,
-		"tableCol": 0,
+		"tableRow": 4,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "EID-CT, % PCD-CT, %"
+		"text": "(6.837.6)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 58,
-		"tableRow": 2,
-		"tableCol": 0,
+		"tableRow": 4,
+		"tableCol": 2,
 		"mode": "preserve",
-		"text": "(95% CI) (95% CI)"
+		"text": "(52.984.7)"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 59,
-		"tableRow": 1,
-		"tableCol": 5,
-		"mode": "translate",
-		"text": "sized polyps (69 mm), PCD-CT demonstrat"
+		"tableRow": 4,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "4.383"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 60,
-		"tableRow": 2,
-		"tableCol": 5,
+		"tableRow": 4,
+		"tableCol": 4,
 		"mode": "preserve",
-		"text": "detection sensitivity [92.9% (95% CI: 77"
+		"text": "0.031"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 61,
-		"tableRow": 3,
-		"tableCol": 5,
+		"tableRow": 5,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "26/28] than EID-CT [71.4% (95% CI: 52.9%"
+		"text": "71.4 (20/28)"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 62,
 		"tableRow": 5,
-		"tableCol": 5,
+		"tableCol": 2,
 		"mode": "preserve",
-		"text": "20/28; χ² = 4.383, P =0.031]. For large "
+		"text": "92.9 (26/28)"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
+		"column": 0,
 		"readingIndex": 63,
-		"tableRow": 3,
-		"tableCol": 0,
+		"tableRow": 6,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "<0.001* * ≤5 (mm) 17.9 (5/28) 71.4 (20/2"
+		"text": "(52.984.7)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 64,
-		"tableRow": 5,
-		"tableCol": 0,
+		"tableRow": 6,
+		"tableCol": 2,
 		"mode": "preserve",
-		"text": "71.4 (20/28) 92.9 (26/28)"
+		"text": "(77.498.0)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 65,
-		"tableRow": 6,
-		"tableCol": 0,
+		"tableRow": 7,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "(52.984.7) (77.498.0)"
+		"text": "92.9 (26/28)"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 66,
-		"tableRow": 6,
-		"tableCol": 5,
-		"mode": "translate",
-		"text": "both modalities achieved excellent detec"
+		"tableRow": 7,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "96.4 (27/28)"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 67,
 		"tableRow": 7,
-		"tableCol": 5,
-		"mode": "translate",
-		"text": "statistically significant difference bet"
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "0.352"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
+		"column": 0,
 		"readingIndex": 68,
 		"tableRow": 7,
-		"tableCol": 0,
+		"tableCol": 4,
 		"mode": "preserve",
-		"text": "≥10 (mm) 92.9 (26/28) 96.4 (27/28) 0.352"
+		"text": "0.549"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 69,
 		"tableRow": 8,
-		"tableCol": 0,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "(77.498.0) (82.399.4)"
+		"text": "(77.498.0)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 70,
+		"tableRow": 8,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "(82.399.4)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 71,
 		"tableRow": 9,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -614,16 +632,16 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 71,
+		"readingIndex": 72,
 		"tableRow": 9,
-		"tableCol": 3,
+		"tableCol": 4,
 		"mode": "preserve",
 		"text": "Photon counting"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 72,
+		"readingIndex": 73,
 		"tableRow": 11,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -632,7 +650,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 73,
+		"readingIndex": 74,
 		"tableRow": 12,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -641,7 +659,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 74,
+		"readingIndex": 75,
 		"tableRow": 13,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -649,44 +667,284 @@
 	},
 	{
 		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 75,
-		"text": "χ McNemars test statistic P value indic"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
+		"column": 1,
 		"readingIndex": 76,
-		"text": "difference"
+		"tableRow": 12,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "Fig. 3 Sensitivity comparison of EID-CT "
 	},
 	{
-		"type": "heading",
-		"column": 0,
+		"type": "paragraph",
+		"column": 1,
 		"readingIndex": 77,
-		"text": "Polyp detection performance and reader d"
+		"tableRow": 13,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "colorectal polyps stratified by polyp si"
 	},
 	{
 		"type": "paragraph",
-		"column": 0,
+		"column": 1,
 		"readingIndex": 78,
-		"text": "Systematic evaluation of polyp detection"
+		"tableRow": 15,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "Table 5 Comparison of reader diagnostic "
 	},
 	{
 		"type": "paragraph",
-		"column": 0,
+		"column": 1,
 		"readingIndex": 79,
-		"text": "PCD-CT achieved significantly superior d"
+		"tableRow": 16,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": "and PCD-CT stratified by polyp size"
 	},
 	{
 		"type": "paragraph",
-		"column": 0,
+		"column": 1,
 		"readingIndex": 80,
-		"text": "edly improved sensitivity [71.4% (95% CI"
+		"tableRow": 17,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "Polyp size"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 81,
+		"tableRow": 17,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "EID-CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 82,
+		"tableRow": 17,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "PCD-CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 83,
+		"tableRow": 17,
+		"tableCol": 6,
+		"mode": "preserve",
+		"text": "Z"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 84,
+		"tableRow": 17,
+		"tableCol": 7,
+		"mode": "preserve",
+		"text": "P value"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 85,
+		"tableRow": 18,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "Confidence"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 86,
+		"tableRow": 18,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "Confidence"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 87,
+		"tableRow": 19,
+		"tableCol": 7,
+		"mode": "preserve",
+		"text": "-3.487 <0.001*"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 88,
+		"tableRow": 19,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "≤5 (mm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 89,
+		"tableRow": 19,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": "2 [1,2]"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 90,
+		"tableRow": 19,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "3 [2,3]"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 91,
+		"tableRow": 20,
+		"tableCol": 7,
+		"mode": "preserve",
+		"text": "-3.824 <0.001*"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 92,
+		"tableRow": 20,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "69 (mm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 93,
+		"tableRow": 20,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": "2 [1,2]"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 94,
+		"tableRow": 20,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "3 [2,3]"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 95,
+		"tableRow": 21,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "≥10 (mm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 96,
+		"tableRow": 21,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": "3 [2,3]"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 97,
+		"tableRow": 21,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "3 [3,3]"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 98,
+		"tableRow": 21,
+		"tableCol": 7,
+		"mode": "preserve",
+		"text": "-0.922 0.285"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 99,
+		"text": "EID-CT Energy integrating detector CT, P"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 100,
+		"tableRow": 0,
+		"tableCol": 5,
+		"mode": "translate",
+		"text": "5/28; χ² = 16.258, P <0.001]. Similarly,"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 101,
+		"tableRow": 1,
+		"tableCol": 5,
+		"mode": "translate",
+		"text": "sized polyps (69 mm), PCD-CT demonstrat"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 102,
+		"tableRow": 2,
+		"tableCol": 5,
+		"mode": "translate",
+		"text": "detection sensitivity [92.9% (95% CI: 77"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 103,
+		"tableRow": 3,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "26/28] than EID-CT [71.4% (95% CI: 52.9%"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 104,
+		"tableRow": 5,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "20/28; χ² = 4.383, P =0.031]. For large "
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 105,
+		"tableRow": 6,
+		"tableCol": 5,
+		"mode": "translate",
+		"text": "both modalities achieved excellent detec"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 106,
+		"tableRow": 7,
+		"tableCol": 5,
+		"mode": "translate",
+		"text": "statistically significant difference bet"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 107,
 		"tableRow": 8,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -695,7 +953,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 82,
+		"readingIndex": 108,
 		"tableRow": 9,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -704,7 +962,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 83,
+		"readingIndex": 109,
 		"tableRow": 10,
 		"tableCol": 5,
 		"mode": "translate",
@@ -713,8 +971,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 84,
-		"tableRow": 11,
+		"readingIndex": 110,
+		"tableRow": 12,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "stantial (κ=0.876; 95% CI: 0.8150.918)."
@@ -722,7 +980,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 85,
+		"readingIndex": 111,
 		"tableRow": 13,
 		"tableCol": 5,
 		"mode": "translate",
@@ -731,7 +989,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 86,
+		"readingIndex": 112,
 		"tableRow": 14,
 		"tableCol": 5,
 		"mode": "translate",
@@ -740,13 +998,172 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 87,
+		"readingIndex": 113,
 		"text": "for both small polyps (≤5 mm: median 3 ["
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 88,
+		"readingIndex": 114,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "PCD-CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 115,
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "≤5 (mm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 116,
+		"tableRow": 3,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "EID-CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 117,
+		"tableRow": 4,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "PCD-CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 118,
+		"tableRow": 5,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "t"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 119,
+		"tableRow": 8,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "69 (mm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 120,
+		"tableRow": 9,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "EID-CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 121,
+		"tableRow": 10,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "PCD-CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 122,
+		"tableRow": 11,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "t"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 123,
+		"tableRow": 14,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "≥10 (mm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 124,
+		"tableRow": 15,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "EID-CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 125,
+		"tableRow": 16,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "PCD-CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 126,
+		"tableRow": 17,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "t"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 127,
+		"text": "val"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 128,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Polyp size"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 129,
+		"tableRow": 3,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "≤5 (mm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 130,
+		"tableRow": 4,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "69 (mm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 131,
+		"tableRow": 7,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "≥10 (mm)"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 132,
 		"tableRow": 10,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -754,23 +1171,59 @@
 	},
 	{
 		"type": "paragraph",
-		"column": 2,
-		"readingIndex": 89,
+		"column": -1,
+		"readingIndex": 133,
 		"tableRow": 14,
 		"tableCol": 0,
 		"mode": "preserve",
-		"text": "2"
+		"text": "2 χ McNemars test statistic"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 134,
+		"text": "P value indicates a significant"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 135,
+		"text": "difference"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 136,
+		"text": "Polyp detection performance and reader d"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 137,
+		"text": "Systematic evaluation of polyp detection"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 138,
+		"text": "PCD-CT achieved significantly superior d"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 139,
+		"text": "edly improved sensitivity [71.4% (95% CI"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 90,
+		"readingIndex": 140,
 		"text": "confidence"
 	},
 	{
 		"type": "title",
 		"column": 2,
-		"readingIndex": 91,
+		"readingIndex": 141,
 		"text": "1 3"
 	}
 ]

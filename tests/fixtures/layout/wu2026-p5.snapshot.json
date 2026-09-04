@@ -45,28 +45,43 @@
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 7,
-		"text": "Qualitative evaluation EID-CT PCD-CT Z"
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "PCD-CT"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 8,
-		"text": "P value"
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "Qualitative evaluation EID-CT PCD-CT Z"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 9,
-		"tableRow": 0,
-		"tableCol": 3,
+		"tableRow": 1,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "P value"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 10,
+		"tableRow": 2,
+		"tableCol": 4,
 		"mode": "preserve",
 		"text": "* -10.078 <0.001"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 10,
-		"tableRow": 0,
+		"readingIndex": 11,
+		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Overall image quality"
@@ -74,8 +89,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 11,
-		"tableRow": 0,
+		"readingIndex": 12,
+		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "3 [3,4]"
@@ -83,8 +98,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 12,
-		"tableRow": 0,
+		"readingIndex": 13,
+		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "5 [4,5]"
@@ -92,17 +107,17 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 13,
-		"tableRow": 1,
-		"tableCol": 3,
+		"readingIndex": 14,
+		"tableRow": 3,
+		"tableCol": 4,
 		"mode": "preserve",
-		"text": "<0.001* -9.279"
+		"text": "<0.001*"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 14,
-		"tableRow": 1,
+		"readingIndex": 15,
+		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Sharpness"
@@ -110,8 +125,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 15,
-		"tableRow": 1,
+		"readingIndex": 16,
+		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "3 [1,4]"
@@ -119,8 +134,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 16,
-		"tableRow": 1,
+		"readingIndex": 17,
+		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "5 [4,5]"
@@ -128,17 +143,26 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 17,
-		"tableRow": 2,
+		"readingIndex": 18,
+		"tableRow": 3,
 		"tableCol": 3,
+		"mode": "preserve",
+		"text": "-9.279"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 19,
+		"tableRow": 4,
+		"tableCol": 4,
 		"mode": "preserve",
 		"text": "-11.188 <0.001*"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 18,
-		"tableRow": 2,
+		"readingIndex": 20,
+		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Noise"
@@ -146,8 +170,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 19,
-		"tableRow": 2,
+		"readingIndex": 21,
+		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "3 [3,3]"
@@ -155,8 +179,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 20,
-		"tableRow": 2,
+		"readingIndex": 22,
+		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "5 [4,5]"
@@ -164,19 +188,19 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 21,
+		"readingIndex": 23,
 		"text": "EID-CT Energy integrating detector CT, P"
 	},
 	{
 		"type": "caption",
 		"column": 1,
-		"readingIndex": 22,
+		"readingIndex": 24,
 		"text": "Fig. 2 The stacked bar chart demonstrate"
 	},
 	{
 		"type": "title",
 		"column": 1,
-		"readingIndex": 23,
+		"readingIndex": 25,
 		"text": "1 3"
 	}
 ]

@@ -12,7 +12,7 @@
 		"tableRow": 0,
 		"tableCol": 1,
 		"mode": "translate",
-		"text": "Description of Image Images based on att"
+		"text": "Description of Image"
 	},
 	{
 		"type": "paragraph",
@@ -21,7 +21,7 @@
 		"tableRow": 0,
 		"tableCol": 2,
 		"mode": "translate",
-		"text": "Expected Clinical Benefit At lower energ"
+		"text": "Expected Clinical Benefit"
 	},
 	{
 		"type": "paragraph",
@@ -30,7 +30,7 @@
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "translate",
-		"text": "Images showing the iodine content of the"
+		"text": "Images based on attenuation values of a "
 	},
 	{
 		"type": "paragraph",
@@ -39,7 +39,7 @@
 		"tableRow": 1,
 		"tableCol": 2,
 		"mode": "translate",
-		"text": "Quantification of iodine concentration; "
+		"text": "At lower energies, the attenuation of io"
 	},
 	{
 		"type": "paragraph",
@@ -48,7 +48,7 @@
 		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "translate",
-		"text": "Images showing the attenuation of the ma"
+		"text": "Images showing the iodine content of the"
 	},
 	{
 		"type": "paragraph",
@@ -57,7 +57,7 @@
 		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "translate",
-		"text": "Radiation dose reduction due to sparing "
+		"text": "Quantification of iodine concentration; "
 	},
 	{
 		"type": "paragraph",
@@ -66,7 +66,7 @@
 		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "translate",
-		"text": "Images showing the integrated atomic num"
+		"text": "Images showing the attenuation of the ma"
 	},
 	{
 		"type": "paragraph",
@@ -75,7 +75,7 @@
 		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "translate",
-		"text": "Improved contrast resolution between dif"
+		"text": "Radiation dose reduction due to sparing "
 	},
 	{
 		"type": "paragraph",
@@ -84,7 +84,7 @@
 		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "translate",
-		"text": "Specific and quantitative imaging of a K"
+		"text": "Images showing the integrated atomic num"
 	},
 	{
 		"type": "paragraph",
@@ -93,7 +93,7 @@
 		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "translate",
-		"text": "Specific visualization of the sole K-edg"
+		"text": "Improved contrast resolution between dif"
 	},
 	{
 		"type": "paragraph",
@@ -102,7 +102,7 @@
 		"tableRow": 5,
 		"tableCol": 1,
 		"mode": "translate",
-		"text": "Assessment of multiple spectral images f"
+		"text": "Specific and quantitative imaging of a K"
 	},
 	{
 		"type": "paragraph",
@@ -111,22 +111,49 @@
 		"tableRow": 5,
 		"tableCol": 2,
 		"mode": "translate",
+		"text": "Specific visualization of the sole K-edg"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 13,
+		"tableRow": 6,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Assessment of multiple spectral images f"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 14,
+		"tableRow": 6,
+		"tableCol": 2,
+		"mode": "translate",
 		"text": "Combination of the advantages of the exa"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 13,
+		"readingIndex": 15,
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Spectral Imaging Type Virtual monoenerge"
+		"text": "Spectral Imaging Type"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 14,
+		"readingIndex": 16,
 		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Virtual monoenergetic images"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 17,
+		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Iodine maps"
@@ -134,8 +161,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 15,
-		"tableRow": 2,
+		"readingIndex": 18,
+		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Virtual noncontrast images"
@@ -143,8 +170,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 16,
-		"tableRow": 3,
+		"readingIndex": 19,
+		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Z-effective images"
@@ -152,8 +179,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 17,
-		"tableRow": 4,
+		"readingIndex": 20,
+		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "K-edge imaging"
@@ -161,8 +188,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 18,
-		"tableRow": 5,
+		"readingIndex": 21,
+		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Multiparametric imaging"
@@ -170,86 +197,104 @@
 	{
 		"type": "table",
 		"column": -1,
-		"readingIndex": 19,
+		"readingIndex": 22,
 		"text": "Table 3: Characteristics of Photon-count"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 20,
+		"column": 0,
+		"readingIndex": 23,
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "translate",
 		"text": "Detector"
 	},
 	{
-		"type": "heading",
-		"column": -1,
-		"readingIndex": 21,
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 24,
+		"tableRow": 0,
+		"tableCol": 3,
+		"mode": "translate",
 		"text": "No. of Energy Body"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 22,
+		"column": 0,
+		"readingIndex": 25,
+		"tableRow": 0,
+		"tableCol": 5,
+		"mode": "translate",
 		"text": "Scan"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 23,
+		"column": 0,
+		"readingIndex": 26,
+		"tableRow": 0,
+		"tableCol": 6,
+		"mode": "translate",
 		"text": "FDA"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 24,
+		"column": 0,
+		"readingIndex": 27,
+		"tableRow": 0,
+		"tableCol": 7,
+		"mode": "translate",
 		"text": "Reference"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 25,
-		"text": "Manufacturer and"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 26,
+		"column": 0,
+		"readingIndex": 28,
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "translate",
 		"text": "Type"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 27,
+		"column": 0,
+		"readingIndex": 29,
+		"tableRow": 1,
+		"tableCol": 2,
+		"mode": "translate",
 		"text": "Collimation"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 28,
+		"column": 0,
+		"readingIndex": 30,
+		"tableRow": 1,
+		"tableCol": 3,
+		"mode": "translate",
 		"text": "Thresholds"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 29,
-		"text": "Region"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 30,
-		"text": "FOV (cm) Clearance No."
-	},
-	{
-		"type": "heading",
-		"column": -1,
+		"column": 0,
 		"readingIndex": 31,
-		"text": "Product Name"
+		"tableRow": 1,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "Region"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 32,
-		"tableRow": 0,
+		"tableRow": 1,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "FOV (cm) Clearance No."
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 33,
+		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "CdTe"
@@ -257,26 +302,26 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 33,
-		"tableRow": 0,
+		"readingIndex": 34,
+		"tableRow": 2,
 		"tableCol": 2,
-		"mode": "translate",
+		"mode": "preserve",
 		"text": "144 × 0.4 mm (SR);"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 34,
-		"tableRow": 0,
+		"readingIndex": 35,
+		"tableRow": 2,
 		"tableCol": 3,
-		"mode": "translate",
+		"mode": "preserve",
 		"text": "4 (SR);"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 35,
-		"tableRow": 0,
+		"readingIndex": 36,
+		"tableRow": 2,
 		"tableCol": 4,
 		"mode": "translate",
 		"text": "Full body"
@@ -284,8 +329,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 36,
-		"tableRow": 0,
+		"readingIndex": 37,
+		"tableRow": 2,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "50"
@@ -293,8 +338,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 37,
-		"tableRow": 0,
+		"readingIndex": 38,
+		"tableRow": 2,
 		"tableCol": 6,
 		"mode": "translate",
 		"text": "Yes"
@@ -302,8 +347,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 38,
-		"tableRow": 0,
+		"readingIndex": 39,
+		"tableRow": 2,
 		"tableCol": 7,
 		"mode": "preserve",
 		"text": "14"
@@ -311,8 +356,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 39,
-		"tableRow": 1,
+		"readingIndex": 40,
+		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "120 × 0.2 mm (UHR)"
@@ -320,8 +365,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 40,
-		"tableRow": 1,
+		"readingIndex": 41,
+		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "2 (UHR)"
@@ -329,8 +374,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 41,
-		"tableRow": 2,
+		"readingIndex": 42,
+		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "Silicon"
@@ -338,8 +383,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 42,
-		"tableRow": 2,
+		"readingIndex": 43,
+		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "*"
@@ -347,8 +392,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 43,
-		"tableRow": 2,
+		"readingIndex": 44,
+		"tableRow": 4,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "8"
@@ -356,8 +401,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 44,
-		"tableRow": 2,
+		"readingIndex": 45,
+		"tableRow": 4,
 		"tableCol": 4,
 		"mode": "translate",
 		"text": "Full body"
@@ -365,8 +410,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 45,
-		"tableRow": 2,
+		"readingIndex": 46,
+		"tableRow": 4,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "50"
@@ -374,8 +419,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 46,
-		"tableRow": 2,
+		"readingIndex": 47,
+		"tableRow": 4,
 		"tableCol": 6,
 		"mode": "preserve",
 		"text": "No"
@@ -383,8 +428,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 47,
-		"tableRow": 2,
+		"readingIndex": 48,
+		"tableRow": 4,
 		"tableCol": 7,
 		"mode": "preserve",
 		"text": "92"
@@ -392,8 +437,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 48,
-		"tableRow": 3,
+		"readingIndex": 49,
+		"tableRow": 5,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "CdZnTe"
@@ -401,8 +446,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 49,
-		"tableRow": 3,
+		"readingIndex": 50,
+		"tableRow": 5,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "64 × 0.275 mm"
@@ -410,8 +455,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 50,
-		"tableRow": 3,
+		"readingIndex": 51,
+		"tableRow": 5,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "5"
@@ -419,8 +464,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 51,
-		"tableRow": 3,
+		"readingIndex": 52,
+		"tableRow": 5,
 		"tableCol": 4,
 		"mode": "translate",
 		"text": "Full body"
@@ -428,8 +473,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 52,
-		"tableRow": 3,
+		"readingIndex": 53,
+		"tableRow": 5,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "50"
@@ -437,8 +482,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 53,
-		"tableRow": 3,
+		"readingIndex": 54,
+		"tableRow": 5,
 		"tableCol": 6,
 		"mode": "preserve",
 		"text": "No"
@@ -446,8 +491,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 54,
-		"tableRow": 3,
+		"readingIndex": 55,
+		"tableRow": 5,
 		"tableCol": 7,
 		"mode": "preserve",
 		"text": "93"
@@ -455,8 +500,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 55,
-		"tableRow": 4,
+		"readingIndex": 56,
+		"tableRow": 6,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "CdZnTe"
@@ -464,8 +509,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 56,
-		"tableRow": 4,
+		"readingIndex": 57,
+		"tableRow": 6,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "16 × 0.62 mm (SR);"
@@ -473,8 +518,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 57,
-		"tableRow": 4,
+		"readingIndex": 58,
+		"tableRow": 6,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "6"
@@ -482,8 +527,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 58,
-		"tableRow": 4,
+		"readingIndex": 59,
+		"tableRow": 6,
 		"tableCol": 4,
 		"mode": "translate",
 		"text": "Full body"
@@ -491,8 +536,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 59,
-		"tableRow": 4,
+		"readingIndex": 60,
+		"tableRow": 6,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "50"
@@ -500,8 +545,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 60,
-		"tableRow": 4,
+		"readingIndex": 61,
+		"tableRow": 6,
 		"tableCol": 6,
 		"mode": "preserve",
 		"text": "No"
@@ -509,8 +554,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 61,
-		"tableRow": 4,
+		"readingIndex": 62,
+		"tableRow": 6,
 		"tableCol": 7,
 		"mode": "preserve",
 		"text": "94"
@@ -518,8 +563,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 62,
-		"tableRow": 5,
+		"readingIndex": 63,
+		"tableRow": 7,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "48 × 0.21 mm (UHR)"
@@ -527,8 +572,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 63,
-		"tableRow": 6,
+		"readingIndex": 64,
+		"tableRow": 8,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "CdTe"
@@ -536,8 +581,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 64,
-		"tableRow": 6,
+		"readingIndex": 65,
+		"tableRow": 8,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "80 × 0.15 mm"
@@ -545,8 +590,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 65,
-		"tableRow": 6,
+		"readingIndex": 66,
+		"tableRow": 8,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "3"
@@ -554,8 +599,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 66,
-		"tableRow": 6,
+		"readingIndex": 67,
+		"tableRow": 8,
 		"tableCol": 4,
 		"mode": "translate",
 		"text": "Head and neck"
@@ -563,8 +608,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 67,
-		"tableRow": 6,
+		"readingIndex": 68,
+		"tableRow": 8,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "25"
@@ -572,17 +617,17 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 68,
-		"tableRow": 6,
+		"readingIndex": 69,
+		"tableRow": 8,
 		"tableCol": 6,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Yes"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 69,
-		"tableRow": 6,
+		"readingIndex": 70,
+		"tableRow": 8,
 		"tableCol": 7,
 		"mode": "preserve",
 		"text": "95"
@@ -590,8 +635,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 70,
-		"tableRow": 8,
+		"readingIndex": 71,
+		"tableRow": 10,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "CdZnTe"
@@ -599,8 +644,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 71,
-		"tableRow": 8,
+		"readingIndex": 72,
+		"tableRow": 10,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "128 × 0.11 mm"
@@ -608,8 +653,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 72,
-		"tableRow": 8,
+		"readingIndex": 73,
+		"tableRow": 10,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "5"
@@ -617,8 +662,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 73,
-		"tableRow": 8,
+		"readingIndex": 74,
+		"tableRow": 10,
 		"tableCol": 4,
 		"mode": "translate",
 		"text": "Extremities"
@@ -626,8 +671,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 74,
-		"tableRow": 8,
+		"readingIndex": 75,
+		"tableRow": 10,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "12, 5"
@@ -635,8 +680,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 75,
-		"tableRow": 8,
+		"readingIndex": 76,
+		"tableRow": 10,
 		"tableCol": 6,
 		"mode": "preserve",
 		"text": "No"
@@ -644,8 +689,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 76,
-		"tableRow": 8,
+		"readingIndex": 77,
+		"tableRow": 10,
 		"tableCol": 7,
 		"mode": "preserve",
 		"text": "96"
@@ -653,8 +698,26 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 77,
+		"readingIndex": 78,
 		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Manufacturer and"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 79,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Product Name"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 80,
+		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Siemens Healthcare"
@@ -662,8 +725,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 78,
-		"tableRow": 1,
+		"readingIndex": 81,
+		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "(Naeotom Alpha)"
@@ -671,8 +734,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 79,
-		"tableRow": 2,
+		"readingIndex": 82,
+		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "GE HealthCare"
@@ -680,8 +743,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 80,
-		"tableRow": 3,
+		"readingIndex": 83,
+		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Philips Healthcare"
@@ -689,8 +752,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 81,
-		"tableRow": 4,
+		"readingIndex": 84,
+		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Canon Medical Research"
@@ -698,8 +761,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 82,
-		"tableRow": 6,
+		"readingIndex": 85,
+		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "Samsung/NeuroLogica"
@@ -707,8 +770,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 83,
-		"tableRow": 7,
+		"readingIndex": 86,
+		"tableRow": 9,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "(OmniTom Elite PCD)"
@@ -716,8 +779,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 84,
-		"tableRow": 8,
+		"readingIndex": 87,
+		"tableRow": 10,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "MARS Bioimaging"
@@ -725,43 +788,43 @@
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 85,
+		"readingIndex": 88,
 		"text": "(extremity 5 × 120)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 86,
+		"readingIndex": 89,
 		"text": "recommend coronary CT angiography as the"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 87,
+		"readingIndex": 90,
 		"text": "These limitations derive from a combinat"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 88,
+		"readingIndex": 91,
 		"text": "spatial resolution of EID CT and bloomin"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 89,
+		"readingIndex": 92,
 		"text": "Note.CdTe = cadmium telluride, CdZnTe ="
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 90,
+		"readingIndex": 93,
 		"text": "Coronary Artery Disease"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 91,
+		"readingIndex": 94,
 		"text": "Nowadays, CT is the imaging modality of "
 	}
 ]
