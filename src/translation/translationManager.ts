@@ -1880,8 +1880,10 @@ export class TranslationManager {
 		// order at the tail, so they neither receive positional context nor
 		// provide it — an isolated hard block doesn't need its neighbour's tail,
 		// and a wrong neighbour is worse than none.
+		// 同流才传上下文 (2.7.1): 单元格批不再收到正文段尾 —— 它的语境是表格
+		// 标题 (moduleContext),正文尾句只是噪声与 token。
 		const contexts = chunks.map((c, i) => (
-			c.lane === 'fast' && i > 0 && chunks[i - 1]!.lane === 'fast'
+			c.lane === 'fast' && i > 0 && chunks[i - 1]!.lane === 'fast' && chunks[i - 1]!.kind === c.kind
 				? trailingContext(chunks[i - 1]!.blocks)
 				: ''
 		));
@@ -1890,7 +1892,7 @@ export class TranslationManager {
 		// continuation, the tail is injected as chunk-0 context — SOURCE text
 		// only, no cross-page block merging, so the per-page overlay contract and
 		// the one-shot commit stay intact.
-		if (this.deps.useContext() && contexts.length && !contexts[0] && chunks[0]!.lane === 'fast' && pageIndex > 0) {
+		if (this.deps.useContext() && contexts.length && !contexts[0] && chunks[0]!.lane === 'fast' && chunks[0]!.kind === 'prose' && pageIndex > 0) {
 			const prev = this.pages.get(pageIndex - 1);
 			const lastBody = [...(prev?.blocks ?? [])].reverse()
 				.find(b => (b.type === 'paragraph' || b.type === 'list') && !b.isReference);

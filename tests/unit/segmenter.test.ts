@@ -230,3 +230,50 @@ test('table cells get the table caption as moduleContext (2.5.13)', async () => 
 	const capChunk = chunks.find(c => c.blocks.some(b => b.id === 'cap'));
 	assert.equal(capChunk!.moduleContext, '');
 });
+
+// ---- 2.7.1 (审核 EF-1): 正文流 / 单元格流两趟独立打包 ------------------------
+
+test('planChunks: 阅读序里格与正文交替,同类批次合并 —— 恰 2 批 (2.7.1)', () => {
+	// chen2023-p5 形态: 正文、格、正文、格、正文 —— 此前每次交替断一批 (5 批),
+	// 现在正文流 1 批 + 单元格流 1 批。
+	const blocks = [
+		para('p1', 'body paragraph one before the first table'),
+		cell('c1', 20, 0, 0), cell('c2', 20, 0, 1),
+		para('p2', 'body paragraph two between the tables'),
+		cell('c3', 20, 1, 0), cell('c4', 20, 1, 1),
+		para('p3', 'body paragraph three after the tables')
+	];
+	const chunks = planChunks(blocks, buildLayoutModules(blocks));
+	assert.equal(chunks.length, 2, `expected prose + cells, got ${chunks.map(c => c.blocks.map(b => b.id).join('+')).join(' | ')}`);
+	assert.equal(chunks[0]!.kind, 'prose');
+	assert.deepEqual(chunks[0]!.blocks.map(b => b.id), ['p1', 'p2', 'p3'], '正文流保持阅读序');
+	assert.equal(chunks[1]!.kind, 'cells');
+	assert.deepEqual(chunks[1]!.blocks.map(b => b.id), ['c1', 'c2', 'c3', 'c4'], '单元格流保持阅读序');
+	// 硬边界不变: 绝不混装。
+	for (const c of chunks) {
+		const cells = c.blocks.filter(b => typeof b.tableRow === 'number').length;
+		assert.ok(cells === 0 || cells === c.blocks.length);
+	}
+});
+
+test('planChunks: 单元格批块数上限放宽到 MAX_CELLS_PER_REQUEST,正文仍是 24 (2.7.1)', async () => {
+	const { MAX_CELLS_PER_REQUEST } = await import('../../src/translation/segmenter');
+	assert.ok(MAX_CELLS_PER_REQUEST > MAX_BLOCKS_PER_REQUEST);
+	const cells = Array.from({ length: MAX_CELLS_PER_REQUEST }, (_, i) => cell('c' + i, 8, Math.floor(i / 4), i % 4));
+	const cellChunks = planChunks(cells, buildLayoutModules(cells));
+	assert.equal(cellChunks.length, 1, `${MAX_CELLS_PER_REQUEST} short cells fit one request`);
+	const paras = Array.from({ length: MAX_BLOCKS_PER_REQUEST + 1 }, (_, i) => para('p' + i, 'short body line ' + i));
+	const proseChunks = planChunks(paras, buildLayoutModules(paras));
+	assert.equal(proseChunks.length, 2, 'prose keeps the 24-block ceiling');
+	// 显式 maxBlocks 对两流都生效。
+	assert.equal(planChunks(cells, buildLayoutModules(cells), { maxBlocks: 10 }).length, Math.ceil(MAX_CELLS_PER_REQUEST / 10));
+});
+
+test('planChunks: 风险分道后,fast 批同样先正文后单元格,slow 批仍在尾部 (2.7.1)', () => {
+	const blocks = [
+		para('p1', 'body one'), cell('c1', 20, 0, 0), para('big', 'y'.repeat(3000)), cell('c2', 20, 0, 1), para('p2', 'body two')
+	];
+	const chunks = planChunks(blocks, buildLayoutModules(blocks), { riskOf: b => b.id === 'big' });
+	assert.deepEqual(chunks.map(c => `${c.lane}:${c.kind}:${c.blocks.map(b => b.id).join('+')}`),
+		['fast:prose:p1+p2', 'fast:cells:c1+c2', 'slow:prose:big']);
+});
