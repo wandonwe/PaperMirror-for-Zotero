@@ -64,7 +64,9 @@ export interface SpanLine {
 	fontSize: number;
 }
 
-const REFERENCES_HEADINGS = /^(references|bibliography|literature\s+cited|参考文献|參考文獻|引用文献)\s*$/i;
+// 字间空格标题 (2.7.2, 审核 C-2): jacc2020-p15 "R E F E R E N C E S" 排成字距体,
+// 原正则不认,整段三栏参考文献被当正文切碎翻译。
+const REFERENCES_HEADINGS = /^(r\s*e\s*f\s*e\s*r\s*e\s*n\s*c\s*e\s*s|bibliography|literature\s+cited|参考文献|參考文獻|引用文献)\s*$/i;
 
 /**
  * Fallback column split when there are too few rows for the gutter vote: any
@@ -887,6 +889,24 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	}).filter(p => p.text.length >= 1);
 
 	let referencesStarted = !!options.referencesAlreadyStarted;
+	// 字距拉开的标题 (2.7.2, 审核 C-2, jacc2020-p15 实证): "R E F E R E N C E S"
+	// 由单字母 span 拼成,字号与正文同,分类落成 paragraph —— 只认 heading/title
+	// 就永远认不出它。整块只有一行、且整行就是这个词时,类型不再是门槛。
+	const isReferencesHeadingBlock = (p: { type: string; text: string; group: unknown[] }): boolean =>
+		(p.type === 'heading' || p.type === 'title' || p.group.length === 1) && REFERENCES_HEADINGS.test(p.text);
+	// 分带页的标题矩形预扫 (2.7.2): merged 序是按带/栏排的,文献三栏里排在标题
+	// 之前的块若只看"序后即文献"就漏掉 —— 先找出本页的文献标题,几何判定不依赖序。
+	const referencesHeadingRect: Rect | undefined = merged.find(p => isReferencesHeadingBlock(p))?.rect;
+	const referenceByGeometry = (rect: Rect, heading: Rect, stamp: (r: Rect) => number): boolean => {
+		const bandOf = (r: Rect) => Math.floor(stamp(r) / 100);
+		const headingBand = bandOf(heading);
+		const band = bandOf(rect);
+		if (band !== headingBand) {
+			return band > headingBand;
+		}
+		// 同带: 顶边 (PDF y 向上) 不高于标题顶边 → 在标题下方。
+		return rect[3] <= heading[3] + 1;
+	};
 	// Column stamp (was MISSING on this path): without it every text-layer
 	// block defaulted to column 0 downstream, so semantic modules ran straight
 	// through the gutter and the same PDF extracted differently depending on
@@ -949,13 +969,24 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			if (p.type !== 'title' && isRunningHeadOrFoot(p.rect, options.pageHeight, p.group.length, p.text)) {
 				continue;
 			}
-			if ((p.type === 'heading' || p.type === 'title') && REFERENCES_HEADINGS.test(p.text)) {
+			// 字距拉开的标题 (2.7.2, 审核 C-2, jacc2020-p15 实证): "R E F E R E N C E S"
+			// 由单字母 span 拼成,字号与正文同,分类落成 paragraph —— 只认
+			// heading/title 就永远认不出它。整块文本只有这一个词、且只有一行时,
+			// 类型不再是门槛。
+			if (isReferencesHeadingBlock(p)) {
 				referencesStarted = true;
 			}
 		}
 		// 不译参考文献时保留为 preserve 块 (2.0.8, 审核 P2-5),与 blockBuilder
 		// 同规则: 墨迹几何要进 inkObstacles,丢弃即失明。
-		const isRef = p.isTableLine ? false : referencesStarted;
+		// 分带页几何门 (2.7.2): jacc2020-p15 正文双栏在上、文献三栏在下,标题
+		// 落在第 0 栏底部;正文第 1 栏在 merged 序里排在标题之后,却在页面上位于
+		// 标题上方 —— 按"序后即文献"会把整栏正文冻成 preserve。分带页上:标题所在
+		// 带内只有顶边不高于标题顶边的块算文献,后面的带整体算文献。均匀页不变。
+		const isRef = p.isTableLine ? false
+			: referencesHeadingRect && bandedStamp
+				? referenceByGeometry(p.rect, referencesHeadingRect, bandedStamp)
+				: referencesStarted;
 		const preserveReference = isRef && !options.includeReferences && !REFERENCES_HEADINGS.test(p.text);
 		blocks.push({
 			id: `page-${options.pageIndex}-block-${order}`,

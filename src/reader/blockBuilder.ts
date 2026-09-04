@@ -73,7 +73,9 @@ interface Paragraph {
 	fontName: string;
 }
 
-const REFERENCES_HEADINGS = /^(references|bibliography|literature\s+cited|参考文献|參考文獻|引用文献)\s*$/i;
+// 字间空格标题 (2.7.2, 审核 C-2): jacc2020-p15 "R E F E R E N C E S" 排成字距体,
+// 原正则不认,整段三栏参考文献被当正文切碎翻译。
+const REFERENCES_HEADINGS = /^(r\s*e\s*f\s*e\s*r\s*e\s*n\s*c\s*e\s*s|bibliography|literature\s+cited|参考文献|參考文獻|引用文献)\s*$/i;
 
 const HEADER_FOOTER_BAND_RATIO = 0.05; // top/bottom 5% of the page
 const MIN_PARAGRAPH_CHARS = 2;

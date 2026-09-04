@@ -51,72 +51,434 @@
 		"type": "list",
 		"column": 100,
 		"readingIndex": 8,
+		"mode": "preserve",
 		"text": "1. Moss AJ, Williams MC, Newby DE, Nicol"
 	},
 	{
+		"type": "paragraph",
+		"column": 100,
+		"readingIndex": 9,
+		"mode": "preserve",
+		"text": "updated NICE guidelines: cardiac CT as t"
+	},
+	{
+		"type": "list",
+		"column": 100,
+		"readingIndex": 10,
+		"mode": "preserve",
+		"text": "2. Knuuti J, Wijns W, Saraste A, et al. "
+	},
+	{
+		"type": "paragraph",
+		"column": 100,
+		"readingIndex": 11,
+		"mode": "preserve",
+		"text": "Guidelines for the diagnosis and managem"
+	},
+	{
+		"type": "list",
+		"column": 100,
+		"readingIndex": 12,
+		"mode": "preserve",
+		"text": "3. Kwak BR, Bäck M, Bochaton-Piallat M-L"
+	},
+	{
+		"type": "paragraph",
+		"column": 100,
+		"readingIndex": 13,
+		"mode": "preserve",
+		"text": "Biomechanical factors in atherosclerosis"
+	},
+	{
+		"type": "list",
+		"column": 100,
+		"readingIndex": 14,
+		"mode": "preserve",
+		"text": "4. Yahagi K, Kolodgie FD, Otsuka F, et a"
+	},
+	{
+		"type": "list",
+		"column": 100,
+		"readingIndex": 15,
+		"mode": "preserve",
+		"text": "5. Otsuka F, Yasuda S, Noguchi T, Ishiba"
+	},
+	{
+		"type": "list",
+		"column": 100,
+		"readingIndex": 16,
+		"mode": "preserve",
+		"text": "6. Kolodgie FD, Gold HK, Burke AP, et al"
+	},
+	{
+		"type": "list",
+		"column": 100,
+		"readingIndex": 17,
+		"mode": "preserve",
+		"text": "7. Ylä-Herttuala S, Bentzon JF, Daemen M"
+	},
+	{
 		"type": "list",
 		"column": 101,
-		"readingIndex": 9,
+		"readingIndex": 18,
+		"mode": "preserve",
 		"text": "8. Ahmadi A, Leipsic J, Blankstein R, et"
 	},
 	{
-		"type": "list",
+		"type": "paragraph",
 		"column": 101,
-		"readingIndex": 10,
-		"text": "10. Otsuka F, Kramer MCA, Woudstra P, et"
+		"readingIndex": 19,
+		"mode": "preserve",
+		"text": "plaques rapidly progress prior to myocar"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 20,
+		"mode": "preserve",
+		"text": "infarction? Circ Res 2015;117:99–104."
 	},
 	{
 		"type": "list",
 		"column": 101,
-		"readingIndex": 11,
+		"readingIndex": 21,
+		"mode": "preserve",
+		"text": "9. Ahmadi A, Argulian E, Leipsic J, Newb"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 22,
+		"mode": "preserve",
+		"text": "Narula J. From subclinical atheroscleros"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 23,
+		"mode": "preserve",
+		"text": "que progression and acute coronary event"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 24,
+		"mode": "preserve",
+		"text": "state-of-the-art review. J Am Coll Cardi"
+	},
+	{
+		"type": "list",
+		"column": 101,
+		"readingIndex": 25,
+		"mode": "preserve",
+		"text": "10. Otsuka F, Kramer MCA, Woudstra P, et"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 26,
+		"mode": "preserve",
+		"text": "Natural progression of atherosclerosis f"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 27,
+		"mode": "preserve",
+		"text": "ologic intimal thickening to late ﬁbroat"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 28,
+		"mode": "preserve",
+		"text": "human coronary arteries: a pathology stu"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 29,
+		"mode": "preserve",
+		"text": "Atherosclerosis 2015;241:772–82."
+	},
+	{
+		"type": "list",
+		"column": 101,
+		"readingIndex": 30,
+		"mode": "preserve",
+		"text": "11. Mori H, Torii S, Kutyna M, Sakamoto "
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 31,
+		"mode": "preserve",
+		"text": "Virmani R. Coronary artery calciﬁcation "
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 32,
+		"mode": "preserve",
+		"text": "progression: what does it really mean? J"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 33,
+		"mode": "preserve",
+		"text": "Cardiol Img 2018;11:127–42."
+	},
+	{
+		"type": "list",
+		"column": 101,
+		"readingIndex": 34,
+		"mode": "preserve",
+		"text": "12. van Rosendael AR, Narula J, Lin FY, "
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 35,
+		"mode": "preserve",
+		"text": "sociation of high-density calciﬁed 1K pl"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 36,
+		"mode": "preserve",
+		"text": "risk of acute coronary syndrome. JAMA Ca"
+	},
+	{
+		"type": "list",
+		"column": 101,
+		"readingIndex": 37,
+		"mode": "preserve",
 		"text": "13. van den Berg VJ, Haskard DO, Fedorow"
 	},
 	{
 		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 38,
+		"mode": "preserve",
+		"text": "et al. IgM anti-malondialdehyde low dens"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 39,
+		"mode": "preserve",
+		"text": "protein antibody levels indicate coronar"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 40,
+		"mode": "preserve",
+		"text": "disease and necrotic core characteristic"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 41,
+		"mode": "preserve",
+		"text": "Nordic Diltiazem (NORDIL) study and the"
+	},
+	{
+		"type": "paragraph",
 		"column": 102,
-		"readingIndex": 12,
+		"readingIndex": 42,
+		"mode": "preserve",
 		"text": "Integrated Imaging and Biomarker Study 3"
 	},
 	{
-		"type": "list",
+		"type": "paragraph",
 		"column": 102,
-		"readingIndex": 13,
-		"text": "15. Han D, Torii S, Yahagi K, et al. Qua"
+		"readingIndex": 43,
+		"mode": "preserve",
+		"text": "3). EBioMedicine 2018;36:63–72."
 	},
 	{
 		"type": "list",
 		"column": 102,
-		"readingIndex": 14,
+		"readingIndex": 44,
+		"mode": "preserve",
+		"text": "14. Fujimoto S, Kondo T, Kodama T, et al"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 45,
+		"mode": "preserve",
+		"text": "method for non-invasive plaque morpholog"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 46,
+		"mode": "preserve",
+		"text": "analysis by coronary computed tomography"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 47,
+		"mode": "preserve",
+		"text": "ography. Int J Cardiovasc Imaging 2014;3"
+	},
+	{
+		"type": "list",
+		"column": 102,
+		"readingIndex": 48,
+		"mode": "preserve",
+		"text": "15. Han D, Torii S, Yahagi K, et al. Qua"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 49,
+		"mode": "preserve",
+		"text": "measurement of lipid rich plaque by coro"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 50,
+		"mode": "preserve",
+		"text": "computed tomography angiography: a corre"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 51,
+		"mode": "preserve",
+		"text": "of histology in sudden cardiac death. At"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 52,
+		"mode": "preserve",
+		"text": "rosis 2018;275:426–33."
+	},
+	{
+		"type": "list",
+		"column": 102,
+		"readingIndex": 53,
+		"mode": "preserve",
 		"text": "16. Puchner SB, Ferencik M, Maurovich-Ho"
 	},
 	{
 		"type": "paragraph",
 		"column": 102,
-		"readingIndex": 15,
+		"readingIndex": 54,
+		"mode": "preserve",
+		"text": "et al. Iterative image reconstruction al"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 55,
+		"mode": "preserve",
+		"text": "coronary CT angiography improve the dete"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 56,
+		"mode": "preserve",
+		"text": "lipid-core plaque—a comparison with hist"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 57,
+		"mode": "preserve",
 		"text": "Eur Radiol 2015;25:15–23."
 	},
 	{
 		"type": "list",
 		"column": 102,
-		"readingIndex": 16,
+		"readingIndex": 58,
+		"mode": "preserve",
 		"text": "17. van den Hoogen IJ, Gianni U, Al Huss"
 	},
 	{
 		"type": "paragraph",
 		"column": 102,
-		"readingIndex": 17,
+		"readingIndex": 59,
+		"mode": "preserve",
+		"text": "Alawamlh O, et al. What atherosclerosis "
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 60,
+		"mode": "preserve",
+		"text": "can CT see in sudden coronary death: pla"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 61,
+		"mode": "preserve",
+		"text": "rupture versus plaque erosion. J Cardiov"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 62,
+		"mode": "preserve",
+		"text": "put Tomogr 2020;14:214–8."
+	},
+	{
+		"type": "list",
+		"column": 102,
+		"readingIndex": 63,
+		"mode": "preserve",
+		"text": "18. Kesarwani M, Nakanishi R, Choi T-Y,"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 64,
+		"mode": "preserve",
+		"text": "Shavelle DM, Budoff MJ. Evaluation of pl"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 65,
+		"mode": "preserve",
+		"text": "morphology by 64-slice coronary computed"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 66,
+		"mode": "preserve",
+		"text": "tomographic"
+	},
+	{
+		"type": "paragraph",
+		"column": 102,
+		"readingIndex": 67,
+		"mode": "preserve",
 		"text": "angiography"
 	},
 	{
 		"type": "paragraph",
 		"column": 102,
-		"readingIndex": 18,
+		"readingIndex": 68,
+		"mode": "preserve",
 		"text": "compared"
 	},
 	{
 		"type": "paragraph",
 		"column": 102,
-		"readingIndex": 19,
+		"readingIndex": 69,
+		"mode": "preserve",
 		"text": "to"
 	}
 ]

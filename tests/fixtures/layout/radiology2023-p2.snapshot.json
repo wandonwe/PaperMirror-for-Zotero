@@ -96,7 +96,7 @@
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Term Dual-energy CT"
+		"text": "Term"
 	},
 	{
 		"type": "paragraph",
@@ -105,7 +105,7 @@
 		"tableRow": 0,
 		"tableCol": 1,
 		"mode": "translate",
-		"text": "Abbreviation DECT"
+		"text": "Abbreviation"
 	},
 	{
 		"type": "paragraph",
@@ -114,7 +114,7 @@
 		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Energy-integrating detector CT"
+		"text": "Dual-energy CT"
 	},
 	{
 		"type": "paragraph",
@@ -123,7 +123,7 @@
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "translate",
-		"text": "EID CT"
+		"text": "DECT"
 	},
 	{
 		"type": "paragraph",
@@ -132,7 +132,7 @@
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Spectral"
+		"text": "Energy-integrating detector CT"
 	},
 	{
 		"type": "paragraph",
@@ -140,23 +140,50 @@
 		"readingIndex": 20,
 		"tableRow": 2,
 		"tableCol": 1,
+		"mode": "translate",
+		"text": "EID CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 21,
+		"tableRow": 3,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Spectral"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 22,
+		"tableRow": 3,
+		"tableCol": 1,
 		"mode": "preserve",
 		"text": ""
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 21,
+		"readingIndex": 23,
 		"tableRow": 0,
 		"tableCol": 2,
 		"mode": "translate",
-		"text": "Definition All CT systems equipped with "
+		"text": "Definition"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 22,
+		"readingIndex": 24,
 		"tableRow": 1,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "All CT systems equipped with EID detecto"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 25,
+		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "translate",
 		"text": "All CT scanners equipped with EID that d"
@@ -164,8 +191,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 23,
-		"tableRow": 2,
+		"readingIndex": 26,
+		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "translate",
 		"text": "All images other than conventional ones "
@@ -173,7 +200,7 @@
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 24,
+		"readingIndex": 27,
 		"text": "Note.DECT = dual-energy CT, EID = energ"
 	}
 ]

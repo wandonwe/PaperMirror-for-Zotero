@@ -7,6 +7,63 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.7.2] — 2026-09-04
+
+**结构批次**(六维审核路线图·批次 3,C-1 / C-2)。数值表表头向上扫掠、字距
+拉开的 REFERENCES 标题、以及扫掠暴露出的三处网格根因。34 个布局快照中
+**13 个有意更新**(逐一审阅,见下),其余 21 个逐字节不变;请求计划基线有意
+重生成(语料请求 48 → 50,输入字符 122,140 → 119,284)。
+
+### Fixed
+
+- **数值表表头向上扫掠**(`tableGuard` 规则 (d))。列头是多行堆叠的短文本
+  ("Detector Type"、"No. of Energy Thresholds"),无数字、在种子区域上方、与
+  数据行不同高,三条旧规则都不沾,于是逃出网格成孤立单词块被无语境翻译
+  (radiology2023-p3 一页 11 个)。现在紧贴区域顶边之上 ≤2.5em、x 中心落在区域
+  横向范围内、≤6 词/≤60 字符、不以句末标点收尾、不是表标题的块并入区域,逐轮
+  生长把堆叠的上一行也收进来。两道闸:**天花板** —— 种子区域上方横向相交的
+  最近一条 "Table N" 标题的底边(无标题时种子顶边上方 6em),之上的块一律不收
+  (wu2026-p6 曾顺着上一张表的脚注一路爬进上一张表);**行伴** —— 同基线上另有
+  句子续行/长行/标题的短块是标题续行("size"),不是表头。
+- **多行表头**(`buildTableModel`)。表头深度 = 首个含纯数字格的行之前的全部行
+  (上限 3),此前只把 row 0 当表头,扫掠进来的第二行表头 "(n = 708)"、"P Value"
+  会落成 preserve;数值列强制(`coerceNumericColumns`)同样跳过表头行。
+- **列带不吞并邻带**(`inferBands`)。跨两列的成员("NAEOTOM Alpha IQon
+  Spectral")并入左带时把带拉宽到盖住右列,右列每个数字格都被分到左带 —— 两列
+  熔成一列(wu2026-p3 "0.50 0.50")。扩张后若会盖住别的带就保持原宽,成员照旧
+  算已落座,由 `assignBand` 判 straddles。副作用是正向的:chen2023-p8 此前
+  "Left main artery to LAD 697 (68)" 一格,现在标签/数字分列。
+- **文本表跨列顶对齐行起点**(`buildTextTableModel`)。表头与首行只隔 0.55em
+  时每列的表头都和首行并成一组,组顶给不出首行起点,整表表头与第一行熔成
+  一格(radiology2023-p11 Table 4)。补一类起点:≥3 个成员顶边对齐且各自贴着
+  列带左沿(悬挂缩进的折行不算)。
+- **字距拉开的 REFERENCES**(`spanBlockBuilder`)。"R E F E R E N C E S" 由单字母
+  span 拼成、字号同正文、分类为 paragraph,`REFERENCES_HEADINGS` 只对
+  heading/title 生效永远认不出它(jacc2020-p15 的 62 条文献按正文翻译,5,522
+  字符)。正则允许字母间空白(三处同步);单行段落块也参与判定。**分带页几何
+  门**:该页正文双栏在上、文献三栏在下,标题落在第 0 栏底部,正文第 1 栏在
+  merged 序里排在标题之后却在页面上位于其上方 —— "序后即文献"会把整栏正文冻成
+  preserve。分带页先预扫标题矩形,标题所在带内只有顶边不高于标题顶边的块算
+  文献,后面的带整体算文献;均匀页行为不变。
+
+### 快照审阅(13 个有意更新)
+
+- radiology2023-p3:Table 3 十一个孤立列头("Detector"/"Type"/"Collimation"/
+  "Thresholds"…)进 row 0/1;p2:Term/Abbreviation/Definition 表头与首行分开;
+  p11:Publications 独立成列、表头行独立、折行格接回。
+- chen2023-p4/p5/p8/p10、nejm-defuse3-p7:表头行进网格;p8 标签/数字分列;
+  p10 三层表头(Events / Univariate Analyses / HR · P Value)全部 text。
+- wu2026-p1/p3/p5/p6:p3 三列不再熔成两列;p6 Table 3/4/5 各自成网格、
+  脚注不再进表(旧快照本就把正文段落划进 Table 4 区域,该问题仍在,见 leftovers)。
+- jacc2020-p15:三栏文献全部 preserve,上带正文(含 CONCLUSIONS)不受影响。
+
+### Tests
+
+- tableGuard:扫掠正例/三类反例/天花板/行伴 4 例;tableStructure:多行表头、
+  列带不吞并、文本表顶对齐行起点 3 例;spanBlockBuilder:字距标题 + jacc2020-p15
+  语料几何门 2 例。八个机制逐一突变(关掉扫掠/天花板/行伴/表头深度/吞并闸/
+  顶对齐/单行标题/几何门)各至少一红。
+
 ## [2.7.1] — 2026-08-29
 
 **请求合并**(六维审核路线图·批次 2,EF-1)。提取/排版零改动,34 个布局快照

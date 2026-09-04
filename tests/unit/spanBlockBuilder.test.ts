@@ -10,6 +10,8 @@ import {
 	type SpanItem
 } from '../../src/reader/spanBlockBuilder';
 import { detectColumns } from '../../src/reader/paragraphHeuristics';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const PAGE_HEIGHT = 792;
 
@@ -740,4 +742,36 @@ test('弱沟: 分带通道外的短双栏区仍按全局沟切开 (审核 2.6.3)
 	const lines = groupIntoLines(items, 594, 792);
 	const shortZone = lines.filter(l => lineText(l).includes('short zone'));
 	assert.equal(shortZone.length, 6, `3 rows × 2 columns must stay split: ${shortZone.map(lineText).join(' | ')}`);
+});
+
+// ---- 2.7.2 批次 3 (C-2): 字距拉开的 REFERENCES ------------------------------
+
+test('字距拉开的 "R E F E R E N C E S" 单行段落也是文献标题 (2.7.2, jacc2020-p15)', () => {
+	// 与正文同字号、分类为 paragraph 的单行标题。
+	const heading = lines(['R E F E R E N C E S'], 50, 700, 10);
+	const entry = lines(['1. Moss AJ, Williams MC. Coronary CT angiography. 2019;12:1–8.'], 50, 676, 9);
+	const result = buildBlocksFromSpans([...heading, ...entry], { pageIndex: 0, pageHeight: PAGE_HEIGHT });
+	assert.equal(result.referencesStarted, true);
+	const ref = result.blocks.find(b => b.sourceText.includes('Moss'));
+	assert.equal(ref?.translationMode, 'preserve');
+	// 多行段落里出现的同一串字不算标题 (只认单行块)。
+	const para = lines(['R E F E R E N C E S', 'continued sentence of body text here.'], 50, 600, 10);
+	const plain = buildBlocksFromSpans(para, { pageIndex: 0, pageHeight: PAGE_HEIGHT });
+	assert.equal(plain.referencesStarted, false);
+});
+
+test('分带页几何门: 文献标题所在带里位于其上方的正文栏不算文献,下方三栏整体算 (2.7.2, jacc2020-p15 语料)', () => {
+	const dump = JSON.parse(readFileSync(join(process.cwd(), 'tests', 'fixtures', 'layout', 'jacc2020-p15.spans.json'), 'utf8'));
+	const { blocks } = buildBlocksFromSpans(dump.items, {
+		pageIndex: 0, pageWidth: dump.pageWidth, pageHeight: dump.pageHeight, includeReferences: false
+	});
+	const conclusions = blocks.find(b => b.sourceText.trim() === 'CONCLUSIONS');
+	assert.ok(conclusions, 'CONCLUSIONS 标题存在');
+	assert.equal(conclusions!.isReference, false, '标题上方的正文栏不是文献');
+	const body = blocks.filter(b => (b.column ?? 0) < 100 && b.sourceText.trim() !== 'R E F E R E N C E S');
+	assert.ok(body.length > 10);
+	assert.ok(body.every(b => !b.isReference), '上带全部正文都不是文献');
+	const refs = blocks.filter(b => (b.column ?? 0) >= 100);
+	assert.ok(refs.length > 30);
+	assert.ok(refs.every(b => b.isReference && b.translationMode === 'preserve'), '下带三栏全部 preserve');
 });

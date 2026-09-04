@@ -228,3 +228,78 @@ test('buildTextTableModel: 连字符折行在格内接回', () => {
 	const cell = model.cells.find(c => c.memberIds.includes('l1'))!;
 	assert.equal(cell.text, 'assessed quantitatively today');
 });
+
+// ---- 2.7.2 批次 3 -----------------------------------------------------------
+
+test('多行表头: 首个数字行之前的行都是表头,有词即 text (2.7.2, chen2023-p5/p8)', () => {
+	const members: CellMember[] = [
+		cell('h0-1', 120, 10, 60, 12, 'All Patients'),
+		cell('h0-2', 200, 10, 60, 12, 'Patients with'),
+		cell('h1-0', 40, 30, 60, 12, 'Characteristic'),
+		cell('h1-1', 120, 30, 60, 12, '(n = 708)'),
+		cell('h1-2', 200, 30, 60, 12, 'P Value'),
+		cell('d0-0', 40, 50, 60, 12, 'Age (y)'),
+		cell('d0-1', 120, 50, 60, 12, '61 ± 10'),
+		cell('d0-2', 200, 50, 60, 12, '.06'),
+		cell('d1-0', 40, 70, 60, 12, 'Male sex'),
+		cell('d1-1', 120, 70, 60, 12, '412 (58)'),
+		cell('d1-2', 200, 70, 60, 12, '.31'),
+		cell('d2-0', 40, 90, 60, 12, 'Diabetes'),
+		cell('d2-1', 120, 90, 60, 12, '120 (17)'),
+		cell('d2-2', 200, 90, 60, 12, '<.001')
+	];
+	const model = buildTableModel(0, 1, region(40, 10, 220, 92), members);
+	const kindOf = (row: number, col: number) => model.cells.find(c => c.row === row && c.col === col)?.kind;
+	assert.equal(kindOf(1, 1), 'text', '第二行表头 "(n = 708)" 是文本');
+	assert.equal(kindOf(1, 2), 'text', '第二行表头 "P Value" 是文本 (列强制不碰表头)');
+	assert.equal(kindOf(2, 1), 'data');
+	assert.equal(kindOf(2, 2), 'data');
+});
+
+test('列带不吞并邻带: 跨两列的成员并入左带但不把带拉宽到右列 (2.7.2, wu2026-p3)', () => {
+	const members: CellMember[] = [
+		cell('l0', 40, 10, 60, 12, 'Parameter'),
+		cell('a0', 140, 10, 40, 12, 'PCD-CT'),
+		cell('b0', 220, 10, 40, 12, 'EID-CT'),
+		cell('l1', 40, 30, 60, 12, 'Scanner model'),
+		cell('wide', 140, 30, 120, 12, 'NAEOTOM Alpha IQon Spectral'),
+		cell('l2', 40, 50, 60, 12, 'Collimation'),
+		cell('a2', 140, 50, 40, 12, '120×0.2'),
+		cell('b2', 220, 50, 40, 12, '64×0.625'),
+		cell('l3', 40, 70, 60, 12, 'Pitch'),
+		cell('a3', 140, 70, 40, 12, '0.50'),
+		cell('b3', 220, 70, 40, 12, '0.60')
+	];
+	const model = buildTableModel(0, 1, region(40, 10, 220, 72), members);
+	assert.equal(model.colCount, 3, '三列不熔成两列');
+	const colOf = (id: string) => model.cells.find(c => c.memberIds.includes(id))?.col;
+	assert.equal(colOf('a2'), 1);
+	assert.equal(colOf('b2'), 2);
+	assert.equal(colOf('b3'), 2);
+});
+
+test('buildTextTableModel: 表头与首行只隔半个 em 时,跨列顶对齐仍切出首行 (2.7.2, radiology2023-p11)', () => {
+	const region: Box = { left: 54, top: 100, width: 460, height: 80 };
+	const em = 9;
+	const members: CellMember[] = [
+		cm('h0', 'Contrast Agent', 54, 100, 55),
+		cm('h1', 'Advantages', 238, 100, 40),
+		cm('h2', 'Publications', 491, 100, 43),
+		// 首行,顶边距表头底边 5pt (0.55em) —— 组内间隙判不出行界。
+		cm('r0a', 'Iodinated small', 54, 114, 54),
+		cm('r0b', 'Clinical availability,', 238, 114, 68),
+		cm('r0c', '68, 97', 491, 114, 22),
+		// 悬挂缩进的折行 (左沿 +9),不构成行起点。
+		cm('r0a2', 'molecules', 63, 125, 34),
+		cm('r0b2', 'prior clinical use', 247, 125, 57),
+		cm('r1a', 'Gadolinium', 54, 136, 43),
+		cm('r1b', 'Clinical availability,', 238, 136, 68),
+		cm('r1c', '83, 85', 491, 136, 22)
+	];
+	const model = buildTextTableModel(0, 0, region, members, em);
+	assert.equal(model.rowCount, 3, '表头 / 首行 / 次行三行');
+	const first = model.cells.find(c => c.row === 1 && c.col === 0);
+	assert.equal(first?.text, 'Iodinated small molecules');
+	const header = model.cells.find(c => c.row === 0 && c.col === 1);
+	assert.equal(header?.text, 'Advantages');
+});

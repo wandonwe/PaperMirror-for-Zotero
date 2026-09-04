@@ -9,55 +9,79 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 1,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
 		"text": "Events"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 2,
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "translate",
 		"text": "Univariate Analyses"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 3,
+		"tableRow": 2,
+		"tableCol": 1,
+		"mode": "translate",
 		"text": "HR"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 4,
+		"tableRow": 2,
+		"tableCol": 2,
+		"mode": "translate",
 		"text": "P Value"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 5,
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "translate",
 		"text": "Variable"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 6,
-		"tableRow": 0,
+		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Segment involvement score 1.17 (1.04, 1."
+		"text": "Segment involvement score"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 7,
-		"tableRow": 1,
-		"tableCol": 0,
+		"tableRow": 3,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "(per one increment)"
+		"text": "1.17 (1.04, 1.31) .007"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 8,
-		"tableRow": 2,
+		"tableRow": 4,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "(per one increment)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 9,
+		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "Segment stenosis score (per one incremen"
@@ -65,38 +89,29 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 9,
-		"tableRow": 3,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "Significant stenosis present 2.0 (1.17, "
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
 		"readingIndex": 10,
-		"tableRow": 4,
+		"tableRow": 6,
 		"tableCol": 0,
-		"mode": "preserve",
-		"text": "Minimum lumen area 0.82 (0.72, 0.94) .00"
+		"mode": "translate",
+		"text": "Significant stenosis present"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 11,
-		"tableRow": 5,
-		"tableCol": 0,
+		"tableRow": 6,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "(per 1-mm2 increment)"
+		"text": "2.0 (1.17, 3.3)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 12,
 		"tableRow": 6,
-		"tableCol": 0,
+		"tableCol": 2,
 		"mode": "preserve",
-		"text": "HRP present 2.5 (1.5, 4.4) .001"
+		"text": ".01"
 	},
 	{
 		"type": "paragraph",
@@ -104,41 +119,104 @@
 		"readingIndex": 13,
 		"tableRow": 7,
 		"tableCol": 0,
-		"mode": "preserve",
-		"text": "Plaque burden (per 1% increment) 1.03 (1"
+		"mode": "translate",
+		"text": "Minimum lumen area"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 14,
-		"tableRow": 8,
-		"tableCol": 0,
+		"tableRow": 7,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "Calcified plaque volume 1 (0.99, 1.00) ."
+		"text": "0.82 (0.72, 0.94) .004"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 15,
-		"tableRow": 9,
+		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "preserve",
-		"text": "(per 1-mm3 increment)"
+		"text": "(per 1-mm2 increment)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 16,
-		"tableRow": 10,
+		"tableRow": 9,
 		"tableCol": 0,
-		"mode": "preserve",
-		"text": "Noncalcified plaque volume 1 (1.001, 1.0"
+		"mode": "translate",
+		"text": "HRP present"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 17,
+		"tableRow": 9,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2.5 (1.5, 4.4)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 18,
+		"tableRow": 9,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": ".001"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 19,
+		"tableRow": 10,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Plaque burden (per 1% increment)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 20,
+		"tableRow": 10,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "1.03 (1.01, 1.06) .006"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 21,
 		"tableRow": 11,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Calcified plaque volume"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 22,
+		"tableRow": 11,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "1 (0.99, 1.00)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 23,
+		"tableRow": 11,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": ".31"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 24,
+		"tableRow": 12,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "(per 1-mm3 increment)"
@@ -146,59 +224,134 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 18,
-		"tableRow": 12,
+		"readingIndex": 25,
+		"tableRow": 13,
 		"tableCol": 0,
-		"mode": "preserve",
-		"text": "Necrotic core volume (per 1-mm3 1 (0.99,"
+		"mode": "translate",
+		"text": "Noncalcified plaque volume"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 19,
+		"readingIndex": 26,
 		"tableRow": 13,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "1 (1.001, 1.004) .007"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 27,
+		"tableRow": 14,
 		"tableCol": 0,
 		"mode": "preserve",
+		"text": "(per 1-mm3 increment)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 28,
+		"tableRow": 15,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Necrotic core volume (per 1-mm3"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 29,
+		"tableRow": 15,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "1 (0.99, 1.02)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 30,
+		"tableRow": 15,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": ".51"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 31,
+		"tableRow": 16,
+		"tableCol": 0,
+		"mode": "translate",
 		"text": "increment)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 20,
-		"tableRow": 14,
+		"readingIndex": 32,
+		"tableRow": 17,
 		"tableCol": 0,
-		"mode": "preserve",
-		"text": "RS (per 0.01 increment) 2.0 (1.5, 2.6) <"
+		"mode": "translate",
+		"text": "RS (per 0.01 increment)"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 33,
+		"tableRow": 17,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2.0 (1.5, 2.6)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 34,
+		"tableRow": 17,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "<.001"
+	},
+	{
+		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 21,
+		"readingIndex": 35,
+		"tableRow": 1,
+		"tableCol": 4,
+		"mode": "preserve",
 		"text": "Multivariate Analysis"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 22,
+		"readingIndex": 36,
+		"tableRow": 2,
+		"tableCol": 4,
+		"mode": "translate",
 		"text": "P Value HR†"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 23,
+		"readingIndex": 37,
+		"tableRow": 2,
+		"tableCol": 3,
+		"mode": "translate",
 		"text": "HR*"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 24,
+		"readingIndex": 38,
+		"tableRow": 2,
+		"tableCol": 6,
+		"mode": "translate",
 		"text": "P Value"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 25,
-		"tableRow": 0,
+		"readingIndex": 39,
+		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "1.05 (0.92, 1.20) .45"
@@ -206,17 +359,26 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 26,
-		"tableRow": 0,
+		"readingIndex": 40,
+		"tableRow": 3,
 		"tableCol": 5,
 		"mode": "preserve",
-		"text": "0.92 (0.73, 1.17) .53"
+		"text": "0.92 (0.73, 1.17)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 27,
-		"tableRow": 2,
+		"readingIndex": 41,
+		"tableRow": 3,
+		"tableCol": 6,
+		"mode": "preserve",
+		"text": ".53"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 42,
+		"tableRow": 5,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "1.15 (0.86, 1.56) .44"
@@ -224,17 +386,26 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 28,
-		"tableRow": 2,
+		"readingIndex": 43,
+		"tableRow": 5,
 		"tableCol": 5,
 		"mode": "preserve",
-		"text": "1.08 (0.68, 1.73) .74"
+		"text": "1.08 (0.68, 1.73)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 29,
-		"tableRow": 3,
+		"readingIndex": 44,
+		"tableRow": 5,
+		"tableCol": 6,
+		"mode": "preserve",
+		"text": ".74"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 45,
+		"tableRow": 6,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "1.3 (0.74, 2.3) .36"
@@ -242,17 +413,26 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 30,
-		"tableRow": 3,
+		"readingIndex": 46,
+		"tableRow": 6,
 		"tableCol": 5,
 		"mode": "preserve",
-		"text": "1.2 (0.56, 2.6) .65"
+		"text": "1.2 (0.56, 2.6)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 31,
-		"tableRow": 4,
+		"readingIndex": 47,
+		"tableRow": 6,
+		"tableCol": 6,
+		"mode": "preserve",
+		"text": ".65"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 48,
+		"tableRow": 7,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "0.94 (0.84–1.06) .30"
@@ -260,35 +440,62 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 32,
-		"tableRow": 4,
+		"readingIndex": 49,
+		"tableRow": 7,
 		"tableCol": 5,
 		"mode": "preserve",
-		"text": "0.84 (0.69, 1.04) .10"
+		"text": "0.84 (0.69, 1.04)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 33,
-		"tableRow": 6,
+		"readingIndex": 50,
+		"tableRow": 7,
+		"tableCol": 6,
+		"mode": "preserve",
+		"text": ".10"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 51,
+		"tableRow": 9,
 		"tableCol": 3,
 		"mode": "preserve",
-		"text": "2.3 (1.3, 4.0) .005"
+		"text": "2.3 (1.3, 4.0)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 34,
-		"tableRow": 6,
+		"readingIndex": 52,
+		"tableRow": 9,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": ".005"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 53,
+		"tableRow": 9,
 		"tableCol": 5,
 		"mode": "preserve",
-		"text": "2.0 (1.1, 3.5) .03"
+		"text": "2.0 (1.1, 3.5)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 35,
-		"tableRow": 7,
+		"readingIndex": 54,
+		"tableRow": 9,
+		"tableCol": 6,
+		"mode": "preserve",
+		"text": ".03"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 55,
+		"tableRow": 10,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "1.03 (0.99, 1.04) .34"
@@ -296,17 +503,26 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 36,
-		"tableRow": 7,
+		"readingIndex": 56,
+		"tableRow": 10,
 		"tableCol": 5,
 		"mode": "preserve",
-		"text": "1.00 (0.99 1.00) .88"
+		"text": "1.00 (0.99 1.00)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 37,
-		"tableRow": 8,
+		"readingIndex": 57,
+		"tableRow": 10,
+		"tableCol": 6,
+		"mode": "preserve",
+		"text": ".88"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 58,
+		"tableRow": 11,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "NA …"
@@ -314,17 +530,26 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 38,
-		"tableRow": 8,
-		"tableCol": 5,
+		"readingIndex": 59,
+		"tableRow": 11,
+		"tableCol": 4,
 		"mode": "preserve",
-		"text": "NA …"
+		"text": "NA"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 39,
-		"tableRow": 10,
+		"readingIndex": 60,
+		"tableRow": 11,
+		"tableCol": 6,
+		"mode": "preserve",
+		"text": "…"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 61,
+		"tableRow": 13,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "1.001 (0.99, .22"
@@ -332,8 +557,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 40,
-		"tableRow": 10,
+		"readingIndex": 62,
+		"tableRow": 13,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "0.99 (0.99, 1.002) .27"
@@ -341,8 +566,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 41,
-		"tableRow": 11,
+		"readingIndex": 63,
+		"tableRow": 14,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "1.004)"
@@ -350,8 +575,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 42,
-		"tableRow": 12,
+		"readingIndex": 64,
+		"tableRow": 15,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "NA …"
@@ -359,53 +584,80 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 43,
-		"tableRow": 12,
-		"tableCol": 5,
+		"readingIndex": 65,
+		"tableRow": 15,
+		"tableCol": 4,
 		"mode": "preserve",
-		"text": "NA …"
+		"text": "NA"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 44,
-		"tableRow": 14,
+		"readingIndex": 66,
+		"tableRow": 15,
+		"tableCol": 6,
+		"mode": "preserve",
+		"text": "…"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 67,
+		"tableRow": 17,
 		"tableCol": 3,
 		"mode": "preserve",
-		"text": "1.7 (1.2, 2.3) .001"
+		"text": "1.7 (1.2, 2.3)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 45,
-		"tableRow": 14,
+		"readingIndex": 68,
+		"tableRow": 17,
+		"tableCol": 4,
+		"mode": "preserve",
+		"text": ".001"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 69,
+		"tableRow": 17,
 		"tableCol": 5,
 		"mode": "preserve",
-		"text": "2.0 (1.2, 3.3) .005"
+		"text": "2.0 (1.2, 3.3)"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 70,
+		"tableRow": 17,
+		"tableCol": 6,
+		"mode": "preserve",
+		"text": ".005"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 46,
+		"readingIndex": 71,
 		"text": "Note.—Data in parentheses are the 95% CI"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 47,
+		"readingIndex": 72,
 		"text": "† HR was adjusted for RS and conventiona"
 	},
 	{
 		"type": "table",
 		"column": 0,
-		"readingIndex": 48,
+		"readingIndex": 73,
 		"text": "Table 6: Incremental Prognostic Value of"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 49,
-		"tableRow": 0,
+		"readingIndex": 74,
+		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Prediction Model"
@@ -413,8 +665,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 50,
-		"tableRow": 0,
+		"readingIndex": 75,
+		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "C Index"
@@ -422,8 +674,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 51,
-		"tableRow": 1,
+		"readingIndex": 76,
+		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Model 1: traditional cardiovascular risk"
@@ -431,8 +683,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 52,
-		"tableRow": 1,
+		"readingIndex": 77,
+		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "0.64 (0.57, 0.71)"
@@ -440,8 +692,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 53,
-		"tableRow": 2,
+		"readingIndex": 78,
+		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Model 2: model 1 + CT anatomic parameter"
@@ -449,8 +701,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 54,
-		"tableRow": 2,
+		"readingIndex": 79,
+		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "0.69 (0.63, 0.76)"
@@ -458,8 +710,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 55,
-		"tableRow": 3,
+		"readingIndex": 80,
+		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Model 3: model 2 + radiomic signature"
@@ -467,23 +719,26 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 56,
-		"tableRow": 3,
+		"readingIndex": 81,
+		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "0.72 (0.65, 0.78)"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 57,
+		"readingIndex": 82,
+		"tableRow": 0,
+		"tableCol": 4,
+		"mode": "translate",
 		"text": "P Value"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 58,
-		"tableRow": 0,
+		"readingIndex": 83,
+		"tableRow": 1,
 		"tableCol": 2,
 		"mode": "translate",
 		"text": "Model 1 vs"
@@ -491,26 +746,26 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 59,
-		"tableRow": 0,
+		"readingIndex": 84,
+		"tableRow": 1,
 		"tableCol": 3,
-		"mode": "translate",
+		"mode": "preserve",
 		"text": "Model 2 vs"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 60,
-		"tableRow": 0,
-		"tableCol": 4,
+		"readingIndex": 85,
+		"tableRow": 1,
+		"tableCol": 5,
 		"mode": "translate",
 		"text": "Model 3 vs"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 61,
-		"tableRow": 1,
+		"readingIndex": 86,
+		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "…"
@@ -518,8 +773,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 62,
-		"tableRow": 1,
+		"readingIndex": 87,
+		"tableRow": 2,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "<.001"
@@ -527,17 +782,17 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 63,
-		"tableRow": 1,
-		"tableCol": 4,
+		"readingIndex": 88,
+		"tableRow": 2,
+		"tableCol": 5,
 		"mode": "preserve",
 		"text": "<.001"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 64,
-		"tableRow": 2,
+		"readingIndex": 89,
+		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "<.001"
@@ -545,8 +800,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 65,
-		"tableRow": 2,
+		"readingIndex": 90,
+		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "…"
@@ -554,17 +809,17 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 66,
-		"tableRow": 2,
-		"tableCol": 4,
+		"readingIndex": 91,
+		"tableRow": 3,
+		"tableCol": 5,
 		"mode": "preserve",
 		"text": ".009"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 67,
-		"tableRow": 3,
+		"readingIndex": 92,
+		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "<.001"
@@ -572,8 +827,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 68,
-		"tableRow": 3,
+		"readingIndex": 93,
+		"tableRow": 4,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": ".009"
@@ -581,28 +836,28 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 69,
-		"tableRow": 3,
-		"tableCol": 4,
+		"readingIndex": 94,
+		"tableRow": 4,
+		"tableCol": 5,
 		"mode": "preserve",
 		"text": "…"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 70,
+		"readingIndex": 95,
 		"text": "Note.—Data in parentheses are 95% CIs. T"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 71,
+		"readingIndex": 96,
 		"text": "For example, the lesions of the entire c"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 72,
+		"readingIndex": 97,
 		"text": "In conclusion, this study presents a rad"
 	}
 ]
