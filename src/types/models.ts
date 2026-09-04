@@ -148,6 +148,8 @@ export interface TranslationRequest {
 
 export interface TranslationResponse {
 	translations: TranslatedBlock[];
+	/** 服务商报告的 token 用量 (2.7.0, 审核 F-2): 纯计数,无文本;缺失即服务商不报。 */
+	usage?: { inputTokens: number; outputTokens: number; cachedInputTokens: number };
 }
 
 export interface TranslationProgress {

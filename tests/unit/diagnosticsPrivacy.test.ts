@@ -68,3 +68,33 @@ test('语料导出仍然可用,且自我声明含原文', () => {
 	assert.ok(/CONTAINS SOURCE TEXT/.test(body), '载荷需自带含原文声明');
 	assert.ok(/含本页原文/.test(body), 'toast 需提醒用户含原文');
 });
+
+test('token 用量进诊断 (2.7.0, 审核 F-2): 只有数字,按页与总账都在', async () => {
+	const deps = makeDeps();
+	deps.translateRequest = async (): Promise<TranslationResponse> => ({
+		translations: [{ id: 'page-0-block-0', translatedText: TGT }],
+		usage: { inputTokens: 123, outputTokens: 45, cachedInputTokens: 6 }
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 1);
+	const diag = manager.exportDiagnostics() as { pages: { metrics: Record<string, number> }[]; usage: Record<string, number> };
+	assert.equal(diag.usage.inputTokens, 123);
+	assert.equal(diag.usage.outputTokens, 45);
+	assert.equal(diag.usage.cachedInputTokens, 6);
+	assert.equal(diag.usage.usageReports, 1);
+	assert.equal(diag.usage.usageMissing, 0);
+	assert.equal(diag.pages[0]!.metrics.inputTokens, 123);
+	const json = JSON.stringify(diag);
+	assert.ok(!json.includes(SRC) && !json.includes(TGT), '用量字段不得夹带文本');
+	manager.dispose();
+});
+
+test('服务商不报用量时计入 usageMissing,页指标不出现 token 字段', async () => {
+	const manager = new TranslationManager(makeDeps(), { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 1);
+	const diag = manager.exportDiagnostics() as { pages: { metrics: Record<string, unknown> }[]; usage: Record<string, number> };
+	assert.equal(diag.usage.usageMissing, 1);
+	assert.equal(diag.usage.inputTokens, 0);
+	assert.ok(!('inputTokens' in diag.pages[0]!.metrics));
+	manager.dispose();
+});

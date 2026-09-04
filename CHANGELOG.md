@@ -7,6 +7,39 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.7.0] — 2026-08-29
+
+**遥测批次**(六维审核路线图·批次 1)。不改任何翻译/排版行为,34 个快照逐字节
+不变;目的是让"结构恢复"与"token 效率"两个维度从此可量化。
+
+### Added
+
+- **API token 用量计数**(审核 F-2)。三家服务商通道(OpenAI 兼容 / Anthropic /
+  Gemini)的响应用量归一为 `inputTokens / outputTokens / cachedInputTokens`
+  (`usageMeter.ts`,纯数字),按请求累加进诊断:`usage.{inputTokens,
+  outputTokens, cachedInputTokens, usageReports, usageMissing}` 与
+  `pages[].metrics.{inputTokens, outputTokens, cachedInputTokens}`。压缩重译与
+  单块重译走同一计量口。免费引擎不报用量时计入 `usageMissing`。
+- **放弃原因**(审核 D-1)。排版放弃的块现在带 `abandonReason`(枚举串
+  `stage/overflow`:expand-ink / expand-geometry / no-room / shrink-floor /
+  compress / audit × width / height / both),进 `placementProbe`;不含文本。
+- **块级口径联表**(审核 B-1)。诊断 `pages[].blocks[].state` 此前按"有译文即
+  translated"计,排版放弃的块(译了、从未显示)也报 translated;现在与 strict
+  页的放弃清单联表 → `unplaced` + `abandonReason`(`diagnosticsJoin.ts`,纯函
+  数;段落拆分块按区域前缀归并)。无论是否开启调试日志都生效。
+- **排版量测耗时**(审核 A-2)。`placement[].layoutMs`:该页所有 ladderFits 量测
+  (扩边、缩字、几何复核重测)的墙钟之和,不含 API 等待与渲染。
+- `scripts/baseline-report.mjs` 新增列:unplaced / inTokens / outTokens /
+  cachedPct / tokPerPage / layoutMs,并打印每篇的放弃原因分布。
+
+### Notes
+
+- 审核报告里"Anthropic 加 cache_control"一项**不做**:Anthropic 提示缓存的最小
+  可缓存前缀为 1024 token(Haiku 2048),OpenAI 自动前缀缓存同样 ≥1024 token,
+  而本插件系统提示约 350–400 token —— 两家都拿不到缓存折扣。token 杠杆只剩
+  批次 2 的合并请求。
+- 隐私不变量不变:新增字段全为计数/枚举,`diagnosticsPrivacy.test.ts` 扩展覆盖。
+
 ## [2.6.4] — 2026-08-29
 
 **审核 2.6.x**。两处防御性修补,34 个快照逐字节不变。

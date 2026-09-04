@@ -19,13 +19,14 @@ import { endpointHost, supportsCharBudget } from '../translation/providers/types
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
 import { TranslationManager, type PageTranslationState } from '../translation/translationManager';
 import { PROMPT_VERSION } from '../translation/promptBuilder';
+import { joinPlacementOutcome } from './diagnosticsJoin';
 import { parseGlossaryJSON, serializeGlossary, dedupeLearnedTerms } from '../translation/glossary';
 import { parseProviderProfiles, effectiveProviderConfig } from '../translation/providerProfiles';
 import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationResponse } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PageRenderResult, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
-import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, expandStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, auditStrictGeometry, probeStrictPlacement, flashKeptIndicator, type UnfitBlock } from '../ui/strictPageReplacement';
+import { buildStrictPage, revertStrictBlocks, settleStrictPage, shrinkStrictBlocks, expandStrictBlocks, applyCompressedStrict, planStrictRetry, strictPageStats, placementTally, auditStrictGeometry, probeStrictPlacement, strictAbandonedBlocks, flashKeptIndicator, type UnfitBlock } from '../ui/strictPageReplacement';
 import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
 import { getString } from '../utils/l10n';
 import * as logger from '../utils/logger';
@@ -212,6 +213,8 @@ export class ReaderSession {
 	/** 每页 placement 探针 (审核: 封面标题空洞定位): 每块的 base 位图/遮罩取样
 	 *  (baseInk/maskOpaque),分辨「底图缺字」与「遮罩误盖」。只几何+布尔,无文本。 */
 	private placementProbe = new Map<number, import('../ui/strictPageReplacement').StrictProbeRow[]>();
+	/** 放弃清单 (2.7.0, 审核 B-1): 页索引 → 放弃块 id + 原因枚举串,无文本。 */
+	private abandonedBlocks = new Map<number, import('../ui/strictPageReplacement').AbandonedBlock[]>();
 	/**
 	 * Per-page render generation. Bumped at the start of every renderDocPage;
 	 * an async render (or its settle/compress callbacks) that discovers a newer
@@ -1668,6 +1671,16 @@ export class ReaderSession {
 			return;
 		}
 		this.placementStats.set(pageIndex, s); // P3 (2.0.10): 供诊断导出
+		// 放弃清单 (2.7.0): 不采样像素、零成本,无论是否开调试日志都收。
+		try {
+			const abandoned = strictAbandonedBlocks(element);
+			if (abandoned) {
+				this.abandonedBlocks.set(pageIndex, abandoned);
+			}
+		}
+		catch (e) {
+			logger.debug(MODULE, `abandoned list failed on page ${pageIndex + 1} (ignored)`, e);
+		}
 		// Placement 探针下热路径 (2.1.7, 计划 PF-2): 探针对每块每行做 getImageData
 		// 采样底图/遮罩,只为诊断导出定位病因。此前每页 FINAL 无条件跑,普通用户
 		// 从不导出诊断却白付数百次逐像素读取、拖长译文显现。现在仅在开启「调试
@@ -2408,7 +2421,15 @@ export class ReaderSession {
 				engines,
 				// 会话内熔断/手动轮换过的页数(>0 说明有引擎不稳被换过)。
 				engineRotations: this.pageProviderOffset.size,
-				...(this.manager.exportDiagnostics() as Record<string, unknown>),
+				...((): Record<string, unknown> => {
+					const diag = this.manager.exportDiagnostics() as Record<string, unknown>;
+					// 块级口径联表 (2.7.0, 审核 B-1): 排版放弃的块 state → 'unplaced'
+					// + abandonReason,不再报成 translated。
+					const pages = diag.pages;
+					return Array.isArray(pages)
+						? { ...diag, pages: joinPlacementOutcome(pages as Parameters<typeof joinPlacementOutcome>[0], this.abandonedBlocks) }
+						: diag;
+				})(),
 				// 几何安全复核结果 (1.1.2 诊断闭环): 页号 → 违例/调整/保留计数。
 				geometryAudits: [...this.geometryAudits.entries()]
 					.sort((a, b) => a[0] - b[0])

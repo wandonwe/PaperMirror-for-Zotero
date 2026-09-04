@@ -5,6 +5,7 @@
 import type { ProviderSettings, TranslationRequest, TranslationResponse, ValidationResult } from '../../types/models';
 import { PaperMirrorError } from '../../types/models';
 import { buildSystemPrompt, buildUserPayload } from '../promptBuilder';
+import { parseUsage } from '../usageMeter';
 import { parsePlainResponse, validateResponse } from '../responseValidator';
 import { requestJSON } from './httpClient';
 import type { TranslateOptions, TranslationProvider } from './types';
@@ -125,7 +126,9 @@ export const anthropicProvider: TranslationProvider = {
 		const { translations } = request.plain
 			? parsePlainResponse(text, request.blocks[0]!.id)
 			: validateResponse(text, request.blocks.map(b => b.id));
-		return { translations };
+		// 用量计数 (2.7.0): 只读数字,响应正文不进任何日志。
+		const usage = parseUsage(json);
+		return usage ? { translations, usage } : { translations };
 	},
 
 	async complete(prompt: string, settings: ProviderSettings, options: TranslateOptions): Promise<string> {
