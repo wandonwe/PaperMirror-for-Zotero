@@ -94,6 +94,9 @@ export function ladderFor(minLineHeight: number): { lineHeight: number; letterSp
  * that silently reverts to English. Floor 8.5px; below that we still revert.
  */
 const SHRINK_STEPS = [0.94, 0.88];
+/** 墙钟 (2.7.0): 浏览器窗口有 performance,单测环境退回 Date.now。 */
+const now = (): number =>
+	(typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
 const SHRINK_FLOOR_PX = 8.5;
 
 /**
@@ -106,6 +109,34 @@ const SHRINK_FLOOR_PX = 8.5;
  * 标题 heading/title)是孤立的,缩它自己不会与正文比出大小差,仍可末位缩字保住
  * 译文。表格单元格由独立表格模型渲染、根本不进这条 items 流水线,不受影响。
  */
+/**
+ * 放弃原因 (2.7.0, 审核 D-1) — 探针与诊断只带这个枚举串,永远没有文本。
+ *  stage:
+ *   expand-ink      扩边几何干净但压上未建模墨迹被否决 (LO-10),又不许缩字
+ *   expand-geometry 扩边被几何预校验否决 (压图/压 preserve/越页)
+ *   no-room         无处可扩 (邻近全被占),又不许缩字
+ *   shrink-floor    缩字梯走到底 (0.88 或 8.5px 地板) 仍放不下
+ *   compress        压缩重译轮次用尽后交给 pmRevert,未经缩字流程
+ *   audit           几何安全复核回退后仍不适配
+ *  overflow: 最后一次量测溢出的方向。
+ */
+export interface FitFailure {
+	stage: 'expand-ink' | 'expand-geometry' | 'no-room' | 'shrink-floor' | 'compress' | 'audit';
+	overflow?: 'width' | 'height' | 'both' | 'none';
+}
+
+/** 量测溢出方向 (pure): 与 ladderFits 同一套 1.5px 容差。 */
+export function fitOverflow(scrollW: number, scrollH: number, boxW: number, boxH: number): NonNullable<FitFailure['overflow']> {
+	const w = scrollW > boxW + 1.5;
+	const h = scrollH > boxH + 1.5;
+	return w && h ? 'both' : w ? 'width' : h ? 'height' : 'none';
+}
+
+/** 探针/诊断用的紧凑串: "expand-ink/width"。 */
+export function fitFailureLabel(f: FitFailure | undefined): string {
+	return f ? (f.overflow ? `${f.stage}/${f.overflow}` : f.stage) : 'unknown';
+}
+
 export function allowsFontShrink(blockType: string, opts?: { isTableCell?: boolean; tinyLine?: boolean }): boolean {
 	// 2.3.7 (基线 doc3 实证修正): 2.2.7 的「正文不缩字」把两类**孤立小盒**误伤了 ——
 	// 探针显示 13px/9px 高的单行表格单元格与表单细行因禁缩只能整行放弃(一篇文档
@@ -265,6 +296,10 @@ export interface StrictPageStats {
 	/** LO-10 (2.4.6): 因新占区域压上未建模墨迹而被否决的扩展次数(按次计)。
 	 * 不是失败 —— 块回退原盒后继续走压缩/缩字/保留原文的既有流程。 */
 	inkBlocked: number;
+	/** 排版量测累计耗时 ms (2.7.0, 审核 A-2): 所有 ladderFits 量测(含扩边、
+	 *  缩字、几何复核里的重测)的墙钟之和;不含 API 等待与页面渲染。可选:
+	 *  placementTally 等纯函数的合成 stats 不必带它。 */
+	layoutMs?: number;
 }
 
 export interface StrictPageResult {
@@ -639,6 +674,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// LO-10 (2.4.6): 因新占条带上有**未建模墨迹**(分节横线/分栏竖线等)而被
 	// 否决的扩展次数 —— 这些块本来会叠印上去且审计看不见。按次计,非按块。
 	let inkBlocked = 0;
+	// 排版量测累计耗时 (2.7.0, 审核 A-2): 只在 ladderFits 里累加。
+	let layoutMs = 0;
 	for (const block of translatable) {
 		if (consumedMemberIds.has(block.id)) {
 			continue; // owned by the table cell model (translated cell or kept original)
@@ -832,6 +869,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		committed: boolean;
 		/** Gave up — stays original, never to be shown translated. */
 		abandoned: boolean;
+		/** 最近一次量测的溢出方向 (2.7.0)。 */
+		lastOverflow?: NonNullable<FitFailure['overflow']>;
+		/** 最近一次末位适配失败的阶段 (2.7.0),pmRevert 据此定放弃原因。 */
+		fitFailure?: FitFailure;
+		/** 放弃原因 (2.7.0),仅放弃后有值。 */
+		abandonReason?: FitFailure;
 	}
 	// 提取级盒重叠裁剪 (2.6.0, radiology2023 p4/p9 实证): L 形图注(首行横贯
 	// 图宽、尾行只占左栏)的联合外接盒斜压进邻栏正文的盒里 —— 两块的【行
@@ -914,15 +957,24 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 
 	/** Ladder-fit a hidden node; true when it fits its fixed rectangle. */
 	const ladderFits = (item: StrictItem): boolean => {
-		for (const step of ladderFor(item.minLineHeight)) {
-			item.node.style.lineHeight = String(step.lineHeight);
-			item.node.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
-			if (item.node.scrollHeight <= item.box.height + 1.5
-				&& item.node.scrollWidth <= item.box.width + 1.5) {
-				return true;
+		const t0 = now();
+		try {
+			for (const step of ladderFor(item.minLineHeight)) {
+				item.node.style.lineHeight = String(step.lineHeight);
+				item.node.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
+				if (item.node.scrollHeight <= item.box.height + 1.5
+					&& item.node.scrollWidth <= item.box.width + 1.5) {
+					item.lastOverflow = 'none';
+					return true;
+				}
 			}
+			// 记下最后一档的溢出方向 (2.7.0): 放弃原因需要它。
+			item.lastOverflow = fitOverflow(item.node.scrollWidth, item.node.scrollHeight, item.box.width, item.box.height);
+			return false;
 		}
-		return false;
+		finally {
+			layoutMs += now() - t0;
+		}
 	};
 
 	/** Reveal a measured-to-fit block: paint its mask, then show the node. */
@@ -1147,6 +1199,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			const original = { width: item.box.width, height: item.box.height };
 			const grow = expansionAllowance(item);
 			let fits = false;
+			// 放弃原因记账 (2.7.0, 审核 D-1): 记下扩边为何没成 —— 墨迹闸、几何
+			// 预校验、还是根本无处可扩;再看缩字是否被允许/是否走到地板。
+			let inkVetoed = false;
+			let geometryVetoed = false;
 			// 1. 算法3: 原字号下的扩展阶梯 — 右扩(标签/标题) → 下扩(段落) → 双向。
 			const expansions: [number, number][] = [];
 			if (grow.right > 4) {
@@ -1165,6 +1221,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				fits = clean && !expansionHitsInk(item);
 				if (clean && !fits) {
 					inkBlocked++;
+					inkVetoed = true;
+				}
+				else if (!clean) {
+					geometryVetoed = true;
 				}
 				if (fits) {
 					break;
@@ -1204,6 +1264,13 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			else {
 				item.node.style.fontSize = `${item.fontPx.toFixed(2)}px`; // restore
 				applyBox(item, original.width, original.height);
+				item.fitFailure = {
+					stage: canShrink ? 'shrink-floor'
+						: inkVetoed ? 'expand-ink'
+							: geometryVetoed ? 'expand-geometry'
+								: 'no-room',
+					overflow: item.lastOverflow
+				};
 				still.push(id);
 			}
 		}
@@ -1278,6 +1345,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				continue;
 			}
 			item.abandoned = true;
+			// 放弃原因 (2.7.0): 末位适配留下的阶段;没走过缩字流程就是压缩轮次用尽。
+			item.abandonReason = item.fitFailure ?? { stage: 'compress', overflow: item.lastOverflow };
 			if (item.committed) {
 				// Only reachable in pathological re-measures; undo the reveal.
 				clearMask(id);
@@ -1367,6 +1436,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 					clearMask(item.id);
 					item.committed = false;
 					item.abandoned = true;
+					item.abandonReason = { stage: 'audit', overflow: item.lastOverflow };
 					item.node.style.visibility = 'hidden';
 					item.node.setAttribute('data-pm-unfit', 'true');
 					item.node.style.fontSize = `${item.fontPx.toFixed(2)}px`;
@@ -1419,7 +1489,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				left: Math.round(item.box.left), top: Math.round(item.box.top),
 				width: Math.round(item.box.width), height: Math.round(item.box.height),
 				baseInk, maskOpaque,
-				...(item.node.hasAttribute('data-pm-annex') ? { annex: true } : {})
+				...(item.node.hasAttribute('data-pm-annex') ? { annex: true } : {}),
+				...(item.abandoned ? { abandonReason: fitFailureLabel(item.abandonReason) } : {})
 			});
 		}
 		return rows;
@@ -1444,9 +1515,15 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		return {
 			replaceable: items.length,
 			committed, abandoned, pending,
-			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed, inkBlocked
+			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed, inkBlocked,
+			layoutMs: Math.round(layoutMs)
 		};
 	};
+
+	// ---- 放弃清单 (2.7.0, 审核 B-1): 不采样像素,随时可读,供诊断把块级 state
+	// 与排版结果联表 —— "翻译成功但从未显示"不再报成 translated。
+	(page as HTMLElement & { pmAbandoned?: () => AbandonedBlock[] }).pmAbandoned = (): AbandonedBlock[] =>
+		items.filter(i => i.abandoned).map(i => ({ id: i.id, reason: fitFailureLabel(i.abandonReason) }));
 
 	logger.debug(MODULE, `page ${input.pageIndex + 1}: ${items.length} strict block(s), ${guard.regions.length} protected table(s)`);
 	return {
@@ -1455,7 +1532,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		stats: {
 			replaceable: items.length,
 			committed: 0, abandoned: 0, pending: items.length,
-			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed: 0, inkBlocked: 0
+			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed: 0, inkBlocked: 0,
+			layoutMs: Math.round(layoutMs)
 		}
 	};
 }
@@ -1512,6 +1590,19 @@ export interface StrictProbeRow {
 	maskOpaque: boolean;
 	/** LO-7 (2.4.0): 该块是「整体另置」的大标题译文(原文未遮,box 是另置位置)。 */
 	annex?: boolean;
+	/** 放弃原因 (2.7.0): "stage/overflow" 枚举串,仅 abandoned 行有;无文本。 */
+	abandonReason?: string;
+}
+
+/** 放弃块清单 (2.7.0): id + 原因枚举串,无文本。 */
+export interface AbandonedBlock {
+	id: string;
+	reason: string;
+}
+
+export function strictAbandonedBlocks(element: HTMLElement): AbandonedBlock[] | null {
+	const fn = (element as HTMLElement & { pmAbandoned?: () => AbandonedBlock[] }).pmAbandoned;
+	return fn ? fn() : null;
 }
 
 export function probeStrictPlacement(element: HTMLElement): StrictProbeRow[] | null {

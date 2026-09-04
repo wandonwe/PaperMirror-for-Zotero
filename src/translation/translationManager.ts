@@ -36,6 +36,7 @@ import { RequestGate } from './requestGate';
 import { planChunks, trailingContext, type PlannedChunk } from './segmenter';
 import { buildLayoutModules } from '../reader/layoutModules';
 import { fnv1a64 } from '../cache/cacheSchema';
+import { addUsage, emptyUsage, type TokenUsage } from './usageMeter';
 
 const MODULE = 'translationManager';
 
@@ -396,6 +397,11 @@ export interface PageDiagnostics {
 	/** 占位符注册表 (1.1.2 诊断闭环): 本页签发 token 总数与校验拒绝次数。 */
 	placeholderTokens?: number;
 	placeholderRejected?: number;
+	/** API token 用量 (2.7.0, 审核 F-2): 本页全部请求(含压缩重试/补救)的
+	 *  服务商报告值之和;服务商不报用量时缺省。纯计数。 */
+	inputTokens?: number;
+	outputTokens?: number;
+	cachedInputTokens?: number;
 }
 
 export interface TranslationDeps {
@@ -492,6 +498,33 @@ export class TranslationManager {
 		prefetchedPages: new Set<number>(),
 		prefetchedUnviewed: new Set<number>()
 	};
+	/** API token 用量总账 (2.7.0, 审核 F-2): 全部请求之和 + 报/不报用量的请求数。 */
+	private tokenUsage: TokenUsage = emptyUsage();
+	private usageReports = 0;
+	private usageMissing = 0;
+	/** 按页的 token 用量(页索引 0 起),诊断导出时并进 pages[].metrics。 */
+	private pageTokens = new Map<number, TokenUsage>();
+
+	/**
+	 * 经计量的服务商调用 (2.7.0): 两条请求路径(整页运行与压缩重译/单块重译)
+	 * 都从这里出去,响应里的用量按页累加。只碰数字,响应正文原样透传。
+	 */
+	private async meteredTranslate(request: TranslationRequest, signal: AbortSignal): Promise<TranslationResponse> {
+		const response = await this.deps.translateRequest(request, signal);
+		if (response.usage) {
+			this.usageReports++;
+			addUsage(this.tokenUsage, response.usage);
+			if (typeof request.pageIndex === 'number') {
+				const page = this.pageTokens.get(request.pageIndex) ?? emptyUsage();
+				addUsage(page, response.usage);
+				this.pageTokens.set(request.pageIndex, page);
+			}
+		}
+		else {
+			this.usageMissing++;
+		}
+		return response;
+	}
 	/** Pages whose provider has already been reported unstable (fire once). */
 	private unstableFired = new Set<number>();
 	/**
@@ -771,7 +804,7 @@ export class TranslationManager {
 					})),
 					glossary: this.glossaryFor(blocks.map(b => b.sourceText))
 				};
-				const response = await this.requestGate.run(this.laneFor(pageIndex), true, () => this.deps.translateRequest(request, signal), signal);
+				const response = await this.requestGate.run(this.laneFor(pageIndex), true, () => this.meteredTranslate(request, signal), signal);
 				for (const t of response.translations) {
 					const pb = protectedBlocks.find(p => p.block.id === t.id);
 					if (!pb || !t.translatedText.trim()) {
@@ -974,7 +1007,17 @@ export class TranslationManager {
 					page: s.pageIndex + 1,
 					status: s.status,
 					error: s.error?.code ?? null,
-					metrics: s.diagnostics ?? null,
+					metrics: s.diagnostics
+						? {
+							...s.diagnostics,
+							...((): Partial<PageDiagnostics> => {
+								const t = this.pageTokens.get(s.pageIndex);
+								return t
+									? { inputTokens: t.inputTokens, outputTokens: t.outputTokens, cachedInputTokens: t.cachedInputTokens }
+									: {};
+							})()
+						}
+						: null,
 					blocks: s.blocks.map(b => ({
 						id: b.id,
 						type: b.type,
@@ -1008,7 +1051,14 @@ export class TranslationManager {
 					? { segmentHitRate: Number((this.usage.segmentHits / this.usage.segmentLookups).toFixed(3)) }
 					: {}),
 				prefetchedPages: this.usage.prefetchedPages.size,
-				prefetchedUnviewed: this.usage.prefetchedUnviewed.size
+				prefetchedUnviewed: this.usage.prefetchedUnviewed.size,
+				// token 用量 (2.7.0, 审核 F-2): 服务商报告值之和;usageReports /
+				// usageMissing 说明有多少请求带/不带用量字段(免费引擎多半不带)。
+				inputTokens: this.tokenUsage.inputTokens,
+				outputTokens: this.tokenUsage.outputTokens,
+				cachedInputTokens: this.tokenUsage.cachedInputTokens,
+				usageReports: this.usageReports,
+				usageMissing: this.usageMissing
 			}
 		};
 	}
@@ -1543,7 +1593,7 @@ export class TranslationManager {
 				const lane = this.laneFor(pageIndex);
 				try {
 					const response = await this.requestGate.run(
-						lane, pageIndex === this.currentPage, () => this.deps.translateRequest(request, sig), sig);
+						lane, pageIndex === this.currentPage, () => this.meteredTranslate(request, sig), sig);
 					beat(); // progress: a request finished → re-arm the idle watchdog
 					this.scheduler.laneFeedback(lane, 'success');
 					return response;

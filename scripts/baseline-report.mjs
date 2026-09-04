@@ -66,8 +66,26 @@ for (const f of files) {
 			? `${(d.usage.pageCacheFullHits / d.usage.pageCacheLookups * 100).toFixed(0)}%` : 'n/a',
 		segHitRate: d.usage?.segmentLookups
 			? `${(d.usage.segmentHits / d.usage.segmentLookups * 100).toFixed(0)}%` : 'n/a',
-		prefetchWaste: d.usage ? `${d.usage.prefetchedUnviewed ?? 0}/${d.usage.prefetchedPages ?? 0}` : 'n/a'
+		prefetchWaste: d.usage ? `${d.usage.prefetchedUnviewed ?? 0}/${d.usage.prefetchedPages ?? 0}` : 'n/a',
+		// 2.7.0 (审核 B-1/F-2/A-2): 排版放弃块(块表已联表)、token 用量、排版量测耗时。
+		unplaced: blocks.filter(b => b.state === 'unplaced').length,
+		inTokens: d.usage?.inputTokens ?? 0,
+		outTokens: d.usage?.outputTokens ?? 0,
+		cachedPct: d.usage?.inputTokens ? `${(d.usage.cachedInputTokens / d.usage.inputTokens * 100).toFixed(0)}%` : 'n/a',
+		tokPerPage: d.usage?.inputTokens && pages.length
+			? Math.round((d.usage.inputTokens + d.usage.outputTokens) / pages.length) : 0,
+		layoutMs: placement.reduce((n, p) => n + (p.layoutMs ?? 0), 0)
 	});
+	// 放弃原因分布 (2.7.0): 从联表后的块表读,枚举串无文本。
+	const reasons = {};
+	for (const b of blocks) {
+		if (b.state === 'unplaced') {
+			reasons[b.abandonReason ?? 'unknown'] = (reasons[b.abandonReason ?? 'unknown'] ?? 0) + 1;
+		}
+	}
+	if (Object.keys(reasons).length) {
+		rows[rows.length - 1].abandonReasons = reasons;
+	}
 }
 
 if (!rows.length) {
@@ -98,12 +116,28 @@ const totals = {
 	inkBlocked: sum('inkBlocked'),
 	pageHitRate: '—',
 	segHitRate: '—',
-	prefetchWaste: '—'
+	prefetchWaste: '—',
+	unplaced: sum('unplaced'),
+	inTokens: sum('inTokens'),
+	outTokens: sum('outTokens'),
+	cachedPct: '—',
+	tokPerPage: sum('pages') ? Math.round((sum('inTokens') + sum('outTokens')) / sum('pages')) : 0,
+	layoutMs: sum('layoutMs')
 };
 
+const abandonReasons = rows.map(r => r.abandonReasons).filter(Boolean);
+for (const r of rows) {
+	delete r.abandonReasons;
+}
 console.table([...rows, totals]);
+if (abandonReasons.length) {
+	console.log('放弃原因分布 (stage/overflow):');
+	for (let i = 0; i < abandonReasons.length; i++) {
+		console.log(`  ${rows[i].doc}:`, JSON.stringify(abandonReasons[i]));
+	}
+}
 
-const headers = ['doc', 'pages', 'requests', 'reqPerPage', 'salvage', 'rate429', 'timeouts', 'segHits', 'avgPageMs', 'translated', 'preserved', 'keptOriginal', 'placed', 'keptPlace', 'placeRate', 'geoViolations', 'annexed', 'inkBlocked', 'pageHitRate', 'segHitRate', 'prefetchWaste'];
+const headers = ['doc', 'pages', 'requests', 'reqPerPage', 'salvage', 'rate429', 'timeouts', 'segHits', 'avgPageMs', 'translated', 'preserved', 'keptOriginal', 'placed', 'keptPlace', 'placeRate', 'geoViolations', 'annexed', 'inkBlocked', 'pageHitRate', 'segHitRate', 'prefetchWaste', 'unplaced', 'inTokens', 'outTokens', 'cachedPct', 'tokPerPage', 'layoutMs'];
 const md = [
 	'# 性能基线报告(真实世界)',
 	'',
