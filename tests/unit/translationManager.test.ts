@@ -1984,3 +1984,39 @@ test('占位符降级重试: 掩码链失败后不掩码重发并接受 (2.5.12)
 	assert.ok(state.translations.get('phfail')?.includes('[4]'), 'citation survives unmasked');
 	manager.dispose();
 });
+
+// ---- 2.7.1 (审核 EF-1): 位置上下文只在同流相邻批之间传递 -------------------
+
+test('单元格批不再收到正文段尾作 previousContext;正文批之间照旧 (2.7.1)', async () => {
+	const requests: TranslationRequest[] = [];
+	const prose = (i: number, len: number): SourceBlock => ({
+		id: `page-0-p-${i}`, pageIndex: 0, order: i, type: 'paragraph',
+		sourceText: `Body paragraph ${i} ` + 'word '.repeat(len)
+	});
+	const cell = (i: number): SourceBlock => ({
+		id: `page-0-c-${i}`, pageIndex: 0, order: 100 + i, type: 'paragraph',
+		sourceText: `Cell value ${i}`, tableRow: Math.floor(i / 2), tableCol: i % 2
+	});
+	// 正文超过一批的字符预算 → ≥2 个正文批;单元格另成一批。
+	const blocks = [
+		...Array.from({ length: 6 }, (_, i) => prose(i, 400)),
+		...Array.from({ length: 6 }, (_, i) => cell(i))
+	];
+	const { deps } = makeDeps({
+		extractPage: async () => blocks,
+		translateRequest: async (request: TranslationRequest): Promise<TranslationResponse> => {
+			requests.push(request);
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '译:' + b.text })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 1);
+	const cellRequests = requests.filter(r => r.blocks.every(b => b.id.startsWith('page-0-c-')));
+	const proseRequests = requests.filter(r => r.blocks.every(b => b.id.startsWith('page-0-p-')));
+	assert.ok(cellRequests.length >= 1 && proseRequests.length >= 2, `plan: ${requests.map(r => r.blocks.length).join(',')}`);
+	for (const r of cellRequests) {
+		assert.equal(r.previousContext, '', '单元格批的 previousContext 必须为空');
+	}
+	assert.ok(proseRequests.slice(1).some(r => r.previousContext.length > 0), '后续正文批仍带上一批段尾');
+	manager.dispose();
+});

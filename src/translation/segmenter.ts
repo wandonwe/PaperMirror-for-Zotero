@@ -9,6 +9,10 @@ import type { LayoutModule } from '../reader/layoutModules';
 /** Per-request budget in characters. Higher fill = fewer round-trips. */
 export const DEFAULT_CHUNK_BUDGET = 8000;
 export const MAX_BLOCKS_PER_REQUEST = 24;
+/** 表格单元格批的块数上限 (2.7.1, 审核 EF-1): 格通常只有几个词,24 的正文上限
+ *  把 40 个格切成两批各付一次系统提示;40 个 id 的 JSON 回包对现代模型不成
+ *  问题,校验/补救链原样兜底。字符预算仍是硬边界。 */
+export const MAX_CELLS_PER_REQUEST = 40;
 /** Below this fill fraction we keep packing across a module boundary. */
 export const DEFAULT_TARGET_FILL = 0.85;
 
@@ -131,6 +135,12 @@ export interface PlannedChunk {
 	 * truncation, nor delay the fast batches that paint most of the page.
 	 */
 	lane: 'fast' | 'slow';
+	/**
+	 * 流别 (2.7.1, 审核 EF-1): 'prose' 正文流 / 'cells' 表格单元格流。两流各自
+	 * 独立打包,批次先正文后单元格;位置上下文 (previousContext) 只在同流相邻
+	 * 批之间传递 —— 单元格批不再收到与之无关的正文段尾。
+	 */
+	kind: 'prose' | 'cells';
 }
 
 export function planChunks(
@@ -209,7 +219,8 @@ export function planChunks(
 			...slowBlocks.map(b => ({
 				blocks: [b],
 				moduleContext: headingOf.get(b.id) ?? '',
-				lane: 'slow' as const
+				lane: 'slow' as const,
+				kind: 'prose' as const
 			}))
 		];
 	}
@@ -266,40 +277,48 @@ export function planChunks(
 		return contextPresent ? '' : context;
 	};
 
-	const chunks: PlannedChunk[] = [];
-	let cur: SourceBlock[] = [];
-	let size = 0;
-	const flush = (): void => {
-		if (cur.length) {
-			chunks.push({ blocks: cur, moduleContext: contextFor(cur), lane: 'fast' });
-			cur = [];
-			size = 0;
+	// 两流独立打包 (2.7.1, 审核 EF-1): 表格硬边界 (2.2.0) 仍然成立 —— 一个请求
+	// 要么全是单元格、要么全是正文,绝不混装;但此前是单趟顺序打包,阅读序里格
+	// 与正文交替一次就断一批,断开的同类批次再不合并: chen2023-p5 一页 1570 字
+	// 正文发了 9 次请求(平均 174 字正文配 1389 字系统提示,非正文开销 80%)。
+	// 现在按流分开: 正文流、单元格流各自按预算/模块边界/块数上限打包,先正文
+	// 后单元格输出。块 id 驱动译文映射,批次顺序与正确性无关;流内阅读序不变。
+	const packStream = (stream: SourceBlock[], kind: PlannedChunk['kind'], cap: number): PlannedChunk[] => {
+		const out: PlannedChunk[] = [];
+		let cur: SourceBlock[] = [];
+		let size = 0;
+		const flush = (): void => {
+			if (cur.length) {
+				out.push({ blocks: cur, moduleContext: contextFor(cur), lane: 'fast', kind });
+				cur = [];
+				size = 0;
+			}
+		};
+		for (let i = 0; i < stream.length; i++) {
+			const b = stream[i]!;
+			const bs = b.sourceText.length;
+			const startsNewModule = i > 0 && moduleOf.get(b.id) !== moduleOf.get(stream[i - 1]!.id);
+			// Prefer to keep modules whole: end the chunk at a module boundary once it
+			// is already full enough.
+			if (cur.length && startsNewModule && size >= charBudget * targetFill) {
+				flush();
+			}
+			// Hard boundary: never exceed the budget or the block ceiling.
+			if (cur.length && (size + bs > charBudget || cur.length >= cap)) {
+				flush();
+			}
+			cur.push(b);
+			size += bs;
 		}
+		flush();
+		return out;
 	};
-	for (let i = 0; i < blocks.length; i++) {
-		const b = blocks[i]!;
-		const bs = b.sourceText.length;
-		const startsNewModule = i > 0 && moduleOf.get(b.id) !== moduleOf.get(blocks[i - 1]!.id);
-		// 表格硬边界 (2.2.0, item 3): 单元格与正文之间无条件断开,无论填充率。
-		// 一个请求要么全是表格单元格、要么全是正文 —— 绝不混装,避免译文互相污染
-		// 与 id 漂移。单元格之间仍受下面的预算/块数上限约束批量打包。
-		if (cur.length && tableBlockIds.has(b.id) !== tableBlockIds.has(cur[cur.length - 1]!.id)) {
-			flush();
-		}
-		// Prefer to keep modules whole: end the chunk at a module boundary once it
-		// is already full enough.
-		if (cur.length && startsNewModule && size >= charBudget * targetFill) {
-			flush();
-		}
-		// Hard boundary: never exceed the budget or the block ceiling.
-		if (cur.length && (size + bs > charBudget || cur.length >= maxBlocks)) {
-			flush();
-		}
-		cur.push(b);
-		size += bs;
-	}
-	flush();
-	return chunks;
+	const proseStream = blocks.filter(b => !tableBlockIds.has(b.id));
+	const cellStream = blocks.filter(b => tableBlockIds.has(b.id));
+	return [
+		...packStream(proseStream, 'prose', maxBlocks),
+		...packStream(cellStream, 'cells', opts?.maxBlocks !== undefined ? maxBlocks : MAX_CELLS_PER_REQUEST)
+	];
 }
 
 /** Trailing context (last N chars of the previous chunk/page) for coherence.
