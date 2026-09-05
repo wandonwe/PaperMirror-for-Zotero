@@ -94,6 +94,11 @@ export function ladderFor(minLineHeight: number): { lineHeight: number; letterSp
  * that silently reverts to English. Floor 8.5px; below that we still revert.
  */
 const SHRINK_STEPS = [0.94, 0.88];
+/**
+ * 孤立块第三档 (2.7.3, 审核 D-1): 标题/图题/表格单元格/微小单行块各自独立,
+ * 缩到 82% 也不与正文比出大小差;正文流仍止于 0.88 (发花闸不动)。
+ */
+const SHRINK_STEPS_ISOLATED = [0.94, 0.88, 0.82];
 /** 墙钟 (2.7.0): 浏览器窗口有 performance,单测环境退回 Date.now。 */
 const now = (): number =>
 	(typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
@@ -123,6 +128,12 @@ const SHRINK_FLOOR_PX = 8.5;
 export interface FitFailure {
 	stage: 'expand-ink' | 'expand-geometry' | 'no-room' | 'shrink-floor' | 'compress' | 'audit';
 	overflow?: 'width' | 'height' | 'both' | 'none';
+	/**
+	 * 缩字梯走到底时扩边曾被谁否决 (2.7.3): 'shrink-floor/none' 意味着地板
+	 * 字号 + 扩边在几何上放得下、却被墨迹闸或几何预校验拦下 —— 没有这一位,
+	 * 单元格的放弃全部报成 shrink-floor,扩边失败的真因被遮住。
+	 */
+	veto?: 'ink' | 'geometry';
 }
 
 /** 量测溢出方向 (pure): 与 ladderFits 同一套 1.5px 容差。 */
@@ -134,7 +145,11 @@ export function fitOverflow(scrollW: number, scrollH: number, boxW: number, boxH
 
 /** 探针/诊断用的紧凑串: "expand-ink/width"。 */
 export function fitFailureLabel(f: FitFailure | undefined): string {
-	return f ? (f.overflow ? `${f.stage}/${f.overflow}` : f.stage) : 'unknown';
+	if (!f) {
+		return 'unknown';
+	}
+	const base = f.overflow ? `${f.stage}/${f.overflow}` : f.stage;
+	return f.veto ? `${base}+${f.veto}` : base;
 }
 
 export function allowsFontShrink(blockType: string, opts?: { isTableCell?: boolean; tinyLine?: boolean }): boolean {
@@ -525,9 +540,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// headings/captions keep their own. 用户倍率 scales on top — the strict
 	// measure gate still governs commit, so an over-scaled block simply fails
 	// placement and stays original rather than overflowing.
-	const anchorPt = bodyAnchorPt(translatable
-		.filter(b => b.type === 'paragraph' || b.type === 'list')
-		.map(b => b.fontSize ?? 0));
+	// 表格单元格不参与页面基准字号 (2.7.3, 审核 D-1, jacc2020 Table 1 页实证):
+	// 单元格块的 type 也是 paragraph,一页 100 个 7pt 格 + 20 段 9.5pt 正文,
+	// 中位数落在 7pt,整页正文被统一到表格字号 —— 正文明显比原文小。反过来
+	// 单元格自己也被压成正文字号排进 7pt 高的格盒 (43/52 个放弃全是
+	// shrink-floor/height)。两个方向都改: 基准只看正文块,单元格按自身字号。
+	const anchorPt = bodyAnchorPt(bodyAnchorSizes(translatable));
 	const fontFactor = parseFactor(getPref('fontSizeFactor', '1'));
 	const lineFactor = parseFactor(getPref('lineHeightFactor', '1'), 0.9, 1.4);
 
@@ -901,7 +919,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		node.setAttribute('data-pm-type', block.type);
 		// 表格单元格标记 (2.3.7): 整格块与逐 member 兜底块的 id 都是
 		// `…-table-T-rR-cC` 形;单元格可末位缩字(allowsFontShrink 豁免)。
-		if (typeof block.tableRow === 'number' || /-table-\d+-r\d+-c\d+/.test(block.id)) {
+		if (isTableCellBlock(block)) {
 			node.setAttribute('data-pm-cell', 'true');
 		}
 		node.setAttribute('data-pm-page', String(block.pageIndex));
@@ -916,7 +934,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// and — critically — its mask is NOT yet painted, so the original text
 		// shows through. Acceptance flips visibility AND paints the mask together.
 		node.style.visibility = 'hidden';
-		const rolePt = (block.type === 'paragraph' || block.type === 'list') && anchorPt > 0
+		const rolePt = (block.type === 'paragraph' || block.type === 'list') && anchorPt > 0 && !isTableCellBlock(block)
 			? anchorPt
 			: (block.fontSize ?? bodyPt);
 		const fontPx = Math.max(6, rolePt * pxPerPoint * fontFactor);
@@ -1241,8 +1259,13 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			});
 			if (!fits && canShrink) {
 				applyBox(item, original.width, original.height);
-				// 2. 既有缩字梯子(原盒)。
-				for (const factor of SHRINK_STEPS) {
+				// 2. 缩字梯子(原盒)。孤立块 (标题/图题/单元格/微小单行) 多一档
+				// 0.82 (2.7.3, D-1);正文类型本就不进这条路。
+				const steps = shrinkStepsFor(item.node.getAttribute('data-pm-type') ?? '', {
+					isTableCell: item.node.hasAttribute('data-pm-cell'),
+					tinyLine
+				});
+				for (const factor of steps) {
 					const px = Math.max(SHRINK_FLOOR_PX, item.fontPx * factor);
 					item.node.style.fontSize = `${px.toFixed(2)}px`;
 					fits = ladderFits(item);
@@ -1250,12 +1273,24 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 						break;
 					}
 				}
-				// 3. 底线: 最小字号 + 最大扩展的组合再试一次。
+				// 3. 底线: 最小字号 + 扩展的组合。2.7.3: 不再只试"最大扩展"一种 ——
+				// 右扩/下扩/双向按新占面积从小到大逐个试,小扩展不压墨迹时
+				// 大扩展被否决也救得回来;每种同样预校验 (item4) + 墨迹闸 (LO-10)。
 				if (!fits && expansions.length) {
-					const last = expansions[expansions.length - 1]!;
-					applyBox(item, last[0], last[1]);
-					// 组合扩展同样预校验 (item4) + 墨迹闸 (LO-10 2.4.6)。
-					fits = ladderFits(item) && !violatesGeometry(item) && !expansionHitsInk(item);
+					for (const [w, h] of orderExpansions(expansions)) {
+						applyBox(item, w, h);
+						const clean = ladderFits(item) && !violatesGeometry(item);
+						fits = clean && !expansionHitsInk(item);
+						if (clean && !fits) {
+							inkVetoed = true;
+						}
+						else if (!clean && item.lastOverflow === 'none') {
+							geometryVetoed = true;
+						}
+						if (fits) {
+							break;
+						}
+					}
 				}
 			}
 			if (fits) {
@@ -1269,7 +1304,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 						: inkVetoed ? 'expand-ink'
 							: geometryVetoed ? 'expand-geometry'
 								: 'no-room',
-					overflow: item.lastOverflow
+					overflow: item.lastOverflow,
+					...(canShrink && (inkVetoed || geometryVetoed)
+						? { veto: inkVetoed ? 'ink' as const : 'geometry' as const }
+						: {})
 				};
 				still.push(id);
 			}
@@ -1804,6 +1842,34 @@ export function selectInkObstacleBlocks<T extends { isReference?: boolean; type?
 export function overlapsImageInk(box: PixelBox, imageBoxes: PixelBox[]): boolean {
 	const area = box.width * box.height;
 	return area > 0 && imageBoxes.some(img => intersectArea(box, img) > area * 0.02);
+}
+
+/**
+ * 表格单元格块判据 (2.7.3) — pure。整格块与逐 member 兜底块的 id 都是
+ * `…-table-T-rR-cC` 形,或带 tableRow;它们 type 仍是 paragraph,但字号、
+ * 缩字豁免、页面基准字号都要按单元格处理。
+ */
+export function isTableCellBlock(block: { id: string; tableRow?: number }): boolean {
+	return typeof block.tableRow === 'number' || /-table-\d+-r\d+-c\d+/.test(block.id);
+}
+
+/** 页面基准字号的样本 (2.7.3) — pure: 只有正文流块,表格单元格不算。 */
+export function bodyAnchorSizes(blocks: { id: string; type: string; fontSize?: number; tableRow?: number }[]): number[] {
+	return blocks
+		.filter(b => (b.type === 'paragraph' || b.type === 'list') && !isTableCellBlock(b))
+		.map(b => b.fontSize ?? 0);
+}
+
+/** 末位缩字梯 (2.7.3) — pure: 孤立块三档 (…0.82),其余两档。 */
+export function shrinkStepsFor(blockType: string, opts?: { isTableCell?: boolean; tinyLine?: boolean }): number[] {
+	const isolated = !!opts?.isTableCell || !!opts?.tinyLine
+		|| blockType === 'heading' || blockType === 'title' || blockType === 'caption';
+	return isolated ? SHRINK_STEPS_ISOLATED : SHRINK_STEPS;
+}
+
+/** 底线组合的扩展顺序 (2.7.3) — pure: 新占面积小的先试。 */
+export function orderExpansions(expansions: [number, number][]): [number, number][] {
+	return [...expansions].sort((a, b) => a[0] * a[1] - b[0] * b[1]);
 }
 
 export function computeExpansionAllowance(
