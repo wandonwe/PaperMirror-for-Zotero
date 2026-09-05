@@ -8,8 +8,9 @@
  *   payloadChars(请求输入体量代理) / dupBlocks(API-2 同页去重省下的块)
  *
  * 这正是第一~四批各项 API 优化作用的对象 —— 任何让某页 chunk 数/payload 回涨的
- * 改动都会在这里现形。基线缺失时自动生成并通过(首跑);有意的改动删
- * tests/fixtures/baseline/pipeline-baseline.json 重新生成,diff 进 PR 审阅。
+ * 改动都会在这里现形。基线是硬门禁 (2.7.5): 缺文件/缺条目/多条目都失败;有意的
+ * 改动用 UPDATE_BASELINE=1 npm test 重生成 tests/fixtures/baseline/pipeline-baseline.json,
+ * diff 进 PR 审阅。
  * 只锁**确定性计数**;耗时是环境相关的,由 `npm run bench` 报告、不在 CI 断言。
  */
 
@@ -112,21 +113,24 @@ test('流水线请求计划基线: 语料页的 chunk 形状与基线一致 (第
 		const dump = JSON.parse(readFileSync(join(layoutDir, file), 'utf8')) as SpanDump;
 		current[file.replace(/\.spans\.json$/, '')] = measurePage(dump);
 	}
-	if (!existsSync(baselinePath)) {
+	// 2.7.5 (外部审核 P2): 基线门禁不再有绕过路径。缺文件、缺条目、多条目一律
+	// 失败;只有显式 UPDATE_BASELINE=1 才生成/覆盖 —— 与布局快照的
+	// UPDATE_SNAPSHOTS 同一姿态,diff 进 PR 审阅。此前基线缺失即自动生成通过、
+	// 新语料页只打印提示,删语料页也无人察觉,回归保护可以悄悄失去。
+	if (process.env.UPDATE_BASELINE) {
 		mkdirSync(baselineDir, { recursive: true });
 		writeFileSync(baselinePath, JSON.stringify(current, null, '\t') + '\n');
-		console.log(`pipeline baseline generated: ${Object.keys(current).length} corpus pages → ${baselinePath}`);
-		return; // 首跑: 生成即通过
+		console.log(`pipeline baseline written: ${Object.keys(current).length} corpus pages → ${baselinePath}`);
+		return;
 	}
+	assert.ok(existsSync(baselinePath), `基线文件缺失 —— 运行 UPDATE_BASELINE=1 npm test 生成并审阅后提交: ${baselinePath}`);
 	const baseline = JSON.parse(readFileSync(baselinePath, 'utf8')) as Record<string, PageBaseline>;
+	const missing = Object.keys(current).filter(n => !(n in baseline)).sort();
+	const stale = Object.keys(baseline).filter(n => !(n in current)).sort();
+	assert.deepEqual({ missing, stale }, { missing: [], stale: [] },
+		`语料页与基线条目集合不一致 (缺基线: ${missing.join(', ') || '无'}; 基线多余: ${stale.join(', ') || '无'}) —— UPDATE_BASELINE=1 重生成并审阅 diff`);
 	for (const [name, cur] of Object.entries(current)) {
-		const base = baseline[name];
-		if (!base) {
-			// 新语料页: 提示补基线(删基线文件重生成),不失败——加语料不该红 CI。
-			console.log(`new corpus page without baseline: ${name} (delete the baseline file to regenerate)`);
-			continue;
-		}
-		assert.deepEqual(cur, base,
-			`${name}: 请求计划形状偏离基线 —— 若为有意优化,删除 ${baselinePath} 重新生成并把 diff 进 PR`);
+		assert.deepEqual(cur, baseline[name],
+			`${name}: 请求计划形状偏离基线 —— 若为有意优化,UPDATE_BASELINE=1 重新生成并把 diff 进 PR`);
 	}
 });

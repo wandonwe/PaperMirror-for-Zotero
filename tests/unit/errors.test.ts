@@ -108,14 +108,14 @@ test('temperature 拒绝语含 "with this model" 也不再归为 INVALID_MODEL',
 	const e = mapHTTPError(400, `{"error":{"message":"Unsupported value: 'temperature' does not support 0 with this model. Only the default (1) value is supported.","param":"temperature"}}`);
 	assert.notEqual(e.code, 'INVALID_MODEL');
 	assert.ok(/request parameter/i.test(e.message), '按参数被拒描述');
-	assert.ok(/temperature/i.test(e.message), '原始片段保留 (自愈匹配依赖它)');
+	assert.equal(e.rejectedParam, 'temperature', '被拒参数归类为枚举 (自愈匹配依赖它)');
 	assert.equal(e.httpStatus, 400);
 });
 
 test('reasoning_effort 的 Unrecognized argument 同样归为参数被拒', () => {
 	const e = mapHTTPError(400, '{"error":{"message":"Unrecognized request argument supplied: reasoning_effort"}}');
 	assert.notEqual(e.code, 'INVALID_MODEL');
-	assert.ok(/reasoning_effort/i.test(e.message));
+	assert.equal(e.rejectedParam, 'reasoning_effort');
 });
 
 test('真正的模型名 400 仍归 INVALID_MODEL', () => {
@@ -158,12 +158,44 @@ test('运行时注册的真实密钥也被脱敏', () => {
 	registerSecret('sk-proj-UNIQUEKEYFORTEST0987654321');
 	const e = mapHTTPError(400, 'rejected: sk-proj-UNIQUEKEYFORTEST0987654321 is expired');
 	assert.ok(!/UNIQUEKEYFORTEST/.test(e.message));
-	assert.ok(/REDACTED/.test(e.message), '应留下 [REDACTED] 痕迹便于排查');
+	// 2.7.5: 片段整体不再进 message (不只是密钥被打码) —— 见下面的原文哨兵测试。
+	assert.ok(!/expired/.test(e.message), '响应片段不进 message');
+});
+
+// ---- 2.7.5 (审核 P1): 服务商回显的原文/译文不得经 error.message 进日志 ---------
+
+test('400/422/418 回显请求正文时, message 与日志都不含原文哨兵, 参数仍被正确归类', async () => {
+	const { recentProblems, error: logError } = await import('../../src/utils/logger');
+	const SENTINEL = 'Myocardial fibrosis SENTINEL_SOURCE_7f3a';
+	const cases: [number, string, string | undefined][] = [
+		[400, `{"error":{"message":"Unsupported value: 'temperature' does not support 0 with this model. input: ${SENTINEL}"}}`, 'temperature'],
+		[400, `{"error":{"message":"Unrecognized request argument supplied: reasoning_effort; echo ${SENTINEL}"}}`, 'reasoning_effort'],
+		[400, `{"error":{"message":"Budget is not supported for this model: ${SENTINEL}"}}`, 'thinking'],
+		[400, `{"error":{"message":"The model \`bogus\` does not exist. ${SENTINEL}"}}`, 'model'],
+		[422, `{"detail":"validation failed on ${SENTINEL}"}`, undefined],
+		[418, `teapot ${SENTINEL}`, undefined]
+	];
+	for (const [status, body, param] of cases) {
+		const e = mapHTTPError(status, body);
+		assert.ok(!e.message.includes('SENTINEL_SOURCE_7f3a'), `HTTP ${status}: message 不含原文`);
+		assert.equal(e.rejectedParam, param, `HTTP ${status}: 参数归类`);
+		logError('test', 'provider failed', e);
+	}
+	assert.ok(recentProblems().every(line => !line.includes('SENTINEL_SOURCE_7f3a')), '日志不含原文');
+});
+
+test('自愈判定改看 rejectedParam 枚举, 不再依赖 message 里的片段', async () => {
+	const { isTemperatureRejection, isReasoningEffortRejection } = await import('../../src/translation/providers/advancedParams');
+	const { isThinkingRejection } = await import('../../src/translation/providers/geminiNative');
+	assert.equal(isTemperatureRejection(mapHTTPError(400, 'Unsupported value: temperature only the default (1) value is supported')), true);
+	assert.equal(isReasoningEffortRejection(mapHTTPError(400, 'Unrecognized request argument supplied: reasoning_effort')), true);
+	assert.equal(isThinkingRejection(mapHTTPError(400, 'thinking is not enabled for this model')), true);
+	assert.equal(isTemperatureRejection(mapHTTPError(400, 'The model `x` does not exist')), false);
 });
 
 test('脱敏不影响无密钥的诊断信息可读性', () => {
 	const e = mapHTTPError(400, 'Unsupported value: temperature does not support 0 with this model');
-	assert.ok(/temperature/.test(e.message), '参数名必须保留,自愈匹配依赖它');
+	assert.ok(/temperature/.test(e.message), '参数名 (枚举) 保留在 message 里便于排查');
 });
 
 // ---- P3 (2.0.10): 覆盖缺口 408/456 ------------------------------------------

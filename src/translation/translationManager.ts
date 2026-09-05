@@ -387,7 +387,10 @@ export interface PageTranslationState {
 }
 
 export interface PageDiagnostics {
+	/** 逻辑批次数 (预算闸口径)。 */
 	requests: number;
+	/** 实际发出的 HTTP 尝试数,含请求级重试 (2.7.5);旧记录缺省。 */
+	attempts?: number;
 	salvage: number;
 	rateLimited: number;
 	timeouts: number;
@@ -583,6 +586,43 @@ export class TranslationManager {
 	}
 	/** Injected (tests) or real timer delay, for request-level retry backoff. */
 	private delay: (ms: number) => Promise<void>;
+
+	/**
+	 * 可取消的退避等待 (2.7.5, 审核 P1): 429 的 Retry-After 可达两分钟,此前
+	 * `await this.delay(wait)` 不看取消信号 —— 刷新 / 换服务商走 resetAllAndWait
+	 * 要等所有任务真正解绕,于是被一个正在退避的请求拖住整段 Retry-After
+	 * ("点了刷新还卡着")。这里把等待与 signal 绑定: 取消即刻以 CANCELLED 结束,
+	 * 释放调度槽;未取消时仍完整遵守 Retry-After。注入的 delayFn (测试假时钟)
+	 * 仍是计时来源,取消只是先于它落地。
+	 */
+	private delayUntilAbort(ms: number, signal: AbortSignal): Promise<void> {
+		if (signal.aborted) {
+			return Promise.reject(new PaperMirrorError('CANCELLED', 'cancelled'));
+		}
+		return new Promise<void>((resolve, reject) => {
+			let settled = false;
+			const onAbort = (): void => {
+				if (!settled) {
+					settled = true;
+					reject(new PaperMirrorError('CANCELLED', 'cancelled'));
+				}
+			};
+			signal.addEventListener('abort', onAbort, { once: true } as AddEventListenerOptions);
+			this.delay(ms).then(() => {
+				signal.removeEventListener('abort', onAbort);
+				if (!settled) {
+					settled = true;
+					resolve();
+				}
+			}, (e) => {
+				signal.removeEventListener('abort', onAbort);
+				if (!settled) {
+					settled = true;
+					reject(e);
+				}
+			});
+		});
+	}
 	/** Extraction semaphore: at most 2 concurrent PDF extractions, current page first. */
 	private extractActive = 0;
 	private extractTimeoutMs = EXTRACT_TIMEOUT_MS;
@@ -943,7 +983,9 @@ export class TranslationManager {
 		this.failedSegments.delete(segmentHash(block.sourceText, source, target));
 		try {
 			return await this.scheduler.enqueue(`page-${pageIndex}-seg-${blockId}`, PRIORITY.CURRENT_RETRANSLATE, async (signal) => {
-				const resp = await this.requestGate.run(this.laneFor(pageIndex), true, () => this.deps.translateRequest({
+				// 2.7.5 (审核 P2): 单段重译也走计量入口 —— 此前绕过 meteredTranslate,
+				// 一次重译的 token 从诊断里消失。
+				const resp = await this.requestGate.run(this.laneFor(pageIndex), true, () => this.meteredTranslate({
 					pageIndex,
 					sourceLanguage: source,
 					targetLanguage: target,
@@ -1572,7 +1614,9 @@ export class TranslationManager {
 		// 真实性能指标 (per page): how many provider round-trips this page cost
 		// and how many were salvage. High salvage counts point at fragment-heavy
 		// grouping or an id-dropping provider — the log tells which.
-		const metrics = { requestCount: 0, salvageCount: 0, rateLimited: 0, timeouts: 0, startedAt: Date.now() };
+		// requestCount = 逻辑批次 (预算闸 canSpend 的口径); attemptCount = 实际发出的
+		// HTTP 尝试 (含请求级重试, 2.7.5 审核 P2) —— 两次 429 后成功是 1 批 / 3 次。
+		const metrics = { requestCount: 0, attemptCount: 0, salvageCount: 0, rateLimited: 0, timeouts: 0, startedAt: Date.now() };
 		// 止损轮次序号 (P3): 本运行的发起顺序,见 failedSegments 注释。
 		const runId = ++this.runSeq;
 		const countedTranslate = async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
@@ -1591,6 +1635,7 @@ export class TranslationManager {
 				// 上限,而真正超载的 B 的 lane 学不到任何东西。translateRequest
 				// 也是按请求时刻解析引擎的,两者现在同刻同源,必然一致。
 				const lane = this.laneFor(pageIndex);
+				metrics.attemptCount++;
 				try {
 					const response = await this.requestGate.run(
 						lane, pageIndex === this.currentPage, () => this.meteredTranslate(request, sig), sig);
@@ -1623,7 +1668,7 @@ export class TranslationManager {
 					const wait = err.code === 'RATE_LIMITED'
 						? Math.max(retryAfter ?? 2500, 1500)
 						: Math.min(2000, 400 * (attempt + 1));
-					await this.delay(wait);
+					await this.delayUntilAbort(wait, sig);
 				}
 			}
 			throw lastError instanceof Error ? lastError : new PaperMirrorError('UNKNOWN', String(lastError));
@@ -2331,6 +2376,7 @@ export class TranslationManager {
 		state.status = 'done';
 		state.diagnostics = {
 			requests: metrics.requestCount,
+			attempts: metrics.attemptCount,
 			salvage: metrics.salvageCount,
 			rateLimited: metrics.rateLimited,
 			timeouts: metrics.timeouts,

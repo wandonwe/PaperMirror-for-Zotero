@@ -93,7 +93,7 @@ export function supportsReasoningControl(providerId: string): boolean {
 export function isReasoningEffortRejection(e: unknown): boolean {
 	return e instanceof PaperMirrorError
 		&& e.httpStatus === 400
-		&& /reasoning_effort/i.test(e.message ?? '');
+		&& (e.rejectedParam === 'reasoning_effort' || /reasoning_effort/i.test(e.message ?? ''));
 }
 
 const reasoningEffortUnsupportedModels = new Set<string>();
@@ -136,6 +136,9 @@ export function markReasoningEffortUnsupported(providerId: string, endpoint: str
 export function isTemperatureRejection(e: unknown): boolean {
 	if (!(e instanceof PaperMirrorError) || e.httpStatus !== 400) {
 		return false;
+	}
+	if (e.rejectedParam === 'temperature') {
+		return true; // 2.7.5: mapHTTPError 已归类,message 不再带片段
 	}
 	const msg = e.message ?? '';
 	// 只匹配明确的「不支持该参数 / 只允许默认值」形态 (审核 P2) —— 单纯

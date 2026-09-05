@@ -3,7 +3,7 @@
  * Pure module (unit-tested).
  */
 
-import { PaperMirrorError } from '../types/models';
+import { PaperMirrorError, type RejectedParam } from '../types/models';
 import { sanitize } from '../security/logSanitizer';
 
 export function mapHTTPError(status: number, bodySnippet?: string): PaperMirrorError {
@@ -37,12 +37,17 @@ export function mapHTTPError(status: number, bodySnippet?: string): PaperMirrorE
 	// 的拒绝语里常带 "with this model" 字样,曾被下面的 /model/ 分支包装成
 	// "The API rejected the model name" —— 完全误导。消息保留原始片段,
 	// postChat 的自愈匹配 (isTemperatureRejection 等) 依赖它。
+	// 2.7.5 (审核 P1): 响应体片段**不再拼进 message**。服务商的 400 回显里可能带
+	// 请求正文 —— 也就是论文原文/译文 —— 而 message 会进 logger 与面板,违反
+	// "原文译文不进日志" 硬约束 (sanitize 只认密钥形态,认不出任意论文文本)。
+	// 自愈所需的信息归一为 rejectedParam 枚举;message 只有固定措辞。
 	if (status === 400
-		&& /unsupported\s+value|unrecognized\s+request\s+argument|unknown\s+parameter|not\s+supported\s+with\s+this\s+model|only\s+the\s+default/i.test(snippet)) {
-		return new PaperMirrorError('UNKNOWN', `The API rejected a request parameter (HTTP 400): ${snippet}`, { httpStatus: status, retryable: false });
+		&& /unsupported\s+value|unrecognized\s+request\s+argument|unknown\s+parameter|not\s+supported\s+with\s+this\s+model|only\s+the\s+default|does\s+not\s+support|is\s+not\s+supported|not\s+enabled/i.test(snippet)) {
+		const rejectedParam = classifyRejectedParam(snippet);
+		return new PaperMirrorError('UNKNOWN', `The API rejected a request parameter (HTTP 400): ${rejectedParam}`, { httpStatus: status, retryable: false, rejectedParam });
 	}
 	if (status === 400 && /model/i.test(snippet)) {
-		return new PaperMirrorError('INVALID_MODEL', `The API rejected the model name (HTTP 400): ${snippet}`, { httpStatus: status, retryable: false });
+		return new PaperMirrorError('INVALID_MODEL', 'The API rejected the model name (HTTP 400). Check the model name.', { httpStatus: status, retryable: false, rejectedParam: 'model' });
 	}
 	if (status === 402) {
 		return new PaperMirrorError('QUOTA_EXCEEDED', 'The API reports insufficient balance (HTTP 402).', { httpStatus: status, retryable: false });
@@ -59,7 +64,24 @@ export function mapHTTPError(status: number, bodySnippet?: string): PaperMirrorE
 	if (status >= 500) {
 		return new PaperMirrorError('NETWORK', `The API server returned an error (HTTP ${status}).`, { httpStatus: status, retryable: true });
 	}
-	return new PaperMirrorError('UNKNOWN', `Unexpected API response (HTTP ${status}): ${snippet}`, { httpStatus: status, retryable: false });
+	return new PaperMirrorError('UNKNOWN', `Unexpected API response (HTTP ${status}).`, { httpStatus: status, retryable: false });
+}
+
+/** 被拒参数归类 (pure): 片段只在这里被读一次,之后丢弃。 */
+export function classifyRejectedParam(snippet: string): RejectedParam {
+	if (/reasoning_effort|reasoning\.effort/i.test(snippet)) {
+		return 'reasoning_effort';
+	}
+	if (/temperature/i.test(snippet)) {
+		return 'temperature';
+	}
+	if (/think|budget/i.test(snippet)) {
+		return 'thinking';
+	}
+	if (/model/i.test(snippet)) {
+		return 'model';
+	}
+	return 'other';
 }
 
 export function mapFetchFailure(e: unknown): PaperMirrorError {

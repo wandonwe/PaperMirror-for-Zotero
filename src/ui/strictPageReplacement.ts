@@ -1234,14 +1234,15 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			}
 			for (const [w, h] of expansions) {
 				applyBox(item, w, h);
-				// 预校验 (item4) + 未建模墨迹闸 (LO-10 2.4.6)。
-				const clean = ladderFits(item) && !violatesGeometry(item);
-				fits = clean && !expansionHitsInk(item);
-				if (clean && !fits) {
+				// 预校验 (item4) + 未建模墨迹闸 (LO-10 2.4.6)。三道检查分开记账
+				// (2.7.5, 审核 P2): 容量不够时几何/墨迹根本没跑,不能记成 geometry。
+				const verdict = expansionVerdict(item, ladderFits, violatesGeometry, expansionHitsInk);
+				fits = verdict === 'fit';
+				if (verdict === 'ink') {
 					inkBlocked++;
 					inkVetoed = true;
 				}
-				else if (!clean) {
+				else if (verdict === 'geometry') {
 					geometryVetoed = true;
 				}
 				if (fits) {
@@ -1279,12 +1280,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				if (!fits && expansions.length) {
 					for (const [w, h] of orderExpansions(expansions)) {
 						applyBox(item, w, h);
-						const clean = ladderFits(item) && !violatesGeometry(item);
-						fits = clean && !expansionHitsInk(item);
-						if (clean && !fits) {
+						const verdict = expansionVerdict(item, ladderFits, violatesGeometry, expansionHitsInk);
+						fits = verdict === 'fit';
+						if (verdict === 'ink') {
 							inkVetoed = true;
 						}
-						else if (!clean && item.lastOverflow === 'none') {
+						else if (verdict === 'geometry') {
 							geometryVetoed = true;
 						}
 						if (fits) {
@@ -1865,6 +1866,31 @@ export function shrinkStepsFor(blockType: string, opts?: { isTableCell?: boolean
 	const isolated = !!opts?.isTableCell || !!opts?.tinyLine
 		|| blockType === 'heading' || blockType === 'title' || blockType === 'caption';
 	return isolated ? SHRINK_STEPS_ISOLATED : SHRINK_STEPS;
+}
+
+/**
+ * 一次扩展的裁决 (2.7.5, 审核 P2) — pure(检查函数由调用方注入,便于单测):
+ * 先容量,再几何,再墨迹;**只有实际执行并失败的检查**才是裁决结果。此前
+ * `clean = fits && !violates` 合并后,容量不够也被记成 geometry 否决,
+ * abandonReason 里 expand-geometry 虚高,误导规则调整。
+ */
+export type ExpansionVerdict = 'fit' | 'capacity' | 'geometry' | 'ink';
+export function expansionVerdict<T>(
+	item: T,
+	fitsBox: (item: T) => boolean,
+	violatesGeometry: (item: T) => boolean,
+	hitsInk: (item: T) => boolean
+): ExpansionVerdict {
+	if (!fitsBox(item)) {
+		return 'capacity';
+	}
+	if (violatesGeometry(item)) {
+		return 'geometry';
+	}
+	if (hitsInk(item)) {
+		return 'ink';
+	}
+	return 'fit';
 }
 
 /** 底线组合的扩展顺序 (2.7.3) — pure: 新占面积小的先试。 */
