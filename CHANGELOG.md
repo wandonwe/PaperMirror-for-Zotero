@@ -7,6 +7,19 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.7.4] — 2026-09-05
+
+### Fixed
+
+- **对照翻译窗格里的状态胶囊(右下角进度圆环)整个消失**,覆盖模式正常。胶囊
+  样式表默认 `position: fixed`:在覆盖模式的 PDF 文档里那就是视口右下角;但
+  窗格挂在 Zotero 主窗口文档上,fixed 的包含块由宿主窗口布局决定 —— 标签页
+  容器一旦带 contain/transform,胶囊就相对它定位,再被窗格自身的 `overflow:
+  hidden` 裁掉。胶囊代码本身自 2.0.8 起零改动,是宿主环境的定位语义变了。
+  现在 `.pm-bilingual-pane > .pm-status-capsule` 按窗格(position: relative)
+  绝对定位,右下 22px,不再依赖宿主窗口的包含块。新增 paneCapsuleCss.test
+  (突变一红)。
+
 ## [2.7.3] — 2026-09-05
 
 **恢复批次**(六维审核路线图·批次 4,D-1)。依据 2.7.2 装机后导出的诊断

@@ -120,6 +120,18 @@
 	--pm-error: #e08e8e;
 }
 
+/* 状态胶囊在对照翻译窗格里按窗格定位 (2.7.4): 胶囊样式表默认 position: fixed
+   —— 在覆盖模式的 PDF 文档里那就是视口右下角;但窗格挂在 Zotero 主窗口文档,
+   fixed 的包含块由宿主窗口的布局决定 (标签页容器一旦带 contain/transform,
+   fixed 就相对它定位,再被窗格自己的 overflow: hidden 裁掉) —— 用户实测胶囊
+   在窗格里整个消失、覆盖模式正常。窗格本身 position: relative,胶囊改按窗格
+   绝对定位,右下 22px,不再依赖宿主窗口的包含块。 */
+.pm-bilingual-pane > .pm-status-capsule {
+	position: absolute;
+	right: 22px;
+	bottom: 22px;
+}
+
 .pm-bilingual-pane button {
 	font: inherit;
 	border: 0;
