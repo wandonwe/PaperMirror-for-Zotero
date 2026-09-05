@@ -26,3 +26,8 @@ pm_sync*.tgz
 
 # Versioned release notes live in CHANGELOG.md + GitHub Releases
 发布说明-*.md
+
+# 真实论文语料与诊断导出 (含论文原文, 只留本地)
+docs/corpus/
+# 生成的基线报告 (scripts/baseline-report.mjs 产物)
+baseline-report.md
