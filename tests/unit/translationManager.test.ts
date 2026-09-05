@@ -2020,3 +2020,122 @@ test('单元格批不再收到正文段尾作 previousContext;正文批之间照
 	assert.ok(proseRequests.slice(1).some(r => r.previousContext.length > 0), '后续正文批仍带上一批段尾');
 	manager.dispose();
 });
+
+// ---------------------------------------------------------------------------
+// 2.7.5 外部审核 (GPT) P1/P2: 可取消退避、批次/尝试计数、单段重译计量
+// ---------------------------------------------------------------------------
+
+test('限流退避可取消: Retry-After 120s 期间 resetAllAndWait 立即完成, 且无第二次请求 (审核 P1)', async () => {
+	const { PaperMirrorError } = await import('../../src/types/models');
+	let calls = 0;
+	let backoffStarted: (() => void) | null = null;
+	const backoffSignal = new Promise<void>(r => { backoffStarted = r; });
+	let pendingDelay: Promise<void> | null = null;
+	const { deps } = makeDeps({
+		translateRequest: async (req) => {
+			calls++;
+			if (calls === 1) {
+				throw new PaperMirrorError('RATE_LIMITED', '429', { retryable: true }) as PaperMirrorError & { retryAfterMs?: number };
+			}
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, {
+		prefetch: false,
+		// 假时钟: 退避永远不自行结束 —— 只有取消能让它落地。
+		delayFn: () => { pendingDelay = new Promise<void>(() => {}); backoffStarted?.(); return pendingDelay; }
+	});
+	const run = manager.ensurePage(0, 10).catch(() => {});
+	try {
+		await backoffSignal; // 已进入退避
+		const t0 = Date.now();
+		let settled = false;
+		const reset = manager.resetAllAndWait().then(() => { settled = true; });
+		await Promise.race([reset, new Promise(r => setTimeout(r, 500))]);
+		assert.equal(settled, true, `重置必须在退避内完成 (耗时 ${Date.now() - t0}ms), 而不是等 Retry-After`);
+		// 退避不可取消的旧实现会让 run 永远悬着 —— 这里同样限时, 让突变体红而不是挂住。
+		await Promise.race([run, new Promise(r => setTimeout(r, 200))]);
+		assert.equal(calls, 1, '取消后不得再发第二次请求');
+	}
+	finally {
+		manager.dispose(); // 断言失败也要释放调度器计时器, 否则进程挂住
+	}
+});
+
+test('未取消的限流退避仍完整等待 delayFn (反例: 正常等待不被缩短)', async () => {
+	const { PaperMirrorError } = await import('../../src/types/models');
+	let calls = 0;
+	let delayed = 0;
+	const { deps } = makeDeps({
+		translateRequest: async (req) => {
+			calls++;
+			if (calls === 1) {
+				throw new PaperMirrorError('RATE_LIMITED', '429', { retryable: true });
+			}
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, {
+		prefetch: false,
+		delayFn: async (ms) => { delayed += ms; await new Promise(r => setTimeout(r, 5)); }
+	});
+	await manager.ensurePage(0, 10);
+	assert.equal(manager.getPageState(0)!.status, 'done');
+	assert.ok(delayed >= 1500, `429 退避至少 1.5s 的计时必须交给 delayFn (记到 ${delayed}ms)`);
+	assert.equal(calls, 2);
+	manager.dispose();
+});
+
+test('诊断分开记 requests(批次) 与 attempts(尝试): 两次失败一次成功 = 1 / 3 (审核 P2)', async () => {
+	const { PaperMirrorError } = await import('../../src/types/models');
+	let calls = 0;
+	const { deps } = makeDeps({
+		translateRequest: async (req) => {
+			calls++;
+			if (calls <= 2) {
+				throw new PaperMirrorError('NETWORK', 'flaky', { retryable: true });
+			}
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' })), usage: { inputTokens: 100, outputTokens: 40, cachedInputTokens: 0 } };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const d = manager.getPageState(0)!.diagnostics!;
+	assert.equal(calls, 3);
+	assert.equal(d.requests, 1, '逻辑批次');
+	assert.equal(d.attempts, 3, '实际尝试');
+	// 缓存命中: 第二个 manager 读到页缓存,零新增请求/尝试。
+	const manager2 = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager2.ensurePage(0, 10);
+	assert.equal(calls, 3, '缓存命中不发请求');
+	manager.dispose();
+	manager2.dispose();
+});
+
+test('单段重译经过计量入口: 重译后 token 用量增长 (审核 P2)', async () => {
+	let mode: 'echo' | 'good' = 'echo';
+	const blocks: SourceBlock[] = [
+		{ id: 'fine', pageIndex: 0, order: 0, type: 'paragraph', sourceText: 'A perfectly ordinary paragraph that translates fine on the first attempt.' },
+		{ id: 'seg', pageIndex: 0, order: 1, type: 'paragraph', sourceText: 'A paragraph the provider first echoes back and later translates properly.' }
+	];
+	const { deps } = makeDeps({
+		extractPage: async () => blocks,
+		readCache: async () => null,
+		translateRequest: async (req) => ({
+			translations: req.blocks.map(b => ({
+				id: b.id,
+				translatedText: b.id === 'seg' && mode === 'echo' ? b.text : '服务商给出了完整的中文译文段落。'
+			})),
+			usage: { inputTokens: 50, outputTokens: 20, cachedInputTokens: 0 }
+		})
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const before = (manager.exportDiagnostics() as { usage: { inputTokens: number; usageReports: number } }).usage;
+	mode = 'good';
+	assert.equal(await manager.retranslateBlock(0, 'seg'), true);
+	const after = (manager.exportDiagnostics() as { usage: { inputTokens: number; usageReports: number } }).usage;
+	assert.equal(after.usageReports, before.usageReports + 1, '重译计入一次用量报告');
+	assert.equal(after.inputTokens, before.inputTokens + 50);
+	manager.dispose();
+});

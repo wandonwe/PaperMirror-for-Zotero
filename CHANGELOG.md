@@ -7,6 +7,53 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.7.5] — 2026-09-05
+
+**外部审核修复**(GPT 对 2.7.4 的独立审核,6 项;5 项修复,1 项判定为提示词措辞
+错误而非产品缺陷)。提取/结构/排版规则零改动,34 个布局快照与请求计划基线
+逐字节不变。
+
+### Fixed
+
+- **P1 服务商回显不再进 error.message**(`errors.ts`)。HTTP 400 的响应体片段此前
+  脱敏后拼进 message,而 message 进 logger 与面板 —— `sanitize` 只认密钥形态,
+  服务商回显请求正文时论文原文就进了日志。现在被拒参数归一为
+  `PaperMirrorError.rejectedParam` 枚举(temperature / reasoning_effort /
+  thinking / model / other),message 只有固定措辞;自愈判定
+  (`isTemperatureRejection` 等)改看枚举。新增哨兵测试:400/422/418 回显原文时
+  message 与 `recentProblems()` 都不含哨兵,参数仍被正确归类。
+- **P1 限流退避可取消**(`translationManager.delayUntilAbort`)。请求级重试的
+  `await this.delay(wait)` 不看取消信号,Retry-After 120 s 会把 `resetAllAndWait`
+  (刷新 / 换服务商)拖住整段 —— "点了刷新还卡着"的一条真实路径。现在等待与
+  signal 绑定:取消即刻 CANCELLED、释放槽位;未取消时仍完整交给 delayFn 计时。
+- **P2 诊断分开记批次与尝试**。`PageDiagnostics.requests` 保持"逻辑批次"
+  (预算闸口径),新增 `attempts` = 实际 HTTP 尝试(含重试):两次失败一次成功
+  = 1 / 3。**单段重译改走 `meteredTranslate`**,此前绕过计量,重译的 token 从
+  诊断里消失。
+- **P2 扩边裁决三道检查分开记账**(`expansionVerdict`,pure)。此前
+  `clean = ladderFits && !violatesGeometry` 合并后,容量不够也被记成 geometry
+  否决,`expand-geometry` 虚高。现在容量 → 几何 → 墨迹依次执行,只有实际执行
+  并失败的检查才是裁决;两处扩边循环共用。
+- **P2 请求计划基线成硬门禁**(`pipelineBaseline.test`)。基线缺失自动生成即
+  通过、新语料页只打印提示、删语料页无人察觉 —— 三条绕过路径全部关闭:缺文件、
+  缺条目、多条目一律失败;只有 `UPDATE_BASELINE=1 npm test` 才生成/覆盖,与
+  `UPDATE_SNAPSHOTS` 同一姿态。
+
+### Not changed
+
+- 审核第 6 项"参考文献应一律 preserve、设置项应失效":这是给外部模型的项目简介
+  里把"默认 preserve"写成了"一律 preserve"。"翻译参考文献部分"是有意的用户选项
+  (默认关),不是漏洞;已更正简介文档,产品行为不变。
+- 审核提醒的"暂存区含 2.4.2 旧内容":发版一直用临时索引提交(`GIT_INDEX_FILE`),
+  `.git/index` 自 2.4.2 起没更新过,HEAD 与 Beta 一致;本次已 `git read-tree Beta`
+  重建索引,`git status` 不再显示假删除。
+
+### Tests
+
+- 新增 8 例(errors 2、translationManager 4、fitFailure 2),基线门禁改写;
+  7 个突变各一红(片段回拼、普通 delay、attempts 移出循环、重译绕过计量、
+  裁决合并、基线缺失、基线多余条目)。931 全绿。
+
 ## [2.7.4] — 2026-09-05
 
 ### Fixed

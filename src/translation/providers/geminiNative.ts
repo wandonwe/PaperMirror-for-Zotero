@@ -96,7 +96,7 @@ function thinkingHealKey(settings: ProviderSettings): string {
 export function isThinkingRejection(e: unknown): boolean {
 	return e instanceof PaperMirrorError
 		&& e.httpStatus === 400
-		&& /think|budget/i.test(e.message);
+		&& (e.rejectedParam === 'thinking' || /think|budget/i.test(e.message));
 }
 
 /** 测试可重置的自愈记忆。 */

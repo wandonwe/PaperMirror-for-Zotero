@@ -208,17 +208,26 @@ export type PaperMirrorErrorCode
 	| 'HTTP_INSECURE'
 	| 'UNKNOWN';
 
+/**
+ * HTTP 400 被拒参数的枚举 (2.7.5, 审核 P1): 自愈 (剥 temperature / reasoning_effort /
+ * thinking 重试) 只看这一位,响应体片段不再进 message —— 片段可能回显请求里的
+ * 论文原文,而 message 会进日志与面板。
+ */
+export type RejectedParam = 'temperature' | 'reasoning_effort' | 'thinking' | 'model' | 'other';
+
 export class PaperMirrorError extends Error {
 	code: PaperMirrorErrorCode;
 	httpStatus?: number;
 	retryable: boolean;
+	rejectedParam?: RejectedParam;
 
-	constructor(code: PaperMirrorErrorCode, message: string, options?: { httpStatus?: number; retryable?: boolean; cause?: unknown }) {
+	constructor(code: PaperMirrorErrorCode, message: string, options?: { httpStatus?: number; retryable?: boolean; cause?: unknown; rejectedParam?: RejectedParam }) {
 		super(message);
 		this.name = 'PaperMirrorError';
 		this.code = code;
 		this.httpStatus = options?.httpStatus;
 		this.retryable = options?.retryable ?? (code === 'NETWORK' || code === 'TIMEOUT' || code === 'RATE_LIMITED');
+		this.rejectedParam = options?.rejectedParam;
 	}
 }
 

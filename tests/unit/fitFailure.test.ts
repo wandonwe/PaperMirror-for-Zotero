@@ -65,3 +65,20 @@ test('orderExpansions: 底线组合按新占面积从小到大', () => {
 	assert.deepEqual(ordered, [[130, 40], [100, 60], [130, 60]]);
 	assert.deepEqual(orderExpansions([[130, 60], [100, 60], [130, 40]]), [[130, 40], [100, 60], [130, 60]]);
 });
+
+// ---- 2.7.5 外部审核 P2: 扩展裁决三道检查分开记账 ----------------------------
+
+import { expansionVerdict } from '../../src/ui/strictPageReplacement';
+
+test('expansionVerdict: 容量不够时几何/墨迹检查不执行, 也不记 geometry', () => {
+	const ran = { geometry: 0, ink: 0 };
+	const v = expansionVerdict({}, () => false, () => { ran.geometry++; return true; }, () => { ran.ink++; return true; });
+	assert.equal(v, 'capacity');
+	assert.deepEqual(ran, { geometry: 0, ink: 0 }, '容量不够时后两道检查不该运行');
+});
+
+test('expansionVerdict: 只有真正与邻块相交才是 geometry, 只有压到墨迹才是 ink', () => {
+	assert.equal(expansionVerdict({}, () => true, () => true, () => false), 'geometry');
+	assert.equal(expansionVerdict({}, () => true, () => false, () => true), 'ink');
+	assert.equal(expansionVerdict({}, () => true, () => false, () => false), 'fit');
+});
