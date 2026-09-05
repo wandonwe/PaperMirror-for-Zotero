@@ -7,6 +7,16 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.7.6] — 2026-09-05
+
+### Fixed
+
+- **CI 红**:2.7.5 的新测试里一处 `as PaperMirrorError & {…}` 把运行时导入的值当
+  类型用,`npm test` 前置的 `typecheck:tests` 报 TS2749。本地只跑了
+  `node scripts/test.mjs`,没跑 `npm test`,漏掉了这一步 —— 发版仪式改为必须跑
+  `npm test`。GitHub Release 只在 manifest.json 变化时触发,v2.7.5 未发布,故直接
+  以 2.7.6 发布,内容与 2.7.5 相同。
+
 ## [2.7.5] — 2026-09-05
 
 **外部审核修复**(GPT 对 2.7.4 的独立审核,6 项;5 项修复,1 项判定为提示词措辞
