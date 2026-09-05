@@ -2035,7 +2035,7 @@ test('限流退避可取消: Retry-After 120s 期间 resetAllAndWait 立即完�
 		translateRequest: async (req) => {
 			calls++;
 			if (calls === 1) {
-				throw new PaperMirrorError('RATE_LIMITED', '429', { retryable: true }) as PaperMirrorError & { retryAfterMs?: number };
+				throw new PaperMirrorError('RATE_LIMITED', '429', { retryable: true });
 			}
 			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' })) };
 		}
