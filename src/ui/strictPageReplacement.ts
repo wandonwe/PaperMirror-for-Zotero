@@ -30,7 +30,7 @@ import { isMetadataBlock } from '../reader/metaFilter';
 import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
 import { detectTableRegions } from '../reader/tableGuard';
-import { buildTableModel, buildTextTableModel, type CellMember } from '../reader/tableStructure';
+import { buildTableModel, buildTextTableModel, cellPreserveEvidence, type CellMember } from '../reader/tableStructure';
 import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, planOverlapClips, type AuditBox, type AuditObstacles } from './layoutSafety';
 import { parseStyledSegments } from '../reader/styleRuns';
 import {
@@ -272,6 +272,8 @@ export interface StrictPageInput {
 	render: adapter.PageRender;
 	/** Real image rectangles (PDF user space) — hard no-mask/no-text zones. */
 	imageRectsPdf?: [number, number, number, number][];
+	/** 2.7.8: 用户不译词表 —— 表格短格 glossary 不译证据 (与抽取期同源)。 */
+	noTranslate?: string[];
 }
 
 export interface UnfitBlock {
@@ -576,7 +578,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const guard = detectTableRegions(
 		geometric.map(b => ({
 			id: b.id, text: b.sourceText, type: b.type,
-			box: pxOf.get(b.id)!, fontSize: b.fontSize
+			box: pxOf.get(b.id)!, fontSize: b.fontSize, column: b.column
 		})),
 		Math.max(6, bodyPt * pxPerPoint)
 	);
@@ -598,6 +600,9 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		...guard.regions.map(region => ({ region, text: false })),
 		...guard.textRegions.map(region => ({ region, text: true }))
 	];
+	// 2.7.8: 与 structureTableCells 同一份证据 (整页文本 + 用户词表),两端格
+	// kind 必须一致,否则抽取期 preserve 的格在排版期会被当作缺译文的失败。
+	const cellEvidence = cellPreserveEvidence(input.blocks.map(b => b.sourceText), input.noTranslate ?? []);
 	allGuardRegions.forEach(({ region, text: isTextTable }, tableIndex) => {
 		const members: CellMember[] = geometric
 			.filter(b => containedFraction(pxOf.get(b.id)!, region) >= 0.5 && b.lineRectsPdf?.length)
@@ -606,8 +611,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			return;
 		}
 		const model = isTextTable
-			? buildTextTableModel(input.pageIndex, tableIndex, region, members, Math.max(6, bodyPt * pxPerPoint))
-			: buildTableModel(input.pageIndex, tableIndex, region, members);
+			? buildTextTableModel(input.pageIndex, tableIndex, region, members, Math.max(6, bodyPt * pxPerPoint), cellEvidence)
+			: buildTableModel(input.pageIndex, tableIndex, region, members, cellEvidence);
 		for (const cell of model.cells) {
 			for (const mid of cell.memberIds) {
 				consumedMemberIds.add(mid); // handled here, not as a normal block

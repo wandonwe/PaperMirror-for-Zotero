@@ -26,6 +26,55 @@ export interface GuardItem {
 	type: string;
 	box: { left: number; top: number; width: number; height: number };
 	fontSize?: number;
+	/**
+	 * 页面栏号 (2.7.8, 外部审核 第三批·4): 可选。有它才能算出"已确认的正文栏
+	 * 间隔",表格横向吸附不跨过这些间隔。分带栏号 (rank*100+local) 也可以,
+	 * 间隔按同一带内相邻栏计算。
+	 */
+	column?: number;
+}
+
+/**
+ * 已确认的正文栏间隔 (2.7.8) — pure: 同一带内相邻两栏的块之间若有正的横向
+ * 空隙,其中点就是一条栏间隔。只看散文类块 (paragraph/list/heading),每栏至少
+ * 2 个块才算"已确认",避免一个孤块就立起一道墙。
+ */
+export function columnExtents(items: GuardItem[]): Map<number, { left: number; right: number; n: number }> {
+	const byCol = new Map<number, { left: number; right: number; n: number }>();
+	for (const it of items) {
+		if (typeof it.column !== 'number' || it.column < 0) {
+			continue;
+		}
+		if (it.type !== 'paragraph' && it.type !== 'list' && it.type !== 'heading') {
+			continue;
+		}
+		const cur = byCol.get(it.column) ?? { left: Infinity, right: -Infinity, n: 0 };
+		cur.left = Math.min(cur.left, it.box.left);
+		cur.right = Math.max(cur.right, it.box.left + it.box.width);
+		cur.n++;
+		byCol.set(it.column, cur);
+	}
+	return byCol;
+}
+
+export function columnGutters(items: GuardItem[]): number[] {
+	const byCol = columnExtents(items);
+	const out: number[] = [];
+	const cols = [...byCol.keys()].sort((a, b) => a - b);
+	for (let i = 0; i + 1 < cols.length; i++) {
+		const a = cols[i]!;
+		const b = cols[i + 1]!;
+		if (Math.floor(a / 100) !== Math.floor(b / 100)) {
+			continue; // 不同带
+		}
+		const A = byCol.get(a)!;
+		const B = byCol.get(b)!;
+		if (A.n < 2 || B.n < 2 || B.left <= A.right) {
+			continue;
+		}
+		out.push((A.right + B.left) / 2);
+	}
+	return out;
 }
 
 export interface TableRegion {
@@ -309,8 +358,47 @@ export function detectTableRegions(
 	obstacles: GuardItem['box'][] = []
 ): { excluded: Set<string>; regions: TableRegion[]; textRegions: TableRegion[] } {
 	const em = Math.max(6, emPx);
-	const cells = items.filter(i => looksTabularSeed(i.text));
+	// 整栏行不是种子 (2.7.8, 外部审核 第三批·4, wu2026-p6 实证): 相邻正文栏里
+	// "5/28; χ² = 16.258, P <0.001]. Similarly," 这类统计密集的【整行】过得了
+	// looksTabularSeed (小写词 <3),与左栏表格同高、栏沟只有 16pt,于是并进
+	// 表格簇,整段正文被切成单元格。表格格子不会填满一整个正文栏 (已确认栏的
+	// 横向范围来自 ≥2 个散文块);块宽 ≥ 该栏范围 85% 的就是正文行,不当种子。
+	// 没有栏号信息的调用方 (行级预扫) 不受影响。
+	const extents = columnExtents(items);
+	const fillsColumn = (i: GuardItem): boolean => {
+		if (typeof i.column !== 'number') {
+			return false;
+		}
+		const ext = extents.get(i.column);
+		if (!ext || ext.n < 2) {
+			return false;
+		}
+		const w = ext.right - ext.left;
+		return w > 0 && i.box.width >= w * 0.85;
+	};
+	const cells = items.filter(i => looksTabularSeed(i.text) && !fillsColumn(i));
 	const captions = items.filter(i => i.type === 'table');
+	// 表格横向范围 (2.7.8, 外部审核 第三批·4, wu2026-p6 实证): 规则 (b) 的
+	// "同高 + 贴边 ≤2em" 收进了相邻正文栏的行 —— 左栏 Table 4 区域右缘 290,
+	// 右栏正文从 306 起,16pt 的页面栏沟正好落在 2em 内,15 个正文行被切成
+	// 单元格。栏沟是页面级的硬证据: 候选块与区域之间隔着一条已确认的栏间隔就
+	// 不按 (b) 收;通栏表 (区域本身已跨过该栏沟) 例外。
+	const gutters = columnGutters(items);
+	const crossesGutter = (region: TableRegion, box: GuardItem['box']): boolean => {
+		const rl = region.left;
+		const rr = region.left + region.width;
+		const bl = box.left;
+		const br = box.left + box.width;
+		return gutters.some(g => {
+			const regionSpans = rl < g - em && rr > g + em;
+			if (regionSpans) {
+				return false; // 通栏表: 区域自己已经跨过这条栏沟
+			}
+			const boxCentre = (bl + br) / 2;
+			const regionCentre = (rl + rr) / 2;
+			return (boxCentre - g) * (regionCentre - g) < 0; // 中心分居栏沟两侧
+		});
+	};
 
 	// Greedy clustering of cell-like boxes, in reading order.
 	let clusters: { region: TableRegion; members: GuardItem[] }[] = [];
@@ -469,6 +557,9 @@ export function detectTableRegions(
 						const inLeftGutter = (item.box.left + item.box.width) <= region.left + em && gapLeft >= -em;
 						const alignsNumericRow = numericRowCentres.some(y => Math.abs(y - centre) <= em * 0.6);
 						rowAligned = nearSide || (inLeftGutter && alignsNumericRow);
+						if (rowAligned && crossesGutter(region, item.box)) {
+							rowAligned = false; // 2.7.8: 不跨已确认的正文栏间隔
+						}
 					}
 				}
 				// (d) 表头向上扫掠 (2.7.2, 审核 C-1): 数值表的列头是多行堆叠的短文本

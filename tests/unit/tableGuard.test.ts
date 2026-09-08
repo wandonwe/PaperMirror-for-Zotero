@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectTableRegions, looksTabular, looksTabularSeed, type GuardItem } from '../../src/reader/tableGuard';
+import { detectTableRegions, looksTabular, looksTabularSeed, columnGutters, type GuardItem } from '../../src/reader/tableGuard';
 
 function item(id: string, text: string, left: number, top: number, width = 60, height = 12, type = 'paragraph'): GuardItem {
 	return { id, text, type, box: { left, top, width, height }, fontSize: 9 };
@@ -311,4 +311,71 @@ test('表头扫掠行伴: 同基线上有句子续行的孤词是标题续行,�
 	assert.ok(excluded.has('hdr'));
 	assert.ok(!excluded.has('size'), '标题续行的孤词不进表');
 	assert.ok(!excluded.has('cont'));
+});
+
+// ---- 2.7.8 外部审核 第三批·4: 表格横向范围, 不吞相邻栏正文 ------------------
+
+function colItem(id: string, text: string, left: number, top: number, width: number, column: number, type = 'paragraph'): GuardItem {
+	return { ...item(id, text, left, top, width, 10, type), column };
+}
+
+test('columnGutters: 同带相邻两栏各 ≥2 个散文块且有正空隙才算一条栏间隔', () => {
+	const items = [
+		colItem('a1', 'Body text of the left column line one.', 50, 100, 230, 0),
+		colItem('a2', 'Body text of the left column line two.', 50, 112, 230, 0),
+		colItem('b1', 'Body text of the right column line one.', 306, 100, 230, 1),
+		colItem('b2', 'Body text of the right column line two.', 306, 112, 230, 1)
+	];
+	const g = columnGutters(items);
+	assert.equal(g.length, 1);
+	assert.ok(Math.abs(g[0]! - 293) < 1, `栏间隔在两栏之间 (${g[0]})`);
+	assert.deepEqual(columnGutters(items.slice(0, 3)), [], '右栏只有 1 个块不算已确认');
+	assert.deepEqual(columnGutters(items.map(i => ({ ...i, column: undefined }))), [], '无栏号无间隔');
+});
+
+test('相邻栏的统计密集整行不当种子, 也不按 rowAligned 收入 (wu2026-p6)', () => {
+	const items: GuardItem[] = [];
+	// 左栏: 3 列 × 5 行数值表 (栏范围 50–240), 加两行正文确认栏范围。
+	for (let r = 0; r < 5; r++) {
+		for (let c = 0; c < 3; c++) {
+			items.push(colItem(`c${r}-${c}`, `${r}.${c} (${r}/28)`, 60 + c * 70, 400 + r * 12, 40, 0));
+		}
+	}
+	items.push(colItem('l1', 'Prose line of the left column below the table here.', 50, 600, 190, 0));
+	items.push(colItem('l2', 'Another prose line of the left column below the table.', 50, 612, 190, 0));
+	// 右栏正文: 与表行同高的整行, 统计密集 (过得了 looksTabularSeed), 栏范围 256–486。
+	const stats = ['5/28; χ² = 16.258, P <0.001]. Similarly,', '20/28; χ² = 4.383, P =0.031]. For large', '26/28] than EID-CT [71.4% (95% CI: 52.9%', '(95% CI: 82.3%, 99.4%); 27/28] and EID-C', 'CI: 77.4%-98.0%); 26/28; χ² = 0.352, P ='];
+	// 右栏从 256 起: 与区域右缘 (240) 只隔 16pt —— 落在规则 (b) 的 2em 贴边范围内。
+	stats.forEach((t, i) => items.push(colItem(`body${i}`, t, 256, 400 + i * 12, 230, 1)));
+	items.push(colItem('body-short', 'Similarly, PCD', 256, 460, 60, 1)); // 短行, 同高贴边
+	items.push(colItem('r1', 'Plain prose of the right column further down the page.', 256, 600, 230, 1));
+	const { excluded, regions } = detectTableRegions(items, 10);
+	assert.equal(regions.length, 1);
+	for (let r = 0; r < 5; r++) {
+		assert.ok(excluded.has(`c${r}-0`), '表格自己的格照收');
+	}
+	stats.forEach((_, i) => assert.ok(!excluded.has(`body${i}`), `正文整行 body${i} 不进表`));
+	assert.ok(!excluded.has('body-short'), '隔着栏沟的短行也不按同高贴边收');
+	assert.ok(regions[0]!.left + regions[0]!.width < 300, '区域不跨栏沟');
+});
+
+test('通栏表: 区域自己跨过栏沟时两侧的标签照收 (反例, nejm 形态)', () => {
+	const items: GuardItem[] = [];
+	// 通栏表: 数值列分布在 120 / 320 / 420, 5 行; 左沟标签在 40。
+	for (let r = 0; r < 5; r++) {
+		items.push(colItem(`lab${r}`, `Outcome label ${r}`, 40, 100 + r * 14, 70, 0));
+		for (const [c, x] of [[0, 120], [1, 320], [2, 420]] as const) {
+			items.push(colItem(`c${r}-${c}`, `${r}${c} (${r}%)`, x, 100 + r * 14, 40, c === 0 ? 0 : 1));
+		}
+	}
+	items.push(colItem('side', 'P Value', 470, 100, 40, 1)); // 右侧同高贴边的表头词
+	// 下方双栏正文确认栏沟 (≈ 293)。
+	for (let i = 0; i < 2; i++) {
+		items.push(colItem(`l${i}`, 'Left column prose line number something here.', 50, 300 + i * 12, 230, 0));
+		items.push(colItem(`r${i}`, 'Right column prose line number something here.', 306, 300 + i * 12, 230, 1));
+	}
+	const { excluded, regions } = detectTableRegions(items, 10);
+	assert.equal(regions.length, 1, '通栏表仍是一张表');
+	assert.ok(excluded.has('lab0') && excluded.has('c0-2'), '两侧的格与标签都在');
+	assert.ok(excluded.has('side'), '区域已跨栏沟, 右侧贴边表头照收');
 });

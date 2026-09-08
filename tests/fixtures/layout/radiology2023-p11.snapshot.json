@@ -204,7 +204,7 @@
 		"tableRow": 6,
 		"tableCol": 3,
 		"mode": "translate",
-		"text": "Extensive preclinical"
+		"text": "Extensive preclinical use, synthetic con"
 	},
 	{
 		"type": "paragraph",
@@ -222,7 +222,7 @@
 		"tableRow": 7,
 		"tableCol": 3,
 		"mode": "translate",
-		"text": "use, synthetic control over shape and si"
+		"text": "Low cost, good safety profile"
 	},
 	{
 		"type": "paragraph",
@@ -231,31 +231,13 @@
 		"tableRow": 7,
 		"tableCol": 4,
 		"mode": "translate",
-		"text": "to be solved, as gold nanoparticles are "
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 29,
-		"tableRow": 8,
-		"tableCol": 3,
-		"mode": "translate",
-		"text": "Low cost, good safety profile"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 30,
-		"tableRow": 8,
-		"tableCol": 4,
-		"mode": "translate",
 		"text": "High K-edgelower K-edge image CNR; more"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 31,
-		"tableRow": 8,
+		"readingIndex": 29,
+		"tableRow": 7,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "90, 101"
@@ -263,7 +245,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 32,
+		"readingIndex": 30,
 		"tableRow": 0,
 		"tableCol": 1,
 		"mode": "translate",
@@ -272,7 +254,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 33,
+		"readingIndex": 31,
 		"tableRow": 0,
 		"tableCol": 2,
 		"mode": "translate",
@@ -281,7 +263,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 34,
+		"readingIndex": 32,
 		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "translate",
@@ -290,7 +272,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 35,
+		"readingIndex": 33,
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "translate",
@@ -299,7 +281,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 36,
+		"readingIndex": 34,
 		"tableRow": 1,
 		"tableCol": 2,
 		"mode": "translate",
@@ -308,7 +290,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 37,
+		"readingIndex": 35,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
@@ -317,7 +299,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 38,
+		"readingIndex": 36,
 		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "translate",
@@ -326,7 +308,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 39,
+		"readingIndex": 37,
 		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -335,7 +317,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 40,
+		"readingIndex": 38,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
@@ -344,7 +326,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 41,
+		"readingIndex": 39,
 		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "translate",
@@ -353,7 +335,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 42,
+		"readingIndex": 40,
 		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "translate",
@@ -362,7 +344,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 43,
+		"readingIndex": 41,
 		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "translate",
@@ -371,7 +353,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 44,
+		"readingIndex": 42,
 		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -380,7 +362,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 45,
+		"readingIndex": 43,
 		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "translate",
@@ -389,7 +371,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 46,
+		"readingIndex": 44,
 		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "translate",
@@ -398,7 +380,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 47,
+		"readingIndex": 45,
 		"tableRow": 5,
 		"tableCol": 1,
 		"mode": "translate",
@@ -407,7 +389,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 48,
+		"readingIndex": 46,
 		"tableRow": 5,
 		"tableCol": 2,
 		"mode": "translate",
@@ -416,16 +398,16 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 49,
+		"readingIndex": 47,
 		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Gold"
+		"text": "Gold nanoparticles"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 50,
+		"readingIndex": 48,
 		"tableRow": 6,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -434,7 +416,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 51,
+		"readingIndex": 49,
 		"tableRow": 6,
 		"tableCol": 2,
 		"mode": "translate",
@@ -443,17 +425,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 52,
+		"readingIndex": 50,
 		"tableRow": 7,
-		"tableCol": 0,
-		"mode": "translate",
-		"text": "nanoparticles"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 53,
-		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Bismuth nanoparticles"
@@ -461,8 +434,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 54,
-		"tableRow": 8,
+		"readingIndex": 51,
+		"tableRow": 7,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "No"
@@ -470,8 +443,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 55,
-		"tableRow": 8,
+		"readingIndex": 52,
+		"tableRow": 7,
 		"tableCol": 2,
 		"mode": "translate",
 		"text": "Yes"
@@ -479,7 +452,7 @@
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 56,
+		"readingIndex": 53,
 		"text": "Note.CNR = contrast-to-noise ratio, FDA"
 	}
 ]

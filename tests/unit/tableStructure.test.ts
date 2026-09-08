@@ -171,7 +171,7 @@ test('tiny symbol-only cells (R², n=5, ±SD) are data — never sent to transla
 
 // ---- 2.6.0 buildTextTableModel ---------------------------------------------
 
-import { buildTextTableModel } from '../../src/reader/tableStructure';
+import { buildTextTableModel, cellPreserveEvidence, preserveReasonFor } from '../../src/reader/tableStructure';
 
 function cm(id: string, text: string, left: number, top: number, width: number, height = 11): CellMember {
 	return { id, text, box: { left, top, width, height }, fontSize: 8 };
@@ -302,4 +302,185 @@ test('buildTextTableModel: 表头与首行只隔半个 em 时,跨列顶对齐仍
 	assert.equal(first?.text, 'Iodinated small molecules');
 	const header = model.cells.find(c => c.row === 0 && c.col === 1);
 	assert.equal(header?.text, 'Advantages');
+});
+
+// ---- 2.7.8 (外部审核 第三批·6): 短格的明确不译证据 -------------------------
+
+test('cellPreserveEvidence: 只从括号定义与脚注定义里收集缩写', () => {
+	const ev = cellPreserveEvidence([
+		'Photon-counting detector (PCD) CT was compared with energy-integrating detector (EID) CT.',
+		'AS = aortic stenosis; CMP = cardiomyopathy. HR, hazard ratio.',
+		'Values are n (%) or mean ± SD. (SEE TEXT)' // "(SEE TEXT)" 不是缩写; SD 前无词无定义
+	]);
+	assert.deepEqual([...ev.definedAbbreviations].sort(), ['AS', 'CMP', 'EID', 'HR', 'PCD']);
+	assert.equal(cellPreserveEvidence([], ['  Kim et al ', '']).noTranslate.size, 1, '词表去空白去空行');
+});
+
+test('preserveReasonFor: 三类硬证据各自命中,其余短格照常翻译', () => {
+	const ev = cellPreserveEvidence(['... photon-counting detector (PCD) computed tomography (CT) and AS = aortic stenosis'], ['Framingham']);
+	assert.equal(preserveReasonFor('Framingham', ev), 'glossary');
+	assert.equal(preserveReasonFor('PCD', ev), 'defined-abbreviation');
+	assert.equal(preserveReasonFor('PCD-CT', ev), 'defined-abbreviation', '连字缩写: 各部分都定义过即命中');
+	assert.equal(preserveReasonFor('PCD-MRI', ev), undefined, '有一部分未定义则不命中');
+	assert.equal(preserveReasonFor('AS*', ev), 'defined-abbreviation', '尾部脚注符不影响匹配');
+	assert.equal(preserveReasonFor('Kim et al,19 2022', ev), 'citation-label');
+	assert.equal(preserveReasonFor('Nacif et al. (2012)', ev), 'citation-label');
+	assert.equal(preserveReasonFor('van der Berg et al', ev), 'citation-label');
+	// 反例: 未定义的全大写、普通表头、含 et al 的整句 —— 都要翻译。
+	assert.equal(preserveReasonFor('YES', ev), undefined, '未定义的大写短词仍翻译');
+	assert.equal(preserveReasonFor('SECT', ev), undefined);
+	assert.equal(preserveReasonFor('Age (y)', ev), undefined);
+	assert.equal(preserveReasonFor('Total', ev), undefined);
+	assert.equal(preserveReasonFor('Kim et al reported higher rates', ev), undefined, '整句不是引用标签');
+	assert.equal(preserveReasonFor('PCD', undefined), undefined, '无证据不判 preserve');
+});
+
+test('buildTableModel / buildTextTableModel: 证据命中的格 kind=data 并记 preserveReason (chen2023-p10 HR, radiology2023-p2 DECT)', () => {
+	const ev = cellPreserveEvidence(['HR = hazard ratio, HRP = high-risk plaque.'], ['Framingham']);
+	const members: CellMember[] = [
+		cell('h0', 40, 10, 60, 12, 'Variable'),
+		cell('h1', 120, 10, 60, 12, 'HR*'),
+		cell('h2', 200, 10, 60, 12, 'P Value'),
+		cell('d0-0', 40, 30, 60, 12, 'Framingham'),
+		cell('d0-1', 120, 30, 60, 12, '1.42'),
+		cell('d0-2', 200, 30, 60, 12, '.03'),
+		cell('d1-0', 40, 50, 60, 12, 'Male sex'),
+		cell('d1-1', 120, 50, 60, 12, '1.10'),
+		cell('d1-2', 200, 50, 60, 12, '.31')
+	];
+	const model = buildTableModel(0, 0, region(40, 10, 220, 52), members);
+	const withEv = buildTableModel(0, 0, region(40, 10, 220, 52), members, ev);
+	const find = (m: typeof model, id: string) => m.cells.find(c => c.memberIds.includes(id))!;
+	assert.equal(find(model, 'h1').kind, 'text', '无证据: "HR*" 仍是要翻译的表头');
+	assert.equal(find(withEv, 'h1').kind, 'data');
+	assert.equal(find(withEv, 'h1').preserveReason, 'defined-abbreviation');
+	assert.equal(find(withEv, 'd0-0').kind, 'data');
+	assert.equal(find(withEv, 'd0-0').preserveReason, 'glossary');
+	assert.equal(find(withEv, 'h2').kind, 'text', '"P Value" 照常翻译');
+	assert.equal(find(withEv, 'd1-0').kind, 'text');
+	assert.equal(find(withEv, 'h2').preserveReason, undefined, '老规则不记 reason');
+
+	// 文本表同一规则。
+	const tm: CellMember[] = [];
+	for (let r = 0; r < 3; r++) {
+		const y = 100 + r * 40;
+		tm.push(cm(`a${r}`, r === 1 ? 'Kim et al,19 2022' : 'Study cohort', 54, y, 80));
+		tm.push(cm(`b${r}`, r === 2 ? 'DECT' : 'Method', 160, y, 40));
+		tm.push(cm(`c${r}`, 'Clinical availability today', 240, y, 130));
+	}
+	const tev = cellPreserveEvidence(['DECT = dual-energy CT']);
+	const text = buildTextTableModel(0, 0, { left: 54, top: 100, width: 460, height: 120 }, tm, 10, tev);
+	assert.equal(find(text, 'a1').preserveReason, 'citation-label');
+	assert.equal(find(text, 'a1').kind, 'data');
+	assert.equal(find(text, 'b2').preserveReason, 'defined-abbreviation');
+	assert.equal(find(text, 'b2').kind, 'data', '文本表里定义过的缩写也 preserve');
+	assert.equal(find(text, 'b1').kind, 'text', '未定义的 "Method" 仍翻译');
+	assert.equal(find(text, 'a0').kind, 'text');
+});
+
+test('structureTableCells: 证据来自整页文本 (表注在区域外) 与用户词表', () => {
+	const mk = (id: string, text: string, x: number, y: number, w: number, order: number, type: SourceBlock['type'] = 'paragraph'): SourceBlock => ({
+		id, pageIndex: 0, order, type, sourceText: text, boundingBox: { x, y, width: w, height: 12 }, fontSize: 9, column: 0
+	});
+	const blocks: SourceBlock[] = [
+		mk('h0', 'Characteristic', 40, 10, 60, 0), mk('h1', 'HR', 120, 10, 40, 1), mk('h2', 'P Value', 200, 10, 40, 2),
+		mk('d0-0', 'Age (y)', 40, 30, 60, 3), mk('d0-1', '61 ± 10', 120, 30, 40, 4), mk('d0-2', '.06', 200, 30, 40, 5),
+		mk('d1-0', 'SECT', 40, 50, 60, 6), mk('d1-1', '412 (58)', 120, 50, 40, 7), mk('d1-2', '.31', 200, 50, 40, 8),
+		mk('d2-0', 'Diabetes', 40, 70, 60, 9), mk('d2-1', '120 (17)', 120, 70, 40, 10), mk('d2-2', '<.001', 200, 70, 40, 11),
+		// 表注在表格区域下方,不属于任何格 —— 证据必须从它来。
+		mk('note', 'HR = hazard ratio. Values are n (%) unless noted.', 40, 120, 300, 12)
+	];
+	const modeOf = (out: SourceBlock[], text: string) => out.find(b => b.sourceText === text)?.translationMode;
+	const plain = structureTableCells(blocks, 0, 10);
+	assert.equal(modeOf(plain, 'HR'), 'preserve', '表注定义 → 表头缩写 preserve');
+	assert.equal(modeOf(plain, 'SECT'), 'translate', '页上未定义 → 照常翻译');
+	assert.equal(modeOf(plain, 'Age (y)'), 'translate');
+	const withList = structureTableCells(blocks, 0, 10, ['SECT']);
+	assert.equal(modeOf(withList, 'SECT'), 'preserve', '用户词表 → preserve');
+	const stripped = blocks.map(b => b.id === 'note' ? { ...b, sourceText: 'Values are n (%) unless noted.' } : b);
+	assert.equal(modeOf(structureTableCells(stripped, 0, 10), 'HR'), 'translate', '拿掉表注定义,缩写仍翻译');
+});
+
+// ---- 2.7.8 (外部审核 第三批·5): 折行续行并回上一行 ------------------------
+
+/**
+ * radiology2023-p11 Table 4 的几何缩影: 列 0/1/3/4/5;"Gold" 行的 c4 格溢进空的
+ * c5 (跨列格,自成一组),下一视觉行的 c4 折行因此在本列新开一组、贡献了一个
+ * 假行起点 —— 这正是真实页被切成两行的机制。
+ */
+function wrappedTable(opts: { secondLine: [string, string, string, string]; gap?: number; indent?: number }): CellMember[] {
+	const gap = opts.gap ?? 2;
+	const indent = opts.indent ?? 9; // 悬挂缩进的折行; 真实新行 indent 0
+	const y2 = 173 + gap;
+	const members: CellMember[] = [
+		cm('h0', 'Contrast Agent', 54, 100, 60), cm('h1', 'Availability', 130, 100, 40), cm('h3', 'Advantages', 240, 100, 90), cm('h4', 'Disadvantages', 349, 100, 100), cm('h5', 'Publications', 490, 100, 40),
+		cm('a0', 'Hafnium oxide nanoparticles', 54, 130, 55, 20), cm('b0', 'In Europe', 130, 130, 35), cm('c0', 'High contrast production, European approval', 240, 130, 90, 31), cm('d0', 'Safety and role as a CT agent yet to be established', 349, 130, 100, 31), cm('r0', '93, 100', 490, 130, 27),
+		cm('a1', 'Gold', 54, 164, 18), cm('b1', 'No', 130, 164, 11), cm('c1', 'Extensive preclinical', 240, 164, 70), cm('d1', 'Potentially high cost; excretion needs', 349, 164, 190),
+		cm('a2', opts.secondLine[0], 54 + indent, y2, 46), cm('b2', opts.secondLine[1], 130, y2, 11), cm('c2', opts.secondLine[2], 240 + indent, y2, 74, 20), cm('d2', opts.secondLine[3], 349 + indent, y2, 118, 31),
+		cm('a3', 'Bismuth nanoparticles', 54, 208, 55, 20), cm('b3', 'No', 130, 208, 11), cm('c3', 'Low cost, good safety profile', 240, 208, 53, 20), cm('d3', 'High K-edge; more preclinical work needed', 349, 208, 118, 31), cm('r3', '90, 101', 490, 208, 27)
+	].filter(m => m.text);
+	return members;
+}
+const wrappedRegion: Box = { left: 54, top: 100, width: 486, height: 140 };
+
+test('buildTextTableModel: 全行小写起头的折行并回上一行 (2.7.8, radiology2023-p11 "Gold / nanoparticles")', () => {
+	const model = buildTextTableModel(0, 0, wrappedRegion, wrappedTable({ secondLine: ['nanoparticles', '', 'use, synthetic control over shape and size', 'to be solved, as gold nanoparticles are retained'] }), 10);
+	assert.equal(model.rowCount, 4, '表头 + 3 个数据行 (续行不再单独成行)');
+	const gold = model.cells.find(c => c.memberIds.includes('a1'))!;
+	assert.equal(gold.text, 'Gold nanoparticles');
+	assert.deepEqual(gold.memberIds, ['a1', 'a2']);
+	const adv = model.cells.find(c => c.memberIds.includes('c1'))!;
+	assert.equal(adv.text, 'Extensive preclinical use, synthetic control over shape and size');
+	assert.equal(adv.row, gold.row);
+	assert.equal(adv.kind, 'text');
+	const dis = model.cells.find(c => c.memberIds.includes('d1'))!;
+	assert.deepEqual(dis.memberIds, ['d1', 'd2'], '溢进空邻列的宽格也接回续行');
+	const bismuth = model.cells.find(c => c.memberIds.includes('a3'))!;
+	assert.equal(bismuth.row, gold.row + 1, '后续行号顺延');
+	assert.ok(model.cells.every(c => c.id === `page-0-table-0-r${c.row}-c${c.col}`), '格 id 按并行后的行号重编');
+});
+
+test('buildTextTableModel: 有新行证据的行不并 —— 大写起头 / 数字格 / 间隙过大', () => {
+	const rows = (members: CellMember[]) => buildTextTableModel(0, 0, wrappedRegion, members, 10).rowCount;
+	assert.equal(rows(wrappedTable({ secondLine: ['Silver nanoparticles', 'No', 'Emerging preclinical evidence', 'Unknown toxicity'], indent: 0 })), 5, '大写起头的真实新行');
+	assert.equal(rows(wrappedTable({ secondLine: ['nanoparticles', '', 'use, synthetic control', 'to be solved'], indent: 0 })), 4, '不缩进但小写起头的折行仍并 (radiology2023-p11 c3 列)');
+	assert.equal(rows(wrappedTable({ secondLine: ['nanoparticles', '12', 'use, synthetic control', 'to be solved'], indent: 0 })), 5, '一格是数字就整行不并');
+	assert.equal(rows(wrappedTable({ secondLine: ['nanoparticles', '', 'use, synthetic control', 'to be solved'], gap: 12 })), 5, '间隙 > 0.8em 不并');
+});
+
+test('buildTextTableModel: 上一行是单个跨列子标题时不并', () => {
+	const members: CellMember[] = [
+		cm('h0', 'Agent', 54, 100, 60), cm('h1', 'Availability', 130, 100, 40), cm('h3', 'Advantages', 240, 100, 130),
+		cm('a0', 'Iodine', 54, 130, 30), cm('b0', 'Yes', 130, 130, 15), cm('c0', 'Clinical availability today', 240, 130, 130),
+		cm('sub', 'Nanoparticle agents under investigation', 54, 160, 320),
+		// 子标题格归入重叠最大的列带 (c2);其下同列的小写起头行也不能并进子标题。
+		cm('c1', 'extensive preclinical use only', 240, 172, 100)
+	];
+	const model = buildTextTableModel(0, 0, { left: 54, top: 100, width: 486, height: 100 }, members, 10);
+	const sub = model.cells.find(c => c.memberIds.includes('sub'))!;
+	assert.deepEqual(sub.memberIds, ['sub'], '子标题格不吸收下一行');
+	assert.equal(model.cells.find(c => c.memberIds.includes('c1'))!.row, sub.row + 1);
+});
+
+test('buildTextTableModel: 小写起头的跨列行 (脚注碎行) 不并进上一行的格', () => {
+	const members: CellMember[] = [
+		cm('h0', 'Agent', 54, 100, 60), cm('h1', 'Availability', 130, 100, 40), cm('h3', 'Advantages', 240, 100, 130),
+		cm('a0', 'Iodine', 54, 130, 30), cm('b0', 'Yes', 130, 130, 15), cm('c0', 'Clinical availability today', 240, 130, 130),
+		cm('note', 'values are pooled from the cited studies unless otherwise noted', 54, 142, 330)
+	];
+	const model = buildTextTableModel(0, 0, { left: 54, top: 100, width: 486, height: 60 }, members, 10);
+	const note = model.cells.find(c => c.memberIds.includes('note'))!;
+	assert.deepEqual(note.memberIds, ['note']);
+	assert.equal(model.cells.find(c => c.memberIds.includes('a0'))!.text, 'Iodine');
+});
+
+test('buildTextTableModel: 三行折行逐行并回 (并回后再看下一行)', () => {
+	const base = wrappedTable({ secondLine: ['nanoparticles', '', 'use, synthetic control over shape and size', 'to be solved, as gold nanoparticles are retained'] });
+	// 第三视觉行: 同样小写起头、紧贴第二行;三格都贴列带左沿 → alignedStarts
+	// 给出一个假行起点,只有并回第二行后再看它才能接上。
+	const third = [cm('a4', 'and shells', 54, 186, 40), cm('c4', 'and surface chemistry', 240, 186, 74), cm('d4', 'in the liver', 349, 186, 60)];
+	const model = buildTextTableModel(0, 0, wrappedRegion, [...base, ...third], 10);
+	const gold = model.cells.find(c => c.memberIds.includes('a1'))!;
+	assert.deepEqual(gold.memberIds, ['a1', 'a2', 'a4']);
+	assert.equal(model.rowCount, 4);
 });

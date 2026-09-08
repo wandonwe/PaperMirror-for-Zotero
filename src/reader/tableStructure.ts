@@ -45,6 +45,71 @@ export interface TableCell {
 	col: number;
 	/** text → translate & replace; data → keep original. */
 	kind: 'text' | 'data';
+	/** 2.7.8: 新增三类"明确不译证据"命中时记下原因,便于诊断审计;老规则不记。 */
+	preserveReason?: PreserveReason;
+}
+
+// ---- 短格的明确"不译"证据 (2.7.8, 外部审核 第三批·6) ------------------------
+//
+// 表格短格 60% 是 ≤2 词 (34 页语料 314 个可译格里 189 个),其中缩写与引用标签
+// 单独送去无语境翻译只会出 "SECT → 教派"、"Kim et al → 金等人"。但**不**把任意
+// 全大写短词判成 preserve —— "YES"/"NO"/"TOTAL" 仍要翻译。只认三种硬证据:
+//   glossary             用户不译词表里的原词 (逐字匹配)
+//   defined-abbreviation 本页正文/脚注里定义过的缩写: "photon-counting detector
+//                        (PCD)"、"AS = aortic stenosis"、"CT, computed tomography"
+//   citation-label       "Kim et al,19 2022"、"Nacif et al. (2012)"
+// 尾部脚注符 (*†‡§¶) 与上标引用数字不影响匹配。
+
+export type PreserveReason = 'glossary' | 'defined-abbreviation' | 'citation-label';
+
+export interface CellPreserveEvidence {
+	noTranslate: Set<string>;
+	definedAbbreviations: Set<string>;
+}
+
+const ABBR = /^[A-Z][A-Z0-9]{1,7}(?:[-/][A-Z0-9]{1,7})?$/;
+const CITATION_LABEL = /^(?:(?:van|von|de|der|den|da|del|di) )*[A-Z][\p{L}'’-]+(?: [A-Z][\p{L}'’-]+)?(?: (?:van|von|de|der|den|da|del|di) [\p{L}'’-]+)? et al[.,]?(?:[ ,]*\d{1,3}(?:[,–-]\d{1,3})*)?(?:[ ,]*\(?(?:19|20)\d{2}\)?)?$/u;
+
+/** 从本页文本里收集"已定义的缩写";noTranslate 是用户词表。pure。 */
+export function cellPreserveEvidence(pageTexts: string[], noTranslate: string[] = []): CellPreserveEvidence {
+	const defined = new Set<string>();
+	for (const t of pageTexts) {
+		// "… detector (PCD)" / "(PCD-CT)" —— 括号里独立的大写缩写,前面紧跟词。
+		for (const m of t.matchAll(/[A-Za-z\u00C0-\u024F)-]\s*\(([A-Z][A-Z0-9]{1,7}(?:[-/][A-Z0-9]{1,7})?)\)/g)) {
+			defined.add(m[1]!);
+		}
+		// 脚注定义 "AS = aortic stenosis; CMP = cardiomyopathy" / "CT, computed tomography"
+		for (const m of t.matchAll(/(?:^|[;,.(\s])([A-Z][A-Z0-9]{1,7}(?:[-/][A-Z0-9]{1,7})?)\s*(?:=|:|,)\s*[a-z]/g)) {
+			defined.add(m[1]!);
+		}
+	}
+	return { noTranslate: new Set(noTranslate.map(w => w.trim()).filter(Boolean)), definedAbbreviations: defined };
+}
+
+/** 去掉尾部脚注符与上标引用数字: "HR*" → "HR", "Kim et al,19 2022" 不动 (数字在中间)。 */
+function stripCellMarks(text: string): string {
+	return text.trim().replace(/[*†‡§¶]+$/u, '').replace(/[\u00B9\u00B2\u00B3\u2070-\u2079]+$/u, '').trim();
+}
+
+export function preserveReasonFor(text: string, evidence: CellPreserveEvidence | undefined): PreserveReason | undefined {
+	const core = stripCellMarks(text);
+	if (!core) {
+		return undefined;
+	}
+	if (evidence?.noTranslate.has(core) || evidence?.noTranslate.has(text.trim())) {
+		return 'glossary';
+	}
+	if (ABBR.test(core)) {
+		const parts = core.split(/[-/]/);
+		const defined = evidence?.definedAbbreviations;
+		if (defined && (defined.has(core) || parts.every(p => defined.has(p)))) {
+			return 'defined-abbreviation';
+		}
+	}
+	if (CITATION_LABEL.test(core)) {
+		return 'citation-label';
+	}
+	return undefined;
 }
 
 export interface TableModel {
@@ -154,7 +219,8 @@ export function buildTableModel(
 	pageIndex: number,
 	tableIndex: number,
 	region: Box,
-	members: CellMember[]
+	members: CellMember[],
+	evidence?: CellPreserveEvidence
 ): TableModel {
 	if (!members.length) {
 		return { region, rowCount: 0, colCount: 0, cells: [] };
@@ -228,14 +294,16 @@ export function buildTableModel(
 		const nameOnly = tableHasEmail && text.length <= 40
 			&& text.split(/\s+/).filter(Boolean).length >= 2
 			&& text.split(/\s+/).filter(Boolean).every(w => /^[A-Z][a-zA-Z'’.-]*$/.test(w));
+		const preserveReason = preserveReasonFor(text, evidence);
 		const kind: TableCell['kind'] =
-			slot.straddles || !text || hasEmail || nameOnly ? 'data'
+			slot.straddles || !text || hasEmail || nameOnly || preserveReason ? 'data'
 				: row < headerDepth && hasWord && !isPureNumeric ? 'text'
 					: looksTabular(text) || text.length < 3 || tinySymbol ? 'data' : 'text';
 		cells.push({
 			id: `page-${pageIndex}-table-${tableIndex}-r${row}-c${col}`,
 			memberIds: ordered.map(m => m.id),
-			box, text, row, col, kind
+			box, text, row, col, kind,
+			...(preserveReason ? { preserveReason } : {})
 		});
 	}
 
@@ -282,7 +350,8 @@ export function buildTextTableModel(
 	tableIndex: number,
 	region: Box,
 	members: CellMember[],
-	em: number
+	em: number,
+	evidence?: CellPreserveEvidence
 ): TableModel {
 	if (!members.length) {
 		return { region, rowCount: 0, colCount: 0, cells: [] };
@@ -382,25 +451,93 @@ export function buildTextTableModel(
 			slots.set(key, slot);
 		}
 	}
-	const cells: TableCell[] = [];
+	interface Draft { members: CellMember[]; straddles: boolean; row: number; col: number }
+	const drafts: Draft[] = [];
 	for (const [key, slot] of slots) {
 		const [row, col] = key.split(':').map(Number) as [number, number];
-		const ordered = [...slot.members].sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left);
+		drafts.push({ members: slot.members, straddles: slot.straddles, row, col });
+	}
+	const rowCount = mergeContinuationRows(drafts, rowStarts.length, em);
+	const cells: TableCell[] = [];
+	for (const d of drafts) {
+		const ordered = [...d.members].sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left);
 		const text = joinCellText(ordered.map(m => m.text));
 		const hasWord = /[A-Za-z一-鿿]{2,}/.test(text);
 		const tinySymbol = text.length <= 4 && !hasWord;
+		const preserveReason = preserveReasonFor(text, evidence);
 		const kind: TableCell['kind'] =
-			!text || !hasWord || tinySymbol ? 'data'
-				: !slot.straddles && (looksTabular(text) || text.length < 3) ? 'data' : 'text';
+			!text || !hasWord || tinySymbol || preserveReason ? 'data'
+				: !d.straddles && (looksTabular(text) || text.length < 3) ? 'data' : 'text';
 		cells.push({
-			id: `page-${pageIndex}-table-${tableIndex}-r${row}-c${col}`,
+			id: `page-${pageIndex}-table-${tableIndex}-r${d.row}-c${d.col}`,
 			memberIds: ordered.map(m => m.id),
 			box: unionBox(ordered.map(m => m.box)),
-			text, row, col, kind
+			text, row: d.row, col: d.col, kind,
+			...(preserveReason ? { preserveReason } : {})
 		});
 	}
 	cells.sort((a, b) => a.row - b.row || a.col - b.col);
-	return { region, rowCount: rowStarts.length, colCount: colBands.length, cells };
+	return { region, rowCount, colCount: colBands.length, cells };
+}
+
+/**
+ * 折行续行并回上一行 (2.7.8, 外部审核 第三批·5, radiology2023-p11 Table 4 实证):
+ * 三列长文格在同一视觉行一起折行时,三个折行的行首顶对齐又都贴列带左沿,
+ * 与 alignedStarts 的"行首硬几何"无法区分,"Gold / nanoparticles"、
+ * "Extensive preclinical / use, synthetic control …" 被切成两行六格。几何
+ * 分不开的只能靠文本: 一行若**每一格**都 (a) 上一行同列有格、(b) 以小写字母或
+ * 续行标点开头、(c) 与上一行同列格的竖向间隙 ≤ 0.8em (与格内折行同一阈值),
+ * 且上一行不是单个跨列格的子标题行 —— 它就是续行,逐格并回。数字/大写开头的格是"新行证据",
+ * 一格命中就整行不并。原地改 drafts,返回并行后的行数。
+ */
+function mergeContinuationRows(
+	drafts: { members: CellMember[]; straddles: boolean; row: number; col: number }[],
+	rowCount: number,
+	em: number
+): number {
+	const CONTINUATION_START = /^[a-z\u00DF-\u00FF,;:)\]]/;
+	const bottomOf = (d: { members: CellMember[] }): number => Math.max(...d.members.map(m => m.box.top + m.box.height));
+	const topOf = (d: { members: CellMember[] }): number => Math.min(...d.members.map(m => m.box.top));
+	const firstText = (d: { members: CellMember[] }): string =>
+		[...d.members].sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left).map(m => m.text.trim()).find(Boolean) ?? '';
+	let removed = 0;
+	for (let row = 1; row < rowCount; row++) {
+		const cur = drafts.filter(d => d.row === row);
+		if (!cur.length) {
+			continue;
+		}
+		type Draft = (typeof drafts)[number];
+		// 上一行若只有一个跨列格 (小节子标题行),不是可续的正文行;上一行里
+		// 溢进空邻列的宽格 (radiology2023-p11 "Potentially high cost; …" 占 c4+c5)
+		// 仍是普通格,可续。
+		const prevRow = drafts.filter(d => d.row === row - 1);
+		if (prevRow.length < 2) {
+			continue;
+		}
+		const prevOf = (col: number): Draft | undefined => prevRow.find(d => d.col === col);
+		const continuation = cur.every(d => {
+			const prev = prevOf(d.col);
+			return !d.straddles && !!prev
+				&& CONTINUATION_START.test(firstText(d))
+				&& topOf(d) - bottomOf(prev) <= em * 0.8;
+		});
+		if (!continuation) {
+			continue;
+		}
+		for (const d of cur) {
+			const prev = prevOf(d.col)!;
+			prev.members = [...prev.members, ...d.members];
+			drafts.splice(drafts.indexOf(d), 1);
+		}
+		for (const d of drafts) {
+			if (d.row > row) {
+				d.row -= 1;
+			}
+		}
+		removed += 1;
+		row -= 1; // 并回后原来的下一行可能也是续行 (三行折行)
+	}
+	return rowCount - removed;
 }
 
 /**
@@ -436,7 +573,7 @@ function contained(box: Box, region: Box): number {
  * stable ids and become provider request units; numeric/data cells remain in
  * the page model but are explicitly marked preserve.
  */
-export function structureTableCells(blocks: SourceBlock[], pageIndex: number, em: number): SourceBlock[] {
+export function structureTableCells(blocks: SourceBlock[], pageIndex: number, em: number, noTranslate: string[] = []): SourceBlock[] {
 	const originalById = new Map(blocks.map(block => [block.id, block]));
 	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox);
 	if (geometric.length < 2) {
@@ -447,12 +584,16 @@ export function structureTableCells(blocks: SourceBlock[], pageIndex: number, em
 		text: b.sourceText,
 		type: b.type,
 		box: { left: b.boundingBox.x, top: b.boundingBox.y, width: b.boundingBox.width, height: b.boundingBox.height },
-		fontSize: b.fontSize
+		fontSize: b.fontSize,
+		column: b.column
 	})), Math.max(6, em));
 	if (!guard.regions.length && !guard.textRegions.length) {
 		return blocks;
 	}
 
+	// 2.7.8: 短格不译证据取自【整页】文本 —— 缩写定义通常在表注或正文里,
+	// 不在表格区域内。
+	const evidence = cellPreserveEvidence(blocks.map(b => b.sourceText), noTranslate);
 	const consumed = new Set<string>();
 	const cells: SourceBlock[] = [];
 	// 文本表区域接在种子区域之后编号 (2.6.0) —— 渲染端按同样顺序重建,格 id
@@ -472,8 +613,8 @@ export function structureTableCells(blocks: SourceBlock[], pageIndex: number, em
 			fontSize: b.fontSize
 		}));
 		const model = isTextTable
-			? buildTextTableModel(pageIndex, tableIndex, region, members, Math.max(6, em))
-			: buildTableModel(pageIndex, tableIndex, region, members);
+			? buildTextTableModel(pageIndex, tableIndex, region, members, Math.max(6, em), evidence)
+			: buildTableModel(pageIndex, tableIndex, region, members, evidence);
 		for (const cell of model.cells) {
 			const originals = cell.memberIds.map(id => originalById.get(id)).filter((b): b is SourceBlock => !!b);
 			if (!originals.length) continue;
