@@ -2208,3 +2208,83 @@ test('计量经回调: 适配器自愈重试计入 attempts, 校验失败的响�
 	manager.dispose();
 	manager2.dispose();
 });
+
+test('尝试去向明细 (2.7.9): 自愈按参数枚举计,失败请求按错误码计,恒等式对得上', async () => {
+	const { PaperMirrorError } = await import('../../src/types/models');
+	let calls = 0;
+	const { deps } = makeDeps({
+		translateRequest: async (req, _signal, hooks) => {
+			calls++;
+			if (calls === 1) {
+				// 一次调用内: 发 → 400 剥 temperature 重发 → 400 剥 reasoning_effort
+				// 重发 → 成功。三次 HTTP,两次自愈。
+				hooks?.onAttempt?.();
+				hooks?.onParamHeal?.('temperature');
+				hooks?.onAttempt?.();
+				hooks?.onParamHeal?.('reasoning_effort');
+				hooks?.onAttempt?.();
+				hooks?.onUsage?.({ inputTokens: 100, outputTokens: 10, cachedInputTokens: 0 });
+				return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' })) };
+			}
+			// 之后每次都是"发出去了、以超时告终"的白发尝试 (管理器会重试若干轮)。
+			hooks?.onAttempt?.();
+			throw new PaperMirrorError('TIMEOUT', 'timed out', { retryable: false });
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	await manager.ensurePage(1, 10).catch(() => {});
+	const usage = (manager.exportDiagnostics() as {
+		usage: { httpAttempts: number; usageReports: number; usageMissing: number; paramHeals?: Record<string, number>; attemptErrors?: Record<string, number> };
+	}).usage;
+	assert.deepEqual(usage.paramHeals, { reasoning_effort: 1, temperature: 1 }, '按参数枚举分开计');
+	assert.deepEqual(usage.attemptErrors, { TIMEOUT: calls - 1 }, '每一次白发的尝试都按错误码计一次');
+	const sum = (o?: Record<string, number>): number => Object.values(o ?? {}).reduce((a, b) => a + b, 0);
+	assert.equal(usage.usageReports + usage.usageMissing + sum(usage.paramHeals) + sum(usage.attemptErrors),
+		usage.httpAttempts, 'httpAttempts = 响应 + 自愈 + 白发的尝试 —— 尝试数不再有说不清的去向');
+	manager.dispose();
+});
+
+test('尝试去向明细: 干净会话整体省略两个字段;未发出的取消与校验失败都不进 attemptErrors (2.7.9)', async () => {
+	const { PaperMirrorError } = await import('../../src/types/models');
+	const clean = makeDeps();
+	const m1 = new TranslationManager(clean.deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await m1.ensurePage(0, 10);
+	const u1 = (m1.exportDiagnostics() as { usage: Record<string, unknown> }).usage;
+	assert.equal('paramHeals' in u1, false, '干净会话不写空表');
+	assert.equal('attemptErrors' in u1, false);
+	m1.dispose();
+
+	// 排队期间取消: 一次 HTTP 都没发出去,不是"白发的尝试"。
+	const cancelled = makeDeps({
+		translateRequest: async () => {
+			throw new PaperMirrorError('CANCELLED', 'cancelled', { retryable: false });
+		}
+	});
+	const m2 = new TranslationManager(cancelled.deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await m2.ensurePage(0, 10).catch(() => {});
+	const u2 = (m2.exportDiagnostics() as { usage: { httpAttempts: number; attemptErrors?: Record<string, number> } }).usage;
+	assert.equal(u2.httpAttempts, 0, '没发出去就不算尝试');
+	assert.equal(u2.attemptErrors, undefined, '也不算白发的尝试');
+	m2.dispose();
+
+	// 收到响应但校验失败: 已按"响应"计过 (validationFailures),不重复计。
+	let calls = 0;
+	const bad = makeDeps({
+		translateRequest: async (req, _signal, hooks) => {
+			calls++;
+			hooks?.onAttempt?.();
+			hooks?.onUsage?.({ inputTokens: 10, outputTokens: 1, cachedInputTokens: 0 });
+			if (calls === 1) {
+				throw new PaperMirrorError('BAD_RESPONSE', 'malformed', { retryable: true });
+			}
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' })) };
+		}
+	});
+	const m3 = new TranslationManager(bad.deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await m3.ensurePage(0, 10);
+	const u3 = (m3.exportDiagnostics() as { usage: { validationFailures: number; attemptErrors?: Record<string, number> } }).usage;
+	assert.equal(u3.validationFailures, 1);
+	assert.equal(u3.attemptErrors, undefined, 'BAD_RESPONSE 不进 attemptErrors');
+	m3.dispose();
+});

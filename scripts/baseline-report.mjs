@@ -21,6 +21,16 @@ if (!files.length) {
 	process.exit(1);
 }
 
+/** 枚举计数表 → "temperature:3 thinking:1";空表显示 —。 */
+function countStr(counts) {
+	const e = Object.entries(counts ?? {});
+	return e.length ? e.map(([k, v]) => `${k}:${v}`).join(' ') : '—';
+}
+
+function countSum(counts) {
+	return Object.values(counts ?? {}).reduce((a, b) => a + b, 0);
+}
+
 const rows = [];
 for (const f of files) {
 	let d;
@@ -80,7 +90,15 @@ for (const f of files) {
 		httpAttempts: d.usage?.httpAttempts ?? 'n/a',
 		attemptsPerBatch: typeof d.usage?.httpAttempts === 'number' && m(x => x.requests)
 			? (d.usage.httpAttempts / m(x => x.requests)).toFixed(2) : 'n/a',
-		validationFailures: d.usage?.validationFailures ?? 'n/a'
+		validationFailures: d.usage?.validationFailures ?? 'n/a',
+		// 2.7.9: 多出来的尝试的去向 —— 参数自愈 / 白发的失败尝试,枚举计数。
+		// 恒等式: httpAttempts ≈ 响应 (usageReports + usageMissing) + heals + errs。
+		paramHeals: countStr(d.usage?.paramHeals),
+		attemptErrors: countStr(d.usage?.attemptErrors),
+		unexplained: typeof d.usage?.httpAttempts === 'number'
+			? d.usage.httpAttempts - (d.usage.usageReports ?? 0) - (d.usage.usageMissing ?? 0)
+				- countSum(d.usage?.paramHeals) - countSum(d.usage?.attemptErrors)
+			: 'n/a'
 	});
 	// 放弃原因分布 (2.7.0): 从联表后的块表读,枚举串无文本。
 	const reasons = {};
@@ -131,7 +149,10 @@ const totals = {
 	layoutMs: sum('layoutMs'),
 	httpAttempts: sum('httpAttempts'),
 	attemptsPerBatch: sum('requests') ? (sum('httpAttempts') / sum('requests')).toFixed(2) : '—',
-	validationFailures: sum('validationFailures')
+	validationFailures: sum('validationFailures'),
+	paramHeals: '—',
+	attemptErrors: '—',
+	unexplained: sum('unexplained')
 };
 
 const abandonReasons = rows.map(r => r.abandonReasons).filter(Boolean);
@@ -146,7 +167,7 @@ if (abandonReasons.length) {
 	}
 }
 
-const headers = ['doc', 'pages', 'requests', 'reqPerPage', 'salvage', 'rate429', 'timeouts', 'segHits', 'avgPageMs', 'translated', 'preserved', 'keptOriginal', 'placed', 'keptPlace', 'placeRate', 'geoViolations', 'annexed', 'inkBlocked', 'pageHitRate', 'segHitRate', 'prefetchWaste', 'unplaced', 'inTokens', 'outTokens', 'cachedPct', 'tokPerPage', 'layoutMs', 'httpAttempts', 'attemptsPerBatch', 'validationFailures'];
+const headers = ['doc', 'pages', 'requests', 'reqPerPage', 'salvage', 'rate429', 'timeouts', 'segHits', 'avgPageMs', 'translated', 'preserved', 'keptOriginal', 'placed', 'keptPlace', 'placeRate', 'geoViolations', 'annexed', 'inkBlocked', 'pageHitRate', 'segHitRate', 'prefetchWaste', 'unplaced', 'inTokens', 'outTokens', 'cachedPct', 'tokPerPage', 'layoutMs', 'httpAttempts', 'attemptsPerBatch', 'validationFailures', 'paramHeals', 'attemptErrors', 'unexplained'];
 const md = [
 	'# 性能基线报告(真实世界)',
 	'',

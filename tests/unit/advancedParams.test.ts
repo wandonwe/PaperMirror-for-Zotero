@@ -151,3 +151,43 @@ test('isThinkingRejection: 只认 400 且提及 thinking/budget 的拒绝', asyn
 		'budget mention but 429', { httpStatus: 429 })), false);
 	assert.equal(isThinkingRejection(new Error('budget')), false, '非 PaperMirrorError 不命中');
 });
+
+test('gemini 思考自愈也报枚举: onParamHeal("thinking") 一次,成功路径零次 (2.7.9)', async () => {
+	const { geminiNativeProvider } = await import('../../src/translation/providers/geminiNative');
+	const OK = '{"candidates":[{"content":{"parts":[{"text":"{\\"translations\\":[{\\"id\\":\\"b0\\",\\"translatedText\\":\\"你好\\"}]}"}]}}]}';
+	const REJECT = '{"error":{"code":400,"message":"Budget 0 is invalid: thinking is not supported with thinkingBudget for this model","status":"INVALID_ARGUMENT"}}';
+	const install = (handler: (body: Record<string, unknown>, n: number) => { status: number; text: string }) => {
+		let n = 0;
+		const bodies: Record<string, unknown>[] = [];
+		(globalThis as Record<string, any>).Zotero = {
+			HTTP: {
+				request: async (_m: string, _u: string, opts: { body: string }) => {
+					const body = JSON.parse(opts.body) as Record<string, unknown>;
+					bodies.push(body);
+					const { status, text } = handler(body, n++);
+					return { status, responseText: text, response: null };
+				}
+			}
+		};
+		return { bodies, teardown: () => { delete (globalThis as Record<string, any>).Zotero; } };
+	};
+	const req = { sourceLanguage: 'en', targetLanguage: 'zh-CN', documentTitle: 't', previousContext: '', blocks: [{ id: 'b0', type: 'paragraph' as const, text: 'hello' }], glossary: [] };
+	const base = { providerId: 'gemini', apiBaseURL: '', apiKey: 'k', timeoutMs: 1000, reasoning: 'disabled' as const };
+
+	const http = install((body, n) => n === 0 ? { status: 400, text: REJECT } : { status: 200, text: OK });
+	try {
+		const healed: string[] = [];
+		await geminiNativeProvider.translate(req, { ...base, model: 'gemini-heal-enum-test' }, { onParamHeal: p => healed.push(p) });
+		assert.deepEqual(healed, ['thinking']);
+		assert.equal(http.bodies.length, 2);
+	}
+	finally { http.teardown(); }
+
+	const http2 = install(() => ({ status: 200, text: OK }));
+	try {
+		const healed: string[] = [];
+		await geminiNativeProvider.translate(req, { ...base, model: 'gemini-no-heal-test' }, { onParamHeal: p => healed.push(p) });
+		assert.deepEqual(healed, [], '一次就成的请求不报自愈');
+	}
+	finally { http2.teardown(); }
+});
