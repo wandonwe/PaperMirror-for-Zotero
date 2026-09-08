@@ -2506,7 +2506,12 @@ export class ReaderSession {
 				// 遮罩误盖真原文。只几何+布尔,无文本。
 				placementProbe: [...this.placementProbe.entries()]
 					.sort((a, b) => a[0] - b[0])
-					.map(([page, rows]) => ({ page: page + 1, blocks: rows }))
+					.map(([page, rows]) => ({ page: page + 1, blocks: rows })),
+				// 2.8.4 (性能第五批: 先量再改): 渲染与缓存写盘的计量。纯计数与
+				// 毫秒,不含路径、不含内容。第五批**只加计量、不改行为** ——
+				// 分片与补译尾部的改动要等这几个数字在真实长文档上说话。
+				render: this.pane?.renderMetrics() ?? null,
+				cacheWrites: cacheManager.cacheWriteStats()
 			};
 			Components.classes['@mozilla.org/widget/clipboardhelper;1']
 				.getService(Components.interfaces.nsIClipboardHelper)

@@ -2539,3 +2539,83 @@ test('从页面缓存复原的页仍然可以再被卸 (2.8.3 第四批)', async
 	assert.ok(holding.length <= 6, `持有量仍受上限约束,实际 ${holding.length}`);
 	manager.dispose();
 });
+
+test('时序三段: 排队 / 抽取 / 首字各自成立,首字早于整页译完 (2.8.4 第五批)', async () => {
+	let releaseFirstChunk: (() => void) | null = null;
+	const gate = new Promise<void>(resolve => { releaseFirstChunk = resolve; });
+	const { deps } = makeDeps({
+		extractPage: async (pageIndex) => {
+			await new Promise(resolve => setTimeout(resolve, 12)); // 抽取要花点时间
+			return makeBlocks(pageIndex, 2);
+		},
+		translateRequest: async (request) => {
+			await gate; // 直到测试放行才返回 —— 首字时间由此可控
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: false, delayFn: () => Promise.resolve() });
+	const run = manager.ensurePage(0, 10);
+	await new Promise(resolve => setTimeout(resolve, 40));
+	releaseFirstChunk!();
+	await run;
+
+	const timingsOf = (mgr: TranslationManager): { queuedMs: number; extractMs: number; firstTextMs: number; durationMs: number } => {
+		const diag = mgr.exportDiagnostics() as { pages: { metrics: Record<string, number> | null }[] };
+		const metrics = diag.pages[0]?.metrics;
+		assert.ok(metrics, '页指标应存在');
+		for (const field of ['queuedMs', 'extractMs', 'firstTextMs', 'durationMs']) {
+			assert.equal(typeof metrics[field], 'number', `${field} 应为毫秒数`);
+		}
+		return {
+			queuedMs: metrics.queuedMs as number,
+			extractMs: metrics.extractMs as number,
+			firstTextMs: metrics.firstTextMs as number,
+			durationMs: metrics.durationMs as number
+		};
+	};
+	const m = timingsOf(manager);
+	assert.ok(m.extractMs >= 10, `抽取耗时应被记下,实际 ${m.extractMs}`);
+	assert.ok(m.queuedMs >= 0, '排队时间应被记下');
+	assert.ok(m.firstTextMs >= 30,
+		`首字时间应含被拦住的那 40ms,实际 ${m.firstTextMs}`);
+	assert.ok(m.firstTextMs <= m.durationMs + m.extractMs + 50,
+		'首字不该晚于整页译完太多 —— 两个数字口径不同,但不能互相矛盾');
+
+	// 首字时刻只记**第一次**。之后任何一次通知(单块重译、补救回填)都不该
+	// 把它往后推 —— 否则这个字段就退化成"最后一次通知的时间",毫无意义。
+	await new Promise(resolve => setTimeout(resolve, 25));
+	await manager.retranslateBlock(0, 'page-0-block-0');
+	assert.equal(timingsOf(manager).firstTextMs, m.firstTextMs, '首字时间不得被后来的通知改写');
+	manager.dispose();
+});
+
+test('热页面数量随淘汰下降,是"当前持有完整内容"的实数 (2.8.4 第五批)', async () => {
+	const cache = new Map<number, { id: string; translatedText: string }[]>();
+	const deps: TranslationDeps = {
+		extractPage: async (pageIndex) => makeBlocks(pageIndex, 2),
+		translateRequest: async (request) => ({
+			translations: request.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' }))
+		}),
+		readCache: async (pageIndex) => cache.get(pageIndex) ?? null,
+		writeCache: async (pageIndex, _blocks, translations) => { cache.set(pageIndex, translations); },
+		getLanguages: () => ({ source: 'en', target: 'zh-CN' }),
+		getDocumentTitle: () => 'Doc',
+		getGlossary: () => [],
+		useContext: () => true,
+		pageCount: () => 40,
+		isPageInUse: () => false
+	};
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: false, delayFn: () => Promise.resolve(), retainLimit: 8 });
+	for (let page = 0; page < 30; page++) {
+		await manager.ensurePage(page, 10);
+		manager.setCurrentPage(page);
+	}
+	const usage = (manager.exportDiagnostics() as { usage: Record<string, number> }).usage;
+	const hotPages = usage.hotPages as number;
+	assert.equal(typeof hotPages, 'number');
+	assert.ok(hotPages <= 8, `热页面数量受上限约束,实际 ${hotPages}`);
+	assert.equal(usage.retainedPages, 30, '轻量状态仍然是 30 页 —— 两个数字分别回答两个问题');
+	manager.dispose();
+});

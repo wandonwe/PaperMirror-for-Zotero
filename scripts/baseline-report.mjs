@@ -93,6 +93,18 @@ for (const f of files) {
 		validationFailures: d.usage?.validationFailures ?? 'n/a',
 		// 2.7.9: 多出来的尝试的去向 —— 参数自愈 / 白发的失败尝试,枚举计数。
 		// 恒等式: httpAttempts ≈ 响应 (usageReports + usageMissing) + heals + errs。
+		// 2.8.4 (性能第五批): 时序三段与写盘/渲染计量 —— 先量再改的那组数字。
+		queuedMs: m(x => x.queuedMs),
+		extractMs: m(x => x.extractMs),
+		firstTextMs: m(x => x.firstTextMs),
+		hotPages: d.usage?.hotPages ?? 'n/a',
+		renderCancelled: d.render?.cancelled ?? 'n/a',
+		renderMs: d.render?.totalMs ?? 'n/a',
+		cacheWriteMs: d.cacheWrites ? d.cacheWrites.pageMs + d.cacheWrites.segmentMs : 'n/a',
+		cacheWriteKB: d.cacheWrites
+			? Math.round((d.cacheWrites.pageBytes + d.cacheWrites.segmentBytes) / 1024) : 'n/a',
+		segFlushKB: d.cacheWrites?.segmentFlushes
+			? Math.round(d.cacheWrites.segmentBytes / d.cacheWrites.segmentFlushes / 1024) : 'n/a',
 		paramHeals: countStr(d.usage?.paramHeals),
 		attemptErrors: countStr(d.usage?.attemptErrors),
 		unexplained: typeof d.usage?.httpAttempts === 'number'
@@ -150,6 +162,15 @@ const totals = {
 	httpAttempts: sum('httpAttempts'),
 	attemptsPerBatch: sum('requests') ? (sum('httpAttempts') / sum('requests')).toFixed(2) : '—',
 	validationFailures: sum('validationFailures'),
+	queuedMs: sum('queuedMs'),
+	extractMs: sum('extractMs'),
+	firstTextMs: sum('firstTextMs'),
+	hotPages: '—',
+	renderCancelled: sum('renderCancelled'),
+	renderMs: sum('renderMs'),
+	cacheWriteMs: sum('cacheWriteMs'),
+	cacheWriteKB: sum('cacheWriteKB'),
+	segFlushKB: '—',
 	paramHeals: '—',
 	attemptErrors: '—',
 	unexplained: sum('unexplained')
@@ -167,7 +188,9 @@ if (abandonReasons.length) {
 	}
 }
 
-const headers = ['doc', 'pages', 'requests', 'reqPerPage', 'salvage', 'rate429', 'timeouts', 'segHits', 'avgPageMs', 'translated', 'preserved', 'keptOriginal', 'placed', 'keptPlace', 'placeRate', 'geoViolations', 'annexed', 'inkBlocked', 'pageHitRate', 'segHitRate', 'prefetchWaste', 'unplaced', 'inTokens', 'outTokens', 'cachedPct', 'tokPerPage', 'layoutMs', 'httpAttempts', 'attemptsPerBatch', 'validationFailures', 'paramHeals', 'attemptErrors', 'unexplained'];
+const headers = ['doc', 'pages', 'requests', 'reqPerPage', 'salvage', 'rate429', 'timeouts', 'segHits', 'avgPageMs', 'translated', 'preserved', 'keptOriginal', 'placed', 'keptPlace', 'placeRate', 'geoViolations', 'annexed', 'inkBlocked', 'pageHitRate', 'segHitRate', 'prefetchWaste', 'unplaced', 'inTokens', 'outTokens', 'cachedPct', 'tokPerPage', 'layoutMs', 'httpAttempts', 'attemptsPerBatch', 'validationFailures', 'paramHeals', 'attemptErrors', 'unexplained',
+	'queuedMs', 'extractMs', 'firstTextMs', 'hotPages', 'renderCancelled', 'renderMs',
+	'cacheWriteMs', 'cacheWriteKB', 'segFlushKB'];
 const md = [
 	'# 性能基线报告(真实世界)',
 	'',
