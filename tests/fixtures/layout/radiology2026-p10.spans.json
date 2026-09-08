@@ -1,0 +1,588 @@
+{
+	"source": "radiology2026",
+	"page": 10,
+	"pageWidth": 612,
+	"pageHeight": 792,
+	"items": [
+		{
+			"text": "Radiology:",
+			"rect": [
+				53.94444783528646,
+				17.722223917643337,
+				83.45832824707031,
+				24.72221883138022
+			],
+			"fontSize": 6.999994913736884
+		},
+		{
+			"text": "Volume 319: Number 1—April 2026",
+			"rect": [
+				84.83333587646484,
+				17.722223917643337,
+				178.58333587646484,
+				24.72221883138022
+			],
+			"fontSize": 6.999994913736884
+		},
+		{
+			"text": "■",
+			"rect": [
+				181.95833841959634,
+				19.722231547037772,
+				184.06944274902344,
+				23.222229003906296
+			],
+			"fontSize": 3.499997456868524
+		},
+		{
+			"text": "radiology.rsna.org",
+			"rect": [
+				187.52777099609378,
+				17.722223917643337,
+				235.66665649414062,
+				24.72221883138022
+			],
+			"fontSize": 6.999994913736884
+		},
+		{
+			"text": "10",
+			"rect": [
+				549.5694478352865,
+				17.51390329996746,
+				557.6527786254883,
+				25.51389567057293
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "Toward Broader Clinical Adoption of Photon-Counting CT",
+			"rect": [
+				53.94444783528646,
+				754.0833333333335,
+				233.93054962158203,
+				762.0833384195963
+			],
+			"fontSize": 8.000005086262831
+		},
+		{
+			"text": "Sahbaee et al",
+			"rect": [
+				514.2777506510417,
+				754.0833333333335,
+				557.541643778483,
+				762.0833384195963
+			],
+			"fontSize": 8.000005086262831
+		},
+		{
+			"text": "Bone Microarchitecture and Trabecular Imaging",
+			"rect": [
+				53.94444783528646,
+				166.8055521647136,
+				243.5277811686198,
+				176.80555216471356
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "UHR acquisition supports clinical assessment of bone microar-",
+			"rect": [
+				53.94444783528646,
+				152.4722086588542,
+				296.9305419921875,
+				162.47220865885419
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "chitecture, essential for osteoporosis diagnosis and fracture risk",
+			"rect": [
+				53.94444783528646,
+				140.4444173177084,
+				296.9305419921875,
+				150.44441731770837
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "prediction. One study showed strong correlations between PCCT",
+			"rect": [
+				53.94444783528646,
+				128.48610432942715,
+				296.9305419921875,
+				138.48610432942712
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "and micro-CT for trabecular parameters across multiple anatomic",
+			"rect": [
+				53.94444783528646,
+				116.45831298828126,
+				296.9305419921875,
+				126.45831298828134
+			],
+			"fontSize": 10.000000000000071
+		},
+		{
+			"text": "sites, even at low radiation dose (",
+			"rect": [
+				53.94444783528646,
+				104.50000000000001,
+				180.0277837117513,
+				114.50000000000009
+			],
+			"fontSize": 10.000000000000071
+		},
+		{
+			"text": "R",
+			"rect": [
+				179.7638956705729,
+				104.50000000000001,
+				186.4305623372396,
+				114.50000000000009
+			],
+			"fontSize": 10.000000000000071
+		},
+		{
+			"text": "2 ",
+			"rect": [
+				185.3333282470703,
+				108.90277099609378,
+				191.40277862548828,
+				114.7361043294271
+			],
+			"fontSize": 5.833333333333329
+		},
+		{
+			"text": "range, 0.55–0.95) (94). An-",
+			"rect": [
+				191.38890584309897,
+				104.50000000000001,
+				296.9027964274089,
+				114.50000000000009
+			],
+			"fontSize": 10.000000000000071
+		},
+		{
+			"text": "other study showed excellent agreement between PCCT and high-",
+			"rect": [
+				53.94444783528646,
+				92.45832316080735,
+				296.97222391764325,
+				102.45832316080734
+			],
+			"fontSize": 9.999999999999986
+		},
+		{
+			"text": "resolution peripheral quantitative CT for volumetric bone mineral",
+			"rect": [
+				53.94444783528646,
+				80.51389567057296,
+				296.9305419921875,
+				90.51389567057295
+			],
+			"fontSize": 9.999999999999986
+		},
+		{
+			"text": "density measurement (Pearson",
+			"rect": [
+				53.94444783528646,
+				68.47221883138022,
+				164.52777862548828,
+				78.47221883138029
+			],
+			"fontSize": 10.000000000000071
+		},
+		{
+			"text": "r",
+			"rect": [
+				166.125005086263,
+				68.47221883138022,
+				169.45833841959634,
+				78.47221883138029
+			],
+			"fontSize": 10.000000000000071
+		},
+		{
+			"text": "= 0.986), with PCCT demonstrat-",
+			"rect": [
+				171.1944580078125,
+				68.47221883138022,
+				296.9166819254557,
+				78.47221883138029
+			],
+			"fontSize": 10.000000000000071
+		},
+		{
+			"text": "ing sensitivity to subtle remodeling changes relevant to osteopo-",
+			"rect": [
+				53.94444783528646,
+				56.527791341145914,
+				296.9305419921875,
+				66.52779134114581
+			],
+			"fontSize": 9.9999999999999
+		},
+		{
+			"text": "rosis monitoring (95). This evaluation was supported by another",
+			"rect": [
+				53.94444783528646,
+				44.48611450195317,
+				296.9583384195964,
+				54.48611450195323
+			],
+			"fontSize": 10.000000000000064
+		},
+		{
+			"text": "study that reported effective resolution of up to 30.5 line pairs per",
+			"rect": [
+				53.94444783528646,
+				32.54168701171886,
+				296.9444274902344,
+				42.541687011718764
+			],
+			"fontSize": 9.999999999999908
+		},
+		{
+			"text": "centimeter for PCCT with a sharp kernel (Br76), comparable to",
+			"rect": [
+				314.8194376627604,
+				166.8055521647136,
+				557.8194173177084,
+				176.80555216471356
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "that of high-resolution peripheral quantitative CT, highlighting the",
+			"rect": [
+				314.8194376627604,
+				154.84723917643234,
+				557.8472137451172,
+				164.8472391764323
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "potential of PCCT in detailed trabecular imaging (96).",
+			"rect": [
+				314.8194376627604,
+				142.81944783528652,
+				516.3749821980794,
+				152.8194478352865
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "Bone Marrow Edema Evaluation",
+			"rect": [
+				314.8194376627604,
+				119.13887532552087,
+				443.7222035725911,
+				129.13887532552084
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "Accurate detection of bone marrow edema, especially after",
+			"rect": [
+				314.8194376627604,
+				106.87497965494796,
+				557.8333028157551,
+				116.87497965494795
+			],
+			"fontSize": 9.999999999999986
+		},
+		{
+			"text": "trauma, greatly impacts clinical management. Surov and Niehoff",
+			"rect": [
+				314.8194376627604,
+				94.83335367838548,
+				557.8194173177084,
+				104.83335367838546
+			],
+			"fontSize": 9.999999999999986
+		},
+		{
+			"text": "(97), in a case study, demonstrated that bone marrow edema could",
+			"rect": [
+				314.8194376627604,
+				82.88887532552091,
+				557.8472137451172,
+				92.8888753255209
+			],
+			"fontSize": 9.999999999999986
+		},
+		{
+			"text": "be identified with PCCT without intravenous contrast material,",
+			"rect": [
+				314.8194376627604,
+				70.84724934895834,
+				557.8194173177084,
+				80.84724934895841
+			],
+			"fontSize": 10.000000000000071
+		},
+		{
+			"text": "with unenhanced PCCT revealing a nondisplaced lateral tibial",
+			"rect": [
+				314.8194376627604,
+				58.90277099609386,
+				557.8333028157551,
+				68.90277099609376
+			],
+			"fontSize": 9.999999999999908
+		},
+		{
+			"text": "plateau fracture that was initially missed on radiographs. PCCT-",
+			"rect": [
+				314.8194376627604,
+				46.86109415690112,
+				557.7916463216146,
+				56.861094156901025
+			],
+			"fontSize": 9.999999999999908
+		},
+		{
+			"text": "derived bone marrow edema maps showed strong concordance",
+			"rect": [
+				314.8194376627604,
+				34.91666666666665,
+				557.8472137451172,
+				44.916666666666714
+			],
+			"fontSize": 10.000000000000064
+		},
+		{
+			"text": "Figure 8:",
+			"rect": [
+				89.9722162882487,
+				270.4305445353191,
+				123.09721628824869,
+				278.93054199218756
+			],
+			"fontSize": 8.49999745686847
+		},
+		{
+			"text": "Photon-counting CT (PCCT) enables dose-efficient detection of osteolytic lesions in multiple myeloma.",
+			"rect": [
+				130.88888804117838,
+				270.5277684529623,
+				417.06946055094403,
+				278.52776082356775
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "(A, B)",
+			"rect": [
+				419.54167683919275,
+				270.5277684529623,
+				439.34722900390625,
+				278.52776082356775
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "Axial",
+			"rect": [
+				441.00001017252606,
+				270.5277684529623,
+				455.2777862548828,
+				278.52776082356775
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "(A)",
+			"rect": [
+				456.97224934895837,
+				270.5277684529623,
+				467.97224680582684,
+				278.52776082356775
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "energy-integrating",
+			"rect": [
+				469.62498982747394,
+				270.5277684529623,
+				521.5972137451172,
+				278.52776082356775
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "detector (EID) CT and",
+			"rect": [
+				89.9722162882487,
+				260.5555775960287,
+				152.91666666666666,
+				268.55558268229174
+			],
+			"fontSize": 8.000005086263059
+		},
+		{
+			"text": "(B)",
+			"rect": [
+				154.7499974568685,
+				260.5555775960287,
+				165.01388549804688,
+				268.55558268229174
+			],
+			"fontSize": 8.000005086263059
+		},
+		{
+			"text": "PCCT images in a patient with multiple lesions (arrows). The PCCT image demonstrates superior lesion conspicuity compared",
+			"rect": [
+				166.73609415690106,
+				260.5555775960287,
+				520.8055369059244,
+				268.55558268229174
+			],
+			"fontSize": 8.000005086263059
+		},
+		{
+			"text": "with the EID CT image. In the associated multireader study, the lesion detection rate was 79% with PCCT versus 64% with EID CT, alongside a mean 83%",
+			"rect": [
+				89.9722162882487,
+				250.58336130778,
+				520.5555597941081,
+				258.58335367838544
+			],
+			"fontSize": 7.99999237060544
+		},
+		{
+			"text": "reduction in volume CT dose index (Adapted, with permission, from reference 88.)",
+			"rect": [
+				89.9722162882487,
+				240.5277684529623,
+				319.5277786254883,
+				248.52776082356777
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "(C–E)",
+			"rect": [
+				321.5416717529297,
+				240.5277684529623,
+				339.73611195882165,
+				248.52776082356777
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "Images in a patient with multiple myeloma show improved lesion",
+			"rect": [
+				341.2361145019531,
+				240.5277684529623,
+				521.2083307902018,
+				248.52776082356777
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "conspicuity with PCCT and deep learning noise reduction at a radiation dose matched to that of EID CT acquisitions.",
+			"rect": [
+				89.9722162882487,
+				230.5555775960287,
+				414.9861017862956,
+				238.55558268229169
+			],
+			"fontSize": 8.000005086262973
+		},
+		{
+			"text": "(C)",
+			"rect": [
+				417.3333231608073,
+				230.5555775960287,
+				427.37499237060547,
+				238.55558268229169
+			],
+			"fontSize": 8.000005086262973
+		},
+		{
+			"text": "Axial 2-mm EID CT images show",
+			"rect": [
+				428.7777709960937,
+				230.5555775960287,
+				521.3749821980795,
+				238.55558268229169
+			],
+			"fontSize": 8.000005086262973
+		},
+		{
+			"text": "lytic lesions (arrows) within the thoracic vertebral body and left iliac wing.",
+			"rect": [
+				89.9722162882487,
+				220.58336130777997,
+				296.7638905843099,
+				228.58335367838544
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "(D)",
+			"rect": [
+				299.0416717529297,
+				220.58336130777997,
+				309.9305597941081,
+				228.58335367838544
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "Axial 2-mm PCCT images show improved conspicuity of these lesions (ar-",
+			"rect": [
+				311.6944376627604,
+				220.58336130777997,
+				521.1388778686523,
+				228.58335367838544
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "rows).",
+			"rect": [
+				89.9722162882487,
+				210.52776845296228,
+				107.29166666666667,
+				218.52776082356775
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "(E)",
+			"rect": [
+				108.98611704508464,
+				210.52776845296228,
+				118.22222391764322,
+				218.52776082356775
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "Axial 0.6-mm PCCT images with convolutional neural network–based denoising show the sharpest cortical detail and reveal the same lesions",
+			"rect": [
+				119.99999999999999,
+				210.52776845296228,
+				520.6111145019531,
+				218.52776082356775
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "(arrows) as seen with 2-mm PCCT as well as additional lesions (arrowheads). (Adapted, with permission, from reference 90.)",
+			"rect": [
+				89.9722162882487,
+				200.54164123535156,
+				441.4861170450846,
+				208.54164632161462
+			],
+			"fontSize": 8.000005086263059
+		}
+	]
+}

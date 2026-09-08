@@ -1,0 +1,1288 @@
+{
+	"source": "radiology2026",
+	"page": 13,
+	"pageWidth": 612,
+	"pageHeight": 792,
+	"items": [
+		{
+			"text": "Radiology:",
+			"rect": [
+				53.94444783528646,
+				17.722223917643337,
+				83.45832824707031,
+				24.72221883138022
+			],
+			"fontSize": 6.999994913736884
+		},
+		{
+			"text": "Volume 319: Number 1—April 2026",
+			"rect": [
+				84.83333587646484,
+				17.722223917643337,
+				178.58333587646484,
+				24.72221883138022
+			],
+			"fontSize": 6.999994913736884
+		},
+		{
+			"text": "■",
+			"rect": [
+				181.95833841959634,
+				19.722231547037772,
+				184.06944274902344,
+				23.222229003906296
+			],
+			"fontSize": 3.499997456868524
+		},
+		{
+			"text": "radiology.rsna.org",
+			"rect": [
+				187.52777099609378,
+				17.722223917643337,
+				235.66665649414062,
+				24.72221883138022
+			],
+			"fontSize": 6.999994913736884
+		},
+		{
+			"text": "13",
+			"rect": [
+				549.9444580078125,
+				17.51390329996746,
+				557.694460550944,
+				25.51389567057293
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "Toward Broader Clinical Adoption of Photon-Counting CT",
+			"rect": [
+				53.94444783528646,
+				754.0833333333335,
+				233.93054962158203,
+				762.0833384195963
+			],
+			"fontSize": 8.000005086262831
+		},
+		{
+			"text": "Sahbaee et al",
+			"rect": [
+				514.2777506510417,
+				754.0833333333335,
+				557.541643778483,
+				762.0833384195963
+			],
+			"fontSize": 8.000005086262831
+		},
+		{
+			"text": "Protocol Optimization for Task-Specific Imaging",
+			"rect": [
+				53.94444783528646,
+				315.4722391764323,
+				242.87499745686847,
+				325.47223917643237
+			],
+			"fontSize": 10.000000000000057
+		},
+		{
+			"text": "Several studies have emphasized the importance of protocol op-",
+			"rect": [
+				53.94444783528646,
+				303.2083435058594,
+				296.9444274902344,
+				313.2083435058594
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "timization to maximize PCCT performance. Tailoring the re-",
+			"rect": [
+				53.94444783528646,
+				291.16666666666674,
+				296.9444274902344,
+				301.16666666666674
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "construction kernel, voxel size, section thickness, and dose to",
+			"rect": [
+				53.94444783528646,
+				279.22223917643237,
+				296.97222391764325,
+				289.2222391764323
+			],
+			"fontSize": 9.999999999999943
+		},
+		{
+			"text": "specific tasks and regions has improved image quality and diag-",
+			"rect": [
+				53.94444783528646,
+				267.1805623372396,
+				296.9583384195964,
+				277.18056233723956
+			],
+			"fontSize": 9.999999999999943
+		},
+		{
+			"text": "nostic outcomes (16,32,71). Sotoudeh-Paima et al (38) demon-",
+			"rect": [
+				53.94444783528646,
+				255.23608398437503,
+				296.9305419921875,
+				265.236083984375
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "strated that task-specific protocol optimization reduced variability",
+			"rect": [
+				53.94444783528646,
+				243.19445800781256,
+				296.9583384195964,
+				253.19445800781253
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "in lung biomarkers by up to 15.7% and 50.9 HU across condi-",
+			"rect": [
+				53.94444783528646,
+				231.249979654948,
+				296.9305419921875,
+				241.24997965494796
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "tions, suggesting similar benefits for other tasks. However, vari-",
+			"rect": [
+				53.94444783528646,
+				219.20835367838544,
+				296.9583384195964,
+				229.2083536783855
+			],
+			"fontSize": 10.000000000000057
+		},
+		{
+			"text": "ability across sites highlights the need for standardized protocols.",
+			"rect": [
+				53.94444783528646,
+				207.249989827474,
+				296.9583384195964,
+				217.24998982747397
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "Recent consensus efforts in abdominal imaging (84) and pediatric",
+			"rect": [
+				53.94444783528646,
+				195.22224934895837,
+				296.9583384195964,
+				205.22224934895834
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "imaging (100) provide a strong foundation, but further multi-",
+			"rect": [
+				53.94444783528646,
+				183.26388549804693,
+				296.97222391764325,
+				193.26388549804693
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "institutional work is required to standardize other clinical",
+			"rect": [
+				53.94444783528646,
+				171.23609415690106,
+				261.0972213745117,
+				181.23609415690103
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "domains,",
+			"rect": [
+				262.81944274902344,
+				171.23609415690106,
+				296.8333307902018,
+				181.23609415690103
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "such as thoracic imaging and neuroimaging.",
+			"rect": [
+				53.94444783528646,
+				159.2777811686198,
+				215.79166412353516,
+				169.27778116861978
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "Radiation Dose Reduction",
+			"rect": [
+				53.94444783528646,
+				135.6110941569011,
+				156.30555470784503,
+				145.6110941569011
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "PCCT has demonstrated the potential for radiation dose reduc-",
+			"rect": [
+				53.94444783528646,
+				123.26388549804696,
+				296.9444274902344,
+				133.26388549804693
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "tion, closely linked to diagnostic performance. Dose efficiency,",
+			"rect": [
+				53.94444783528646,
+				111.30557250976571,
+				296.9444274902344,
+				121.3055725097657
+			],
+			"fontSize": 9.999999999999986
+		},
+		{
+			"text": "electronic noise suppression, and high-resolution multienergy",
+			"rect": [
+				53.94444783528646,
+				99.27778116861982,
+				296.9444274902344,
+				109.27778116861981
+			],
+			"fontSize": 9.999999999999986
+		},
+		{
+			"text": "CT have enabled low-dose protocols across various applications.",
+			"rect": [
+				53.94444783528646,
+				87.3194173177084,
+				296.9583384195964,
+				97.31941731770839
+			],
+			"fontSize": 9.999999999999986
+		},
+		{
+			"text": "More than one-third of studies evaluated this benefit (Fig 10).",
+			"rect": [
+				53.94444783528646,
+				75.29167683919269,
+				296.9444274902344,
+				85.29167683919276
+			],
+			"fontSize": 10.000000000000071
+		},
+		{
+			"text": "Abdominal studies showed up to a 44% dose reduction for kid-",
+			"rect": [
+				53.94444783528646,
+				63.333312988281264,
+				296.9166564941406,
+				73.33331298828134
+			],
+			"fontSize": 10.000000000000071
+		},
+		{
+			"text": "ney stone assessments, with consistent diagnostic performance",
+			"rect": [
+				53.94444783528646,
+				51.29168701171886,
+				296.9583384195964,
+				61.291687011718764
+			],
+			"fontSize": 9.999999999999908
+		},
+		{
+			"text": "across body mass index groups (74). PCCT in musculoskeletal",
+			"rect": [
+				53.94444783528646,
+				39.347208658854214,
+				296.9166564941406,
+				49.34720865885428
+			],
+			"fontSize": 10.000000000000064
+		},
+		{
+			"text": "imaging achieved high spatial resolution at equal or lower doses",
+			"rect": [
+				314.8194376627604,
+				315.5555521647136,
+				557.8055318196615,
+				325.5555521647136
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "than EID CT, enabling precise evaluation of bone lesions (88)",
+			"rect": [
+				314.8194376627604,
+				303.59723917643237,
+				557.7916463216146,
+				313.59723917643237
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "and fractures (91). PCCT for calcium scoring and coronary CT",
+			"rect": [
+				314.8194376627604,
+				291.5694478352865,
+				557.8333028157551,
+				301.56944783528644
+			],
+			"fontSize": 9.999999999999943
+		},
+		{
+			"text": "angiography provided enhanced image quality with lower expo-",
+			"rect": [
+				314.8194376627604,
+				279.61108398437506,
+				557.8333028157551,
+				289.61108398437506
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "sure using PureCalcium images (13). In thoracic imaging, ultra-",
+			"rect": [
+				314.8194376627604,
+				267.58334350585943,
+				557.8333028157551,
+				277.58334350585943
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "low-dose protocols allowed confident detection of interstitial",
+			"rect": [
+				314.8194376627604,
+				255.62497965494794,
+				557.7916463216146,
+				265.624979654948
+			],
+			"fontSize": 10.000000000000057
+		},
+		{
+			"text": "lung disease at mean effective doses as low as 0.17 mSv (32). Dose",
+			"rect": [
+				314.8194376627604,
+				243.5972391764323,
+				557.8610992431641,
+				253.59723917643237
+			],
+			"fontSize": 10.000000000000057
+		},
+		{
+			"text": "reductions of 43%–70% were also achieved in pediatric imaging",
+			"rect": [
+				314.8194376627604,
+				231.63887532552087,
+				557.8333028157551,
+				241.63887532552084
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "while maintaining diagnostic confidence; addressing challenges",
+			"rect": [
+				314.8194376627604,
+				219.61108398437506,
+				557.8194173177084,
+				229.61108398437506
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "such as radiosensitivity, small anatomy, and motion artifacts; and",
+			"rect": [
+				314.8194376627604,
+				207.6527709960938,
+				557.8194173177084,
+				217.6527709960938
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "supporting safer, often sedation-free examinations (104).",
+			"rect": [
+				314.8194376627604,
+				195.62497965494794,
+				527.4444325764974,
+				205.6249796549479
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "Disease Management and Cost-effectiveness",
+			"rect": [
+				314.8194376627604,
+				171.94445800781253,
+				492.41664886474604,
+				181.94445800781253
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "Beyond diagnostic improvements, the true demonstration of the",
+			"rect": [
+				314.8194376627604,
+				159.68056233723962,
+				557.8194173177084,
+				169.68056233723962
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "clinical value of PCCT lies in tangible enhancements in disease",
+			"rect": [
+				314.8194376627604,
+				147.6388854980469,
+				557.8194173177084,
+				157.63888549804688
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "management, decision-making, and cost savings. These areas re-",
+			"rect": [
+				314.8194376627604,
+				135.6110941569011,
+				557.8055318196615,
+				145.6110941569011
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "main underexplored, with only about 10% of studies addressing",
+			"rect": [
+				314.8194376627604,
+				123.65278116861984,
+				557.8472137451172,
+				133.65278116861984
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "these end points (Fig 10). In cardiac imaging, improved accuracy in",
+			"rect": [
+				314.8194376627604,
+				111.62498982747404,
+				557.8610992431641,
+				121.62498982747402
+			],
+			"fontSize": 9.999999999999986
+		},
+		{
+			"text": "coronary assessments reduced downstream testing and unnecessary",
+			"rect": [
+				314.8194376627604,
+				99.66667683919279,
+				557.8472137451172,
+				109.66667683919277
+			],
+			"fontSize": 9.999999999999986
+		},
+		{
+			"text": "invasive procedures (4,6). One study projected average cost savings",
+			"rect": [
+				314.8194376627604,
+				87.6388854980469,
+				557.8194173177084,
+				97.63888549804689
+			],
+			"fontSize": 9.999999999999986
+		},
+		{
+			"text": "of $794.50 ± 18.50 per patient, totaling $11.9 million ± 4.35 mil-",
+			"rect": [
+				314.8194376627604,
+				75.68057250976574,
+				557.8055318196615,
+				85.68057250976564
+			],
+			"fontSize": 9.9999999999999
+		},
+		{
+			"text": "lion over the expected lifetime of a PCCT scanner (10 years) (6).",
+			"rect": [
+				314.8194376627604,
+				63.652781168619775,
+				557.8610992431641,
+				73.65278116861984
+			],
+			"fontSize": 10.000000000000064
+		},
+		{
+			"text": "A recent analysis comparing PCCT with EID CT demonstrated",
+			"rect": [
+				314.8194376627604,
+				51.69441731770835,
+				557.7916463216146,
+				61.694417317708414
+			],
+			"fontSize": 10.000000000000064
+		},
+		{
+			"text": "further reductions in downstream testing costs with PCCT of",
+			"rect": [
+				314.8194376627604,
+				39.666676839192725,
+				557.8333028157551,
+				49.66667683919279
+			],
+			"fontSize": 10.000000000000064
+		},
+		{
+			"text": "Current Challenges of Integrating PCCT into Routine Clinical Workflows",
+			"rect": [
+				60.4861068725586,
+				723.0972213745117,
+				342.44444529215497,
+				731.5972188313804
+			],
+			"fontSize": 8.499997456868641
+		},
+		{
+			"text": "Challenge",
+			"rect": [
+				60.4861068725586,
+				705.4166717529297,
+				95.51389058430989,
+				714.4166615804036
+			],
+			"fontSize": 8.999989827473883
+		},
+		{
+			"text": "(or Opportunity)",
+			"rect": [
+				60.4861068725586,
+				694.5,
+				120.87500254313152,
+				703.5000025431316
+			],
+			"fontSize": 9.000002543131586
+		},
+		{
+			"text": "Description",
+			"rect": [
+				149.72222646077475,
+				694.5,
+				190.98611195882162,
+				703.5000025431316
+			],
+			"fontSize": 9.000002543131586
+		},
+		{
+			"text": "Implications and Recommended Solutions",
+			"rect": [
+				335.375010172526,
+				694.5,
+				484.15279388427734,
+				703.5000025431316
+			],
+			"fontSize": 9.000002543131586
+		},
+		{
+			"text": "Data burden and",
+			"rect": [
+				60.4861068725586,
+				680.4861119588217,
+				118.52778116861978,
+				689.4861145019531
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "workflow efficiency",
+			"rect": [
+				69.47222391764323,
+				669.4861145019532,
+				135.09722391764322,
+				678.4861170450847
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "As imaging technology advances, data volumes",
+			"rect": [
+				149.72222646077475,
+				680.4861119588217,
+				312.4861145019531,
+				689.4861145019531
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "continue to grow; larger matrix sizes (1024²",
+			"rect": [
+				158.7222162882487,
+				669.4861145019532,
+				311.374994913737,
+				678.4861170450847
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "vs 512²) and thinner sections (0.2 mm vs 0.6",
+			"rect": [
+				158.7222162882487,
+				658.4722188313802,
+				315.9722264607747,
+				667.4722213745117
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "mm) can enhance spatial detail but may also",
+			"rect": [
+				158.7222162882487,
+				647.4722213745117,
+				313.49999745686847,
+				656.4722239176433
+			],
+			"fontSize": 9.000002543131586
+		},
+		{
+			"text": "increase reconstruction time, storage demand,",
+			"rect": [
+				158.7222162882487,
+				636.4722239176433,
+				318.6388905843099,
+				645.4722264607748
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "and interpretation workload",
+			"rect": [
+				158.7222162882487,
+				625.4583282470703,
+				256.9583384195964,
+				634.4583307902018
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "As technology evolves, increasing data demands should not",
+			"rect": [
+				335.375010172526,
+				680.4861119588217,
+				540.9027862548828,
+				689.4861145019531
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "limit innovation or the added clinical value of advanced",
+			"rect": [
+				344.3611145019531,
+				669.4861145019532,
+				538.5416666666667,
+				678.4861170450847
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "imaging; selective use of UHR mode when high spatial",
+			"rect": [
+				344.3611145019531,
+				658.4722188313802,
+				535.8888880411783,
+				667.4722213745117
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "detail is required, combined with GPU-accelerated",
+			"rect": [
+				344.3611145019531,
+				647.4722213745117,
+				521.319440205892,
+				656.4722239176433
+			],
+			"fontSize": 9.000002543131586
+		},
+		{
+			"text": "reconstruction pipelines, can help maintain workflow",
+			"rect": [
+				344.3611145019531,
+				636.4722239176433,
+				530.3611119588217,
+				645.4722264607748
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "efficiency (24)",
+			"rect": [
+				344.3611145019531,
+				625.4583282470703,
+				394.0277735392253,
+				634.4583307902018
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "Noise in UHR",
+			"rect": [
+				60.4861068725586,
+				613.9861094156902,
+				111.97222391764322,
+				622.9861119588217
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "spectral",
+			"rect": [
+				69.47222391764323,
+				602.9861119588217,
+				95.86111704508464,
+				611.9861145019532
+			],
+			"fontSize": 9.000002543131586
+		},
+		{
+			"text": "reconstructions",
+			"rect": [
+				69.47222391764323,
+				591.9722162882488,
+				122.88888295491537,
+				600.9722188313802
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "Combining high spatial resolution with spectral",
+			"rect": [
+				149.72222646077475,
+				613.9861094156902,
+				316.3194402058919,
+				622.9861119588217
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "reconstruction increases image noise due to",
+			"rect": [
+				158.7222162882487,
+				602.9861119588217,
+				309.47222391764325,
+				611.9861145019532
+			],
+			"fontSize": 9.000002543131586
+		},
+		{
+			"text": "limited photon counts per bin and reduced",
+			"rect": [
+				158.7222162882487,
+				591.9722162882488,
+				309.13888295491535,
+				600.9722188313802
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "photon flux per pixel",
+			"rect": [
+				158.7222162882487,
+				580.9722188313802,
+				231.95833841959634,
+				589.9722213745117
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "Leveraging the low electronic noise of PCCT, optimizing",
+			"rect": [
+				335.375010172526,
+				613.9861094156902,
+				543.8194529215494,
+				622.9861119588217
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "threshold selection, and using advanced reconstruction",
+			"rect": [
+				344.3611145019531,
+				602.9861119588217,
+				544.8888905843098,
+				611.9861145019532
+			],
+			"fontSize": 9.000002543131586
+		},
+		{
+			"text": "algorithms (eg, QIR) can mitigate this effect;",
+			"rect": [
+				344.3611145019531,
+				591.9722162882488,
+				508.93054962158203,
+				600.9722188313802
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "additionally, limiting spectral CT to 0.4 mm supports",
+			"rect": [
+				344.3611145019531,
+				580.9722188313802,
+				541.6666666666667,
+				589.9722213745117
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "noise control (107)",
+			"rect": [
+				344.3611145019531,
+				569.9722213745117,
+				414.5416641235352,
+				578.9722239176432
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "Beam collimation",
+			"rect": [
+				60.4861068725586,
+				558.4861043294271,
+				122.34722137451173,
+				567.4860941569011
+			],
+			"fontSize": 8.999989827473996
+		},
+		{
+			"text": "and coverage",
+			"rect": [
+				69.47222391764323,
+				547.4861068725586,
+				114.31944529215495,
+				556.4861094156901
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "limitations",
+			"rect": [
+				69.47222391764323,
+				536.4861221313478,
+				107.05554962158203,
+				545.4861246744792
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "Current UHR acquisition modes are limited to",
+			"rect": [
+				149.72222646077475,
+				558.4861043294271,
+				314.0277735392253,
+				567.4860941569011
+			],
+			"fontSize": 8.999989827473996
+		},
+		{
+			"text": "120 × 0.2-mm beam collimation, compared",
+			"rect": [
+				158.7222162882487,
+				547.4861068725586,
+				311.9166692097982,
+				556.4861094156901
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "with standard 144 × 0.4 mm, reducing",
+			"rect": [
+				158.7222162882487,
+				536.4861221313478,
+				294.12499745686847,
+				545.4861246744792
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "z-coverage and increasing the risk of slab",
+			"rect": [
+				158.7222162882487,
+				525.4722391764323,
+				300.0138854980469,
+				534.4722290039064
+			],
+			"fontSize": 8.99998982747411
+		},
+		{
+			"text": "misregistration in cardiac CT",
+			"rect": [
+				158.7222162882487,
+				514.4722162882488,
+				261.01388295491535,
+				523.4722188313802
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "High-pitch settings and a 0.25-second rotation time",
+			"rect": [
+				335.375010172526,
+				558.4861043294271,
+				517.0277913411459,
+				567.4860941569011
+			],
+			"fontSize": 8.999989827473996
+		},
+		{
+			"text": "help mitigate this challenge; in addition, advanced",
+			"rect": [
+				344.3611145019531,
+				547.4861068725586,
+				519.9305597941081,
+				556.4861094156901
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "reconstruction algorithms such as ZeeFree* can restore",
+			"rect": [
+				344.3611145019531,
+				536.4861221313478,
+				534.1527811686198,
+				545.4861246744792
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "spatial continuity and address potential misregistration",
+			"rect": [
+				344.3611145019531,
+				525.4722391764323,
+				535.180549621582,
+				534.4722290039064
+			],
+			"fontSize": 8.99998982747411
+		},
+		{
+			"text": "(108)",
+			"rect": [
+				344.3611145019531,
+				514.4722162882488,
+				363.69444529215497,
+				523.4722188313802
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "Energy threshold use",
+			"rect": [
+				60.4861068725586,
+				502.9999974568685,
+				133.40277353922525,
+				512
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "Current systems use four energy thresholds at",
+			"rect": [
+				149.72222646077475,
+				502.9999974568685,
+				308.000005086263,
+				512
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "the detector level, which are combined into",
+			"rect": [
+				158.7222162882487,
+				491.98610178629565,
+				309.9305597941081,
+				500.9861043294271
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "fewer thresholds in clinical use to optimize",
+			"rect": [
+				158.7222162882487,
+				480.9861043294272,
+				307.30555216471356,
+				489.98609415690106
+			],
+			"fontSize": 8.999989827473883
+		},
+		{
+			"text": "image quality, workflow, and reconstruction",
+			"rect": [
+				158.7222162882487,
+				469.9861068725587,
+				311.750005086263,
+				478.9861094156902
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "time before transmission to the image",
+			"rect": [
+				158.7222162882487,
+				458.97223663330084,
+				290.18054962158203,
+				467.9722391764323
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "reconstruction system",
+			"rect": [
+				158.7222162882487,
+				448.0555394490561,
+				234.76388295491535,
+				457.05554199218756
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "In investigational research mode, available under a dedicated",
+			"rect": [
+				335.375010172526,
+				502.9999974568685,
+				546.388905843099,
+				512
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "research license, all four thresholds can be used individually",
+			"rect": [
+				344.3611145019531,
+				491.98610178629565,
+				551.430549621582,
+				500.9861043294271
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "for greater spectral flexibility, potentially enabling K-edge",
+			"rect": [
+				344.3611145019531,
+				480.9861043294272,
+				543.9444478352865,
+				489.98609415690106
+			],
+			"fontSize": 8.999989827473883
+		},
+		{
+			"text": "imaging",
+			"rect": [
+				344.3611145019531,
+				469.9861068725587,
+				372.5833384195963,
+				478.9861094156902
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "† ",
+			"rect": [
+				372.5,
+				473.88887278238934,
+				377.26388295491535,
+				479.13887532552087
+			],
+			"fontSize": 5.250002543131529
+		},
+		{
+			"text": "and other advanced spectral techniques under",
+			"rect": [
+				377.26389567057294,
+				469.9861068725587,
+				536.569455464681,
+				478.9861094156902
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "investigation (1)",
+			"rect": [
+				344.3611145019531,
+				458.97223663330084,
+				401.37499491373694,
+				467.9722391764323
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "Standardization of",
+			"rect": [
+				60.4861068725586,
+				436.4166692097983,
+				124.49999491373698,
+				445.41667175292974
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "quantitative CT",
+			"rect": [
+				69.47222391764323,
+				425.48611195882165,
+				125.5972162882487,
+				434.4861145019532
+			],
+			"fontSize": 9.00000254313153
+		},
+		{
+			"text": "(opportunity)",
+			"rect": [
+				69.47222391764323,
+				414.48610178629565,
+				117.45833079020181,
+				423.4861043294271
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "PCCT offers the potential for truly quantitative",
+			"rect": [
+				149.72222646077475,
+				436.4166692097983,
+				316.125005086263,
+				445.41667175292974
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "CT, which can be achieved only through",
+			"rect": [
+				158.7222162882487,
+				425.48611195882165,
+				300.36111195882165,
+				434.4861145019532
+			],
+			"fontSize": 9.00000254313153
+		},
+		{
+			"text": "harmonized acquisition and reconstruction",
+			"rect": [
+				158.7222162882487,
+				414.48610178629565,
+				308.63889058430993,
+				423.4861043294271
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "protocols",
+			"rect": [
+				158.7222162882487,
+				403.4861043294272,
+				190.97222646077472,
+				412.48609415690106
+			],
+			"fontSize": 8.999989827473883
+		},
+		{
+			"text": "Developing standardized protocols, including monoenergetic",
+			"rect": [
+				335.43055216471356,
+				436.4166692097983,
+				548.1388854980469,
+				445.41667175292974
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "and material-specific image protocols, is essential to ensure",
+			"rect": [
+				344.4166564941406,
+				425.48611195882165,
+				548.6527633666992,
+				434.4861145019532
+			],
+			"fontSize": 9.00000254313153
+		},
+		{
+			"text": "reproducibility across centers, maximize the benefits of",
+			"rect": [
+				344.4166564941406,
+				414.48610178629565,
+				534.9444325764974,
+				423.4861043294271
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "PCCT, and enable truly quantitative CT (84)",
+			"rect": [
+				344.4166564941406,
+				403.4861043294272,
+				503.3611043294271,
+				412.48609415690106
+			],
+			"fontSize": 8.999989827473883
+		},
+		{
+			"text": "Note.—GPU = graphics processing unit, PCCT = photon-counting CT, QIR = quantitative iterative reconstruction, UHR = ultra-high resolution.",
+			"rect": [
+				60.4861068725586,
+				389.9444376627605,
+				547.9583358764648,
+				398.9444274902344
+			],
+			"fontSize": 8.999989827473883
+		},
+		{
+			"text": "* ZeeFree is an algorithm that applies motion correction across overlapping slabs to restore spatial continuity.",
+			"rect": [
+				60.4861068725586,
+				377.98611195882165,
+				439.9444452921549,
+				386.9861145019531
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "† ",
+			"rect": [
+				60.4861068725586,
+				369.94443766276044,
+				65.25000254313152,
+				375.19442749023443
+			],
+			"fontSize": 5.249989827473996
+		},
+		{
+			"text": "K-edge imaging is a spectral CT technique that exploits sharp attenuation changes at an element’s K-edge to identify and quantify specific",
+			"rect": [
+				65.19444783528647,
+				365.95832061767584,
+				545.2083333333334,
+				374.9583231608073
+			],
+			"fontSize": 9.000002543131473
+		},
+		{
+			"text": "contrast materials.",
+			"rect": [
+				60.4861068725586,
+				355.9861043294271,
+				124.19445037841795,
+				364.98609415690106
+			],
+			"fontSize": 8.99998982747394
+		}
+	]
+}

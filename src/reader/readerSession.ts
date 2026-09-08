@@ -1417,7 +1417,11 @@ export class ReaderSession {
 			this.scannedNoticeShown.add(pageIndex);
 			this.flashNotice(`第 ${pageIndex + 1} 页未检测到可翻译文本(纯图或扫描页),已保留原样`);
 		}
-		if (state && state.status === 'done' && state.blocks.length) {
+		// 增量显示 (2.7.10): 途中也可以重建 —— 已到的块画译文,没到的保持原文。
+		// 但半成品页**不**做压缩重试、不报排版统计、不弹排版失败提示: 那些都是
+		// 对"这页最终结果"的判断,对着一个还在长的页面做只会白花请求、误报数字。
+		const partial = !!(state && state.status === 'translating' && state.blocks.length && state.translations.size);
+		if (state && (state.status === 'done' || partial) && state.blocks.length) {
 			// Real image boundaries (operator list) — fetched once per page and
 			// cached for the document's lifetime; null = fall back to the grid.
 			if (!this.imageRects.has(pageIndex)) {
@@ -1448,6 +1452,11 @@ export class ReaderSession {
 				});
 			}
 			catch (e) {
+				if (partial) {
+					// 半成品重建失败无所谓: 保持原文,译完那一趟还会再来一次。
+					logger.debug(MODULE, `partial buildStrictPage failed on page ${pageIndex + 1}`, e);
+					return false;
+				}
 				logger.error(MODULE, `buildStrictPage threw on page ${pageIndex + 1}; showing original`, e);
 				this.setTask('translation', null);
 				// 每页只提示一次 (2.5.2): 这条路径现在会被自动重试,若每次都弹
@@ -1469,6 +1478,9 @@ export class ReaderSession {
 				settleStrictPage(element, (unfit: UnfitBlock[], final: boolean) => {
 					if (!current() || !final) {
 						return;
+					}
+					if (partial) {
+						return; // 半成品页不结算: 不压缩重试、不报排版统计
 					}
 					if (!unfit.length) {
 						this.reportPlacement(pageIndex, element);
@@ -1520,7 +1532,7 @@ export class ReaderSession {
 						});
 					});
 				}
-				return 'translated';
+				return partial ? 'partial' : 'translated';
 			}
 		}
 		// 画原文兜底。但「这页本来就没有译文」和「这页有译文、只是这一趟没重建

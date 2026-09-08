@@ -1,0 +1,50 @@
+[
+	{
+		"type": "caption",
+		"column": -1,
+		"readingIndex": 0,
+		"text": "Figure 2: Myocardial extracellular volum"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "Stent and Vascular Device Imaging"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "Coronary stent imaging has benefited fro"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "Thoracic Imaging"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 4,
+		"text": "In thoracic imaging, PCCT offers detaile"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 5,
+		"text": "196 patients with post–COVID-19 conditio"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 6,
+		"text": "Diffuse Lung Diseases"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 7,
+		"text": "In patients with post–COVID-19 condition"
+	}
+]

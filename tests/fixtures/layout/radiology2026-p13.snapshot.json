@@ -1,0 +1,206 @@
+[
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 0,
+		"text": "Current Challenges of Integrating PCCT i"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "Description"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 2,
+		"text": "(or Opportunity)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"text": "As imaging technology advances, data vol"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 4,
+		"text": "Data burden and workflow efficiency"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 5,
+		"text": "continue to grow; larger matrix sizes (1"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 6,
+		"text": "Noise in UHR"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 7,
+		"text": "reconstruction increases image noise due"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 8,
+		"text": "spectral reconstructions"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 9,
+		"text": "limited photon counts per bin and reduce"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 10,
+		"text": "Beam collimation and coverage limitation"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 11,
+		"text": "120 × 0.2-mm beam collimation, compared "
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 12,
+		"text": "Energy threshold use"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 13,
+		"text": "the detector level, which are combined i"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 14,
+		"text": "Standardization of quantitative CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 15,
+		"text": "CT, which can be achieved only through h"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 16,
+		"text": "(opportunity)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 17,
+		"text": "protocols"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 18,
+		"text": "Implications and Recommended Solutions"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 19,
+		"text": "As technology evolves, increasing data d"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 20,
+		"text": "Leveraging the low electronic noise of P"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 21,
+		"text": "Developing standardized protocols, inclu"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 22,
+		"text": "PCCT, and enable truly quantitative CT ("
+	},
+	{
+		"type": "heading",
+		"column": 100,
+		"readingIndex": 23,
+		"text": "Protocol Optimization for Task-Specific "
+	},
+	{
+		"type": "paragraph",
+		"column": 100,
+		"readingIndex": 24,
+		"text": "Several studies have emphasized the impo"
+	},
+	{
+		"type": "heading",
+		"column": 100,
+		"readingIndex": 25,
+		"text": "Radiation Dose Reduction"
+	},
+	{
+		"type": "paragraph",
+		"column": 100,
+		"readingIndex": 26,
+		"text": "PCCT has demonstrated the potential for "
+	},
+	{
+		"type": "heading",
+		"column": 100,
+		"readingIndex": 27,
+		"text": "CT have enabled low-dose protocols acros"
+	},
+	{
+		"type": "heading",
+		"column": 100,
+		"readingIndex": 28,
+		"text": "More than one-third of studies evaluated"
+	},
+	{
+		"type": "paragraph",
+		"column": 100,
+		"readingIndex": 29,
+		"text": "Abdominal studies showed up to a 44% dos"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 30,
+		"text": "imaging achieved high spatial resolution"
+	},
+	{
+		"type": "heading",
+		"column": 101,
+		"readingIndex": 31,
+		"text": "Disease Management and Cost-effectivenes"
+	},
+	{
+		"type": "heading",
+		"column": 101,
+		"readingIndex": 32,
+		"text": "Beyond diagnostic improvements, the true"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 33,
+		"text": "clinical value of PCCT lies in tangible "
+	}
+]

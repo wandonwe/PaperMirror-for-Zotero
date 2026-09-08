@@ -335,6 +335,42 @@
 		"payloadChars": 3992,
 		"dupBlocks": 7
 	},
+	"radiology2026-p10": {
+		"blocks": 5,
+		"translatable": 5,
+		"tableCells": 0,
+		"modules": 4,
+		"chunks": 1,
+		"fastChunks": 1,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 5,
+		"payloadChars": 2617,
+		"dupBlocks": 0
+	},
+	"radiology2026-p13": {
+		"blocks": 34,
+		"translatable": 34,
+		"tableCells": 0,
+		"modules": 10,
+		"chunks": 2,
+		"fastChunks": 2,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 24,
+		"payloadChars": 5592,
+		"dupBlocks": 0
+	},
+	"radiology2026-p4": {
+		"blocks": 8,
+		"translatable": 8,
+		"tableCells": 0,
+		"modules": 5,
+		"chunks": 1,
+		"fastChunks": 1,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 8,
+		"payloadChars": 4207,
+		"dupBlocks": 0
+	},
 	"sample-twocol-p1": {
 		"blocks": 5,
 		"translatable": 5,

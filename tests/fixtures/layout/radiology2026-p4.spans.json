@@ -1,0 +1,908 @@
+{
+	"source": "radiology2026",
+	"page": 4,
+	"pageWidth": 612,
+	"pageHeight": 792,
+	"items": [
+		{
+			"text": "Radiology:",
+			"rect": [
+				53.94444783528646,
+				17.722223917643337,
+				83.45832824707031,
+				24.72221883138022
+			],
+			"fontSize": 6.999994913736884
+		},
+		{
+			"text": "Volume 319: Number 1—April 2026",
+			"rect": [
+				84.83333587646484,
+				17.722223917643337,
+				178.58333587646484,
+				24.72221883138022
+			],
+			"fontSize": 6.999994913736884
+		},
+		{
+			"text": "■",
+			"rect": [
+				181.95833841959634,
+				19.722231547037772,
+				184.06944274902344,
+				23.222229003906296
+			],
+			"fontSize": 3.499997456868524
+		},
+		{
+			"text": "radiology.rsna.org",
+			"rect": [
+				187.52777099609378,
+				17.722223917643337,
+				235.66665649414062,
+				24.72221883138022
+			],
+			"fontSize": 6.999994913736884
+		},
+		{
+			"text": "4",
+			"rect": [
+				553.4305826822916,
+				17.51390329996746,
+				558.2500203450521,
+				25.51389567057293
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "Toward Broader Clinical Adoption of Photon-Counting CT",
+			"rect": [
+				53.94444783528646,
+				754.0833333333335,
+				233.93054962158203,
+				762.0833384195963
+			],
+			"fontSize": 8.000005086262831
+		},
+		{
+			"text": "Sahbaee et al",
+			"rect": [
+				514.2777506510417,
+				754.0833333333335,
+				557.541643778483,
+				762.0833384195963
+			],
+			"fontSize": 8.000005086262831
+		},
+		{
+			"text": "Stent and Vascular Device Imaging",
+			"rect": [
+				53.94444783528646,
+				346.9027506510417,
+				192.33333587646487,
+				356.9027506510417
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "Coronary stent imaging has benefited from the high spatial res-",
+			"rect": [
+				53.94444783528646,
+				334.55554199218756,
+				296.97222391764325,
+				344.55554199218756
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "olution and reduced blooming artifacts with PCCT (24). UHR",
+			"rect": [
+				53.94444783528646,
+				322.5972290039063,
+				296.97222391764325,
+				332.5972290039063
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "coronary CT angiography improved in-stent lumen visibility",
+			"rect": [
+				53.94444783528646,
+				310.56943766276044,
+				296.9305419921875,
+				320.56943766276044
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "and accuracy for determining restenosis, achieving an accuracy",
+			"rect": [
+				53.94444783528646,
+				298.6111246744792,
+				296.9305419921875,
+				308.6111246744792
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "of 88% with a sharp kernel (Bv72) versus 78% for standard-res-",
+			"rect": [
+				53.94444783528646,
+				286.58333333333337,
+				296.97222391764325,
+				296.58333333333337
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "olution CT angiography with 0.6-mm section thickness (25).",
+			"rect": [
+				53.94444783528646,
+				274.6250203450521,
+				296.9444274902344,
+				284.6250203450521
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "In another study, two readers achieved sensitivities of 100% and",
+			"rect": [
+				53.94444783528646,
+				262.59722900390625,
+				296.9166564941406,
+				272.5972290039063
+			],
+			"fontSize": 10.000000000000057
+		},
+		{
+			"text": "100% and specificities of 92.3% and 87.2% for stent patency",
+			"rect": [
+				53.94444783528646,
+				250.638916015625,
+				296.9305419921875,
+				260.63891601562506
+			],
+			"fontSize": 10.000000000000057
+		},
+		{
+			"text": "detection at PCCT, highlighting its potential to reduce unnec-",
+			"rect": [
+				53.94444783528646,
+				238.6111246744792,
+				296.97222391764325,
+				248.61112467447919
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "essary invasive procedures (26).",
+			"rect": [
+				53.94444783528646,
+				226.65276082356777,
+				174.5972188313802,
+				236.65276082356777
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "PCCT has also been applied to structural and peripheral",
+			"rect": [
+				65.93055725097656,
+				214.62502034505215,
+				296.9583384195964,
+				224.62502034505215
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "vascular interventions. In 110 patients, virtual noniodine im-",
+			"rect": [
+				53.94444783528646,
+				202.66665649414065,
+				296.9305419921875,
+				212.66665649414062
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "aging after endovascular aortic repair demonstrated sensitivity",
+			"rect": [
+				53.94444783528646,
+				190.624979654948,
+				296.9444274902344,
+				200.62497965494796
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "and specificity comparable to true noncontrast imaging for",
+			"rect": [
+				53.94444783528646,
+				178.6805521647136,
+				296.9583384195964,
+				188.6805521647136
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "endoleak detection, supporting lower-dose surveillance (27).",
+			"rect": [
+				53.94444783528646,
+				166.63887532552084,
+				296.9444274902344,
+				176.63887532552084
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "In transcatheter aortic valve replacement, detailed assess-",
+			"rect": [
+				53.94444783528646,
+				154.69444783528647,
+				296.9583384195964,
+				164.69444783528652
+			],
+			"fontSize": 10.000000000000057
+		},
+		{
+			"text": "ment of valve morphologic features, leaflet thickening, and",
+			"rect": [
+				53.94444783528646,
+				142.6527709960938,
+				296.9444274902344,
+				152.65277099609378
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "prosthetic positioning was feasible, aiding structural heart",
+			"rect": [
+				53.94444783528646,
+				130.7083435058594,
+				296.9583384195964,
+				140.7083435058594
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "evaluation (28). Lastly, in a cadaveric stent model, UHR im-",
+			"rect": [
+				53.94444783528646,
+				118.66666666666674,
+				296.9305419921875,
+				128.66666666666674
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "aging maintained image quality at a reduced dose compared",
+			"rect": [
+				53.94444783528646,
+				106.70835367838549,
+				296.9583384195964,
+				116.70835367838548
+			],
+			"fontSize": 9.999999999999986
+		},
+		{
+			"text": "with standard-resolution PCCT, though further validation is",
+			"rect": [
+				53.94444783528646,
+				94.68056233723962,
+				296.9583384195964,
+				104.68056233723959
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "needed (29).",
+			"rect": [
+				53.94444783528646,
+				82.72224934895837,
+				103.75000000000001,
+				92.72224934895834
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "Thoracic Imaging",
+			"rect": [
+				53.94444783528646,
+				58.55555725097664,
+				133.8888931274414,
+				70.55555216471356
+			],
+			"fontSize": 11.99999491373692
+		},
+		{
+			"text": "In thoracic imaging, PCCT offers detailed anatomic visual-",
+			"rect": [
+				53.94444783528646,
+				44.72221883138019,
+				296.9583384195964,
+				54.72221883138025
+			],
+			"fontSize": 10.000000000000064
+		},
+		{
+			"text": "ization, functional assessment, and reduced radiation dose. In",
+			"rect": [
+				53.94444783528646,
+				32.69442749023439,
+				296.9583384195964,
+				42.69442749023445
+			],
+			"fontSize": 10.000000000000064
+		},
+		{
+			"text": "196 patients with post–COVID-19 condition, a dose-efficient",
+			"rect": [
+				314.8194376627604,
+				344.13887532552087,
+				557.8055318196615,
+				354.13887532552087
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "dual-phase acquisition enabled comprehensive assessment of",
+			"rect": [
+				314.8194376627604,
+				332.09724934895837,
+				557.8194173177084,
+				342.09724934895837
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "pulmonary ventilation, perfusion, morphologic features, and",
+			"rect": [
+				314.8194376627604,
+				320.1527709960938,
+				557.8333028157551,
+				330.1527709960938
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "vasculature in a single examination, providing full diagnostic",
+			"rect": [
+				314.8194376627604,
+				308.11109415690106,
+				557.8194173177084,
+				318.11109415690106
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "information in 85% of cases (30). UHR imaging enhanced",
+			"rect": [
+				314.8194376627604,
+				296.1666666666667,
+				557.8472137451172,
+				306.1666666666667
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "visualization of small bronchial structures and peripheral ves-",
+			"rect": [
+				314.8194376627604,
+				284.12498982747405,
+				557.8194173177084,
+				294.124989827474
+			],
+			"fontSize": 9.999999999999943
+		},
+		{
+			"text": "sels, improving detection of airway abnormalities and subtle",
+			"rect": [
+				314.8194376627604,
+				272.1666768391928,
+				557.8055318196615,
+				282.16667683919275
+			],
+			"fontSize": 9.999999999999943
+		},
+		{
+			"text": "parenchymal",
+			"rect": [
+				314.8194376627604,
+				260.1388854980469,
+				364.26387786865234,
+				270.1388854980469
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "disease.",
+			"rect": [
+				370.97223917643225,
+				260.1388854980469,
+				399.5555623372396,
+				270.1388854980469
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "(31).",
+			"rect": [
+				406.3194274902344,
+				260.1388854980469,
+				425.22220611572266,
+				270.1388854980469
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "Ultra-low-dose",
+			"rect": [
+				431.95831298828125,
+				260.1388854980469,
+				489.6110916137696,
+				270.1388854980469
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "acquisition",
+			"rect": [
+				496.30554199218744,
+				260.1388854980469,
+				538.5555394490559,
+				270.1388854980469
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "has",
+			"rect": [
+				545.2916463216146,
+				260.1388854980469,
+				557.7083079020182,
+				270.1388854980469
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "also proven useful across thoracic indications. In patients with",
+			"rect": [
+				314.8194376627604,
+				248.18057250976565,
+				557.8333028157551,
+				258.1805725097656
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "lung transplant, PCCT with doses as low as 0.17–0.26 mSv",
+			"rect": [
+				314.8194376627604,
+				236.15278116861984,
+				557.7916463216146,
+				246.15278116861984
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "enabled detection of lung abnormalities (32). In patients with",
+			"rect": [
+				314.8194376627604,
+				224.19441731770834,
+				557.8333028157551,
+				234.1944173177084
+			],
+			"fontSize": 10.000000000000057
+		},
+		{
+			"text": "suspected pneumonia, PCCT at 0.11 mSv resulted in a revised",
+			"rect": [
+				314.8194376627604,
+				212.16667683919272,
+				557.8055318196615,
+				222.16667683919277
+			],
+			"fontSize": 10.000000000000057
+		},
+		{
+			"text": "diagnosis in 41% of patients and influenced management in",
+			"rect": [
+				314.8194376627604,
+				200.12500000000006,
+				557.8333028157551,
+				210.12500000000003
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "37% of patients (33). In patients with newly diagnosed breast",
+			"rect": [
+				314.8194376627604,
+				188.18057250976565,
+				557.8472137451172,
+				198.18057250976565
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "cancer, contrast-enhanced PCCT enabled accurate local-re-",
+			"rect": [
+				314.8194376627604,
+				176.1388956705729,
+				557.8333028157551,
+				186.138895670573
+			],
+			"fontSize": 10.000000000000085
+		},
+		{
+			"text": "gional",
+			"rect": [
+				314.8194376627604,
+				164.19441731770834,
+				338.4722137451172,
+				174.19441731770834
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "staging, outperforming digital mammography even in",
+			"rect": [
+				342.52777099609375,
+				164.19441731770834,
+				557.7638753255208,
+				174.19441731770834
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "dense breast tissue (34). The following sections highlight the",
+			"rect": [
+				314.8194376627604,
+				152.15279134114587,
+				557.7916463216146,
+				162.15279134114584
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "broad utility and increasing application of PCCT in specialized",
+			"rect": [
+				314.8194376627604,
+				140.2083129882813,
+				557.7916463216146,
+				150.20831298828128
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "pulmonary contexts.",
+			"rect": [
+				314.8194376627604,
+				128.1666870117188,
+				394.1388702392578,
+				138.1666870117188
+			],
+			"fontSize": 10
+		},
+		{
+			"text": "Diffuse Lung Diseases",
+			"rect": [
+				314.8194376627604,
+				104.50000000000001,
+				400.44443766276044,
+				114.50000000000009
+			],
+			"fontSize": 10.000000000000071
+		},
+		{
+			"text": "In patients with post–COVID-19 condition with persistent",
+			"rect": [
+				314.8194376627604,
+				92.22221883138026,
+				557.8055318196615,
+				102.22221883138025
+			],
+			"fontSize": 9.999999999999986
+		},
+		{
+			"text": "respiratory symptoms, PCCT helped identify additional ab-",
+			"rect": [
+				314.8194376627604,
+				80.19442749023446,
+				557.8333028157551,
+				90.19442749023443
+			],
+			"fontSize": 9.999999999999972
+		},
+		{
+			"text": "normalities, primarily bronchiectasis, in 50% of cases; these ab-",
+			"rect": [
+				314.8194376627604,
+				68.23611450195321,
+				557.8194173177084,
+				78.23611450195311
+			],
+			"fontSize": 9.9999999999999
+		},
+		{
+			"text": "normalities were not detected with same-day EID CT (35) (Fig",
+			"rect": [
+				314.8194376627604,
+				56.2083231608074,
+				557.8194173177084,
+				66.20832316080731
+			],
+			"fontSize": 9.999999999999908
+		},
+		{
+			"text": "4A, 4B). In a study of 112 patients with stable interstitial lung",
+			"rect": [
+				314.8194376627604,
+				44.25001017252615,
+				557.8194173177084,
+				54.25001017252605
+			],
+			"fontSize": 9.9999999999999
+		},
+		{
+			"text": "disease, UHR PCCT combined with iterative reconstruction",
+			"rect": [
+				314.8194376627604,
+				32.22221883138019,
+				557.8055318196615,
+				42.22221883138025
+			],
+			"fontSize": 10.000000000000064
+		},
+		{
+			"text": "Figure 2:",
+			"rect": [
+				77.9861068725586,
+				457.0972112019857,
+				111.08333587646483,
+				465.5972086588542
+			],
+			"fontSize": 8.49999745686847
+		},
+		{
+			"text": "Myocardial extracellular volume (ECV) quantification with photon-counting CT (PCCT) compared with MRI and impact of parameter optimization.",
+			"rect": [
+				118.90277862548828,
+				457.2083333333334,
+				532.6111221313477,
+				465.2083384195964
+			],
+			"fontSize": 8.000005086262945
+		},
+		{
+			"text": "(A–C)",
+			"rect": [
+				77.91666666666667,
+				447.15276590983075,
+				97.87499745686848,
+				455.1527709960938
+			],
+			"fontSize": 8.000005086263059
+		},
+		{
+			"text": "Images in an individual with a history of arrhythmogenic right ventricular cardiomyopathy show subepicardial involvement (arrows):",
+			"rect": [
+				100.2500025431315,
+				447.15276590983075,
+				478.0694452921549,
+				455.1527709960938
+			],
+			"fontSize": 8.000005086263059
+		},
+		{
+			"text": "(A)",
+			"rect": [
+				481.3194274902344,
+				447.15276590983075,
+				492.3194376627604,
+				455.1527709960938
+			],
+			"fontSize": 8.000005086263059
+		},
+		{
+			"text": "midventricular",
+			"rect": [
+				494.6527608235677,
+				447.15276590983075,
+				533.6388778686523,
+				455.1527709960938
+			],
+			"fontSize": 8.000005086263059
+		},
+		{
+			"text": "short-axis late gadolinium enhancement MRI scan,",
+			"rect": [
+				77.91666666666667,
+				437.18053690592455,
+				223.1527837117513,
+				445.18054199218756
+			],
+			"fontSize": 8.000005086263002
+		},
+		{
+			"text": "(B)",
+			"rect": [
+				225.76390584309897,
+				437.18053690592455,
+				236.02779388427734,
+				445.18054199218756
+			],
+			"fontSize": 8.000005086263002
+		},
+		{
+			"text": "PCCT ECV map, and",
+			"rect": [
+				238.29167683919272,
+				437.18053690592455,
+				300.9861246744792,
+				445.18054199218756
+			],
+			"fontSize": 8.000005086263002
+		},
+		{
+			"text": "(C)",
+			"rect": [
+				303.374989827474,
+				437.18053690592455,
+				313.41665903727215,
+				445.18054199218756
+			],
+			"fontSize": 8.000005086263002
+		},
+		{
+			"text": "MRI ECV map. The PCCT ECV map shows a pattern of subepicardial and",
+			"rect": [
+				315.6805419921875,
+				437.18053690592455,
+				533.0138651529948,
+				445.18054199218756
+			],
+			"fontSize": 8.000005086263002
+		},
+		{
+			"text": "midmyocardial involvement that is visually concordant with that on the late gadolinium enhancement MRI scan and MRI-derived ECV map, supporting the clinical",
+			"rect": [
+				77.91666666666667,
+				427.20833333333337,
+				532.4861145019531,
+				435.2083384195964
+			],
+			"fontSize": 8.000005086263002
+		},
+		{
+			"text": "feasibility of PCCT for myocardial tissue characterization. (Adapted, with permission, from reference 15.)",
+			"rect": [
+				77.91666666666667,
+				417.22221883138025,
+				373.93056233723956,
+				425.22222391764325
+			],
+			"fontSize": 8.000005086263002
+		},
+		{
+			"text": "(D–F)",
+			"rect": [
+				376.5972391764323,
+				417.22221883138025,
+				395.6111272176107,
+				425.22222391764325
+			],
+			"fontSize": 8.000005086263002
+		},
+		{
+			"text": "Images in an individual with ischemic cardiomy-",
+			"rect": [
+				397.4583435058593,
+				417.22221883138025,
+				533.3333460489908,
+				425.22222391764325
+			],
+			"fontSize": 8.000005086263002
+		},
+		{
+			"text": "opathy show an anteroseptal 25%–50% subendocardial scar and near-transmural apical scar (arrow).",
+			"rect": [
+				77.91666666666667,
+				407.1666514078777,
+				364.5277913411458,
+				415.1666564941406
+			],
+			"fontSize": 8.000005086262945
+		},
+		{
+			"text": "(D)",
+			"rect": [
+				366.49998982747394,
+				407.1666514078777,
+				377.38887786865234,
+				415.1666564941406
+			],
+			"fontSize": 8.000005086262945
+		},
+		{
+			"text": "The PCCT ECV map reconstructed with current literature",
+			"rect": [
+				378.61109415690106,
+				407.1666514078777,
+				533.2777659098308,
+				415.1666564941406
+			],
+			"fontSize": 8.000005086262945
+		},
+		{
+			"text": "settings (quantitative iterative reconstruction 3; section thickness, 1.5 mm; virtual monoenergetic imaging at 65 keV) overestimates global ECV.",
+			"rect": [
+				77.91666666666667,
+				397.1944351196289,
+				475.9166717529297,
+				405.1944274902344
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "(E)",
+			"rect": [
+				478.75,
+				397.1944351196289,
+				487.9861068725586,
+				405.1944274902344
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "The PCCT ECV",
+			"rect": [
+				489.6944173177083,
+				397.1944351196289,
+				533.5416412353516,
+				405.1944274902344
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "map reconstructed with optimized parameters (quantitative iterative reconstruction 4; section thickness, 0.4 mm; virtual monoenergetic imaging at 45 keV) shows",
+			"rect": [
+				77.91666666666667,
+				387.22221883138025,
+				532.4583435058594,
+				395.2222239176433
+			],
+			"fontSize": 8.000005086263059
+		},
+		{
+			"text": "improved agreement with",
+			"rect": [
+				77.91666666666667,
+				377.25000254313153,
+				150.27777353922528,
+				385.249994913737
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "(F)",
+			"rect": [
+				152.05554962158203,
+				377.25000254313153,
+				161.26388549804688,
+				385.249994913737
+			],
+			"fontSize": 7.999992370605469
+		},
+		{
+			"text": "the MRI ECV map. (Adapted, under a CC BY 4.0 license, from reference 17.)",
+			"rect": [
+				162.81944274902344,
+				377.25000254313153,
+				382.30555216471356,
+				385.249994913737
+			],
+			"fontSize": 7.999992370605469
+		}
+	]
+}

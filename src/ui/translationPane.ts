@@ -123,7 +123,49 @@ export interface PaneStrings {
  *                一页整个会话都停在英文 —— 用户看到的就是"往回翻译文消失"。
  *   false        现在画不了(底图没拿到、渲染被更新的一趟顶掉),保持 ghost。
  */
-export type PageRenderResult = 'translated' | 'original' | 'degraded' | false;
+export type PageRenderResult = 'translated' | 'partial' | 'original' | 'degraded' | false;
+
+/**
+ * 增量显示的准入 (2.7.10, 外部审核 第二批·3)。
+ *
+ * 管理器每译完一个 chunk 就 notify 一次(progressive rendering per chunk),
+ * 但页视图此前只在 status==='done' 时重建 —— 于是块多、批次多的页整段时间
+ * 都是原文。真实诊断 (Radiology 2026 PCCT, p13) 上这一页 33 个可替换块、
+ * 3 个批次、34.7 秒:首批约 12 秒就到了,用户却要等满 34 秒才看到第一个字。
+ *
+ * 但"每次 notify 都重画"正是老注释警告的那件事: 重建要跑一次严格排版 +
+ * 遮罩/文本层,页面还会闪。三道闸让它只在真的划算时才画:
+ *   - 只画**看得见**的页 —— 看不见的页重建纯属浪费,反正 done 时还会再画;
+ *   - 至少要有 MIN_NEW_BLOCKS 个**新**译文块,零星一两块不值一次重建;
+ *   - 两次增量之间至少隔 MIN_INTERVAL_MS。
+ * done 不走这里(它是终态,无条件重建)。
+ */
+export const MIN_NEW_BLOCKS = 3;
+export const MIN_INTERVAL_MS = 2000;
+
+export interface PartialRenderInput {
+	status: 'idle' | 'extracting' | 'translating' | 'done' | 'error' | 'no-text-layer';
+	/** 已到手的译文块数。 */
+	ready: number;
+	/** 上一次画上去时的译文块数。 */
+	rendered: number;
+	/** 上一次增量重建的时刻 (0 = 还没画过)。 */
+	lastAt: number;
+	now: number;
+	/** 这一页在可视窗口内吗。 */
+	visible: boolean;
+}
+
+/** 纯函数,单测锁死。 */
+export function shouldRenderPartial(i: PartialRenderInput): boolean {
+	if (i.status !== 'translating' || !i.visible) {
+		return false;
+	}
+	if (i.ready - i.rendered < MIN_NEW_BLOCKS) {
+		return false;
+	}
+	return i.lastAt === 0 || i.now - i.lastAt >= MIN_INTERVAL_MS;
+}
 
 /** pumpRenders 对一次重建结果的处置 —— 纯函数,单测锁死。 */
 export interface SlotDecision {
@@ -157,6 +199,11 @@ export function nextSlotState(
 	if (result === false) {
 		// 现在画不了:保持 ghost,过一会儿再来 —— 绝不在同一页上空转。
 		return { state: 'empty', dirty: false, retryAt: now + 2500, tries: degradeTries };
+	}
+	if (result === 'partial') {
+		// 半成品页 (2.7.10): 画上去了,但这页还在翻 —— 不是终态,也不是失败。
+		// 不排重试(下一批到达时 renderPage 会重新置脏),降级预算不动。
+		return { state: 'translated', dirty: false, retryAt: 0, tries: degradeTries };
 	}
 	if (result === 'degraded') {
 		const tries = degradeTries + 1;
@@ -287,6 +334,9 @@ export class TranslationPane {
 	 * 确定性失败(某页 buildStrictPage 必抛)变成每 2.5 秒一次的永久空转。
 	 */
 	private slotDegradeTries: number[] = [];
+	/** 增量显示 (2.7.10): 每槽上次画上去时的译文块数与时刻。 */
+	private slotRenderedCount: number[] = [];
+	private slotPartialAt: number[] = [];
 	/** One render at a time; re-prioritised between renders. */
 	private pumping = false;
 	private ensureTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1058,6 +1108,8 @@ export class TranslationPane {
 		this.slotToken = [];
 		this.slotRetryAt = [];
 		this.slotDegradeTries = [];
+		this.slotRenderedCount = [];
+		this.slotPartialAt = [];
 		this.refreshViewKindButton();
 		if (kind === 'page') {
 			this.initPageList();
@@ -1190,6 +1242,8 @@ export class TranslationPane {
 		this.slotToken = [];
 		this.slotRetryAt = [];
 		this.slotDegradeTries = [];
+		this.slotRenderedCount = [];
+		this.slotPartialAt = [];
 		const children: HTMLElement[] = [];
 		for (let i = 0; i < this.docPageSizes.length; i++) {
 			const slot = this.el('div', 'pm-repage-slot');
@@ -1202,6 +1256,8 @@ export class TranslationPane {
 			this.slotToken.push(0);
 			this.slotRetryAt.push(0);
 			this.slotDegradeTries.push(0);
+			this.slotRenderedCount.push(0);
+			this.slotPartialAt.push(0);
 			children.push(
 				this.el('div', 'pm-repage-page-label',
 					`${this.strings.pagePrefix} ${i + 1} ${this.strings.pageSuffix}`.trim()),
@@ -1358,6 +1414,8 @@ export class TranslationPane {
 				this.slotDirty[i] = false;
 				// 槽被回收 = 下次进入是一次全新的重建,降级预算随之复位。
 				this.slotDegradeTries[i] = 0;
+				this.slotRenderedCount[i] = 0;
+				this.slotPartialAt[i] = 0;
 				this.slots[i]!.replaceChildren(this.makeGhost(i));
 			}
 		}
@@ -1382,13 +1440,15 @@ export class TranslationPane {
 	 * re-rendering on every intermediate state would repaint the original page
 	 * over and over while the provider streams in.
 	 */
-	refreshPage(pageIndex: number): void {
+	refreshPage(pageIndex: number, options: { resetDegrade?: boolean } = {}): void {
 		if (this.viewKind !== 'page' || !this.slots[pageIndex]) {
 			return;
 		}
 		this.slotDirty[pageIndex] = true;
 		this.slotRetryAt[pageIndex] = 0;
-		this.slotDegradeTries[pageIndex] = 0;
+		if (options.resetDegrade !== false) {
+			this.slotDegradeTries[pageIndex] = 0;
+		}
 		this.scheduleEnsure();
 	}
 
@@ -1424,10 +1484,29 @@ export class TranslationPane {
 
 	renderPage(state: PageTranslationState): void {
 		if (this.viewKind === 'page') {
-			// Show the original until the translation is COMPLETE; swap the
-			// slot to the rebuilt page only on 'done'.
 			if (state.status === 'done') {
+				this.slotRenderedCount[state.pageIndex] = state.translations.size;
 				this.refreshPage(state.pageIndex);
+				return;
+			}
+			// 增量显示 (2.7.10): 途中也画,但要过 shouldRenderPartial 的三道闸
+			// (可见 / 够多新块 / 距上次够久),否则整页在译完前一直是原文。
+			const [first, last] = this.visibleRange(0);
+			const ready = state.translations.size;
+			const decided = shouldRenderPartial({
+				status: state.status,
+				ready,
+				rendered: this.slotRenderedCount[state.pageIndex] ?? 0,
+				lastAt: this.slotPartialAt[state.pageIndex] ?? 0,
+				now: Date.now(),
+				visible: state.pageIndex >= first && state.pageIndex <= last
+			});
+			if (decided) {
+				this.slotRenderedCount[state.pageIndex] = ready;
+				this.slotPartialAt[state.pageIndex] = Date.now();
+				// 降级预算不复位: 半成品重建每 2 秒最多一次,不能让它把
+				// 确定性失败页的重试预算刷回去。
+				this.refreshPage(state.pageIndex, { resetDegrade: false });
 			}
 			return;
 		}
