@@ -7,6 +7,43 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.7.10] — 2026-09-08
+
+**页视图增量显示 + 新语料来源**。计划里的"第二批·3"终于有了证据:2.7.8 的真实诊断
+里 Radiology 2026 PCCT 综述 p13 有 33 个可替换块、3 个批次、`durationMs 34653` ——
+首批约 12 秒就到手,用户却要等满 34 秒才看到第一个字。
+
+### Changed
+
+- **页视图不再等整页译完才显示**(`translationPane.renderPage` /
+  `readerSession` 的页渲染器)。管理器本来就每译完一个 chunk notify 一次
+  (2.3.x 的 progressive rendering per chunk),此前页视图只在 `status==='done'`
+  时重建,那些通知全被丢掉。现在途中也画,但要过 `shouldRenderPartial` 的三道闸
+  (纯函数,单测锁死):**页面可见**(看不见的页重建纯属浪费,`done` 时还会再画)、
+  至少 `MIN_NEW_BLOCKS`=3 个**新**译文块、距上次增量重建 ≥ `MIN_INTERVAL_MS`=2000 ms。
+  已到的块画译文,没到的保持原文。
+- **半成品页不结算**:`settleStrictPage` 的回调在 partial 时直接返回 —— 不做压缩
+  重试(对着一个还在长的页面重试是白花请求)、不报排版统计(会误报数字)、
+  重建抛异常也不弹"排版失败"提示(译完那一趟还会再来)。新的
+  `PageRenderResult` 取值 `'partial'`:画上去了,但不是终态,不排重试、
+  **不复位降级预算**(否则半成品重建会把确定性失败页的重试预算反复刷回)。
+
+### Added
+
+- 三个新语料夹具 `radiology2026-p4 / -p10 / -p13`(Radiology 2026 PCCT 综述,
+  双栏,语料库里的新来源)。夹具总数 34 → 37,基线同步扩到 37 条,
+  **原有 34 页逐字节不变**。
+- p13 顺带钉住一个**已知缺陷**:那是一张"Description (or Opportunity) /
+  Implications and Recommended Solutions"两列文本表,`detectTableRegions`
+  完全没识别出来,于是 34 个块里 22 个是被打散的表格碎片、标签与描述在
+  阅读顺序里交错(`tableCells: 0`)。快照如实记录当前行为,留给下一批修。
+
+### Tests
+
+- slotState 4 例(`'partial'` 的槽处置;`shouldRenderPartial` 三道闸各自把关 +
+  五种非 translating 状态都不走增量;readerSession 半成品不结算的结构闸;
+  renderPage 增量分支的结构闸)。6 个突变各一红。961 全绿。
+
 ## [2.7.9] — 2026-09-08
 
 **尝试去向明细**。2.7.8 装机后的首份真实诊断显示 `httpAttempts 30` 对 20 个响应

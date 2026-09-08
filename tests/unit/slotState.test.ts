@@ -8,7 +8,9 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextSlotState } from '../../src/ui/translationPane';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { nextSlotState, shouldRenderPartial, MIN_NEW_BLOCKS, MIN_INTERVAL_MS } from '../../src/ui/translationPane';
 
 const NOW = 1_700_000_000_000;
 
@@ -62,4 +64,60 @@ test('一次降级后重建成功,预算复位', () => {
 	const ok = nextSlotState('translated', failed.tries, NOW);
 	assert.equal(ok.state, 'translated');
 	assert.equal(ok.tries, 0);
+});
+
+// ---- 2.7.10 增量显示 ---------------------------------------------------------
+
+test("'partial' 是半成品页: 画上去但不是终态,不排重试、不动降级预算", () => {
+	const d = nextSlotState('partial', 2, NOW);
+	assert.equal(d.state, 'translated', '半成品页确实画上了译文');
+	assert.equal(d.dirty, false, '不自排重试 —— 下一批到达时由 renderPage 置脏');
+	assert.equal(d.retryAt, 0);
+	assert.equal(d.tries, 2, '降级预算原样保留,不被半成品重建刷回 0');
+});
+
+test('shouldRenderPartial: 只在「可见 + 够多新块 + 距上次够久」时才途中重画 (2.7.10)', () => {
+	const base = { status: 'translating' as const, ready: 12, rendered: 0, lastAt: 0, now: NOW, visible: true };
+	assert.equal(shouldRenderPartial(base), true, '首批 12 块到手、页面可见 → 画');
+
+	// 三道闸各自把关。
+	assert.equal(shouldRenderPartial({ ...base, visible: false }), false, '看不见的页重建纯属浪费');
+	assert.equal(shouldRenderPartial({ ...base, ready: MIN_NEW_BLOCKS - 1 }), false, '零星几块不值一次重建');
+	assert.equal(shouldRenderPartial({ ...base, rendered: 12 }), false, '没有新块就不重画');
+	assert.equal(shouldRenderPartial({ ...base, rendered: 12 - MIN_NEW_BLOCKS + 1 }), false, '新块不够阈值');
+	assert.equal(shouldRenderPartial({ ...base, rendered: 12 - MIN_NEW_BLOCKS }), true, '刚好够阈值就画');
+	assert.equal(shouldRenderPartial({ ...base, lastAt: NOW - MIN_INTERVAL_MS + 1 }), false, '距上次太近');
+	assert.equal(shouldRenderPartial({ ...base, lastAt: NOW - MIN_INTERVAL_MS }), true, '隔够了就画');
+
+	// done 是终态,由无条件重建那条路走,绝不从这里出去。
+	for (const status of ['idle', 'extracting', 'done', 'error', 'no-text-layer'] as const) {
+		assert.equal(shouldRenderPartial({ ...base, status }), false, `${status} 不走增量`);
+	}
+});
+
+test('readerSession 的半成品重建不结算、不报统计 (结构性回归闸, 2.7.10)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const start = src.indexOf("const partial = !!(state && state.status === 'translating'");
+	assert.ok(start > 0, '找不到 partial 判定');
+	const body = src.slice(start, src.indexOf("return partial ? 'partial' : 'translated';", start));
+	// 半成品页对着一个还在长的页面压缩重试会白花请求,报排版统计会误报数字。
+	assert.ok(/if \(partial\) \{\s*\n\s*return; \/\/ 半成品页不结算/.test(body),
+		'settleStrictPage 回调必须在 partial 时直接返回');
+	const settle = body.indexOf('settleStrictPage(');
+	assert.ok(body.indexOf('if (partial)', settle) < body.indexOf('this.reportPlacement(', settle),
+		'partial 闸必须在 reportPlacement / resolveStrictUnfit 之前');
+});
+
+test('renderPage 的页视图真的走增量分支,且 done 仍无条件重建 (结构性回归闸, 2.7.10)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/ui/translationPane.ts'), 'utf8');
+	const start = src.indexOf('\trenderPage(state: PageTranslationState): void {');
+	assert.ok(start > 0, '找不到 renderPage');
+	const body = src.slice(start, src.indexOf('const section = this.ensurePageSection(', start));
+	assert.ok(/if \(state\.status === 'done'\)[\s\S]*?this\.refreshPage\(state\.pageIndex\);/.test(body),
+		'done 必须仍然无条件重建');
+	assert.ok(/shouldRenderPartial\(\{[\s\S]*?visible: state\.pageIndex >= first && state\.pageIndex <= last/.test(body),
+		'途中必须过 shouldRenderPartial,可见性来自 visibleRange');
+	assert.ok(/resetDegrade: false/.test(body), '半成品重建不得复位降级预算');
+	assert.ok(body.indexOf('this.slotPartialAt[state.pageIndex] = Date.now();') > 0,
+		'画过之后要记下时刻,否则节流闸永远放行');
 });
