@@ -7,6 +7,44 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.8.4] — 2026-09-08
+
+**性能第五批(上半): 先量,再改**。本版**只加计量、不改任何行为** —— 缓存分片与
+补译尾部的改动要等这几个数字在真实长文档上说话。全部是计数与毫秒,不含原文、
+译文、路径与密钥;37 页布局快照与请求计划基线**逐字节不变**。
+
+### Added
+
+- **页级时序三段**(`PageDiagnostics`): `queuedMs`(抽取完到调度器真正让这页开跑
+  —— 它大说明并发/优先级有问题,不是模型慢)、`extractMs`(PDF 抽取)、
+  `firstTextMs`(从这页开始跑到**第一块译文到手**)。`durationMs` 回答的是"整页
+  多久译完",回答不了"用户多久看到第一个中文字";三段合起来才说得清慢在哪。
+  首字时刻**只记第一次**,后来的通知(单块重译、补救回填)不得把它往后推。
+- **`usage.hotPages` / `usage.retainedPages`**: 此刻还持有完整内容的页数,以及
+  轻量状态的页数。前者与第四批的 `RETAIN_LIMIT` 一起看,才知道上限定得合不合适。
+- **缓存写盘计量**(`cacheManager.cacheWriteStats()`): 页缓存与段落库各自的写入
+  次数、字节数、耗时,加上失败次数。段落库是**整库重写** —— `segmentBytes /
+  segmentFlushes` 就是"每写一条段落要重写多大一坨",分片值不值得做先看这个数。
+  快照是拷贝,外部改不到内部计数。
+- **渲染计量**(`pane.renderMetrics()`): started / committed / **cancelled** /
+  failed / totalMs。`cancelled` 大是第一批的取消在频繁生效(翻页快),不是故障;
+  它与 `layoutMs` 一起看才知道排版耗时被谁吃掉。
+- baseline-report 新增 9 列:`queuedMs` `extractMs` `firstTextMs` `hotPages`
+  `renderCancelled` `renderMs` `cacheWriteMs` `cacheWriteKB` `segFlushKB`。
+
+### 明确**没有**做的事
+
+按第五批的约定,以下三项都要等真实长文档的数字确认瓶颈之后再动,本版一行未改:
+缓存按稳定哈希分片、补译尾部只补缺失块、限流时降低对应服务商压力。结构闸钉住了
+"计量绝不参与任何分支判断"与"仍然只有页缓存 + 段落库两处整体写盘"。
+
+### Tests
+
+- diagnosticsPrivacy 3 例(时序/热页数只有数字且不夹带文本;写盘计量字段集合固定、
+  快照是拷贝;"只量不改"的结构闸),translationManager 2 例(时序三段各自成立 +
+  **首字时间不被后来的通知改写**;热页面数量随淘汰下降,与 `retainedPages` 分别
+  回答两个问题)。7 个突变各一红。999 全绿。
+
 ## [2.8.3] — 2026-09-08
 
 **性能第四批: 限制已完成页面的内存保留**。`TranslationManager.pages` 此前只增不减:

@@ -395,6 +395,12 @@ export class TranslationPane {
 	/** 每槽一个渲染序号 —— 与在飞任务比对,过时结果绝不落地。 */
 	private slotRenderSeq: number[] = [];
 	/**
+	 * 渲染计量 (2.8.4, 性能第五批: 先量再改)。只有计数与毫秒,随诊断导出。
+	 * `cancelled` 大 = 第一批的取消在频繁生效(翻页快),不是故障;
+	 * 它与 `layoutMs` 一起看才知道"排版耗时"是被谁吃掉的。
+	 */
+	private renderStats = { started: 0, committed: 0, cancelled: 0, failed: 0, totalMs: 0 };
+	/**
 	 * 页位置索引 (2.8.0 第二批): 建一次、二分查,滚动期间零 DOM 读取。
 	 * 几何真的变了(页宽 / 缩放 / 页面尺寸)才作废重建。
 	 */
@@ -1384,6 +1390,11 @@ export class TranslationPane {
 	 * 这一页此刻还挂在面板上吗 (2.8.3, 性能第四批): 管理器据此决定能不能卸掉
 	 * 它的完整内容 —— 正挂着的页卸掉会当场变回原文。
 	 */
+	/** 渲染计量的只读快照 (2.8.4)。 */
+	renderMetrics(): { started: number; committed: number; cancelled: number; failed: number; totalMs: number } {
+		return { ...this.renderStats };
+	}
+
 	hasMountedPage(pageIndex: number): boolean {
 		return this.mounted.has(pageIndex) || this.pump.busyPage === pageIndex;
 	}
@@ -1433,12 +1444,18 @@ export class TranslationPane {
 		}
 		this.slotRenderSeq[page] = ++this.slotToken[page]!;
 		this.slotDirty[page] = false;
+		this.renderStats.started++;
+		const startedAt = Date.now();
 		try {
 			return await this.pageRenderer(page, slot, this.slotWidthFor(page), signal);
 		}
 		catch (e) {
+			this.renderStats.failed++;
 			logger.debug(MODULE, `page ${page + 1} render failed`, e);
 			return false;
+		}
+		finally {
+			this.renderStats.totalMs += Date.now() - startedAt;
 		}
 	}
 
@@ -1451,8 +1468,12 @@ export class TranslationPane {
 			return; // superseded while rendering
 		}
 		if (aborted) {
+			this.renderStats.cancelled++;
 			this.slotDirty[page] = true;
 			return;
+		}
+		if (result !== false) {
+			this.renderStats.committed++;
 		}
 		const next = nextSlotState(result, this.slotDegradeTries[page] ?? 0, Date.now());
 		if (result !== false) {

@@ -142,3 +142,56 @@ test('readerSession 把三个计量钩子原样转给适配器 (结构性回归�
 			`${hook} 必须转给适配器 —— 漏一个,诊断里那一类尝试就永远是 0`);
 	}
 });
+
+test('第五批计量只有数字: 时序、热页数、写盘、渲染,一个字都不带 (2.8.4)', async () => {
+	const deps = makeDeps();
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager.ensurePage(0, 1);
+	const diag = manager.exportDiagnostics() as {
+		pages: { metrics: Record<string, unknown> }[];
+		usage: Record<string, unknown>;
+	};
+	const json = JSON.stringify(diag);
+	assert.ok(!json.includes(SRC) && !json.includes(TGT), '计量字段不得夹带文本');
+
+	const metrics = diag.pages[0]!.metrics;
+	for (const field of ['extractMs', 'firstTextMs']) {
+		assert.equal(typeof metrics[field], 'number', `${field} 应为毫秒数`);
+		assert.ok((metrics[field] as number) >= 0);
+	}
+	assert.equal(typeof diag.usage.hotPages, 'number', '热页面数量');
+	assert.equal(diag.usage.hotPages, 1);
+	assert.equal(typeof diag.usage.retainedPages, 'number');
+	manager.dispose();
+});
+
+test('缓存写盘计量只累计次数/字节/毫秒 (2.8.4)', async () => {
+	const cache = await import('../../src/cache/cacheManager');
+	cache.resetCacheWriteStats();
+	const zero = cache.cacheWriteStats();
+	for (const [key, value] of Object.entries(zero)) {
+		assert.equal(value, 0, `${key} 归零`);
+		assert.equal(typeof value, 'number');
+	}
+	assert.deepEqual(Object.keys(zero).sort(), [
+		'failures', 'pageBytes', 'pageMs', 'pageWrites',
+		'segmentBytes', 'segmentEntriesWritten', 'segmentFlushes', 'segmentMs'
+	], '字段集合固定,不该混进路径或内容');
+	// 快照是拷贝,外部改不到内部计数。
+	const snapshot = cache.cacheWriteStats();
+	snapshot.pageWrites = 999;
+	assert.equal(cache.cacheWriteStats().pageWrites, 0, '快照必须是拷贝');
+});
+
+test('第五批只加计量、不改行为: 缓存与补译路径原样 (结构性回归闸, 2.8.4)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/cache/cacheManager.ts'), 'utf8');
+	// 计量只能出现在写盘成功之后与失败分支里,不能掺进"写什么/写到哪"的决策。
+	const write = src.slice(src.indexOf('export async function writePage('), src.indexOf('/**\n * 段落级缓存 read'));
+	assert.ok(/writeStats\.pageWrites\+\+;/.test(write));
+	assert.ok(!/if \(writeStats/.test(src), '计量绝不参与任何分支判断 —— 那就不是"只量"了');
+	// 真的分片会带来"按哈希选文件"的逻辑;注释里提到"分片"是说明动机,不算实现。
+	assert.ok(!/shardOf|shardPath|segmentsPath\([^)]*shard/.test(src),
+		'第五批不做分片,先量再改');
+	assert.equal(src.split('await IOUtils.writeJSON(').length - 1, 2,
+		'仍然是页缓存 + 段落库两处整体写盘,没有引入新的写盘路径');
+});

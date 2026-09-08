@@ -102,6 +102,53 @@ export async function readPage(parts: CacheKeyParts): Promise<TranslatedBlock[] 
 	}
 }
 
+/**
+ * 缓存写盘计量 (2.8.4, 性能第五批: 先量再改)。
+ *
+ * 只累计**次数、字节数、耗时**,不碰任何内容 —— 与诊断的口径一致。
+ * 目的只有一个: 在动手改缓存分片之前,先用真实长文档回答"缓存写入到底慢不慢"。
+ * 没有这组数字,分片就是凭感觉改。
+ */
+export interface CacheWriteStats {
+	pageWrites: number;
+	pageBytes: number;
+	pageMs: number;
+	segmentFlushes: number;
+	segmentEntriesWritten: number;
+	segmentBytes: number;
+	segmentMs: number;
+	/** 写盘失败次数(内容照旧留在内存里,不算数据丢失)。 */
+	failures: number;
+}
+
+const writeStats: CacheWriteStats = {
+	pageWrites: 0, pageBytes: 0, pageMs: 0,
+	segmentFlushes: 0, segmentEntriesWritten: 0, segmentBytes: 0, segmentMs: 0,
+	failures: 0
+};
+
+/** 只读快照。 */
+export function cacheWriteStats(): CacheWriteStats {
+	return { ...writeStats };
+}
+
+/** 测试用: 归零。 */
+export function resetCacheWriteStats(): void {
+	writeStats.pageWrites = 0;
+	writeStats.pageBytes = 0;
+	writeStats.pageMs = 0;
+	writeStats.segmentFlushes = 0;
+	writeStats.segmentEntriesWritten = 0;
+	writeStats.segmentBytes = 0;
+	writeStats.segmentMs = 0;
+	writeStats.failures = 0;
+}
+
+/** 序列化一次,既用来写盘也用来记字节数 —— 不为计量多序列化一遍。 */
+function serializedBytes(text: string): number {
+	return text.length;
+}
+
 export async function writePage(parts: CacheKeyParts, translations: TranslatedBlock[], producedBy?: string): Promise<void> {
 	const path = pagePath(parts);
 	const dir = PathUtils.parent(path);
@@ -117,6 +164,7 @@ export async function writePage(parts: CacheKeyParts, translations: TranslatedBl
 		translations
 	};
 	await enqueueWrite(path, async () => {
+		const startedAt = Date.now();
 		try {
 			if (dir) {
 				await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
@@ -125,8 +173,13 @@ export async function writePage(parts: CacheKeyParts, translations: TranslatedBl
 			// Atomic: write to tmp file, then rename over the target.
 			await IOUtils.writeJSON(path, entry, { tmpPath: path + '.tmp' });
 			await chmodBestEffort(path, 0o600);
+			// 2.8.4: 只记次数/字节/耗时,不记路径也不记内容。
+			writeStats.pageWrites++;
+			writeStats.pageBytes += serializedBytes(JSON.stringify(entry));
+			writeStats.pageMs += Date.now() - startedAt;
 		}
 		catch (e) {
+			writeStats.failures++;
 			logger.warn(MODULE, 'Cache write failed (continuing without cache)', e);
 		}
 	});
@@ -345,6 +398,7 @@ async function flushSegments(path: string): Promise<void> {
 	const { context, entries, resolve } = p;
 	const dir = PathUtils.parent(path);
 	await enqueueWrite(path, async () => {
+		const startedAt = Date.now();
 		try {
 			// 合并基底的读取失败分类 (2.0.7, 审核 P2-1): 只有内容确认损坏
 			// (SyntaxError)或 context 不符才允许以空库重建;瞬时读失败直接
@@ -381,6 +435,12 @@ async function flushSegments(path: string): Promise<void> {
 			}
 			await IOUtils.writeJSON(path, entry, { tmpPath: path + '.tmp' });
 			await chmodBestEffort(path, 0o600);
+			// 2.8.4: 段落库是整库重写 —— 这里的字节数就是"每写一条段落要重写
+			// 多大一坨"。分片值不值得做,先看这个数字。
+			writeStats.segmentFlushes++;
+			writeStats.segmentEntriesWritten += entries.size;
+			writeStats.segmentBytes += serializedBytes(JSON.stringify(entry));
+			writeStats.segmentMs += Date.now() - startedAt;
 			// 刚写完的内容就是权威版本: 就地更新解析缓存,下一页连 parse 带
 			// 重读全省。指纹取不到就把缓存丢掉,绝不留一份无法证明有效的。
 			const stamp = await statStamp(path);
@@ -392,6 +452,7 @@ async function flushSegments(path: string): Promise<void> {
 			}
 		}
 		catch (e) {
+			writeStats.failures++;
 			storeCache.delete(path); // 写到一半失败: 内存里那份可能已不对应磁盘
 			logger.warn(MODULE, 'Segment cache write failed (continuing without cache)', e);
 		}

@@ -251,6 +251,8 @@ test('面板经 RenderPump 泵送,不再自己按页码扫描 (结构性回归�
 	assert.ok(/current: Math\.max\(first, Math\.min\(last, this\.currentPage\)\)/.test(src),
 		'窗口必须带上当前页,否则"当前页优先"无从谈起');
 	const commit = src.slice(src.indexOf('private commitRender('), src.indexOf('private releaseFarSlots('));
-	assert.ok(/if \(aborted\) \{\s*\n\s*this\.slotDirty\[page\] = true;\s*\n\s*return;/.test(commit),
+	assert.ok(/if \(aborted\) \{[\s\S]{0,120}?this\.slotDirty\[page\] = true;\s*\n\s*return;/.test(commit),
 		'被取消的一页只标脏、不写状态');
+	assert.ok(!/nextSlotState/.test(commit.slice(commit.indexOf('if (aborted)'), commit.indexOf('return;', commit.indexOf('if (aborted)')))),
+		'取消分支里不得写槽状态机');
 });

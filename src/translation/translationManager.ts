@@ -430,6 +430,18 @@ export interface PageDiagnostics {
 	inputTokens?: number;
 	outputTokens?: number;
 	cachedInputTokens?: number;
+	/**
+	 * 时序三件套 (2.8.4, 性能第五批: 先量再改)。全是毫秒,不含任何文本。
+	 *   queuedMs        从 ensurePage 被调用到调度器真正把这页跑起来 —— 当前页
+	 *                   的"排队时间",它大说明并发/优先级有问题,不是模型慢。
+	 *   extractMs       PDF 抽取耗时(不占服务商槽位,但会拖住首字)。
+	 *   firstTextMs     从这页开始跑到**第一块译文到手** —— 这才是用户等待
+	 *                   "第一个中文字"的时间;durationMs 是整页译完的时间。
+	 * 三个数字合起来才回答得了"慢在哪一段",单看 durationMs 回答不了。
+	 */
+	queuedMs?: number;
+	extractMs?: number;
+	firstTextMs?: number;
 }
 
 /**
@@ -520,6 +532,11 @@ export class TranslationManager {
 	 * 不用时间戳: 同一毫秒内先后用到的页时间戳分不出先后。
 	 */
 	private pageTouch = new Map<number, number>();
+	/**
+	 * 页 → 本趟运行的时序 (2.8.4, 性能第五批)。只有毫秒数,随页级指标导出。
+	 * `firstTextAt` 由 notify 顺手记下: 第一次看到这页有译文的时刻。
+	 */
+	private pageTiming = new Map<number, { requestedAt: number; extractMs: number; queuedMs?: number; firstTextAt: number }>();
 	private touchSeq = 0;
 	/** 同时持有完整内容的已完成页上限(测试可注入)。 */
 	private retainLimit: number | undefined;
@@ -1247,6 +1264,18 @@ export class TranslationManager {
 								return t
 									? { inputTokens: t.inputTokens, outputTokens: t.outputTokens, cachedInputTokens: t.cachedInputTokens }
 									: {};
+							})(),
+							// 2.8.4 (性能第五批): 排队 / 抽取 / 首字三段计时。
+							...((): Partial<PageDiagnostics> => {
+								const t = this.pageTiming.get(s.pageIndex);
+								if (!t) {
+									return {};
+								}
+								return {
+									extractMs: t.extractMs,
+									...(typeof t.queuedMs === 'number' ? { queuedMs: t.queuedMs } : {}),
+									...(t.firstTextAt ? { firstTextMs: t.firstTextAt - t.requestedAt } : {})
+								};
 							})()
 						}
 						: null,
@@ -1294,6 +1323,10 @@ export class TranslationManager {
 				// 2.7.7: 真实 HTTP 尝试 (含适配器自愈重试) 与校验失败次数。
 				httpAttempts: this.httpAttempts,
 				validationFailures: this.validationFailures,
+				// 2.8.4 (性能第五批): 此刻还持有完整内容的页数("热页面")。
+				// 它与 pageRetention 的上限一起看 —— 上限是否合适,先看这个数字。
+				hotPages: [...this.pages.values()].filter(p => p.evicted !== true).length,
+				retainedPages: this.pages.size,
 				// 2.7.9: 多出来的尝试都去哪了 —— 按枚举计数,空表则省略。
 				...(this.paramHeals.size ? { paramHeals: countsOf(this.paramHeals) } : {}),
 				...(this.attemptErrors.size ? { attemptErrors: countsOf(this.attemptErrors) } : {})
@@ -1503,6 +1536,12 @@ export class TranslationManager {
 	private notify(state: PageTranslationState): void {
 		if (!this.disposed) {
 			state.translationRevision = this.bumpRevision(state);
+			// 首字时刻 (2.8.4): 第一次看到这页有译文就记下来,之后不再改。
+			// 放在 notify 里 = 任何产出译文的路径都被覆盖,不必逐个现场埋点。
+			const timing = this.pageTiming.get(state.pageIndex);
+			if (timing && timing.firstTextAt === 0 && state.translations.size > 0) {
+				timing.firstTextAt = Date.now();
+			}
 			try {
 				this.events.onPageUpdate(state);
 			}
@@ -1572,6 +1611,9 @@ export class TranslationManager {
 			extractingSince: Date.now()
 		};
 		const navigationAtStart = this.navigationGeneration;
+		// 2.8.4 (性能第五批): 排队/抽取/首字三段计时的起点。
+		const requestedAt = Date.now();
+		let extractedAt = requestedAt;
 		this.pages.set(pageIndex, state);
 		// 预取浪费计数 (2.3.9): 只有**显式后台预取**(foreground === false,即
 		// schedulePrefetch 发起的邻页)进账 —— 导出等路径不带 foreground 选项,
@@ -1663,6 +1705,12 @@ export class TranslationManager {
 				return;
 			}
 			state.blocks = blocks;
+			extractedAt = Date.now();
+			this.pageTiming.set(pageIndex, {
+				requestedAt,
+				extractMs: extractedAt - requestedAt,
+				firstTextAt: 0
+			});
 			if (!blocks.length) {
 				state.status = 'done';
 				this.notify(state);
@@ -1670,6 +1718,11 @@ export class TranslationManager {
 			}
 
 			await this.scheduler.enqueue(`page-${pageIndex}`, priority, async (signal) => {
+				// 排队时间 = 抽取完到调度器真正让这页开跑 (2.8.4)。
+				const timing = this.pageTiming.get(pageIndex);
+				if (timing) {
+					timing.queuedMs = Date.now() - extractedAt;
+				}
 				// IDLE watchdog with a REAL abort. The old Promise.race watchdog had
 				// two structural bugs: (a) it measured TOTAL page time, so a big page
 				// whose every request succeeded could still be killed; (b) it only
