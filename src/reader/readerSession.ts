@@ -22,9 +22,11 @@ import { PROMPT_VERSION } from '../translation/promptBuilder';
 import { joinPlacementOutcome } from './diagnosticsJoin';
 import { engineExportRow, type EngineExportRow } from '../export/endpointKind';
 import type { DiagnosticsExportSource } from '../export/diagnosticsJsonl';
+import type { CorpusExportSource, CorpusPageRecord, TranslationSource, TranslationMissing } from '../export/corpusJsonl';
+import { checkStructure, changedExtractInputs } from '../export/structureMatch';
 import { parseGlossaryJSON, serializeGlossary, dedupeLearnedTerms } from '../translation/glossary';
 import { parseProviderProfiles, effectiveProviderConfig } from '../translation/providerProfiles';
-import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationResponse } from '../types/models';
+import type { GlossaryRule, ProviderSettings, SourceBlock, TranslationRequest, TranslationResponse } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PageRenderResult, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
@@ -2533,6 +2535,131 @@ export class ReaderSession {
 			pin: (pageIndex: number) => { this.exportPins.add(pageIndex); },
 			unpin: (pageIndex: number) => { this.exportPins.delete(pageIndex); }
 		};
+	}
+
+	/**
+	 * 语料导出的数据源 (2.8.7, 导出方案 P2)。
+	 *
+	 * 每一页做三件事,**都不发任何翻译请求**:
+	 *
+	 *   1. **重新解析**结构 —— 直接调 `extractor.extractPage`,那就是翻译当初走的
+	 *      同一条流水线(方案 §1.1 要求"喂同样的 opts",共用同一个函数是最彻底的
+	 *      做法,不会有"检查用的链和真链慢慢分叉"这种事);
+	 *   2. **核对**留存结构与重建结构,并先查四项可变输入有没有变 —— 变了就直接
+	 *      `unverifiable`,不拿"碰巧相等"当证据;
+	 *   3. **取译文**: 内存里还在就用内存的,已被淘汰则读页缓存复原。
+	 *      结构不匹配时照样把译文交给写出器 —— 由写出器统一扣下并计数,
+	 *      这条闸只有一处,不靠这里自觉。
+	 *
+	 * spans 只有渲染过的页才拿得到(文本层来自 DOM),拿不到就标 `missing:not-rendered`
+	 * —— **不拿重建的结构冒充 spans**。
+	 */
+	async corpusExportSource(pluginVersion: string): Promise<CorpusExportSource> {
+		const manager = this.manager;
+		if (!manager) {
+			throw new PaperMirrorError('UNKNOWN', 'No translation session to export.', { retryable: false });
+		}
+		const engines = await this.engineSelfCheck();
+		return {
+			pluginVersion,
+			generatedAt: new Date(),
+			scope: manager.exportScope(),
+			summary: () => ({
+				engines,
+				engineRotations: this.pageProviderOffset.size,
+				...((): Record<string, unknown> => {
+					const diag = manager.exportDiagnostics() as Record<string, unknown>;
+					const { pages: _pages, ...session } = diag;
+					return session;
+				})()
+			}),
+			readPage: async (pageIndex: number): Promise<CorpusPageRecord> => {
+				const state = manager.getPageState(pageIndex);
+				const before = this.extractor.extractInputsFor(pageIndex);
+				// 与翻译当时**同一条**流水线,不是"另写一份检查用的解析"。
+				const rebuilt = await this.extractor.extractPage(pageIndex);
+				const after = this.extractor.extractPathFor(pageIndex);
+				const inputsChanged = changedExtractInputs(before, {
+					...this.extractor.currentExtractInputs(pageIndex),
+					...(after ? { path: after } : {})
+				});
+				// 已被淘汰的页没有留存结构可比 —— checkStructure 会如实报
+				// no-stored-structure,不是"比过了且相等"。
+				const stored = state && state.blocks.length ? state.blocks : null;
+				const check = checkStructure(stored, rebuilt, { inputsChanged });
+				const { translations, translationSource, translationsMissing } =
+					await this.corpusTranslations(pageIndex, state, rebuilt);
+				const spans = this.pageSpans(pageIndex);
+				return {
+					spans: spans ?? null,
+					...(spans ? {} : { spansMissing: 'missing:not-rendered' as const }),
+					blocks: rebuilt,
+					check,
+					translations,
+					...(translationSource ? { translationSource } : {}),
+					...(translationsMissing ? { translationsMissing } : {}),
+					...(this.placementProbe.has(pageIndex) ? { probe: this.placementProbe.get(pageIndex) } : {})
+				};
+			},
+			pin: (pageIndex: number) => { this.exportPins.add(pageIndex); },
+			unpin: (pageIndex: number) => { this.exportPins.delete(pageIndex); }
+		};
+	}
+
+	/** 这一页的译文: 内存 → 页缓存 → 说不出来就如实标缺失。**不发请求。** */
+	private async corpusTranslations(
+		pageIndex: number,
+		state: PageTranslationState | undefined,
+		rebuilt: SourceBlock[]
+	): Promise<{
+		translations: { id: string; translatedText: string }[] | null;
+		translationSource?: TranslationSource;
+		translationsMissing?: TranslationMissing;
+	}> {
+		if (state && state.translations.size) {
+			return {
+				translations: [...state.translations].map(([id, translatedText]) => ({ id, translatedText })),
+				translationSource: 'live'
+			};
+		}
+		if (!state) {
+			return { translations: null, translationsMissing: 'missing:never-processed' };
+		}
+		try {
+			const parts = await this.cacheKey(pageIndex, rebuilt.map(b => b.sourceText));
+			const hit = parts ? await cacheManager.readPage(parts) : null;
+			if (hit && hit.length) {
+				return { translations: hit, translationSource: 'restored-from-cache' };
+			}
+		}
+		catch (e) {
+			logger.debug(MODULE, `corpus: cache restore failed for page ${pageIndex + 1}`, e);
+		}
+		// 被卸过、缓存也没有 —— 两种缺失分开说,后者不冒充前者。
+		return {
+			translations: null,
+			translationsMissing: state.evicted ? 'missing:evicted' : 'missing:cache-miss'
+		};
+	}
+
+	/** 这一页的文本层 spans(夹具同格式);没渲染过就拿不到,返回 null。 */
+	private pageSpans(pageIndex: number): unknown | null {
+		try {
+			const page = adapter.getTextLayerItems(this.reader, pageIndex);
+			if (!page || !page.items.length) {
+				return null;
+			}
+			return {
+				source: 'document',
+				page: pageIndex + 1,
+				pageWidth: page.pageWidth,
+				pageHeight: page.pageHeight,
+				items: page.items.map(i => ({ text: i.text, rect: i.rect, ...(i.fontSize ? { fontSize: i.fontSize } : {}) }))
+			};
+		}
+		catch {
+			return null;
+		}
 	}
 
 	/**

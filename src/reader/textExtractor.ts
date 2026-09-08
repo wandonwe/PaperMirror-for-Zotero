@@ -17,6 +17,7 @@
  * extractable text — never because one path came back empty.
  */
 
+import { hashSourceTexts } from '../cache/cacheSchema';
 import type { SourceBlock } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
@@ -79,6 +80,28 @@ export interface PathReport {
  */
 export type ExtractPath = 'chars' | 'text-layer' | 'plain-text' | 'rendered-recovery' | 'empty';
 
+/**
+ * 一次抽取所依赖的**跨页累积 / 可中途改变**的输入 (2.8.7, 导出方案 P2 · 方案 §1.2)。
+ *
+ * 语料导出要在会话末尾重新解析每一页,再和留存结构比对。但下面这几项在两次解析
+ * 之间可能已经不同了 —— 那样比出来的差异是自己制造的,比对结论也就不作数:
+ *
+ *   - `bodyFontSize`: 文档级正文字号估计,prime() 之后才有值,首页可能是 0;
+ *   - `referencesAlreadyStarted`: 跨页累积的"前面是否已进参考文献";
+ *   - `includeReferences` / 不译词表: 用户首选项,可中途改;
+ *   - `path`: 运行时择路(含 `(cid:` 未解码比例的启发式),重解析可能走上另一条。
+ *
+ * 所以抽取时把它们记下来,导出时逐项比对 —— 有任一项变了,结构比对结论必须是
+ * `unverifiable`,**哪怕逐项全等**。不译词表只记哈希,不记词表本身。
+ */
+export interface ExtractInputs {
+	path?: ExtractPath;
+	bodyFontSize: number;
+	includeReferences: boolean;
+	referencesAlreadyStarted: boolean;
+	noTranslateHash: string;
+}
+
 export class TextExtractor implements PageParser {
 	private reader: ReaderLike;
 	private includeReferences: boolean;
@@ -102,6 +125,8 @@ export class TextExtractor implements PageParser {
 
 	/** 2.8.5: 每页最终走通的抽取路径。只在**返回块的那一刻**写入。 */
 	private pathByPage = new Map<number, ExtractPath>();
+	/** 2.8.7: 每页抽取当时的可变输入快照,导出核对结构一致性时用。 */
+	private inputsByPage = new Map<number, Omit<ExtractInputs, 'path'>>();
 
 	constructor(reader: ReaderLike, options: { includeReferences: boolean; noTranslate?: () => string[] }) {
 		this.reader = reader;
@@ -212,6 +237,9 @@ export class TextExtractor implements PageParser {
 	}
 
 	async extractPage(pageIndex: number): Promise<SourceBlock[]> {
+		// 2.8.7: 先把这次抽取实际依赖的可变输入拍下来 —— 事后重解析时逐项比对,
+		// 变了就把结构比对结论降为 unverifiable,不拿"碰巧相等"当证据。
+		this.inputsByPage.set(pageIndex, this.currentExtractInputs(pageIndex));
 		// 边框硬屏障: real figure boundaries participate in extraction — in-figure
 		// labels stay out of the flow, and nothing merges across a figure.
 		const obstacles = await this.obstaclesFor(pageIndex);
@@ -311,6 +339,22 @@ export class TextExtractor implements PageParser {
 	 */
 	extractPathFor(pageIndex: number): ExtractPath | undefined {
 		return this.pathByPage.get(pageIndex);
+	}
+
+	/** 这一页抽取当时的可变输入(含最终走通的路径);没抽过则 undefined。 */
+	extractInputsFor(pageIndex: number): ExtractInputs | undefined {
+		const inputs = this.inputsByPage.get(pageIndex);
+		return inputs ? { ...inputs, ...(this.pathByPage.get(pageIndex) ? { path: this.pathByPage.get(pageIndex) } : {}) } : undefined;
+	}
+
+	/** 此刻重新解析这一页会用到的可变输入 —— 与上面那份比对即可判断能否核。 */
+	currentExtractInputs(pageIndex: number): Omit<ExtractInputs, 'path'> {
+		return {
+			bodyFontSize: this.bodyFontSize,
+			includeReferences: this.includeReferences,
+			referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
+			noTranslateHash: hashSourceTexts(this.noTranslateSafe())
+		};
 	}
 
 	/** Build blocks from the rendered PDF.js text layer, if there is one. */
