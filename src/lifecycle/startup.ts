@@ -4,6 +4,7 @@
  */
 
 import * as cacheManager from '../cache/cacheManager';
+import { setPluginVersion } from '../export/pluginVersion';
 import { ReaderToolbarController } from '../reader/readerToolbar';
 import { deleteApiKey, getApiKey, setApiKey } from '../security/credentialStore';
 import { sanitize, registerUrlCredentials } from '../security/logSanitizer';
@@ -108,6 +109,9 @@ export async function startup(params: StartupParams): Promise<void> {
 
 	await Zotero.initializationPromise;
 	await Zotero.uiReadyPromise;
+
+	// 2.8.8 (导出方案 P3): 导出文件的版本号只认这一份 —— 运行中的插件自己报的。
+	setPluginVersion(params.version);
 
 	logger.setDebugEnabled(getPref<boolean>('debugLogging', false));
 	const prefObserver = registerPrefObserver('debugLogging', value => logger.setDebugEnabled(!!value));

@@ -24,6 +24,14 @@ import { engineExportRow, type EngineExportRow } from '../export/endpointKind';
 import type { DiagnosticsExportSource } from '../export/diagnosticsJsonl';
 import type { CorpusExportSource, CorpusPageRecord, TranslationSource, TranslationMissing } from '../export/corpusJsonl';
 import { checkStructure, changedExtractInputs } from '../export/structureMatch';
+import { writeCorpusJsonl, type CorpusExportResult } from '../export/corpusJsonl';
+import { writeDiagnosticsJsonl, ExportStageError } from '../export/diagnosticsJsonl';
+import { exportFileName, type ExportKind } from '../export/exportNaming';
+import { pluginVersion } from '../export/pluginVersion';
+import {
+	FileJsonlSink, pickSavePath, prepareTarget, ensureNoOverwrite, uniquePathIn,
+	revealFile, stageLabel, type FilePickerLike
+} from '../export/fileSink';
 import { parseGlossaryJSON, serializeGlossary, dedupeLearnedTerms } from '../translation/glossary';
 import { parseProviderProfiles, effectiveProviderConfig } from '../translation/providerProfiles';
 import type { GlossaryRule, ProviderSettings, SourceBlock, TranslationRequest, TranslationResponse } from '../types/models';
@@ -381,6 +389,8 @@ export class ReaderSession {
 			onSaveNote: () => void this.saveSelectionToNote(),
 			onShowDiagnostics: () => void this.copyDiagnostics(),
 			onCopyCorpus: () => this.copyLayoutCorpus(),
+			onExportDiagnosticsFile: () => void this.runExport('diagnostics'),
+			onExportCorpusFile: () => void this.runExport('corpus'),
 			onSaveTerms: () => this.previewSaveLearnedTerms(), // 2.3.1 item3: 预览并保存到词汇表(不再只复制 TSV)
 			onExportPdf: () => void this.exportTranslatedPdf(), // 菜单栏「导出」(2.3.8 从「更多」搬回工具条)
 			onOpenSettings: () => this.openSettings(),
@@ -2535,6 +2545,161 @@ export class ReaderSession {
 			pin: (pageIndex: number) => { this.exportPins.add(pageIndex); },
 			unpin: (pageIndex: number) => { this.exportPins.delete(pageIndex); }
 		};
+	}
+
+	/**
+	 * 「更多」菜单的两个导出入口 (2.8.8, 导出方案 P3)。
+	 *
+	 * 流程: (语料才有)隐私确认 → 选择保存位置 → 逐页写入 → 成功后「显示文件」。
+	 *
+	 * 四条不肯让步的规矩,都在这个方法里:
+	 *
+	 *   1. **保存对话框取消 = 直接结束** —— 不写文件、不回落别的目录、不提示成功;
+	 *   2. **对话框拉不起来时先问再写**,绝不自动把含全文的语料写到别处;
+	 *   3. **失败只报失败并指明阶段**,失败后绝不提示成功,半份文件顺手删掉;
+	 *   4. 导出期间**不发任何翻译请求、不清缓存、不刷新翻译** —— 有副作用的只有
+	 *      逐页短时 pin 与写文件。
+	 */
+	private async runExport(kind: ExportKind): Promise<void> {
+		if (!this.manager) {
+			return;
+		}
+		const version = pluginVersion();
+		if (kind === 'corpus' && !this.confirmCorpusPrivacy()) {
+			return;
+		}
+		let source: DiagnosticsExportSource | CorpusExportSource;
+		try {
+			source = kind === 'corpus'
+				? await this.corpusExportSource(version)
+				: await this.diagnosticsExportSource(version);
+		}
+		catch (e) {
+			logger.warn(MODULE, 'export could not be prepared', e);
+			this.flashNotice('导出失败(准备阶段):没有可导出的翻译会话');
+			return;
+		}
+		const fileName = exportFileName({ kind, version, at: source.generatedAt });
+		const target = await this.resolveSavePath(fileName, kind);
+		if (!target) {
+			return; // 取消,或用户不同意写备用目录 —— 已各自提示过
+		}
+
+		const total = source.scope.length;
+		this.flashNotice(`正在导出${total} 页…`);
+		source.onProgress = (done, all) => {
+			// 每页都刷会把提示刷成噪音;整十页与最后一页足够看出在动。
+			if (done === all || done % 10 === 0) {
+				this.flashNotice(`正在导出:第 ${done} / ${all} 页`);
+			}
+		};
+		const sink = new FileJsonlSink(target);
+		try {
+			await prepareTarget(target);
+			const result = kind === 'corpus'
+				? await writeCorpusJsonl(sink, source as CorpusExportSource)
+				: await writeDiagnosticsJsonl(sink, source as DiagnosticsExportSource);
+			const missing = result.pageReadFailures
+				? `,其中 ${result.pageReadFailures} 页读取失败(文件里已逐页标注)`
+				: '';
+			const withheld = kind === 'corpus' && (result as CorpusExportResult).translationsWithheld
+				? `,${(result as CorpusExportResult).translationsWithheld} 页因结构不匹配未附译文`
+				: '';
+			const shown = revealFile(target, this.revealFn());
+			this.flashNotice(`已导出 ${result.pagesWritten} 页${missing}${withheld}`
+				+ (shown ? '' : ` —— ${target}`)
+				+ (kind === 'corpus' ? ';文件含原文与译文,分享前请确认可公开' : ''));
+			logger.info(MODULE, `export written: ${result.linesWritten} lines`);
+		}
+		catch (e) {
+			// 失败绝不提示成功,并且必须说得出卡在哪一步。
+			const stage = e instanceof ExportStageError ? stageLabel(e.stage) : '未知阶段';
+			await sink.discardPartial();
+			logger.warn(MODULE, `export failed at ${stage}`, e);
+			this.flashNotice(`导出失败(${stage})—— 未生成完整文件`);
+		}
+	}
+
+	/** 语料的隐私确认。**弹不出对话框就不导出** —— 含全文的文件不能默默写出去。 */
+	private confirmCorpusPrivacy(): boolean {
+		const prompt = (Services as unknown as {
+			prompt?: { confirm(parent: unknown, title: string, text: string): boolean };
+		}).prompt;
+		const win = (Zotero as unknown as { getMainWindow?(): unknown }).getMainWindow?.() ?? null;
+		if (!prompt?.confirm) {
+			this.flashNotice('无法弹出确认对话框,已取消语料导出(该文件含原文与译文)');
+			return false;
+		}
+		try {
+			return prompt.confirm(win, '导出翻译语料',
+				'文件包含当前文档已处理页面的原文、译文和布局数据。分享前请确认你有权提供这些内容;不会导出 API 密钥。');
+		}
+		catch {
+			return false;
+		}
+	}
+
+	/**
+	 * 选保存位置。返回 null = 结束(用户取消,或不同意写备用目录)。
+	 *
+	 * 对话框拉不起来时**弹一次询问**再写备用目录 —— 绝不自动把含全文的语料
+	 * 写到用户没点头的地方。
+	 */
+	private async resolveSavePath(fileName: string, kind: ExportKind): Promise<string | null> {
+		const win = (Zotero as unknown as { getMainWindow?(): unknown }).getMainWindow?.() ?? null;
+		const fallbackDir = ((): string | null => {
+			try {
+				return (Zotero as unknown as { DataDirectory?: { dir: string } }).DataDirectory?.dir ?? null;
+			}
+			catch {
+				return null;
+			}
+		})();
+		const target = await pickSavePath(fileName, {
+			window: win,
+			defaultDir: fallbackDir,
+			title: kind === 'corpus' ? '保存翻译语料' : '保存诊断文件',
+			createPicker: () => {
+				const picker = Components.classes['@mozilla.org/filepicker;1']
+					?.createInstance(Components.interfaces.nsIFilePicker);
+				return (picker as FilePickerLike | undefined) ?? null;
+			}
+		});
+		if (target.kind === 'cancelled') {
+			this.flashNotice('已取消');
+			return null;
+		}
+		if (target.kind === 'picked') {
+			return ensureNoOverwrite(target.path);
+		}
+		// —— 对话框不可用: 先问,同意才写。
+		if (!target.suggestedDir) {
+			this.flashNotice('无法打开保存对话框,且没有可用的备用目录 —— 已取消');
+			return null;
+		}
+		const prompt = (Services as unknown as {
+			prompt?: { confirm(parent: unknown, title: string, text: string): boolean };
+		}).prompt;
+		const agreed = ((): boolean => {
+			try {
+				return prompt?.confirm(win, '无法打开保存对话框',
+					`是否改为保存到 ${target.suggestedDir}?`) === true;
+			}
+			catch {
+				return false;
+			}
+		})();
+		if (!agreed) {
+			this.flashNotice('已取消');
+			return null;
+		}
+		return uniquePathIn(target.suggestedDir, fileName);
+	}
+
+	/** `Zotero.File.reveal` 不一定存在 —— 拿不到就返回 undefined,由调用方回落到路径提示。 */
+	private revealFn(): ((path: string) => void) | undefined {
+		const file = (Zotero as unknown as { File?: { reveal?(path: string): void } }).File;
+		return typeof file?.reveal === 'function' ? (path: string) => file.reveal!(path) : undefined;
 	}
 
 	/**
