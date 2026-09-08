@@ -21,6 +21,12 @@ interface Waiter {
 	resolve: () => void;
 }
 
+export interface RequestGateClock {
+	now: () => number;
+	/** 定时唤醒;返回取消函数。默认 setTimeout。 */
+	schedule: (fn: () => void, ms: number) => () => void;
+}
+
 export class RequestGate {
 	private readonly defaultCap: number;
 	private readonly caps = new Map<string, number>();
@@ -28,9 +34,60 @@ export class RequestGate {
 	private readonly waiters = new Map<string, Waiter[]>();
 	/** 峰值在途(诊断用):lane → 见过的最大并发。 */
 	private readonly peak = new Map<string, number>();
+	/**
+	 * 服务商冷却期 (2.7.7, 外部审核 第一批): lane → 冷却截止时刻。429 带
+	 * Retry-After 时,此前只有**撞上的那一个**请求在退避,同 lane 其他在途/排队
+	 * 请求照常出手 —— 服务商刚说"等 30 秒",我们下一毫秒又打过去。冷却期内该
+	 * lane 的新名额一律不放行(已在途的不打断),到点由定时器唤醒 drain;等待者
+	 * 的取消仍走 acquire 里的 abort 路径,冷却不会把任务挂死。别的 lane 不受影响。
+	 */
+	private readonly cooldownUntil = new Map<string, number>();
+	private readonly cooldownTimers = new Map<string, () => void>();
+	private readonly clock: RequestGateClock;
 
-	constructor(defaultCap = 4) {
+	constructor(defaultCap = 4, clock?: Partial<RequestGateClock>) {
 		this.defaultCap = Math.max(1, Math.floor(defaultCap));
+		this.clock = {
+			now: clock?.now ?? (() => Date.now()),
+			schedule: clock?.schedule ?? ((fn, ms) => {
+				const t = setTimeout(fn, ms);
+				return () => clearTimeout(t);
+			})
+		};
+	}
+
+	/** 进入/延长冷却期: 截止时刻取"更晚者",不会被较短的 Retry-After 缩短。 */
+	cooldown(lane: string, untilMs: number): void {
+		const cur = this.cooldownUntil.get(lane) ?? 0;
+		if (untilMs <= this.clock.now()) {
+			return;
+		}
+		if (untilMs <= cur) {
+			return;
+		}
+		this.cooldownUntil.set(lane, untilMs);
+		this.cooldownTimers.get(lane)?.();
+		const cancel = this.clock.schedule(() => {
+			this.cooldownTimers.delete(lane);
+			this.cooldownUntil.delete(lane);
+			this.drain(lane);
+		}, untilMs - this.clock.now());
+		this.cooldownTimers.set(lane, cancel);
+	}
+
+	/** 该 lane 是否在冷却期(诊断/测试用)。 */
+	coolingDown(lane: string): boolean {
+		const until = this.cooldownUntil.get(lane);
+		return until !== undefined && until > this.clock.now();
+	}
+
+	/** 释放所有冷却定时器(dispose 用)。 */
+	dispose(): void {
+		for (const cancel of this.cooldownTimers.values()) {
+			cancel();
+		}
+		this.cooldownTimers.clear();
+		this.cooldownUntil.clear();
 	}
 
 	/** 设定某 lane 的在途上限(≥1)。调低不打断已在途请求,只收窄后续放行。 */
@@ -84,7 +141,7 @@ export class RequestGate {
 			return Promise.reject(new PaperMirrorError('CANCELLED', 'Cancelled before acquiring a request slot.'));
 		}
 		const cur = this.inFlight.get(lane) ?? 0;
-		if (cur < this.capOf(lane)) {
+		if (cur < this.capOf(lane) && !this.coolingDown(lane)) {
 			this.bump(lane, cur + 1);
 			return Promise.resolve();
 		}
@@ -154,6 +211,9 @@ export class RequestGate {
 		const q = this.waiters.get(lane);
 		if (!q) {
 			return;
+		}
+		if (this.coolingDown(lane)) {
+			return; // 到点后定时器再来 drain
 		}
 		while (q.length && (this.inFlight.get(lane) ?? 0) < this.capOf(lane)) {
 			const w = q.shift()!;

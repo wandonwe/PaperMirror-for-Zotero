@@ -28,6 +28,12 @@ export interface HttpJSONOptions {
 	timeoutMs: number;
 	signal?: AbortSignal;
 	allowInsecureHTTP?: boolean;
+	/**
+	 * 真正交给传输层前回调一次 (2.7.7, 外部审核 第一批): 计量"实际 HTTP 尝试"。
+	 * 适配器内部的参数自愈重试 (剥 reasoning_effort / temperature / thinking 再发)
+	 * 每次发送都会触发;排队期间取消的请求不会走到这里,不计数。
+	 */
+	onAttempt?: () => void;
 }
 
 export function checkEndpointURL(url: string, allowInsecureHTTP: boolean): URL {
@@ -259,6 +265,7 @@ export async function requestJSON(url: string, options: HttpJSONOptions): Promis
 		? options.rawBody
 		: options.body !== undefined ? JSON.stringify(options.body) : null;
 
+	options.onAttempt?.();
 	const { status, text, elapsedMs, retryAfterMs } = await send(
 		options.method ?? 'POST',
 		url,

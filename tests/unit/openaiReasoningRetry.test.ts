@@ -186,3 +186,35 @@ test('非「不支持参数」形态的 temperature 400 (类型/越界) 照旧�
 	}
 	finally { http.teardown(); }
 });
+
+// ---- 2.7.7 外部审核 第一批: 计量放到正确位置 ---------------------------------
+
+test('onAttempt 在传输层每次发送都触发: 参数自愈重试 = 2 次尝试 (2.7.7)', async () => {
+	const http = installHTTP((body) => body.reasoning_effort !== undefined
+		? { status: 400, text: REJECT }
+		: { status: 200, text: OK_JSON });
+	try {
+		const p = createOpenAICompatibleProvider({ id: 'openai', displayName: 'OpenAI', defaultBaseURL: 'https://api.openai.com', defaultModel: 'gpt-4o' });
+		let attempts = 0;
+		const req: TranslationRequest = { sourceLanguage: 'en', targetLanguage: 'zh-CN', documentTitle: 't', previousContext: '', blocks: [{ id: 'b0', type: 'paragraph', text: 'hello' }], glossary: [] };
+		await p.translate(req, settings({ model: 'gpt-4o-attempt-test' }), { onAttempt: () => { attempts++; } });
+		assert.equal(http.bodies.length, 2);
+		assert.equal(attempts, 2, '每次真正发送都计一次');
+	}
+	finally { http.teardown(); }
+});
+
+test('用量先于校验: 译文校验失败 (BAD_RESPONSE) 时 onUsage 仍已上报 (2.7.7)', async () => {
+	const BAD_WITH_USAGE = '{"choices":[{"message":{"content":"not json at all"}}],"usage":{"prompt_tokens":120,"completion_tokens":7}}';
+	const http = installHTTP(() => ({ status: 200, text: BAD_WITH_USAGE }));
+	try {
+		const p = createOpenAICompatibleProvider({ id: 'openai', displayName: 'OpenAI', defaultBaseURL: 'https://api.openai.com', defaultModel: 'gpt-4o' });
+		const usages: { inputTokens: number }[] = [];
+		const req: TranslationRequest = { sourceLanguage: 'en', targetLanguage: 'zh-CN', documentTitle: 't', previousContext: '', blocks: [{ id: 'b0', type: 'paragraph', text: 'hello' }], glossary: [] };
+		await assert.rejects(
+			p.translate(req, settings({ model: 'gpt-4o-usage-test', reasoning: undefined as unknown as ProviderSettings['reasoning'] }), { onUsage: u => usages.push(u) }),
+			(e: any) => e.code === 'BAD_RESPONSE');
+		assert.deepEqual(usages.map(u => u.inputTokens), [120], '校验失败也保留数字用量');
+	}
+	finally { http.teardown(); }
+});

@@ -136,3 +136,76 @@ test('不传 signal 时行为与旧版一致', async () => {
 	await queued;
 	assert.deepEqual(order, ['queued']);
 });
+
+// ---- 服务商冷却期 (2.7.7, 外部审核 第一批) ----------------------------------
+
+function fakeClock() {
+	let t = 1000;
+	const timers: { at: number; fn: () => void; dead: boolean }[] = [];
+	return {
+		clock: {
+			now: () => t,
+			schedule: (fn: () => void, ms: number) => {
+				const rec = { at: t + ms, fn, dead: false };
+				timers.push(rec);
+				return () => { rec.dead = true; };
+			}
+		},
+		advance(ms: number) {
+			t += ms;
+			for (const rec of timers.splice(0).sort((a, b) => a.at - b.at)) {
+				if (rec.dead) continue;
+				if (rec.at <= t) rec.fn(); else timers.push(rec);
+			}
+		}
+	};
+}
+
+test('冷却期: 同 lane 新名额不放行, 到点自动唤醒; 别的 lane 不受影响; 在途的不打断', async () => {
+	const fc = fakeClock();
+	const gate = new RequestGate(4, fc.clock);
+	const inflight = deferred();
+	const ra = gate.run('A', false, () => inflight.p);
+	await flush();
+	gate.cooldown('A', fc.clock.now() + 30_000);
+	assert.equal(gate.coolingDown('A'), true);
+	let startedA2 = false;
+	let startedB = false;
+	const ra2 = gate.run('A', true, async () => { startedA2 = true; });
+	const rb = gate.run('B', false, async () => { startedB = true; });
+	await flush();
+	assert.equal(startedA2, false, '冷却期内 A 的新请求不出发 (即使有名额)');
+	assert.equal(startedB, true, 'B 不受 A 冷却影响');
+	inflight.resolve(); await ra; // 在途的照常结束
+	await flush();
+	assert.equal(startedA2, false, '释放名额也不放行 —— 仍在冷却');
+	fc.advance(30_000);
+	await flush();
+	assert.equal(startedA2, true, '到点唤醒');
+	await Promise.all([ra2, rb]);
+});
+
+test('冷却期内取消等待者立即 reject, 不必等冷却结束', async () => {
+	const fc = fakeClock();
+	const gate = new RequestGate(4, fc.clock);
+	gate.cooldown('A', fc.clock.now() + 120_000);
+	const ac = new AbortController();
+	const started: boolean[] = [];
+	const r = gate.run('A', true, async () => { started.push(true); }, ac.signal);
+	await flush();
+	ac.abort();
+	await assert.rejects(r, (e: any) => e.code === 'CANCELLED');
+	assert.equal(started.length, 0);
+	assert.equal(gate.inFlightOf('A'), 0, '名额未泄漏');
+});
+
+test('较短的 Retry-After 不缩短已有冷却; 过期时刻不进冷却', async () => {
+	const fc = fakeClock();
+	const gate = new RequestGate(4, fc.clock);
+	gate.cooldown('A', fc.clock.now() + 10_000);
+	gate.cooldown('A', fc.clock.now() + 2_000);
+	fc.advance(5_000);
+	assert.equal(gate.coolingDown('A'), true, '10s 的冷却不被 2s 的覆盖');
+	gate.cooldown('B', fc.clock.now() - 1);
+	assert.equal(gate.coolingDown('B'), false);
+});

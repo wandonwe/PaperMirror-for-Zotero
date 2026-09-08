@@ -2139,3 +2139,72 @@ test('单段重译经过计量入口: 重译后 token 用量增长 (审核 P2)',
 	assert.equal(after.inputTokens, before.inputTokens + 50);
 	manager.dispose();
 });
+
+test('429 反馈同时收窄请求闸的真实 HTTP 上限, 带 Retry-After 时整个 lane 进冷却 (2.7.7)', async () => {
+	const { PaperMirrorError } = await import('../../src/types/models');
+	let calls = 0;
+	const { deps } = makeDeps({
+		laneFor: () => 'openai',
+		translateRequest: async (req) => {
+			calls++;
+			if (calls === 1) {
+				const e = new PaperMirrorError('RATE_LIMITED', '429', { retryable: true });
+				(e as { retryAfterMs?: number }).retryAfterMs = 60_000;
+				throw e;
+			}
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	manager.setLaneCaps({ openai: { min: 1, initial: 4, max: 8 } });
+	const gate = (manager as any).requestGate;
+	assert.equal(gate.caps.get('openai'), 4, '起点是 initial 不是 max');
+	const run = manager.ensurePage(0, 10).catch(() => {});
+	// 等到第一次 429 已反馈
+	for (let i = 0; i < 50 && calls < 1; i++) { await new Promise(r => setTimeout(r, 5)); }
+	await new Promise(r => setTimeout(r, 10));
+	assert.equal((manager as any).requestGate.caps.get('openai'), 2, '429 后闸上限跟着 laneCap 减半 (4→2)');
+	assert.equal(gate.coolingDown('openai'), true, 'Retry-After 60s → lane 冷却');
+	await manager.resetAllAndWait();
+	await Promise.race([run, new Promise(r => setTimeout(r, 200))]);
+	manager.dispose();
+	assert.equal(gate.coolingDown('openai'), false, 'dispose 释放冷却定时器');
+});
+
+test('计量经回调: 适配器自愈重试计入 attempts, 校验失败的响应 token 仍计入, 缓存命中零新增 (2.7.7)', async () => {
+	const { PaperMirrorError } = await import('../../src/types/models');
+	let calls = 0;
+	const { deps } = makeDeps({
+		translateRequest: async (req, _signal, hooks) => {
+			calls++;
+			hooks?.onAttempt?.();
+			hooks?.onAttempt?.(); // 模拟适配器内部剥参重试: 一次调用两次 HTTP
+			hooks?.onUsage?.({ inputTokens: 100, outputTokens: 10, cachedInputTokens: 0 });
+			if (calls === 1) {
+				throw new PaperMirrorError('BAD_RESPONSE', 'malformed', { retryable: true });
+			}
+			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' })), usage: { inputTokens: 100, outputTokens: 10, cachedInputTokens: 0 } };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const d = manager.getPageState(0)!.diagnostics!;
+	const usage = (manager.exportDiagnostics() as { usage: Record<string, number> }).usage;
+	assert.equal(calls, 2);
+	assert.equal(d.requests, 1, '逻辑批次');
+	assert.equal(d.attempts, 4, '两次调用 × 每次两次 HTTP');
+	assert.equal(usage.httpAttempts, 4);
+	assert.equal(usage.validationFailures, 1);
+	assert.equal(usage.inputTokens, 200, '失败响应的 100 + 成功响应的 100;回调与响应字段不重复累加');
+	assert.equal(usage.usageReports, 2);
+	const before = { ...usage };
+	const manager2 = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false });
+	await manager2.ensurePage(0, 10);
+	const after = (manager2.exportDiagnostics() as { usage: Record<string, number> }).usage;
+	assert.equal(calls, 2, '缓存命中不发请求');
+	assert.equal(after.httpAttempts, 0);
+	assert.equal(after.inputTokens, 0);
+	void before;
+	manager.dispose();
+	manager2.dispose();
+});

@@ -74,7 +74,13 @@ for (const f of files) {
 		cachedPct: d.usage?.inputTokens ? `${(d.usage.cachedInputTokens / d.usage.inputTokens * 100).toFixed(0)}%` : 'n/a',
 		tokPerPage: d.usage?.inputTokens && pages.length
 			? Math.round((d.usage.inputTokens + d.usage.outputTokens) / pages.length) : 0,
-		layoutMs: placement.reduce((n, p) => n + (p.layoutMs ?? 0), 0)
+		layoutMs: placement.reduce((n, p) => n + (p.layoutMs ?? 0), 0),
+		// 2.7.7 (外部审核 第一批): 真实 HTTP 尝试 / 每逻辑批次的尝试数 / 校验失败。
+		// requests 仍是逻辑批次 (预算闸口径),旧诊断无这两个字段时显示 n/a。
+		httpAttempts: d.usage?.httpAttempts ?? 'n/a',
+		attemptsPerBatch: typeof d.usage?.httpAttempts === 'number' && m(x => x.requests)
+			? (d.usage.httpAttempts / m(x => x.requests)).toFixed(2) : 'n/a',
+		validationFailures: d.usage?.validationFailures ?? 'n/a'
 	});
 	// 放弃原因分布 (2.7.0): 从联表后的块表读,枚举串无文本。
 	const reasons = {};
@@ -122,7 +128,10 @@ const totals = {
 	outTokens: sum('outTokens'),
 	cachedPct: '—',
 	tokPerPage: sum('pages') ? Math.round((sum('inTokens') + sum('outTokens')) / sum('pages')) : 0,
-	layoutMs: sum('layoutMs')
+	layoutMs: sum('layoutMs'),
+	httpAttempts: sum('httpAttempts'),
+	attemptsPerBatch: sum('requests') ? (sum('httpAttempts') / sum('requests')).toFixed(2) : '—',
+	validationFailures: sum('validationFailures')
 };
 
 const abandonReasons = rows.map(r => r.abandonReasons).filter(Boolean);
@@ -137,7 +146,7 @@ if (abandonReasons.length) {
 	}
 }
 
-const headers = ['doc', 'pages', 'requests', 'reqPerPage', 'salvage', 'rate429', 'timeouts', 'segHits', 'avgPageMs', 'translated', 'preserved', 'keptOriginal', 'placed', 'keptPlace', 'placeRate', 'geoViolations', 'annexed', 'inkBlocked', 'pageHitRate', 'segHitRate', 'prefetchWaste', 'unplaced', 'inTokens', 'outTokens', 'cachedPct', 'tokPerPage', 'layoutMs'];
+const headers = ['doc', 'pages', 'requests', 'reqPerPage', 'salvage', 'rate429', 'timeouts', 'segHits', 'avgPageMs', 'translated', 'preserved', 'keptOriginal', 'placed', 'keptPlace', 'placeRate', 'geoViolations', 'annexed', 'inkBlocked', 'pageHitRate', 'segHitRate', 'prefetchWaste', 'unplaced', 'inTokens', 'outTokens', 'cachedPct', 'tokPerPage', 'layoutMs', 'httpAttempts', 'attemptsPerBatch', 'validationFailures'];
 const md = [
 	'# 性能基线报告(真实世界)',
 	'',

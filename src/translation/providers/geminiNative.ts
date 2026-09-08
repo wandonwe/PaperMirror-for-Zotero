@@ -113,7 +113,8 @@ async function requestWithThinkingHeal(
 	makeBody: (config: Record<string, unknown>) => unknown,
 	config: Record<string, unknown>,
 	timeoutMs: number,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	onAttempt?: () => void
 ): Promise<{ status: number; json: unknown; elapsedMs: number }> {
 	const key = thinkingHealKey(settings);
 	const strip = (c: Record<string, unknown>): Record<string, unknown> => {
@@ -126,7 +127,8 @@ async function requestWithThinkingHeal(
 			headers: headers(settings),
 			body: makeBody(effective),
 			timeoutMs,
-			signal
+			signal,
+			onAttempt
 		}) as { status: number; json: unknown; elapsedMs: number };
 	}
 	catch (e) {
@@ -138,7 +140,8 @@ async function requestWithThinkingHeal(
 			headers: headers(settings),
 			body: makeBody(strip(effective)),
 			timeoutMs,
-			signal
+			signal,
+			onAttempt
 		}) as Promise<{ status: number; json: unknown; elapsedMs: number }>;
 	}
 }
@@ -199,14 +202,18 @@ export const geminiNativeProvider: TranslationProvider = {
 			}),
 			geminiGenerationConfig(settings, { json: !request.plain }),
 			settings.timeoutMs,
-			options.signal
+			options.signal,
+			options.onAttempt
 		);
+		// 用量先于校验 (2.7.7): 校验失败的响应同样花了 token。只读数字。
+		const usage = parseUsage(json);
+		if (usage) {
+			options.onUsage?.(usage);
+		}
 		const text = extractText(json);
 		const { translations } = request.plain
 			? parsePlainResponse(text, request.blocks[0]!.id)
 			: validateResponse(text, request.blocks.map(b => b.id));
-		// 用量计数 (2.7.0): 只读数字,响应正文不进任何日志。
-		const usage = parseUsage(json);
 		return usage ? { translations, usage } : { translations };
 	},
 

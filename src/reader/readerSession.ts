@@ -17,7 +17,7 @@ import { getProvider, listProviders } from '../translation/providers/registry';
 import { buildPool, pickProviderForPage, rankProvidersForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
 import { endpointHost, supportsCharBudget } from '../translation/providers/types';
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
-import { TranslationManager, type PageTranslationState } from '../translation/translationManager';
+import { TranslationManager, type PageTranslationState, type TranslateHooks } from '../translation/translationManager';
 import { PROMPT_VERSION } from '../translation/promptBuilder';
 import { joinPlacementOutcome } from './diagnosticsJoin';
 import { parseGlossaryJSON, serializeGlossary, dedupeLearnedTerms } from '../translation/glossary';
@@ -576,7 +576,7 @@ export class ReaderSession {
 			{
 				extractPage: pageIndex => this.extractor.extractPage(pageIndex),
 				extractRenderedPage: pageIndex => this.extractor.extractRenderedPage(pageIndex),
-				translateRequest: (request, signal) => this.translateRequest(request, signal),
+				translateRequest: (request, signal, hooks) => this.translateRequest(request, signal, hooks),
 				readCache: async (pageIndex, blocks) => {
 					const texts = blocks.map(b => b.sourceText);
 					const parts = await this.cacheKey(pageIndex, texts);
@@ -839,7 +839,7 @@ export class ReaderSession {
 		this.applyConcurrencyPlan();
 	}
 
-	private async translateRequest(request: TranslationRequest, signal: AbortSignal): Promise<TranslationResponse> {
+	private async translateRequest(request: TranslationRequest, signal: AbortSignal, hooks?: TranslateHooks): Promise<TranslationResponse> {
 		const chosen = typeof request.pageIndex === 'number'
 			? this.providerForPage(request.pageIndex)
 			: getPref<string>('provider', 'bing-free');
@@ -862,7 +862,7 @@ export class ReaderSession {
 		// watchdog is 150 s, so a full-length request can never trip it).
 		const payloadChars = request.blocks.reduce((n, b) => n + b.text.length, 0);
 		const scaled = Math.min(120000, Math.max(settings.timeoutMs, 20000 + payloadChars * 12));
-		return provider.translate(request, { ...settings, timeoutMs: scaled }, { signal });
+		return provider.translate(request, { ...settings, timeoutMs: scaled }, { signal, onAttempt: hooks?.onAttempt, onUsage: hooks?.onUsage });
 	}
 
 	private async cacheKey(pageIndex: number, texts: string[], providerId?: string): Promise<CacheKeyParts | null> {

@@ -120,14 +120,18 @@ export const anthropicProvider: TranslationProvider = {
 				messages: [{ role: 'user', content: buildUserPayload(request) }]
 			},
 			timeoutMs: settings.timeoutMs,
-			signal: options.signal
+			signal: options.signal,
+			onAttempt: options.onAttempt
 		});
+		// 用量先于校验 (2.7.7): 校验失败的响应同样花了 token。只读数字。
+		const usage = parseUsage(json);
+		if (usage) {
+			options.onUsage?.(usage);
+		}
 		const text = extractText(json);
 		const { translations } = request.plain
 			? parsePlainResponse(text, request.blocks[0]!.id)
 			: validateResponse(text, request.blocks.map(b => b.id));
-		// 用量计数 (2.7.0): 只读数字,响应正文不进任何日志。
-		const usage = parseUsage(json);
 		return usage ? { translations, usage } : { translations };
 	},
 
