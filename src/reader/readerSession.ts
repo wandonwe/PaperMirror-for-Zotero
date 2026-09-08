@@ -646,6 +646,11 @@ export class ReaderSession {
 				},
 				getGlossary: () => this.loadGlossary(),
 				getNoTranslate: () => readNoTranslateList(),
+				// 内存淘汰的"在用"判据 (2.8.3, 性能第四批): 当前阅读页、面板上
+				// 仍挂着内容的页、以及正在重建的页,都不许被卸掉完整内容。
+				isPageInUse: (pageIndex: number) =>
+					pageIndex === adapter.getCurrentPageIndex(this.reader)
+					|| this.pane?.hasMountedPage(pageIndex) === true,
 				useContext: () => getPref<boolean>('useContext', true),
 				pageCount: () => adapter.getPageCount(this.reader),
 				// Each page's provider LANE — lets the scheduler cap providers

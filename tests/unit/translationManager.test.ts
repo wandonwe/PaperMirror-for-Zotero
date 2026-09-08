@@ -2350,3 +2350,192 @@ test('译文修订号: 原地重译(块数不变、内容变了)也要前进 (2.
 		'内容变了,修订号必须前进 —— 这正是不用块数当判据的原因');
 	manager.dispose();
 });
+
+test('连续读 100 页: 完整页状态受控,回到旧页零新增 API 请求 (2.8.3 第四批)', async () => {
+	const cache = new Map<number, { id: string; translatedText: string }[]>();
+	let apiCalls = 0;
+	let extractions = 0;
+	const inUse = new Set<number>();
+	const deps: TranslationDeps = {
+		extractPage: async (pageIndex) => { extractions++; return makeBlocks(pageIndex, 4); },
+		translateRequest: async (request) => {
+			apiCalls++;
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' })) };
+		},
+		readCache: async (pageIndex) => cache.get(pageIndex) ?? null,
+		writeCache: async (pageIndex, _blocks, translations) => { cache.set(pageIndex, translations); },
+		getLanguages: () => ({ source: 'en', target: 'zh-CN' }),
+		getDocumentTitle: () => 'Long Doc',
+		getGlossary: () => [],
+		useContext: () => true,
+		pageCount: () => 100,
+		isPageInUse: (pageIndex) => inUse.has(pageIndex)
+	};
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: false, delayFn: () => Promise.resolve(), retainLimit: 20 });
+
+	const holding = (): number[] => Array.from({ length: 100 }, (_, i) => i)
+		.filter(i => {
+			const s = manager.getPageState(i);
+			return !!s && s.evicted !== true;
+		});
+
+	// 从头读到尾。每页都是"当前页",读完就往下翻。
+	for (let page = 0; page < 100; page++) {
+		inUse.clear();
+		inUse.add(page);
+		await manager.ensurePage(page, 10);
+		manager.setCurrentPage(page);
+	}
+	const apiAfterFirstPass = apiCalls;
+	assert.equal(apiAfterFirstPass, 100, '第一趟每页各一次请求');
+	assert.ok(holding().length <= 20,
+		`持有完整内容的页必须受控,实际 ${holding().length} 页 —— 关掉淘汰这里就是 100`);
+	assert.equal(manager.getPageState(0)?.status, 'done', '轻量状态还在,诊断不会少掉这几页');
+	assert.equal(manager.getPageState(0)?.evicted, true, '第 0 页早已被卸');
+	assert.equal(manager.getPageState(0)?.translations.size, 0);
+
+	// 翻回第 0 页: 必须从缓存复原,一次新的 API 请求都不许有。
+	const extractionsBefore = extractions;
+	inUse.clear();
+	inUse.add(0);
+	manager.setCurrentPage(0); // 它自己就会 void ensurePage(0) 起一趟复原
+	for (let tick = 0; tick < 50 && manager.getPageState(0)?.status !== 'done'; tick++) {
+		await new Promise(resolve => setTimeout(resolve, 0));
+	}
+	const restored = manager.getPageState(0)!;
+	assert.equal(restored.status, 'done');
+	assert.equal(restored.evicted, undefined, '复原后不再是轻量状态');
+	assert.equal(restored.translations.size, 4, '四块译文都回来了');
+	assert.equal(apiCalls, apiAfterFirstPass, '回到旧页的 API 增量必须为零');
+	assert.ok(extractions > extractionsBefore, '复原走的是"重新抽取 + 读页面缓存"这条路');
+	manager.dispose();
+});
+
+test('正在用的页与没落盘的页不会被卸 (2.8.3 第四批)', async () => {
+	const cache = new Map<number, { id: string; translatedText: string }[]>();
+	const inUse = new Set<number>([3]);
+	// 第 7 页永远译不全 → 按设计不写页面缓存 → 它的译文是唯一的一份。
+	const deps: TranslationDeps = {
+		extractPage: async (pageIndex) => makeBlocks(pageIndex, 2),
+		translateRequest: async (request) => ({
+			translations: request.blocks
+				.filter(b => !(b.id.startsWith('page-7-') && b.id.endsWith('-1')))
+				.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' }))
+		}),
+		readCache: async (pageIndex) => cache.get(pageIndex) ?? null,
+		writeCache: async (pageIndex, _blocks, translations) => { cache.set(pageIndex, translations); },
+		getLanguages: () => ({ source: 'en', target: 'zh-CN' }),
+		getDocumentTitle: () => 'Doc',
+		getGlossary: () => [],
+		useContext: () => true,
+		pageCount: () => 40,
+		isPageInUse: (pageIndex) => inUse.has(pageIndex)
+	};
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: false, delayFn: () => Promise.resolve(), retainLimit: 5 });
+	for (let page = 0; page < 40; page++) {
+		await manager.ensurePage(page, 10);
+		manager.setCurrentPage(page);
+	}
+	assert.equal(manager.getPageState(3)?.evicted, undefined, '正在用的页不许卸');
+	assert.notEqual(cache.has(7), true, '第 7 页没译全,按设计不入页面缓存');
+	const seven = manager.getPageState(7)!;
+	assert.equal(seven.evicted, undefined, '没落盘的页不许卸 —— 卸了就丢掉唯一的一份译文');
+	assert.ok(seven.translations.size > 0, '它译出来的那部分还在内存里');
+	manager.dispose();
+});
+
+test('LRU 看的是"最近用到"而不是页码: 回访过的旧页留下,没回访的邻页先卸 (2.8.3 第四批)', async () => {
+	const cache = new Map<number, { id: string; translatedText: string }[]>();
+	const deps: TranslationDeps = {
+		extractPage: async (pageIndex) => makeBlocks(pageIndex, 2),
+		translateRequest: async (request) => ({
+			translations: request.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' }))
+		}),
+		readCache: async (pageIndex) => cache.get(pageIndex) ?? null,
+		writeCache: async (pageIndex, _blocks, translations) => { cache.set(pageIndex, translations); },
+		getLanguages: () => ({ source: 'en', target: 'zh-CN' }),
+		getDocumentTitle: () => 'Doc',
+		getGlossary: () => [],
+		useContext: () => true,
+		pageCount: () => 60,
+		isPageInUse: () => false
+	};
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: false, delayFn: () => Promise.resolve(), retainLimit: 10 });
+	const settle = async (page: number): Promise<void> => {
+		for (let tick = 0; tick < 50 && manager.getPageState(page)?.status !== 'done'; tick++) {
+			await new Promise(resolve => setTimeout(resolve, 0));
+		}
+	};
+	for (let page = 0; page <= 40; page++) {
+		await manager.ensurePage(page, 10);
+		manager.setCurrentPage(page);
+	}
+	assert.equal(manager.getPageState(5)?.evicted, true, '读到第 40 页时,第 5、6 页早就被卸了');
+	assert.equal(manager.getPageState(6)?.evicted, true);
+
+	// 回访第 5 页 —— 它被复原,并成为"最近用到"的页;第 6 页没人碰。
+	manager.setCurrentPage(5);
+	await settle(5);
+	assert.equal(manager.getPageState(5)?.evicted, undefined, '回访后复原');
+
+	// 继续往后读几页,内存又超上限 —— 该卸的是比第 5 页更久没用到的页
+	// (第一趟里读过的 32..36),而不是刚刚回访过的第 5 页。
+	for (let page = 41; page <= 45; page++) {
+		await manager.ensurePage(page, 10);
+		manager.setCurrentPage(page);
+	}
+	assert.equal(manager.getPageState(5)?.evicted, undefined,
+		'刚回访过的旧页必须留下 —— 只按页码排序会把它当成"最冷"的先卸掉');
+	assert.equal(manager.getPageState(6)?.evicted, true, '没人回访的邻页照卸');
+	assert.equal(manager.getPageState(32)?.evicted, true, '比它更久没用到的页先卸');
+	manager.dispose();
+});
+
+test('从页面缓存复原的页仍然可以再被卸 (2.8.3 第四批)', async () => {
+	// 漏掉这一条,"翻回旧页"复原出来的页会被永久钉在内存里 —— 来回翻几次
+	// 就把上限彻底架空。
+	const cache = new Map<number, { id: string; translatedText: string }[]>();
+	const deps: TranslationDeps = {
+		extractPage: async (pageIndex) => makeBlocks(pageIndex, 2),
+		translateRequest: async (request) => ({
+			translations: request.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' }))
+		}),
+		readCache: async (pageIndex) => cache.get(pageIndex) ?? null,
+		writeCache: async (pageIndex, _blocks, translations) => { cache.set(pageIndex, translations); },
+		getLanguages: () => ({ source: 'en', target: 'zh-CN' }),
+		getDocumentTitle: () => 'Doc',
+		getGlossary: () => [],
+		useContext: () => true,
+		pageCount: () => 60,
+		isPageInUse: () => false
+	};
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: false, delayFn: () => Promise.resolve(), retainLimit: 6 });
+	for (let page = 0; page <= 20; page++) {
+		await manager.ensurePage(page, 10);
+		manager.setCurrentPage(page);
+	}
+	// 回访第 0 页并复原(整页缓存命中,没有任何 writeCache)。
+	manager.setCurrentPage(0);
+	for (let tick = 0; tick < 80 && manager.getPageState(0)?.translations.size === 0; tick++) {
+		await new Promise(resolve => setTimeout(resolve, 0));
+	}
+	assert.equal(manager.getPageState(0)?.evicted, undefined, '复原了');
+	assert.equal(manager.getPageState(0)?.status, 'done');
+	assert.equal(manager.getPageState(0)?.cached, true,
+		'缓存命中的页当然还在缓存里 —— 必须仍可被卸,否则上限被架空');
+
+	// 再往后读,它应该能像任何冷页一样被卸掉。
+	for (let page = 21; page <= 40; page++) {
+		await manager.ensurePage(page, 10);
+		manager.setCurrentPage(page);
+	}
+	assert.equal(manager.getPageState(0)?.evicted, true, '复原过的页仍然可以再被卸');
+	const holding = Array.from({ length: 60 }, (_, i) => i)
+		.filter(i => { const st = manager.getPageState(i); return !!st && st.evicted !== true; });
+	assert.ok(holding.length <= 6, `持有量仍受上限约束,实际 ${holding.length}`);
+	manager.dispose();
+});

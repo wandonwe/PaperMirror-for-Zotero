@@ -39,6 +39,7 @@ import { planChunks, trailingContext, type PlannedChunk } from './segmenter';
 import { buildLayoutModules } from '../reader/layoutModules';
 import { fnv1a64 } from '../cache/cacheSchema';
 import { addUsage, emptyUsage, type TokenUsage } from './usageMeter';
+import { pagesToEvict, type RetainCandidate } from './pageRetention';
 
 const MODULE = 'translationManager';
 
@@ -397,6 +398,17 @@ export interface PageTranslationState {
 	 * 九个 `translations.set` 现场各记一次,漏一处就是一个不会报错的静默 bug。
 	 */
 	translationRevision?: number;
+	/**
+	 * 译文已可靠落进**页面缓存** (2.8.3, 性能第四批)。只有它为真的已完成页
+	 * 才可能被卸掉完整内容 —— 卸一个没落盘的页就是丢掉唯一的一份译文。
+	 * 有未译块或 keepOrigin 的页按设计不写页面缓存,于是永远不会被淘汰。
+	 */
+	cached?: boolean;
+	/**
+	 * 完整内容(blocks / translations)已被卸掉,只剩轻量状态 (2.8.3)。
+	 * 用户翻回来时 `ensurePage` 重新抽取 + 读页面缓存复原,零 API 请求。
+	 */
+	evicted?: boolean;
 }
 
 export interface PageDiagnostics {
@@ -451,6 +463,11 @@ export interface TranslationDeps {
 	extractRenderedPage?(pageIndex: number): Promise<SourceBlock[]>;
 	/** Perform one provider request. */
 	translateRequest(request: TranslationRequest, signal: AbortSignal, hooks?: TranslateHooks): Promise<TranslationResponse>;
+	/**
+	 * 这一页此刻还被用着吗 (2.8.3, 性能第四批): 正在渲染、或仍挂在面板上。
+	 * 宿主实现;缺省视为"没在用"。内存淘汰绝不动正在用的页。
+	 */
+	isPageInUse?(pageIndex: number): boolean;
 	/** Cache access; may be no-ops. */
 	readCache(pageIndex: number, blocks: SourceBlock[]): Promise<TranslatedBlock[] | null>;
 	writeCache(pageIndex: number, blocks: SourceBlock[], translations: TranslatedBlock[]): Promise<void>;
@@ -498,6 +515,14 @@ export class TranslationManager {
 	 *  服务商在途请求收到 ≈ 其页面并发上限,当前页请求优先出手。 */
 	private requestGate = new RequestGate();
 	private pages = new Map<number, PageTranslationState>();
+	/**
+	 * 页 → 最近一次被用到的序号 (2.8.3, 性能第四批)。单调递增,只用来排先后,
+	 * 不用时间戳: 同一毫秒内先后用到的页时间戳分不出先后。
+	 */
+	private pageTouch = new Map<number, number>();
+	private touchSeq = 0;
+	/** 同时持有完整内容的已完成页上限(测试可注入)。 */
+	private retainLimit: number | undefined;
 	/**
 	 * 已发出、尚未落盘的段落写入 (2.5.9)。
 	 *
@@ -726,12 +751,13 @@ export class TranslationManager {
 	private prefetchDebounceMs: number;
 	private prefetchTimer: ReturnType<typeof setTimeout> | null = null;
 
-	constructor(deps: TranslationDeps, events: ManagerEvents, options?: { maxConcurrent?: number; reservedForeground?: number; prefetch?: boolean; delayFn?: (ms: number) => Promise<void>; extractTimeoutMs?: number; prefetchDebounceMs?: number }) {
+	constructor(deps: TranslationDeps, events: ManagerEvents, options?: { maxConcurrent?: number; reservedForeground?: number; prefetch?: boolean; delayFn?: (ms: number) => Promise<void>; extractTimeoutMs?: number; prefetchDebounceMs?: number; retainLimit?: number }) {
 		this.deps = deps;
 		this.events = events;
 		this.extractTimeoutMs = options?.extractTimeoutMs ?? EXTRACT_TIMEOUT_MS;
 		this.prefetchEnabled = options?.prefetch ?? true;
 		this.prefetchDebounceMs = Math.max(0, options?.prefetchDebounceMs ?? 500);
+		this.retainLimit = options?.retainLimit;
 		this.delay = options?.delayFn ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
 		this.scheduler = new RequestScheduler({
 			// The GLOBAL cap; the host (session) reconfigures it from the live
@@ -747,6 +773,50 @@ export class TranslationManager {
 
 	getPageState(pageIndex: number): PageTranslationState | undefined {
 		return this.pages.get(pageIndex);
+	}
+
+	/** 用到了这一页 —— 刷新它在 LRU 里的位置 (2.8.3)。 */
+	private touchPage(pageIndex: number): void {
+		this.pageTouch.set(pageIndex, ++this.touchSeq);
+	}
+
+	/**
+	 * 卸掉冷页的**完整内容**,只留轻量状态 (2.8.3, 性能第四批)。
+	 * 判据全在 pagesToEvict 里(纯函数,单测锁死);这里只负责取快照与执行。
+	 */
+	private evictColdPages(): void {
+		const candidates: RetainCandidate[] = [...this.pages.values()].map(state => ({
+			pageIndex: state.pageIndex,
+			status: state.status,
+			cached: state.cached === true,
+			inUse: this.pageInUse(state.pageIndex),
+			touchedAt: this.pageTouch.get(state.pageIndex) ?? 0,
+			evicted: state.evicted === true
+		}));
+		for (const pageIndex of pagesToEvict(candidates, this.currentPage, { limit: this.retainLimit })) {
+			const state = this.pages.get(pageIndex);
+			if (!state) {
+				continue;
+			}
+			// 轻量状态留着: 状态、页级指标、诊断都还在,导出诊断不会因为省内存
+			// 而少掉几页;卸的只是 blocks(每块带行矩形数组)与 translations。
+			state.blocks = [];
+			state.translations = new Map();
+			state.keepOrigin = undefined;
+			state.rejectReasons = undefined;
+			state.evicted = true;
+			this.revisions.delete(pageIndex);
+			logger.debug(MODULE, `page ${pageIndex + 1}: full content evicted (cached, cold)`);
+		}
+	}
+
+	private pageInUse(pageIndex: number): boolean {
+		try {
+			return this.deps.isPageInUse?.(pageIndex) === true;
+		}
+		catch {
+			return true; // 问不出来就当作在用 —— 宁可多占内存,不冒丢译文的险
+		}
 	}
 
 	private laneFor(pageIndex: number): string {
@@ -813,6 +883,7 @@ export class TranslationManager {
 			this.readDirection = pageIndex > this.currentPage ? 1 : -1;
 		}
 		this.currentPage = pageIndex;
+		this.touchPage(pageIndex);
 		// 用户读到了这一页 → 它的预取(如有)没有浪费。
 		this.usage.prefetchedUnviewed.delete(pageIndex);
 		this.navigationGeneration++;
@@ -859,6 +930,8 @@ export class TranslationManager {
 		//    That is what actually makes a provider pool multiply throughput.
 		//    去抖 (2.1.9): 快速跳页时不立刻发,停下才对最终页预取。
 		this.schedulePrefetch();
+		// 5. 冷页卸内容 (2.8.3): 翻页是内存该收一收的自然时机。
+		this.evictColdPages();
 	}
 
 	/**
@@ -993,6 +1066,7 @@ export class TranslationManager {
 						b.translationMode === 'preserve' || state.translations.has(b.id));
 					if (complete) {
 						await this.deps.writeCache(pageIndex, state.blocks, all);
+						state.cached = true; // 2.8.3: 落盘成功才允许被淘汰
 					}
 					// The SHORTER (fitting) version replaces the long one in the
 					// segment store too, so a 普通刷新 does not resurrect a
@@ -1134,7 +1208,9 @@ export class TranslationManager {
 					await this.deps.writeCache(pageIndex, state.blocks, state.blocks
 						.filter(b => state.translations.has(b.id))
 						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })))
-						.catch(() => { /* best effort */ });
+						// 2.8.3: 只有真的落盘了才标 cached —— 失败就永不淘汰,
+						// 绝不把唯一的一份译文卸掉。
+						.then(() => { state.cached = true; }, () => { /* best effort */ });
 				}
 				return true;
 			}, { foreground: true, lane: this.laneFor(pageIndex), maxRetries: 0 });
@@ -1160,6 +1236,9 @@ export class TranslationManager {
 					page: s.pageIndex + 1,
 					status: s.status,
 					error: s.error?.code ?? null,
+					// 2.8.3: 完整内容已卸(冷页省内存)—— 块表为空是这个原因,
+					// 不是"这页没有可译内容"。
+					...(s.evicted ? { evicted: true } : {}),
 					metrics: s.diagnostics
 						? {
 							...s.diagnostics,
@@ -1467,7 +1546,11 @@ export class TranslationManager {
 			}
 		}
 		const existing = this.pages.get(pageIndex);
-		if (existing && (existing.status === 'done' || existing.status === 'translating')) {
+		this.touchPage(pageIndex);
+		// 2.8.3: 被卸过内容的已完成页必须能重新装载 —— 否则用户翻回去只剩原文。
+		// 走的是与"从未翻过的页"完全相同的路径: 重新抽取 + 读页面缓存,零 API。
+		if (existing && (existing.status === 'done' || existing.status === 'translating')
+			&& existing.evicted !== true) {
 			return;
 		}
 		// A page may legitimately be mid-extraction — but a state STUCK there
@@ -1865,6 +1948,10 @@ export class TranslationManager {
 					this.usage.pageCacheFullHits++;
 					state.status = 'done';
 					state.fromCache = true;
+					// 整页缓存命中 = 译文就在缓存里 (2.8.3): 这一页当然可以再被
+					// 卸掉。漏了这一条,"翻回旧页"复原出来的页会被永久钉在内存
+					// 里,来回翻几次就把上限彻底架空。
+					state.cached = true;
 					state.diagnostics = {
 						requests: 0, salvage: 0, rateLimited: 0, timeouts: 0,
 						segmentHits: 0, durationMs: Date.now() - metrics.startedAt, fromCache: true
@@ -1962,6 +2049,7 @@ export class TranslationManager {
 				await this.deps.writeCache(pageIndex, blocks, activeBlocks
 					.filter(b => state.translations.has(b.id))
 					.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })));
+				state.cached = true; // 2.8.3
 			}
 			return;
 		}
@@ -2566,6 +2654,7 @@ export class TranslationManager {
 				.filter(b => state.translations.has(b.id))
 				.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! }));
 			await this.deps.writeCache(pageIndex, blocks, all);
+			state.cached = true; // 2.8.3
 		}
 		else {
 			logger.warn(MODULE, `Page ${pageIndex + 1} left uncached (${untranslatedCount} untranslated block(s)) so a revisit retries`);

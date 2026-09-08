@@ -1380,6 +1380,14 @@ export class TranslationPane {
 		});
 	}
 
+	/**
+	 * 这一页此刻还挂在面板上吗 (2.8.3, 性能第四批): 管理器据此决定能不能卸掉
+	 * 它的完整内容 —— 正挂着的页卸掉会当场变回原文。
+	 */
+	hasMountedPage(pageIndex: number): boolean {
+		return this.mounted.has(pageIndex) || this.pump.busyPage === pageIndex;
+	}
+
 	/** 几何变了(页宽 / 缩放 / 页面尺寸): 索引整体作废。滚动不会让它失效。 */
 	private invalidatePageIndex(): void {
 		this.pageIndex.invalidate();
