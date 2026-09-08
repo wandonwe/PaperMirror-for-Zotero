@@ -19,6 +19,7 @@ import { isFormulaRun } from '../reader/formulaGuard';
 import { stripStyleMarkers } from '../reader/styleRuns';
 import * as logger from '../utils/logger';
 import { RenderPump } from './renderPump';
+import { CachedPageIndex, type PageOffsetIndex } from './pageOffsetIndex';
 import { getPref } from '../utils/prefs';
 import type { ExplanationSection } from '../translation/explainer';
 import type { PageTranslationState } from '../translation/translationManager';
@@ -388,6 +389,13 @@ export class TranslationPane {
 	});
 	/** 每槽一个渲染序号 —— 与在飞任务比对,过时结果绝不落地。 */
 	private slotRenderSeq: number[] = [];
+	/**
+	 * 页位置索引 (2.8.0 第二批): 建一次、二分查,滚动期间零 DOM 读取。
+	 * 几何真的变了(页宽 / 缩放 / 页面尺寸)才作废重建。
+	 */
+	private pageIndex = new CachedPageIndex();
+	/** 已挂载内容的页 —— 回收时只看这个集合,不遍历全篇。 */
+	private mounted = new Set<number>();
 	/** Echo guard: ignore our own programmatic scrolls. */
 	private suppressScrollUntil = 0;
 	/** Width the slots were laid out for. */
@@ -1159,6 +1167,8 @@ export class TranslationPane {
 		this.slotRenderedCount = [];
 		this.slotPartialAt = [];
 		this.slotRenderSeq = [];
+		this.mounted.clear();
+		this.invalidatePageIndex();
 		this.pump.cancelAll();
 		this.refreshViewKindButton();
 		if (kind === 'page') {
@@ -1229,6 +1239,8 @@ export class TranslationPane {
 			? this.scroll.scrollTop / this.scroll.scrollHeight
 			: 0;
 		this.layoutWidth = fresh;
+		// 页宽/缩放变了 —— 位置索引整体作废 (2.8.0 第二批)。
+		this.invalidatePageIndex();
 		for (let i = 0; i < this.slots.length; i++) {
 			this.sizeSlot(this.slots[i]!, i);
 			// Content was built for the old width: release it.
@@ -1238,6 +1250,7 @@ export class TranslationPane {
 				this.slots[i]!.replaceChildren(this.makeGhost(i));
 			}
 		}
+		this.mounted.clear();
 		this.scroll.scrollTop = anchorFraction * this.scroll.scrollHeight;
 		this.scheduleEnsure();
 	}
@@ -1295,6 +1308,8 @@ export class TranslationPane {
 		this.slotRenderedCount = [];
 		this.slotPartialAt = [];
 		this.slotRenderSeq = [];
+		this.mounted.clear();
+		this.invalidatePageIndex();
 		const children: HTMLElement[] = [];
 		for (let i = 0; i < this.docPageSizes.length; i++) {
 			const slot = this.el('div', 'pm-repage-slot');
@@ -1350,26 +1365,33 @@ export class TranslationPane {
 	// ---- virtualisation -----------------------------------------------------
 
 	/** Slots intersecting the viewport, expanded by `buffer` pages each way. */
+	/**
+	 * 页位置索引 —— 没有就建一次。**一趟批量读完**所有槽的几何,读写不交错。
+	 */
+	private ensurePageIndex(): PageOffsetIndex | null {
+		return this.pageIndex.get(this.slots.length, page => {
+			const slot = this.slots[page]!;
+			return { top: slot.offsetTop, height: slot.offsetHeight };
+		});
+	}
+
+	/** 几何变了(页宽 / 缩放 / 页面尺寸): 索引整体作废。滚动不会让它失效。 */
+	private invalidatePageIndex(): void {
+		this.pageIndex.invalidate();
+	}
+
 	private visibleRange(buffer: number): [number, number] {
+		const index = this.ensurePageIndex();
+		const last = this.slots.length - 1;
+		if (!index) {
+			return [0, Math.min(last, buffer)];
+		}
 		const top = this.scroll.scrollTop;
-		const bottom = top + this.scroll.clientHeight;
-		let first = -1;
-		let last = -1;
-		for (let i = 0; i < this.slots.length; i++) {
-			const slot = this.slots[i]!;
-			const slotTop = slot.offsetTop;
-			const slotBottom = slotTop + slot.offsetHeight;
-			if (slotBottom > top && slotTop < bottom) {
-				if (first < 0) {
-					first = i;
-				}
-				last = i;
-			}
+		const range = index.rangeFor(top, top + this.scroll.clientHeight);
+		if (!range) {
+			return [0, Math.min(last, buffer)];
 		}
-		if (first < 0) {
-			return [0, Math.min(this.slots.length - 1, buffer)];
-		}
-		return [Math.max(0, first - buffer), Math.min(this.slots.length - 1, last + buffer)];
+		return [Math.max(0, range[0] - buffer), Math.min(last, range[1] + buffer)];
 	}
 
 	private scheduleEnsure(): void {
@@ -1420,6 +1442,9 @@ export class TranslationPane {
 			return;
 		}
 		const next = nextSlotState(result, this.slotDegradeTries[page] ?? 0, Date.now());
+		if (result !== false) {
+			this.mounted.add(page); // 槽里现在有内容,回收时要看它
+		}
 		this.slotState[page] = next.state;
 		this.slotDirty[page] = next.dirty;
 		this.slotRetryAt[page] = next.retryAt;
@@ -1431,10 +1456,15 @@ export class TranslationPane {
 
 	private releaseFarSlots(): void {
 		const [first, last] = this.visibleRange(2);
-		for (let i = 0; i < this.slots.length; i++) {
-			if (i >= first && i <= last) {
-				continue;
+		// 只看已挂载的页 (2.8.0 第二批): 此前每趟泵送结束都要把整篇文档扫一遍,
+		// 500 页的文档里 496 页本来就是空的。先收集再改 DOM —— 读写不交错。
+		const release: number[] = [];
+		for (const i of this.mounted) {
+			if (i < first || i > last) {
+				release.push(i);
 			}
+		}
+		for (const i of release) {
 			if (this.slotState[i] !== 'empty') {
 				this.slotToken[i]!++;
 				this.slotState[i] = 'empty';
@@ -1445,6 +1475,7 @@ export class TranslationPane {
 				this.slotPartialAt[i] = 0;
 				this.slots[i]!.replaceChildren(this.makeGhost(i));
 			}
+			this.mounted.delete(i);
 		}
 	}
 
