@@ -137,19 +137,24 @@ export type PageRenderResult = 'translated' | 'partial' | 'original' | 'degraded
  *
  * 但"每次 notify 都重画"正是老注释警告的那件事: 重建要跑一次严格排版 +
  * 遮罩/文本层,页面还会闪。三道闸让它只在真的划算时才画:
- *   - 只画**看得见**的页 —— 看不见的页重建纯属浪费,反正 done 时还会再画;
- *   - 至少要有 MIN_NEW_BLOCKS 个**新**译文块,零星一两块不值一次重建;
- *   - 两次增量之间至少隔 MIN_INTERVAL_MS。
- * done 不走这里(它是终态,无条件重建)。
+ *   - 只画**看得见**的页 —— 看不见的页重建纯属浪费(后台页只更新数据,
+ *     不立即排版),反正 done 时还会再画;
+ *   - 修订号必须真的前进 —— **同一修订版本只渲染一次**;
+ *   - 两次增量之间至少隔 MIN_INTERVAL_MS (2.8.2: 2000 → 500 ms,
+ *     配合修订号去重,节流本身就是限速器,不再另外要求"够多新块")。
+ * done 不走这里(它是终态,无条件重建,并把最终修订号记下)。
  */
-export const MIN_NEW_BLOCKS = 3;
-export const MIN_INTERVAL_MS = 2000;
+export const MIN_INTERVAL_MS = 500;
 
 export interface PartialRenderInput {
 	status: 'idle' | 'extracting' | 'translating' | 'done' | 'error' | 'no-text-layer';
-	/** 已到手的译文块数。 */
-	ready: number;
-	/** 上一次画上去时的译文块数。 */
+	/**
+	 * 译文修订号 (2.8.2 第三批): 管理器在译文内容**真的变了**时 +1。
+	 * 用它而不是"已到块数": 原地重译(单块 replay / 补救)块数不变、内容变了,
+	 * 按块数判会漏;而同一批 notify 被重复投递时按块数判又会白重建一次。
+	 */
+	revision: number;
+	/** 上一次画上去的修订号(0 = 还没画过)。 */
 	rendered: number;
 	/** 上一次增量重建的时刻 (0 = 还没画过)。 */
 	lastAt: number;
@@ -163,8 +168,8 @@ export function shouldRenderPartial(i: PartialRenderInput): boolean {
 	if (i.status !== 'translating' || !i.visible) {
 		return false;
 	}
-	if (i.ready - i.rendered < MIN_NEW_BLOCKS) {
-		return false;
+	if (i.revision <= i.rendered) {
+		return false; // 同一修订版本只渲染一次
 	}
 	return i.lastAt === 0 || i.now - i.lastAt >= MIN_INTERVAL_MS;
 }
@@ -183,12 +188,12 @@ export interface SlotDecision {
 /**
  * 槽状态机 (2.5.2)。
  *
- * 关键在于 'degraded' 与 'original' 必须**分开**处置:pumpRenders 只重排
- * 'empty' 或 slotDirty 的槽,而 slotDirty 只在 manager 通知 done 时置位、
- * 已经 done 的页永不再通知。所以任何被写成终态的结果就是"这一页这辈子
- * 不会再重建了"。此前 'degraded'(有译文却没重建出来)被当成 'original'
- * 写死,一次偶发失败 —— 往回翻时 PDF.js 刚销毁该页、底图被 LRU 淘汰、
- * fonts 未就绪 —— 就把那一页整个会话钉死在英文,正是"往回翻译文消失"。
+ * 关键在于 'degraded' 与 'original' 必须**分开**处置:泵只重排 'empty' 或
+ * slotDirty 的槽,而 slotDirty 只在 manager 通知时置位。所以任何被写成终态的
+ * 结果就是"这一页这辈子不会再重建了"。此前 'degraded'(有译文却没重建出来)
+ * 被当成 'original' 写死,一次偶发失败 —— 往回翻时 PDF.js 刚销毁该页、底图被
+ * LRU 淘汰、fonts 未就绪 —— 就把那一页整个会话钉死在英文,正是"往回翻译文
+ * 消失"。
  *
  * 现在 'degraded' 像 false 一样自愈,区别只在画面:false 保持 ghost,
  * 'degraded' 先把原文画上(总比空白强),两者都排进退避重试。
@@ -336,8 +341,8 @@ export class TranslationPane {
 	 * 确定性失败(某页 buildStrictPage 必抛)变成每 2.5 秒一次的永久空转。
 	 */
 	private slotDegradeTries: number[] = [];
-	/** 增量显示 (2.7.10): 每槽上次画上去时的译文块数与时刻。 */
-	private slotRenderedCount: number[] = [];
+	/** 增量显示: 每槽上次画上去的译文修订号与时刻 (2.8.2)。 */
+	private slotRenderedRevision: number[] = [];
 	private slotPartialAt: number[] = [];
 	/** One render at a time; re-prioritised between renders. */
 	private ensureTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1164,7 +1169,7 @@ export class TranslationPane {
 		this.slotToken = [];
 		this.slotRetryAt = [];
 		this.slotDegradeTries = [];
-		this.slotRenderedCount = [];
+		this.slotRenderedRevision = [];
 		this.slotPartialAt = [];
 		this.slotRenderSeq = [];
 		this.mounted.clear();
@@ -1305,7 +1310,7 @@ export class TranslationPane {
 		this.slotToken = [];
 		this.slotRetryAt = [];
 		this.slotDegradeTries = [];
-		this.slotRenderedCount = [];
+		this.slotRenderedRevision = [];
 		this.slotPartialAt = [];
 		this.slotRenderSeq = [];
 		this.mounted.clear();
@@ -1322,7 +1327,7 @@ export class TranslationPane {
 			this.slotToken.push(0);
 			this.slotRetryAt.push(0);
 			this.slotDegradeTries.push(0);
-			this.slotRenderedCount.push(0);
+			this.slotRenderedRevision.push(0);
 			this.slotPartialAt.push(0);
 			this.slotRenderSeq.push(0);
 			children.push(
@@ -1471,7 +1476,7 @@ export class TranslationPane {
 				this.slotDirty[i] = false;
 				// 槽被回收 = 下次进入是一次全新的重建,降级预算随之复位。
 				this.slotDegradeTries[i] = 0;
-				this.slotRenderedCount[i] = 0;
+				this.slotRenderedRevision[i] = 0;
 				this.slotPartialAt[i] = 0;
 				this.slots[i]!.replaceChildren(this.makeGhost(i));
 			}
@@ -1542,27 +1547,29 @@ export class TranslationPane {
 
 	renderPage(state: PageTranslationState): void {
 		if (this.viewKind === 'page') {
+			const revision = state.translationRevision ?? 0;
 			if (state.status === 'done') {
-				this.slotRenderedCount[state.pageIndex] = state.translations.size;
+				// 终态无条件重建,并记下最终修订号 —— 之后同一修订的重复通知
+				// 不会再触发一次重建。
+				this.slotRenderedRevision[state.pageIndex] = revision;
 				this.refreshPage(state.pageIndex);
 				return;
 			}
-			// 增量显示 (2.7.10): 途中也画,但要过 shouldRenderPartial 的三道闸
-			// (可见 / 够多新块 / 距上次够久),否则整页在译完前一直是原文。
+			// 增量显示 (2.7.10 起,2.8.2 改用修订号): 途中也画,但要过
+			// shouldRenderPartial 的三道闸,否则整页在译完前一直是原文。
 			const [first, last] = this.visibleRange(0);
-			const ready = state.translations.size;
 			const decided = shouldRenderPartial({
 				status: state.status,
-				ready,
-				rendered: this.slotRenderedCount[state.pageIndex] ?? 0,
+				revision,
+				rendered: this.slotRenderedRevision[state.pageIndex] ?? 0,
 				lastAt: this.slotPartialAt[state.pageIndex] ?? 0,
 				now: Date.now(),
 				visible: state.pageIndex >= first && state.pageIndex <= last
 			});
 			if (decided) {
-				this.slotRenderedCount[state.pageIndex] = ready;
+				this.slotRenderedRevision[state.pageIndex] = revision;
 				this.slotPartialAt[state.pageIndex] = Date.now();
-				// 降级预算不复位: 半成品重建每 2 秒最多一次,不能让它把
+				// 降级预算不复位: 半成品重建每 500 ms 最多一次,不能让它把
 				// 确定性失败页的重试预算刷回去。
 				this.refreshPage(state.pageIndex, { resetDegrade: false });
 			}

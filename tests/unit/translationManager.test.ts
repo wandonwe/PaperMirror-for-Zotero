@@ -2288,3 +2288,65 @@ test('尝试去向明细: 干净会话整体省略两个字段;未发出的取�
 	assert.equal(u3.attemptErrors, undefined, 'BAD_RESPONSE 不进 attemptErrors');
 	m3.dispose();
 });
+
+test('译文修订号: 内容变了才 +1,重复通知不前进 (2.8.2 第三批)', async () => {
+	const seen: { status: string; revision: number; count: number }[] = [];
+	const { deps } = makeDeps({
+		extractPage: async () => makeBlocks(0, 3),
+		translateRequest: async (req) => ({
+			translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容。' }))
+		})
+	});
+	const manager = new TranslationManager(deps, {
+		onPageUpdate: state => seen.push({
+			status: state.status,
+			revision: state.translationRevision ?? -1,
+			count: state.translations.size
+		})
+	}, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+
+	assert.ok(seen.length >= 2, '至少有"开始翻"与"翻完"两次通知');
+	// 还没有译文时修订号停在 1;译文到手后必须前进。
+	const first = seen[0]!;
+	const done = seen.at(-1)!;
+	assert.equal(done.status, 'done');
+	assert.equal(done.count, 3, '三块都译好了');
+	assert.ok(done.revision > first.revision,
+		`译文到手后修订号必须前进 (${first.revision} → ${done.revision})`);
+	// 修订号只增不减,且不会在同一份内容上跳号。
+	for (let i = 1; i < seen.length; i++) {
+		assert.ok(seen[i]!.revision >= seen[i - 1]!.revision, '修订号只增不减');
+		if (seen[i]!.count === seen[i - 1]!.count && seen[i]!.count === 3) {
+			assert.equal(seen[i]!.revision, seen[i - 1]!.revision,
+				'同一份译文被重复通知时修订号不动 —— 否则页视图会白重建一次');
+		}
+	}
+	manager.dispose();
+});
+
+test('译文修订号: 原地重译(块数不变、内容变了)也要前进 (2.8.2 第三批)', async () => {
+	let text = '第一版的中文译文段落内容。';
+	const { deps } = makeDeps({
+		extractPage: async () => makeBlocks(0, 2),
+		translateRequest: async (req) => ({
+			translations: req.blocks.map(b => ({ id: b.id, translatedText: text }))
+		})
+	});
+	const revisions: number[] = [];
+	const manager = new TranslationManager(deps, {
+		onPageUpdate: state => revisions.push(state.translationRevision ?? -1)
+	}, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 10);
+	const afterFirst = revisions.at(-1)!;
+	const size = manager.getPageState(0)!.translations.size;
+
+	// 单块重译: 块数一模一样,只有内容变了 —— 按"已到块数"判会完全漏掉。
+	text = '第二版的中文译文段落内容,长度也一样。';
+	await manager.retranslateBlock(0, 'page-0-block-0');
+	const state = manager.getPageState(0)!;
+	assert.equal(state.translations.size, size, '块数没变');
+	assert.ok((state.translationRevision ?? 0) > afterFirst,
+		'内容变了,修订号必须前进 —— 这正是不用块数当判据的原因');
+	manager.dispose();
+});

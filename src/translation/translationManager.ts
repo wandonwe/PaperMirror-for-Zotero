@@ -386,6 +386,17 @@ export interface PageTranslationState {
 	keepOrigin?: Map<string, string>;
 	/** 最近一次验收拒绝的原因 (仅原因码,无文本): validator | placeholder。 */
 	rejectReasons?: Map<string, string>;
+	/**
+	 * 译文修订号 (2.8.2, 性能第三批): 每次 notify 之前算一遍译文指纹,内容
+	 * **真的变了**才 +1。页视图据此决定要不要在译完之前先把已到的译文画上,
+	 * 并保证同一修订版本只渲染一次。
+	 *
+	 * 为什么不用"已到块数": 原地重译(单块 replay、逐块补救、缓存回填)块数
+	 * 不变而内容变了,按块数判会漏;同一批结果被重复通知时按块数判又会白
+	 * 重建一次。指纹在 notify 这一处算,任何写入路径都自动被覆盖 —— 不必在
+	 * 九个 `translations.set` 现场各记一次,漏一处就是一个不会报错的静默 bug。
+	 */
+	translationRevision?: number;
 }
 
 export interface PageDiagnostics {
@@ -1391,8 +1402,28 @@ export class TranslationManager {
 		}
 	}
 
+	/** 页 → {修订号, 上次通知时的译文指纹}。 */
+	private revisions = new Map<number, { revision: number; fingerprint: string }>();
+
+	/** 译文内容变了才前进修订号 —— 纯计数,不含文本。 */
+	private bumpRevision(state: PageTranslationState): number {
+		const parts: string[] = [];
+		for (const [id, text] of state.translations) {
+			parts.push(id, String(text.length), text);
+		}
+		const fingerprint = fnv1a64(parts.join('\u0001'));
+		const previous = this.revisions.get(state.pageIndex);
+		if (previous && previous.fingerprint === fingerprint) {
+			return previous.revision;
+		}
+		const revision = (previous?.revision ?? 0) + 1;
+		this.revisions.set(state.pageIndex, { revision, fingerprint });
+		return revision;
+	}
+
 	private notify(state: PageTranslationState): void {
 		if (!this.disposed) {
+			state.translationRevision = this.bumpRevision(state);
 			try {
 				this.events.onPageUpdate(state);
 			}

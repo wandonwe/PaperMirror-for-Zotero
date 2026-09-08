@@ -1491,7 +1491,13 @@ export class ReaderSession {
 						return;
 					}
 					if (partial) {
-						return; // 半成品页不结算: 不压缩重试、不报排版统计
+						// 半成品页仍然要过**几何审计** (2.8.2 第三批): 墨迹闸与
+						// 跨块碰撞检查是"这一块能不能显示"的判据,对半成品页同样
+						// 成立 —— 违例的块由审计回退,绝不带着叠印显示出去。
+						// 跳过的只有两件事: 压缩重试(对着还在长的页面重试会白花
+						// 请求)与统计入账(会把半成品的数字当成终值报上去)。
+						this.auditPartialGeometry(pageIndex, element);
+						return;
 					}
 					if (!unfit.length) {
 						this.reportPlacement(pageIndex, element);
@@ -1682,6 +1688,19 @@ export class ReaderSession {
 	 * "Translation complete" and "every block placed" are now distinct: the
 	 * text was translated; some rectangles are mathematically too small for it.
 	 */
+	/**
+	 * 半成品页的几何审计 (2.8.2 第三批): 只跑审计本身(违例块回退/保留原文),
+	 * **不**写 geometryAudits —— 半成品的数字不该进诊断,终版渲染会写真的那份。
+	 */
+	private auditPartialGeometry(pageIndex: number, element: HTMLElement): void {
+		try {
+			auditStrictGeometry(element);
+		}
+		catch (e) {
+			logger.debug(MODULE, `partial geometry audit failed on page ${pageIndex + 1} (ignored)`, e);
+		}
+	}
+
 	private reportPlacement(pageIndex: number, element: HTMLElement): void {
 		// 几何安全复核 (1.1.0 目标架构第 5 步): FINAL 状态下审计一次;违例的
 		// 块回退扩展/缩字重试,仍不适配则保留原文——处置结果反映进随后的
