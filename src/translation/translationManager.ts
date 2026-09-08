@@ -40,6 +40,7 @@ import { buildLayoutModules } from '../reader/layoutModules';
 import { fnv1a64 } from '../cache/cacheSchema';
 import { addUsage, emptyUsage, type TokenUsage } from './usageMeter';
 import { pagesToEvict, type RetainCandidate } from './pageRetention';
+import { buildPageDigest, digestRows, diagnosticRows, type PageBlockDigest } from './pageBlockDigest';
 
 const MODULE = 'translationManager';
 
@@ -409,6 +410,19 @@ export interface PageTranslationState {
 	 * 用户翻回来时 `ensurePage` 重新抽取 + 读页面缓存复原,零 API 请求。
 	 */
 	evicted?: boolean;
+	/**
+	 * 逐块诊断摘要 (2.8.5, 导出方案 P0): 淘汰完整内容**之前**拍下的定长明细。
+	 * 只含枚举与计数,没有原文/译文/异常原文。有了它,被卸掉内容的页在诊断里
+	 * 仍然有逐块状态 —— "空块表"不再需要靠猜是"这页没内容"还是"省内存省掉了"。
+	 */
+	blockDigest?: PageBlockDigest;
+	/**
+	 * 这一页的块是走哪条抽取路径产出的 (2.8.5, 导出方案 P0):
+	 * chars(fork 字符流)/ text-layer(渲染文本层)/ plain-text(PDFWorker 纯文本)/
+	 * rendered-recovery(超时后的当前页兜底)。语料重解析若走上另一条路径,
+	 * 这是唯一能说清"为什么结构对不上"的字段 —— 此前根本没有记录。
+	 */
+	extractPath?: string;
 }
 
 export interface PageDiagnostics {
@@ -480,6 +494,11 @@ export interface TranslationDeps {
 	 * 宿主实现;缺省视为"没在用"。内存淘汰绝不动正在用的页。
 	 */
 	isPageInUse?(pageIndex: number): boolean;
+	/**
+	 * 上一次抽取这一页走的是哪条路径 (2.8.5, 导出方案 P0)。宿主实现;缺省不记。
+	 * 只在 extractPage 刚返回时问一次,之后随页状态存着。
+	 */
+	extractPathOf?(pageIndex: number): string | undefined;
 	/** Cache access; may be no-ops. */
 	readCache(pageIndex: number, blocks: SourceBlock[]): Promise<TranslatedBlock[] | null>;
 	writeCache(pageIndex: number, blocks: SourceBlock[], translations: TranslatedBlock[]): Promise<void>;
@@ -815,6 +834,10 @@ export class TranslationManager {
 			if (!state) {
 				continue;
 			}
+			// 卸之前先拍一份逐块摘要 (2.8.5, P0): 这是**唯一**还看得见 blocks 与
+			// keepOrigin/rejectReasons 的时刻。摘要定长、无文本,随轻量状态活着,
+			// 于是被卸过的页在诊断里仍然有逐块明细。
+			state.blockDigest = buildPageDigest(state, this.runSeq, state.translationRevision ?? 0);
 			// 轻量状态留着: 状态、页级指标、诊断都还在,导出诊断不会因为省内存
 			// 而少掉几页;卸的只是 blocks(每块带行矩形数组)与 translations。
 			state.blocks = [];
@@ -1279,23 +1302,17 @@ export class TranslationManager {
 							})()
 						}
 						: null,
-					blocks: s.blocks.map(b => ({
-						id: b.id,
-						type: b.type,
-						chars: b.sourceText.length,
-						// 'preserved' (2.3.7, 基线口径修正): preserve 块(数据单元格等)
-						// **有意**不翻译,此前显示 'untranslated' —— 表格密集页看起来
-						// 一片失败,实际全是保护性保留。诊断从此与 placement 的
-						// tableIntentional 对得上号。
-						state: s.translations.has(b.id)
-							? 'translated'
-							: b.translationMode === 'preserve'
-								? 'preserved'
-								: (s.keepOrigin?.get(b.id) ?? 'untranslated'),
-						...(s.rejectReasons?.has(b.id) && !s.translations.has(b.id)
-							? { lastReject: s.rejectReasons.get(b.id) }
-							: {})
-					}))
+					// 2.8.5 (P0): 活块与摘要走**同一个**函数 —— 逐块状态的判定规则只有
+					// 一份,不会"内存里算一套、摘要里算另一套"。'preserved' 的口径
+					// 沿用 2.3.7:preserve 块(数据单元格等)是**有意**不翻译,不该
+					// 报成 untranslated。
+					blocks: diagnosticRows(s.blocks.length ? digestRows(s) : (s.blockDigest?.blocks ?? [])),
+					// 这一页的逐块明细是现算的还是卸载前拍下的 —— 空块表不再需要靠猜。
+					blockSource: s.blocks.length ? 'live' : (s.blockDigest ? 'digest' : 'none'),
+					...(s.blockDigest && !s.blocks.length
+						? { blockDigestRun: s.blockDigest.runId, blockDigestRevision: s.blockDigest.revision }
+						: {}),
+					...(s.extractPath ? { extractPath: s.extractPath } : {})
 				})),
 			docMemoryTerms: this.docMemory.size(),
 			// 用量统计 (2.3.9): 纯计数,不含文本。比率现算,分母为 0 时省略。
@@ -1705,6 +1722,15 @@ export class TranslationManager {
 				return;
 			}
 			state.blocks = blocks;
+			// 2.8.5 (P0): 记下这一页走的抽取路径 —— 语料重解析对不上时,
+			// "路径不同"是最可能的原因,此前连问都问不出来。
+			try {
+				const path = this.deps.extractPathOf?.(pageIndex);
+				if (path) {
+					state.extractPath = path;
+				}
+			}
+			catch { /* 记不到就不记,绝不影响翻译 */ }
 			extractedAt = Date.now();
 			this.pageTiming.set(pageIndex, {
 				requestedAt,

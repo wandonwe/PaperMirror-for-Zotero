@@ -7,6 +7,45 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.8.5] — 2026-09-08
+
+**导出方案 P0: 省内存不再吃掉诊断结论**。2.8.3 的冷页淘汰把 `blocks` 与
+`keepOrigin`/`rejectReasons` 一起卸掉之后,逐块诊断明细就没了依据 —— 导出诊断只
+看得到一页空块表,分不清"这页没有可译内容"和"这页的明细被省内存省掉了"。本版在
+**卸载现场、清空之前**拍一份定长无文本的逐块摘要,并记下该页实际走通的抽取路径。
+不改任何翻译、结构或排版行为;37 页布局快照与请求计划基线**逐字节不变**。
+
+### Added
+
+- **逐块诊断摘要**(`src/translation/pageBlockDigest.ts`): 块 id、类型、字符数、
+  最终去向(`translated`/`preserved`/`untranslated`)、keepOrigin 原因枚举、最后
+  一次拒绝原因枚举。约 60–80 字节/块,随轻量页状态活着。摘要带 `runId`/
+  `revision` 两个审计位,重新翻译后一眼看得出手上这份属于哪一轮。
+  - 活块与摘要**走同一个函数**(`digestRows` → `diagnosticRows`),逐块状态的判定
+    规则只有一份,不会"内存里算一套、摘要里算另一套"。
+  - 诊断行的 `state` 口径**沿用 2.3.7**(translated / preserved / keepOrigin 原因
+    / untranslated),`joinPlacementOutcome` 与 baseline-report 不受影响;新增的
+    `keepOrigin` 是把原因**另外**显式列一栏,不替换 `state`。
+  - 摘要在**卸载现场**拍,不在页面完成时拍 —— 那是最后一个 `blocks` 与两个 Map
+    都还看得见的时刻,只有一处调用点,没被卸的页零开销。
+- **`blockSource`**(诊断每页): `live` / `digest` / `none` —— 空块表不再需要靠猜。
+  取 `digest` 时附 `blockDigestRun` / `blockDigestRevision`。
+- **`extractPath`**(诊断每页): 这一页的块究竟是哪条抽取路径产出的 ——
+  `chars`(fork 字符流)/ `text-layer`(渲染文本层)/ `plain-text`(PDFWorker)/
+  `rendered-recovery`(当前页恢复)/ `empty`。三条路径拿到的数据差别很大,不记下
+  来的话,后续"重新解析 spans 再与当时结构比对"的核对说不清是排版变了还是路径
+  变了。只记枚举:privacy 闸钉死了取值集合,以及五个记录现场只能写枚举字面量 ——
+  字段名里带 "path",最容易在后续改动里被塞进真实文件路径。
+
+### 不变量
+
+- 摘要**只收枚举与数字**,原文、译文、异常原始消息一律不进;
+  `diagnosticsPrivacy` 与新增的行为测试都拿哨兵字符串反查过。
+- 行为闸:被卸过的页导出的逐块明细与卸之前**逐字相同** —— 省内存不得改变诊断
+  结论。8 个突变(不拍摘要、拍晚了、preserve 报成 untranslated、译出的块仍挂旧
+  拒绝原因、state 不回落 keepOrigin、blockSource 恒为 live、抽取路径出口漏记、
+  宿主不接线)全部被杀。
+
 ## [2.8.4] — 2026-09-08
 
 **性能第五批(上半): 先量,再改**。本版**只加计量、不改任何行为** —— 缓存分片与
