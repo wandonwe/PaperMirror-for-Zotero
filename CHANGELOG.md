@@ -7,6 +7,57 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.8.6] — 2026-09-08
+
+**导出方案 P1: 诊断文件的写出内核**。一次导出 = **一个 JSONL 纯文本文件,不打包**
+(用户定的方向;此前的 ZIP 方案作废)。本版做的是内核与数据源:纯函数、可单测、
+不碰抽取 / 结构 / 排版,也不发任何请求。保存对话框与「显示文件」属于平台交互,留给 P3。
+37 页布局快照与请求计划基线**逐字节不变**。
+
+### Added
+
+- **`src/export/diagnosticsJsonl.ts`**: 一行一个 JSON —— 首行 `manifest`(版本、时间、
+  冻结的页清单与统计)、次行 `summary`(引擎 / usage / render / cacheWrites)、
+  其后每页一行、末行 `result`。
+  - **`result` 行是"这份文件写完了"的唯一凭据**。manifest 在第一行,写它的时候后面
+    会不会失败还不知道 —— 完成情况只能记在最后。没有 `result` 行的文件就是半份,
+    读的人一眼看得出,不会把截断的文件当成完整证据。
+  - **某页读失败不终止导出,但必须被数出来**:那页照样出一行标
+    `availability.pageRecord = "missing:read-failed"`,并计入 `result.pageReadFailures`。
+    异常的原始消息(常带路径)不进文件。**不能静默漏页**。
+  - 失败一律抛 `ExportStageError` 并带阶段(prepare / summary / write-page / finalize),
+    调用方据此提示"读第 N 页失败"而不是笼统的"导出失败"。
+  - **逐页短时保护**:读一页之前 pin、读完(哪怕抛错)立即释放,`readerSession.exportPins`
+    接进 `isPageInUse`。**不是全局暂停淘汰** —— 那样长文档导出时内存会一路上涨,
+    把 2.8.3 省下来的又吃回去。
+  - 逐行 `append`,不把整份内容拼成一个字符串;写出前实查一次"行内无真实换行"。
+  - 拿不到运行中的插件版本就**拒绝写文件**:版本写错的诊断比没有诊断更坏,
+    它会把排障引到另一份代码上。
+- **`src/export/exportNaming.ts`**: `PaperMirror_v2.8.6_diagnostics_20260908_153042_287+0800.jsonl`
+  —— 版本从运行中的插件取,时间带毫秒与 `±HHMM` 时区,重名追加 `_2`/`_3` **绝不覆盖**,
+  **文件名不含论文标题**(文件名是别人第一眼看到的东西),版本号进文件名前先消毒。
+- **`TranslationManager.exportScope()` / `exportPageDiagnostics(pageIndex)`**: 逐页取诊断,
+  与整份 `exportDiagnostics()` **走同一个** `pageDiagnosticsRow` —— 两条取法逐字节相同,
+  不会"一次性诊断"与"导出的文件"各说各话。
+- **`readerSession.diagnosticsExportSource(version)`**: 把"从哪儿取数"与"怎么写文件"
+  分开。summary 行剥掉 `pages`(否则整份文档的页数据出现两遍);每页附
+  geometryAudit / placement;探针未采样如实标 `not-sampled`,不冒充"这页没问题"。
+
+### Changed
+
+- **诊断不再导出真实端点主机名**(`src/export/endpointKind.ts`)。此前带的是
+  `endpointHost` —— 一份"可以放心贴进 issue"的诊断会顺带公开用户自建网关的域名或
+  公司内网主机名。改为固定枚举 `endpointKind`:`official` · `custom` · `local` ·
+  `invalid` · `unknown`,外加 `customEndpoint` 布尔。**不导出域名、IP、端口、路径,
+  也不导出主机名哈希** —— 哈希看着无害,但候选集小到可以枚举,等于没脱敏。
+  引擎自检失败也只报 `selfCheckFailed: true`:异常消息里常带着端点 URL。
+
+### 不变量
+
+14 项突变全部被杀(重名覆盖、时间戳丢时区、版本不消毒、custom 报成 official、
+回环判定失效、失败仍写 result、读失败页被跳过、pin 不释放、空版本照写、页序不排、
+summary 重复整份页数据、pin 不被 isPageInUse 认、逐页与整份口径分家、自检退回主机名)。
+
 ## [2.8.5] — 2026-09-08
 
 **导出方案 P0: 省内存不再吃掉诊断结论**。2.8.3 的冷页淘汰把 `blocks` 与
