@@ -43,6 +43,20 @@ for (const f of files) {
 	}
 	const pages = Array.isArray(d.pages) ? d.pages : [];
 	const m = (sel) => pages.reduce((n, p) => n + (p.metrics ? (sel(p.metrics) ?? 0) : 0), 0);
+	/**
+	 * 时延不能求和 (2.8.5): "23 页的首字时间加起来是 6.8 秒"没有任何意义 ——
+	 * 用户等的是**某一页**的首字。时延列一律给 "中位/最大",一眼看得出
+	 * "大多数页多快" 与 "最糟的一页多慢"。
+	 */
+	const latency = (sel) => {
+		const values = pages.map(p => (p.metrics ? sel(p.metrics) : undefined))
+			.filter(v => typeof v === 'number').sort((a, b) => a - b);
+		if (!values.length) {
+			return 'n/a';
+		}
+		const p50 = values[Math.floor((values.length - 1) / 2)];
+		return `${p50}/${values[values.length - 1]}`;
+	};
 	const blocks = pages.flatMap(p => p.blocks ?? []);
 	const placement = Array.isArray(d.placement) ? d.placement : [];
 	const placed = placement.reduce((n, p) => n + (p.placed ?? p.committed ?? 0), 0);
@@ -94,9 +108,11 @@ for (const f of files) {
 		// 2.7.9: 多出来的尝试的去向 —— 参数自愈 / 白发的失败尝试,枚举计数。
 		// 恒等式: httpAttempts ≈ 响应 (usageReports + usageMissing) + heals + errs。
 		// 2.8.4 (性能第五批): 时序三段与写盘/渲染计量 —— 先量再改的那组数字。
-		queuedMs: m(x => x.queuedMs),
-		extractMs: m(x => x.extractMs),
-		firstTextMs: m(x => x.firstTextMs),
+		// 中位/最大,不是求和。
+		queuedMs: latency(x => x.queuedMs),
+		extractMs: latency(x => x.extractMs),
+		firstTextMs: latency(x => x.firstTextMs),
+		pageDoneMs: latency(x => x.durationMs),
 		hotPages: d.usage?.hotPages ?? 'n/a',
 		renderCancelled: d.render?.cancelled ?? 'n/a',
 		renderMs: d.render?.totalMs ?? 'n/a',
@@ -162,9 +178,10 @@ const totals = {
 	httpAttempts: sum('httpAttempts'),
 	attemptsPerBatch: sum('requests') ? (sum('httpAttempts') / sum('requests')).toFixed(2) : '—',
 	validationFailures: sum('validationFailures'),
-	queuedMs: sum('queuedMs'),
-	extractMs: sum('extractMs'),
-	firstTextMs: sum('firstTextMs'),
+	queuedMs: '—',
+	extractMs: '—',
+	firstTextMs: '—',
+	pageDoneMs: '—',
 	hotPages: '—',
 	renderCancelled: sum('renderCancelled'),
 	renderMs: sum('renderMs'),
@@ -189,7 +206,7 @@ if (abandonReasons.length) {
 }
 
 const headers = ['doc', 'pages', 'requests', 'reqPerPage', 'salvage', 'rate429', 'timeouts', 'segHits', 'avgPageMs', 'translated', 'preserved', 'keptOriginal', 'placed', 'keptPlace', 'placeRate', 'geoViolations', 'annexed', 'inkBlocked', 'pageHitRate', 'segHitRate', 'prefetchWaste', 'unplaced', 'inTokens', 'outTokens', 'cachedPct', 'tokPerPage', 'layoutMs', 'httpAttempts', 'attemptsPerBatch', 'validationFailures', 'paramHeals', 'attemptErrors', 'unexplained',
-	'queuedMs', 'extractMs', 'firstTextMs', 'hotPages', 'renderCancelled', 'renderMs',
+	'queuedMs', 'extractMs', 'firstTextMs', 'pageDoneMs', 'hotPages', 'renderCancelled', 'renderMs',
 	'cacheWriteMs', 'cacheWriteKB', 'segFlushKB'];
 const md = [
 	'# 性能基线报告(真实世界)',
