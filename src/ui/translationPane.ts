@@ -18,6 +18,7 @@
 import { isFormulaRun } from '../reader/formulaGuard';
 import { stripStyleMarkers } from '../reader/styleRuns';
 import * as logger from '../utils/logger';
+import { RenderPump } from './renderPump';
 import { getPref } from '../utils/prefs';
 import type { ExplanationSection } from '../translation/explainer';
 import type { PageTranslationState } from '../translation/translationManager';
@@ -296,7 +297,7 @@ export class TranslationPane {
 	 * 'article' 流式译文 — the translation as a continuous article.
 	 */
 	private viewKind: 'page' | 'article' = 'page';
-	private pageRenderer: ((pageIndex: number, slot: HTMLElement, width: number) => Promise<PageRenderResult>) | null = null;
+	private pageRenderer: ((pageIndex: number, slot: HTMLElement, width: number, signal: AbortSignal) => Promise<PageRenderResult>) | null = null;
 	private pageHost: HTMLElement | null = null;
 	private currentPage = -1;
 	private compareOriginal = false;
@@ -338,8 +339,55 @@ export class TranslationPane {
 	private slotRenderedCount: number[] = [];
 	private slotPartialAt: number[] = [];
 	/** One render at a time; re-prioritised between renders. */
-	private pumping = false;
 	private ensureTimer: ReturnType<typeof setTimeout> | null = null;
+	/** 渲染泵 (2.8.0 第一批): 当前页优先 + 过时任务取消,逻辑在 renderPump.ts。 */
+	private pump: RenderPump = new RenderPump({
+		windowOf: () => {
+			if (this.viewKind !== 'page' || !this.pageRenderer || !this.slots.length) {
+				return null;
+			}
+			const [first, last] = this.visibleRange(0);
+			if (first < 0) {
+				return null;
+			}
+			// 当前页夹到可视范围里 (滚动与阅读器翻页之间总有一小段不同步),
+			// buffer=1 = 可视范围前后各预取一页,与 releaseFarSlots 的 2 页
+			// 保留窗口配套。
+			return { current: Math.max(first, Math.min(last, this.currentPage)), first, last, buffer: 1 };
+		},
+		needsRender: page => (this.slotState[page] === 'empty' || this.slotDirty[page] === true)
+			&& Date.now() >= (this.slotRetryAt[page] ?? 0),
+		anyWaiting: () => {
+			const [first, last] = this.visibleRange(1);
+			for (let i = first; i <= last && i >= 0; i++) {
+				if (this.slotState[i] === 'empty' || this.slotDirty[i]) {
+					return true;
+				}
+			}
+			return false;
+		},
+		render: (page, signal) => this.renderSlot(page, signal),
+		commit: (page, result, aborted) => this.commitRender(page, result, aborted),
+		afterPass: () => this.releaseFarSlots(),
+		now: () => Date.now(),
+		setTimer: (fn, ms) => setTimeout(fn, ms),
+		clearTimer: handle => {
+			if (handle !== null) {
+				clearTimeout(handle as ReturnType<typeof setTimeout>);
+			}
+		},
+		schedule: delayMs => {
+			if (this.ensureTimer) {
+				return;
+			}
+			this.ensureTimer = setTimeout(() => {
+				this.ensureTimer = null;
+				this.pump.request();
+			}, delayMs);
+		}
+	});
+	/** 每槽一个渲染序号 —— 与在飞任务比对,过时结果绝不落地。 */
+	private slotRenderSeq: number[] = [];
 	/** Echo guard: ignore our own programmatic scrolls. */
 	private suppressScrollUntil = 0;
 	/** Width the slots were laid out for. */
@@ -1088,7 +1136,7 @@ export class TranslationPane {
 	 * 'translated', 'original' (translation not finished yet), or false when
 	 * the page could not be rendered at all.
 	 */
-	setPageRenderer(renderer: (pageIndex: number, slot: HTMLElement, width: number) => Promise<PageRenderResult>): void {
+	setPageRenderer(renderer: (pageIndex: number, slot: HTMLElement, width: number, signal: AbortSignal) => Promise<PageRenderResult>): void {
 		this.pageRenderer = renderer;
 		this.observeResize();
 	}
@@ -1110,6 +1158,8 @@ export class TranslationPane {
 		this.slotDegradeTries = [];
 		this.slotRenderedCount = [];
 		this.slotPartialAt = [];
+		this.slotRenderSeq = [];
+		this.pump.cancelAll();
 		this.refreshViewKindButton();
 		if (kind === 'page') {
 			this.initPageList();
@@ -1244,6 +1294,7 @@ export class TranslationPane {
 		this.slotDegradeTries = [];
 		this.slotRenderedCount = [];
 		this.slotPartialAt = [];
+		this.slotRenderSeq = [];
 		const children: HTMLElement[] = [];
 		for (let i = 0; i < this.docPageSizes.length; i++) {
 			const slot = this.el('div', 'pm-repage-slot');
@@ -1258,6 +1309,7 @@ export class TranslationPane {
 			this.slotDegradeTries.push(0);
 			this.slotRenderedCount.push(0);
 			this.slotPartialAt.push(0);
+			this.slotRenderSeq.push(0);
 			children.push(
 				this.el('div', 'pm-repage-page-label',
 					`${this.strings.pagePrefix} ${i + 1} ${this.strings.pageSuffix}`.trim()),
@@ -1326,7 +1378,9 @@ export class TranslationPane {
 		}
 		this.ensureTimer = setTimeout(() => {
 			this.ensureTimer = null;
-			void this.pumpRenders();
+			// request() 先取消已经离开窗口的在飞任务,再泵 —— 当前页因此不必
+			// 排在一个卡住的旧任务后面 (2.8.0 第一批)。
+			this.pump.request();
 		}, 60);
 	}
 
@@ -1337,68 +1391,41 @@ export class TranslationPane {
 	 * their canvases — with several supersampled canvases per page, an
 	 * unbounded list is an out-of-memory crash on a long paper.
 	 */
-	private async pumpRenders(): Promise<void> {
-		if (this.pumping || this.viewKind !== 'page' || !this.pageRenderer || !this.slots.length) {
+	private async renderSlot(page: number, signal: AbortSignal): Promise<PageRenderResult> {
+		const slot = this.slots[page];
+		if (!slot || !this.pageRenderer) {
+			return false;
+		}
+		this.slotRenderSeq[page] = ++this.slotToken[page]!;
+		this.slotDirty[page] = false;
+		try {
+			return await this.pageRenderer(page, slot, this.slotWidthFor(page), signal);
+		}
+		catch (e) {
+			logger.debug(MODULE, `page ${page + 1} render failed`, e);
+			return false;
+		}
+	}
+
+	/**
+	 * 一页渲染结束后回写槽状态。被取消的任务**不写状态**,只把槽标脏:它的
+	 * 结果没有意义(渲染器在取消后不提交 DOM),但这一页仍然欠一次重建。
+	 */
+	private commitRender(page: number, result: PageRenderResult, aborted: boolean): void {
+		if (this.slotToken[page] !== this.slotRenderSeq[page] || this.viewKind !== 'page') {
+			return; // superseded while rendering
+		}
+		if (aborted) {
+			this.slotDirty[page] = true;
 			return;
 		}
-		this.pumping = true;
-		try {
-			for (let guard = 0; guard < 24; guard++) {
-				const [first, last] = this.visibleRange(1);
-				const now = Date.now();
-				let target = -1;
-				for (let i = first; i <= last; i++) {
-					if ((this.slotState[i] === 'empty' || this.slotDirty[i]) && now >= (this.slotRetryAt[i] ?? 0)) {
-						target = i;
-						break;
-					}
-				}
-				if (target < 0) {
-					// Anything left is only waiting out its retry backoff.
-					for (let i = first; i <= last; i++) {
-						if (this.slotState[i] === 'empty' || this.slotDirty[i]) {
-							this.ensureTimer ??= setTimeout(() => {
-								this.ensureTimer = null;
-								void this.pumpRenders();
-							}, 1500);
-							break;
-						}
-					}
-					break;
-				}
-				const token = ++this.slotToken[target]!;
-				this.slotDirty[target] = false;
-				const slot = this.slots[target]!;
-				let result: PageRenderResult = false;
-				try {
-					// The renderer has its own timeouts; this race is the
-					// backstop that keeps the whole pump from freezing if it
-					// ever hangs anyway — the freeze bug, once, was the pane
-					// stuck on a spinner forever.
-					result = await Promise.race([
-						this.pageRenderer(target, slot, this.slotWidthFor(target)),
-						new Promise<false>(resolve => setTimeout(() => resolve(false), 20000))
-					]);
-				}
-				catch (e) {
-					logger.debug(MODULE, `page ${target + 1} render failed`, e);
-				}
-				if (this.slotToken[target] !== token || this.viewKind !== 'page') {
-					continue; // superseded while rendering
-				}
-				const next = nextSlotState(result, this.slotDegradeTries[target] ?? 0, Date.now());
-				this.slotState[target] = next.state;
-				this.slotDirty[target] = next.dirty;
-				this.slotRetryAt[target] = next.retryAt;
-				this.slotDegradeTries[target] = next.tries;
-				if (result !== false) {
-					this.applyCompareState();
-				}
-			}
-			this.releaseFarSlots();
-		}
-		finally {
-			this.pumping = false;
+		const next = nextSlotState(result, this.slotDegradeTries[page] ?? 0, Date.now());
+		this.slotState[page] = next.state;
+		this.slotDirty[page] = next.dirty;
+		this.slotRetryAt[page] = next.retryAt;
+		this.slotDegradeTries[page] = next.tries;
+		if (result !== false) {
+			this.applyCompareState();
 		}
 	}
 
@@ -1769,6 +1796,8 @@ export class TranslationPane {
 		this.closeBarMenu();
 		this.resizeObserver?.disconnect();
 		this.resizeObserver = null;
+		// 面板销毁: 在飞的重建立刻取消,别让它在一个已经拆掉的槽上收尾。
+		this.pump.cancelAll();
 		this.pageRenderer = null;
 		this.host.replaceChildren();
 		this.pages.clear();

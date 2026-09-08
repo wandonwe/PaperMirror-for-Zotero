@@ -403,7 +403,7 @@ export class ReaderSession {
 		this.pane.setArticleFontSize(getPref<number>('articleFontSize', 16));
 		// 整页对照: the pane shows the whole document; each page renders as
 		// the original until its translation completes, then swaps.
-		this.pane.setPageRenderer((pageIndex, slot, width) => this.renderDocPage(pageIndex, slot, width));
+		this.pane.setPageRenderer((pageIndex, slot, width, signal) => this.renderDocPage(pageIndex, slot, width, signal));
 		this.installDocumentLayout();
 		// 左右对照 = 原文左 / 版面级重排的整页译文右. 文章流 stays one click
 		// away in the pane header for anyone who wants plain continuous text.
@@ -1364,12 +1364,20 @@ export class ReaderSession {
 	 * goes through pdf.js core (adapter.renderPageBitmap), so any page works —
 	 * not just the ones the left viewer keeps on screen.
 	 */
-	private async renderDocPage(pageIndex: number, slot: HTMLElement, width: number): Promise<PageRenderResult> {
+	private async renderDocPage(pageIndex: number, slot: HTMLElement, width: number, signal?: AbortSignal): Promise<PageRenderResult> {
 		// Claim this render's generation up front; any older render still in its
 		// async tail will see a newer token and bow out before touching the slot.
 		const token = (this.renderToken.get(pageIndex) ?? 0) + 1;
 		this.renderToken.set(pageIndex, token);
-		const current = (): boolean => !this.destroyed && this.renderToken.get(pageIndex) === token;
+		// 取消并进世代闸 (2.8.0 第一批): current() 是这条路径上**唯一**的"我还
+		// 该不该动这个槽"判据 —— 把 signal 折进来,于是每一处已有的检查点
+		// (每次 await 之后、每次提交 DOM 之前) 自动同时是取消检查点。
+		const current = (): boolean => !this.destroyed
+			&& this.renderToken.get(pageIndex) === token
+			&& signal?.aborted !== true;
+		if (!current()) {
+			return false;
+		}
 		// 底图位图 LRU (2.2.5, item6): 同页同宽度已 rasterize 过就直接复用,免去
 		// 最贵的 pdf.js 整页渲染;buildStrictPage 只重建遮罩+文本层。宽度取整分桶,
 		// 缩放换宽度自然落到不同键、旧宽度条目由 LRU 淘汰。
@@ -1470,6 +1478,9 @@ export class ReaderSession {
 				if (!current()) {
 					return false;
 				}
+				if (!current()) {
+					return false; // 取消后绝不提交 DOM
+				}
 				slot.replaceChildren(applyFit(built.element));
 				const element = built.element;
 				// Measure-before-commit: fitting blocks are revealed only on the
@@ -1539,6 +1550,9 @@ export class ReaderSession {
 		// 出来」是两回事 (2.5.2): 后者必须让面板知道可以再试,否则一次偶发失败
 		// 就把该页整个会话钉死在英文 —— 用户看到的正是"往回翻译文消失"。
 		const degraded = !!(state && state.status === 'done' && state.blocks.length);
+		if (!current()) {
+			return false; // 取消后绝不提交 DOM
+		}
 		slot.replaceChildren(applyFit(buildOriginalPage(doc, render)));
 		return degraded ? 'degraded' : 'original';
 	}
