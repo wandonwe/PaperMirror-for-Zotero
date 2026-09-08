@@ -7,6 +7,48 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.7.8] — 2026-09-08
+
+**外部审核·第三批(表格结构)**。三项都是 `src/reader` 里的纯函数规则,排版层零改动。
+7 个布局快照与请求计划基线按预告变化,其余 27 页逐字节不变。
+
+### Fixed
+
+- **表格横向范围不再吞邻栏正文**(`tableGuard.detectTableRegions`)。双栏页上,
+  一栏的统计密集正文行(百分比、p 值、置信区间)此前被当成数字种子,聚成与邻栏
+  表格同行的"格"并被并入表格区(wu2026‑p6 Table 4 吞掉右栏 13 行正文)。两条几何
+  闸门:(a) `columnExtents` —— 宽度 ≥ 所在正文栏宽 85% 的块是整行正文,不是种子;
+  (b) `columnGutters` —— 行对齐扩张不得跨栏沟(区域本身已跨沟的通栏表除外)。
+  wu2026‑p6:142 → 129 块,表格格 125 → 105,右栏正文回到散文流(payloadChars
+  1817 → 2323 —— 这些行此前作为 preserve 数据格根本没有送译,是整段英文残留)。
+- **文本表折行续行并回上一行**(`tableStructure.mergeContinuationRows`)。三列长文格
+  同一视觉行一起折行时,折行行首顶对齐又贴列带左沿(或因邻列宽格自成一组),
+  与真实行起点几何不可分,radiology2023‑p11 Table 4 的 "Gold / nanoparticles"、
+  "Extensive preclinical / use, synthetic control …" 被切成两行六格。几何分不开的
+  靠文本:一行**每一格**都(a) 上一行同列有格、(b) 小写字母或续行标点开头、
+  (c) 与上一行同列格竖向间隙 ≤ 0.8em(与格内折行同一阈值),且上一行不是单个
+  跨列子标题 —— 整行并回;任一格大写/数字开头即新行证据,整行不并;并回后再看
+  下一行(三行折行)。radiology2023‑p11:57 → 54 块,9 行 → 8 行。
+- **短格三类明确不译证据**(`tableStructure.cellPreserveEvidence` /
+  `preserveReasonFor`,`TableCell.preserveReason`)。只认硬证据,**不**把任意全大写
+  短词判 preserve("YES"/"TOTAL"/"Age (y)" 照常翻译):
+  `glossary`(用户不译词表逐字命中)、`defined-abbreviation`(本页正文/表注定义过:
+  "… detector (PCD)"、"AS = aortic stenosis"、"CT, computed tomography";连字缩写各
+  部分都定义过也算)、`citation-label`("Kim et al,19 2022"、"van der Berg et al")。
+  证据取自**整页**文本(定义通常在表注,不在表区),抽取期与严格排版期同一份证据
+  (`StrictPageInput.noTranslate`、`TextExtractor` 选项 `noTranslate`,三处共用
+  `readNoTranslateList`)。快照变化仅 5 页各 1–2 格,全部是表注里定义过的缩写:
+  chen2023‑p10 "HR"/"HR*"、chen2023‑p4 "NSTEMI"、chen2023‑p5/p8 "RCA"、
+  radiology2023‑p2 "DECT" → preserve。
+
+### Tests
+
+- tableGuard 3 例(`columnGutters`;邻栏统计密集整行不当种子;通栏表反例),
+  tableStructure 9 例(证据收集、三类证据与反例、两种表模型记 `preserveReason`、
+  整页证据与词表经 `structureTableCells`;续行并回、新行证据不并、子标题不吸收、
+  小写跨列行不并、三行折行)。16 个突变各一红。950 全绿。
+- 基线 `UPDATE_BASELINE=1` 重生成:7 页变化如上,其余不变。
+
 ## [2.7.7] — 2026-09-05
 
 **外部审核·第一批(调度与计量)**。提取/结构/排版零改动,34 个布局快照与请求

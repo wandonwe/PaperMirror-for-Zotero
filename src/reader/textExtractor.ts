@@ -85,9 +85,22 @@ export class TextExtractor implements PageParser {
 	 */
 	private primedPageData: { pageIndex: number; data: Awaited<ReturnType<typeof adapter.getPageData>> } | null = null;
 
-	constructor(reader: ReaderLike, options: { includeReferences: boolean }) {
+	/** 2.7.8: 用户不译词表读取器 —— 表格短格的 glossary 不译证据来源。 */
+	private readonly noTranslate: () => string[];
+
+	constructor(reader: ReaderLike, options: { includeReferences: boolean; noTranslate?: () => string[] }) {
 		this.reader = reader;
 		this.includeReferences = options.includeReferences;
+		this.noTranslate = options.noTranslate ?? (() => []);
+	}
+
+	private noTranslateSafe(): string[] {
+		try {
+			return this.noTranslate();
+		}
+		catch {
+			return [];
+		}
 	}
 
 	setIncludeReferences(include: boolean): void {
@@ -215,7 +228,7 @@ export class TextExtractor implements PageParser {
 				// Canonical reading order BEFORE coalescing: row-wise streams
 				// interleave the columns, and the coalescer only merges adjacent
 				// blocks — without this, one-line shreds never rejoin.
-				const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10);
+				const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe());
 				const tableCells = structured.filter(b => b.translationMode !== undefined);
 				const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
 				result.blocks = orderBlocksForReading([...prose, ...tableCells]);
@@ -290,7 +303,7 @@ export class TextExtractor implements PageParser {
 			// Rebuild semantic regions from whatever fragments extraction
 			// produced: whole regions translate as whole sentences.
 			const sourceBlockCount = result.blocks.length;
-			const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10);
+			const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe());
 			const tableCells = structured.filter(b => b.translationMode !== undefined);
 			const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
 			result.blocks = orderBlocksForReading([...prose, ...tableCells]);

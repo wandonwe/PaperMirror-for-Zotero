@@ -121,6 +121,17 @@ function languageLabel(code: string): string {
 	}
 }
 
+/**
+ * 用户不译词表 (首选项 noTranslateList,每行一条,# 开头为注释,≥2 字)。
+ * 2.7.8 起三处共用: 提示词掩蔽、抽取期表格短格证据、严格排版期表格短格证据。
+ */
+function readNoTranslateList(): string[] {
+	return String(getPref<string>('noTranslateList', '') ?? '')
+		.split(/\r?\n/)
+		.map(l => l.trim())
+		.filter(l => l.length >= 2 && !l.startsWith('#'));
+}
+
 export class ReaderSession {
 	private reader: ReaderLike;
 	private onClosed: () => void;
@@ -289,7 +300,8 @@ export class ReaderSession {
 		this.reader = reader;
 		this.onClosed = onClosed;
 		this.extractor = new TextExtractor(reader, {
-			includeReferences: getPref<boolean>('translateReferences', false)
+			includeReferences: getPref<boolean>('translateReferences', false),
+			noTranslate: () => readNoTranslateList()
 		});
 	}
 
@@ -633,10 +645,7 @@ export class ReaderSession {
 					return item?.getDisplayTitle?.() ?? '';
 				},
 				getGlossary: () => this.loadGlossary(),
-				getNoTranslate: () => String(getPref<string>('noTranslateList', '') ?? '')
-					.split(/\r?\n/)
-					.map(l => l.trim())
-					.filter(l => l.length >= 2 && !l.startsWith('#')),
+				getNoTranslate: () => readNoTranslateList(),
 				useContext: () => getPref<boolean>('useContext', true),
 				pageCount: () => adapter.getPageCount(this.reader),
 				// Each page's provider LANE — lets the scheduler cap providers
@@ -1434,7 +1443,8 @@ export class ReaderSession {
 					translations: state.translations,
 					pageIndex,
 					render,
-					imageRectsPdf: this.imageRects.get(pageIndex) ?? undefined
+					imageRectsPdf: this.imageRects.get(pageIndex) ?? undefined,
+					noTranslate: readNoTranslateList()
 				});
 			}
 			catch (e) {

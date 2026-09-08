@@ -73,14 +73,14 @@
 	},
 	"chen2023-p10": {
 		"blocks": 98,
-		"translatable": 32,
+		"translatable": 30,
 		"tableCells": 91,
 		"modules": 4,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 25,
-		"payloadChars": 3186,
+		"maxBlocksPerChunk": 23,
+		"payloadChars": 3181,
 		"dupBlocks": 2
 	},
 	"chen2023-p11": {
@@ -121,26 +121,26 @@
 	},
 	"chen2023-p4": {
 		"blocks": 90,
-		"translatable": 32,
+		"translatable": 31,
 		"tableCells": 82,
 		"modules": 4,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 25,
-		"payloadChars": 3230,
+		"maxBlocksPerChunk": 24,
+		"payloadChars": 3224,
 		"dupBlocks": 0
 	},
 	"chen2023-p5": {
 		"blocks": 188,
-		"translatable": 51,
+		"translatable": 50,
 		"tableCells": 183,
 		"modules": 4,
 		"chunks": 3,
 		"fastChunks": 3,
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 40,
-		"payloadChars": 1570,
+		"payloadChars": 1567,
 		"dupBlocks": 2
 	},
 	"chen2023-p6": {
@@ -169,14 +169,14 @@
 	},
 	"chen2023-p8": {
 		"blocks": 92,
-		"translatable": 28,
+		"translatable": 27,
 		"tableCells": 85,
 		"modules": 4,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 22,
-		"payloadChars": 4126,
+		"maxBlocksPerChunk": 21,
+		"payloadChars": 4123,
 		"dupBlocks": 0
 	},
 	"chen2023-p9": {
@@ -300,27 +300,27 @@
 		"dupBlocks": 0
 	},
 	"radiology2023-p11": {
-		"blocks": 57,
-		"translatable": 47,
-		"tableCells": 47,
+		"blocks": 54,
+		"translatable": 44,
+		"tableCells": 44,
 		"modules": 6,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 31,
-		"payloadChars": 3434,
+		"maxBlocksPerChunk": 28,
+		"payloadChars": 3437,
 		"dupBlocks": 7
 	},
 	"radiology2023-p2": {
 		"blocks": 28,
-		"translatable": 26,
+		"translatable": 25,
 		"tableCells": 12,
 		"modules": 10,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 15,
-		"payloadChars": 5057,
+		"payloadChars": 5053,
 		"dupBlocks": 0
 	},
 	"radiology2023-p3": {
@@ -396,15 +396,15 @@
 		"dupBlocks": 0
 	},
 	"wu2026-p6": {
-		"blocks": 142,
-		"translatable": 44,
-		"tableCells": 125,
+		"blocks": 129,
+		"translatable": 42,
+		"tableCells": 105,
 		"modules": 12,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 21,
-		"payloadChars": 1817,
+		"maxBlocksPerChunk": 19,
+		"payloadChars": 2323,
 		"dupBlocks": 10
 	}
 }

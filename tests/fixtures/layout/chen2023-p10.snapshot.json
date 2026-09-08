@@ -29,7 +29,7 @@
 		"readingIndex": 3,
 		"tableRow": 2,
 		"tableCol": 1,
-		"mode": "translate",
+		"mode": "preserve",
 		"text": "HR"
 	},
 	{
@@ -335,7 +335,7 @@
 		"readingIndex": 37,
 		"tableRow": 2,
 		"tableCol": 3,
-		"mode": "translate",
+		"mode": "preserve",
 		"text": "HR*"
 	},
 	{
