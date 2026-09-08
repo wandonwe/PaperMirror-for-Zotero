@@ -20,6 +20,8 @@ import { canExplain, explainText, parseExplanationSections, type ExplanationSect
 import { TranslationManager, type PageTranslationState, type TranslateHooks } from '../translation/translationManager';
 import { PROMPT_VERSION } from '../translation/promptBuilder';
 import { joinPlacementOutcome } from './diagnosticsJoin';
+import { engineExportRow, type EngineExportRow } from '../export/endpointKind';
+import type { DiagnosticsExportSource } from '../export/diagnosticsJsonl';
 import { parseGlossaryJSON, serializeGlossary, dedupeLearnedTerms } from '../translation/glossary';
 import { parseProviderProfiles, effectiveProviderConfig } from '../translation/providerProfiles';
 import type { GlossaryRule, ProviderSettings, TranslationRequest, TranslationResponse } from '../types/models';
@@ -226,6 +228,14 @@ export class ReaderSession {
 	private placementProbe = new Map<number, import('../ui/strictPageReplacement').StrictProbeRow[]>();
 	/** 放弃清单 (2.7.0, 审核 B-1): 页索引 → 放弃块 id + 原因枚举串,无文本。 */
 	private abandonedBlocks = new Map<number, import('../ui/strictPageReplacement').AbandonedBlock[]>();
+	/**
+	 * 导出中的逐页短时保护 (2.8.6, 导出方案 P1)。
+	 *
+	 * 导出器读某页之前把它放进来、读完立刻拿掉,`isPageInUse` 因而在这一瞬间
+	 * 报"在用",2.8.3 的淘汰就不会正好在这时把它卸掉。**不是全局暂停淘汰** ——
+	 * 那样长文档导出时内存会一路上涨,把第四批省下来的又吃回去。
+	 */
+	private exportPins = new Set<number>();
 	/**
 	 * Per-page render generation. Bumped at the start of every renderDocPage;
 	 * an async render (or its settle/compress callbacks) that discovers a newer
@@ -651,7 +661,10 @@ export class ReaderSession {
 				// 仍挂着内容的页、以及正在重建的页,都不许被卸掉完整内容。
 				isPageInUse: (pageIndex: number) =>
 					pageIndex === adapter.getCurrentPageIndex(this.reader)
-					|| this.pane?.hasMountedPage(pageIndex) === true,
+					|| this.pane?.hasMountedPage(pageIndex) === true
+					// 2.8.6 (导出方案 P1): 导出器正在读的那一页也算在用 —— 逐页短时
+					// 保护,读完立即释放,不在整个导出期间全局暂停淘汰。
+					|| this.exportPins.has(pageIndex),
 				useContext: () => getPref<boolean>('useContext', true),
 				pageCount: () => adapter.getPageCount(this.reader),
 				// Each page's provider LANE — lets the scheduler cap providers
@@ -2435,6 +2448,94 @@ export class ReaderSession {
 	}
 
 	/**
+	 * 引擎自检 (2.3.0, 第四批 item2 · WF-2): 每个已启用引擎的配置健康度 ——
+	 * 纯本地检查(密钥配没配、端点类别、模型),**不发任何网络请求**。
+	 *
+	 * 2.8.6 (导出方案 P1) 起端点只报枚举: 此前报的是真实主机名,于是一份
+	 * "可以放心贴进 issue"的诊断会顺带公开用户自建网关的域名或公司内网主机名。
+	 * 自检异常也只报一个布尔 —— 异常消息里常带着端点 URL。
+	 */
+	private async engineSelfCheck(): Promise<EngineExportRow[]> {
+		const engines: EngineExportRow[] = [];
+		const ids = this.pool.length ? this.pool : [getPref<string>('provider', 'bing-free')];
+		for (const id of ids) {
+			const provider = getProvider(id);
+			try {
+				const s = await this.providerSettingsFor(id);
+				engines.push(engineExportRow(id, s, {
+					defaultBaseURL: provider?.defaultBaseURL,
+					keyConfigured: !!s.apiKey,
+					requiresKey: !!provider?.requiresApiKey
+				}));
+			}
+			catch {
+				engines.push(engineExportRow(id, null, {
+					keyConfigured: false,
+					requiresKey: !!provider?.requiresApiKey
+				}));
+			}
+		}
+		return engines;
+	}
+
+	/**
+	 * 诊断导出的数据源 (2.8.6, 导出方案 P1)。
+	 *
+	 * 把"从哪儿取数"与"怎么写文件"分开: 写出逻辑(JSONL 逐行追加、缺失计数、
+	 * 阶段化报错)在 `src/export/diagnosticsJsonl.ts` 里,是纯函数式的、可单测的;
+	 * 这里只负责把会话里的各处数据接上去。保存对话框与 `Zotero.File.reveal`
+	 * 属于平台交互,留给 P3。
+	 *
+	 * **逐页读**: `readPage` 每次只取一页,读之前 pin、读完立即释放 ——
+	 * 导出不把整篇文档拉进内存,也不在整个导出期间挂着淘汰。
+	 */
+	async diagnosticsExportSource(pluginVersion: string): Promise<DiagnosticsExportSource> {
+		const manager = this.manager;
+		if (!manager) {
+			throw new PaperMirrorError('UNKNOWN', 'No translation session to export.', { retryable: false });
+		}
+		const engines = await this.engineSelfCheck();
+		return {
+			pluginVersion,
+			generatedAt: new Date(),
+			// 冻结的页清单: 导出期间新完成的页不混进来。
+			scope: manager.exportScope(),
+			summary: () => ({
+				engines,
+				engineRotations: this.pageProviderOffset.size,
+				...((): Record<string, unknown> => {
+					const diag = manager.exportDiagnostics() as Record<string, unknown>;
+					// 逐页数据单独成行,这里只留会话级汇总 —— 否则整份文档的页数据
+					// 会在 summary 行里再出现一遍,文件大一倍且两处口径可能不一致。
+					const { pages: _pages, ...session } = diag;
+					return session;
+				})(),
+				render: this.pane?.renderMetrics() ?? null,
+				cacheWrites: cacheManager.cacheWriteStats()
+			}),
+			readPage: (pageIndex: number) => {
+				const row = manager.exportPageDiagnostics(pageIndex);
+				if (!row) {
+					throw new PaperMirrorError('UNKNOWN', 'page state is gone', { retryable: false });
+				}
+				// 块级口径联表 (2.7.0, 审核 B-1): 排版放弃的块 state → 'unplaced'
+				// + abandonReason —— 与一次性诊断走同一个 joinPlacementOutcome。
+				const joined = joinPlacementOutcome(
+					[row] as Parameters<typeof joinPlacementOutcome>[0], this.abandonedBlocks)[0] ?? row;
+				return {
+					...joined,
+					geometryAudit: this.geometryAudits.get(pageIndex) ?? null,
+					placement: this.placementStats.get(pageIndex) ?? null,
+					// 探针只在调试日志开启时采样 —— 没采到就如实说,不冒充"没问题"。
+					placementProbe: this.placementProbe.get(pageIndex) ?? 'not-sampled'
+				};
+			},
+			pin: (pageIndex: number) => { this.exportPins.add(pageIndex); },
+			unpin: (pageIndex: number) => { this.exportPins.delete(pageIndex); }
+		};
+	}
+
+	/**
 	 * 诊断导出: sanitized per-page diagnostics (statuses, request/retry/429
 	 * counts, keep-origin reasons) → clipboard as JSON.
 	 *
@@ -2452,30 +2553,7 @@ export class ReaderSession {
 			// 引擎自检 (2.3.0, 第四批 item2 · WF-2): 随诊断产出每个已启用引擎的
 			// 配置健康度 —— 纯本地检查(密钥是否已配、端点主机、模型、熔断轮换
 			// 次数),**不发任何网络请求**,也绝不含密钥本体。
-			const engines: Record<string, unknown>[] = [];
-			const ids = this.pool.length ? this.pool : [getPref<string>('provider', 'bing-free')];
-			for (const id of ids) {
-				try {
-					const s = await this.providerSettingsFor(id);
-					let host = '';
-					try {
-						host = s.apiBaseURL ? new URL(s.apiBaseURL).host : '';
-					}
-					catch {
-						host = '(invalid URL)';
-					}
-					engines.push({
-						id,
-						model: s.model || '(default)',
-						endpointHost: host,
-						keyConfigured: !!s.apiKey,
-						requiresKey: !!getProvider(id)?.requiresApiKey
-					});
-				}
-				catch (e) {
-					engines.push({ id, selfCheckError: e instanceof Error ? e.message : String(e) });
-				}
-			}
+			const engines = await this.engineSelfCheck();
 			const payload = {
 				plugin: 'PaperMirror',
 				generatedAt: new Date().toISOString(),

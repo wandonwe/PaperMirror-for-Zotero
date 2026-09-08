@@ -1272,8 +1272,35 @@ export class TranslationManager {
 		return {
 			pages: [...this.pages.values()]
 				.sort((a, b) => a.pageIndex - b.pageIndex)
-				.map(s => ({
-					page: s.pageIndex + 1,
+				.map(s => this.pageDiagnosticsRow(s)),
+			docMemoryTerms: this.docMemory.size(),
+			...this.sessionDiagnostics()
+		};
+	}
+
+	/**
+	 * 导出范围 (2.8.6, 导出方案 P1): 冻结时刻的页清单,**只有状态,不含内容**。
+	 * 导出器据此逐页读,不再重新枚举 `pages` —— 导出期间新完成的页不混进来。
+	 */
+	exportScope(): { pageIndex: number; status: string; evicted?: boolean }[] {
+		return [...this.pages.values()]
+			.sort((a, b) => a.pageIndex - b.pageIndex)
+			.map(s => ({ pageIndex: s.pageIndex, status: s.status, ...(s.evicted ? { evicted: true } : {}) }));
+	}
+
+	/**
+	 * 单页诊断 (2.8.6, 导出方案 P1): 与整份导出**走同一个** `pageDiagnosticsRow`,
+	 * 于是"一次性导出"与"逐页流式导出"永远是同一份口径。页不存在时返回 null ——
+	 * 导出器把它记成缺失,不静默跳过。
+	 */
+	exportPageDiagnostics(pageIndex: number): unknown | null {
+		const state = this.pages.get(pageIndex);
+		return state ? this.pageDiagnosticsRow(state) : null;
+	}
+
+	private pageDiagnosticsRow(s: PageTranslationState): Record<string, unknown> {
+		return {
+			page: s.pageIndex + 1,
 					status: s.status,
 					error: s.error?.code ?? null,
 					// 2.8.3: 完整内容已卸(冷页省内存)—— 块表为空是这个原因,
@@ -1313,8 +1340,12 @@ export class TranslationManager {
 						? { blockDigestRun: s.blockDigest.runId, blockDigestRevision: s.blockDigest.revision }
 						: {}),
 					...(s.extractPath ? { extractPath: s.extractPath } : {})
-				})),
-			docMemoryTerms: this.docMemory.size(),
+		};
+	}
+
+	/** 会话级汇总(用量、引擎轮换等)—— 与逐页数据分开,导出时单独成一行。 */
+	private sessionDiagnostics(): Record<string, unknown> {
+		return {
 			// 用量统计 (2.3.9): 纯计数,不含文本。比率现算,分母为 0 时省略。
 			usage: {
 				pageCacheLookups: this.usage.pageCacheLookups,

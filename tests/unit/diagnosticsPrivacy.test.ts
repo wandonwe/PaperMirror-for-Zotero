@@ -215,3 +215,17 @@ test('extractPath 是枚举,永远装不下真实文件路径 (2.8.5 P0)', async
 		assert.ok(values.includes(value), `记的必须是枚举字面量,实际 ${value}`);
 	}
 });
+
+test('诊断不再导出真实端点主机名 (2.8.6 P1)', () => {
+	// 2.3.0–2.8.5 期间诊断里带的是 endpointHost —— 用户自建网关的域名、公司内网
+	// 主机名会随一份"可以放心贴进 issue"的诊断一起公开。改为 endpointKind 枚举。
+	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const start = src.indexOf('private async engineSelfCheck(');
+	assert.ok(start > 0, '找不到 engineSelfCheck');
+	const body = src.slice(start, src.indexOf('async diagnosticsExportSource('));
+	assert.ok(!/endpointHost|new URL\(/.test(body),
+		'自检不得再取主机名 —— 端点只报 endpointKind 枚举');
+	assert.ok(!/selfCheckError|e instanceof Error \? e\.message/.test(body),
+		'自检异常的原始消息常带端点 URL,只能报一个布尔');
+	assert.ok(/engineExportRow\(id, null, \{/.test(body), '失败分支也走同一个脱敏构造');
+});
