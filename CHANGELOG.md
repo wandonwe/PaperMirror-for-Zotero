@@ -7,6 +7,52 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.8.7] — 2026-09-08
+
+**导出方案 P2: 语料文件的写出内核 + 结构一致性核对**。语料**故意**含原文与译文,
+所以这一版钉的不是"别泄露",而是**别说谎** —— spans 没被留存过,导出时只能重新解析,
+文件里必须如实说清这一点的效力边界。仍不碰抽取 / 结构 / 排版的行为,不发任何请求;
+37 页布局快照与请求计划基线**逐字节不变**。
+
+### Added
+
+- **`src/export/structureMatch.ts`** —— 三态判定:
+  - `matched` 有可靠对照且逐项全等 · `mismatched` 有对照但不等 · `unverifiable`
+    原始结构已被淘汰/从未留存,**或对照本身不可信**。
+  - **四项跨页累积 / 可中途改变的输入**(`bodyFontSize`、`referencesAlreadyStarted`、
+    `includeReferences`/不译词表、抽取路径)任一已知变化 → **必须 `unverifiable`**,
+    哪怕逐项全等 —— 那只是碰巧。这时**不做比对**,也不给分类计数(给了会让人以为比过了)。
+  - 比对**不止 id 与原文哈希**:`type`、`boundingBox`(容差 0.5 px,**容差写进文件**)、
+    阅读序与栏、`tableRow`/`tableCol`、`translationMode`、原文哈希,各自成一类计数,
+    另有 `missing` / `extra`。只比 id + 哈希会放过"文字一样但被切到了另一栏/另一行"
+    这类真正会毁掉语料的差异。
+- **`src/export/corpusJsonl.ts`** —— 语料文件的写出:
+  - 首行 manifest 的**第一个字段**就是 `CONTAINS_SOURCE_TEXT: true`,外加
+    `spansPolicy: "re-extracted-at-export"` 与一句写死的说明:matched 只说明用同样的
+    流水线重建出了同样的结构,**不等于这就是翻译当时的 spans**。
+  - `availability.spans` **恒为 `re-extracted`,匹配也不升格**;没渲染过的页拿不到
+    文本层,标 `missing:not-rendered` —— 不拿重建的结构冒充 spans。
+  - **结构不匹配时,写出器就地扣下译文**并记 `missing:structure-mismatch`,
+    `result.translationsWithheld` 数得出来。块 id 是按位置生成的,照 id 贴译文会产出
+    "看起来对齐、其实错位"的语料,**比缺失更糟**。这条闸放在写出器里,不靠数据源自觉。
+  - `result` 行带三态计数 `structureMatch: { matched, mismatched, unverifiable }`。
+- **`src/export/jsonlWriter.ts`**: 把 P1 的写出骨架(逐行追加、result 行的含义、
+  阶段化报错、逐页短时 pin)抽出来两个导出器共用 —— 否则两份文件的这些语义迟早各长各的,
+  而它们恰恰是读文件的人最依赖的部分。
+- **`TextExtractor.extractInputsFor()` / `currentExtractInputs()`**: 每页抽取当时的可变
+  输入快照(不译词表只记哈希)。没有它,重解析对不上时连"是不是输入变了"都答不出来。
+- **`readerSession.corpusExportSource(version)`**: 重解析**直接调 `extractor.extractPage`**
+  —— 那就是翻译当初走的同一条流水线,共用同一个函数,不会有"检查用的链和真链慢慢分叉";
+  译文来路三分 `live` / `restored-from-cache` / 缺失原因(`missing:evicted` 与
+  `missing:cache-miss` 分开说,后者不冒充前者)。
+
+### 不变量
+
+19 项突变全部被杀,含:输入变了仍照比、匹配后 spans 升格、不匹配也贴译文、扣下的译文
+不计数、只比 id 与哈希、表格行/列各自不比、栏号不比、缺块被忽略、容差大到吃掉真差异、
+淘汰页当成比过了、自我声明不在首位、探针没采样却标 live、三态计数不进 result、
+宿主另写一份检查用解析、查了却不喂给 checkStructure、evicted 与 cache-miss 混为一谈。
+
 ## [2.8.6] — 2026-09-08
 
 **导出方案 P1: 诊断文件的写出内核**。一次导出 = **一个 JSONL 纯文本文件,不打包**
