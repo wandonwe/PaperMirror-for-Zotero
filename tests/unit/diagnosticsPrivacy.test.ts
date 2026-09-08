@@ -195,3 +195,23 @@ test('第五批只加计量、不改行为: 缓存与补译路径原样 (结构�
 	assert.equal(src.split('await IOUtils.writeJSON(').length - 1, 2,
 		'仍然是页缓存 + 段落库两处整体写盘,没有引入新的写盘路径');
 });
+
+test('extractPath 是枚举,永远装不下真实文件路径 (2.8.5 P0)', async () => {
+	// 字段名里带 "path",最容易在后续改动里被塞进一个真实文件路径 —— 那就是
+	// 把用户的目录结构(往往含姓名、机构、稿件标题)写进了可粘贴的诊断包。
+	const { ExtractPath } = await import('../../src/reader/textExtractor') as unknown as Record<string, never>;
+	assert.equal(ExtractPath, undefined, 'ExtractPath 是纯类型,不该有运行期值');
+	const src = readFileSync(join(process.cwd(), 'src/reader/textExtractor.ts'), 'utf8');
+	const decl = /export type ExtractPath = ([^;]+);/.exec(src);
+	assert.ok(decl, '找不到 ExtractPath 的声明');
+	const values = decl![1]!.split('|').map(s => s.trim());
+	assert.deepEqual(values.slice().sort(),
+		["'chars'", "'empty'", "'plain-text'", "'rendered-recovery'", "'text-layer'"],
+		'只允许这五个枚举值 —— 新增取值必须是枚举,不能是路径/文件名/URL');
+	// 记录现场也只能写这五个字面量,不能写变量。
+	const sets = [...src.matchAll(/this\.pathByPage\.set\(pageIndex, ([^)]+)\)/g)].map(m => m[1]!.trim());
+	assert.equal(sets.length, 5, '五个出口各记一次');
+	for (const value of sets) {
+		assert.ok(values.includes(value), `记的必须是枚举字面量,实际 ${value}`);
+	}
+});

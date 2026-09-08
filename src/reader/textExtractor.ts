@@ -67,6 +67,18 @@ export interface PathReport {
 	detail: string;
 }
 
+/**
+ * 这一页的块最终是**哪条抽取路径**产出的 (2.8.5, 导出方案 P0)。
+ *
+ * 三条路径拿到的东西差别很大: `chars` 有断行标记与字体名,`text-layer` 只有
+ * 渲染出来的 span 矩形,`plain-text` 连坐标都没有。导出诊断/语料时如果不知道
+ * 当时走的是哪条,任何"重新解析 spans 再比对"的核对都说不清 —— 重建走的可能
+ * 压根不是同一条路径,不匹配也无从判断是排版变了还是路径变了。
+ *
+ * 只记枚举,不记内容。
+ */
+export type ExtractPath = 'chars' | 'text-layer' | 'plain-text' | 'rendered-recovery' | 'empty';
+
 export class TextExtractor implements PageParser {
 	private reader: ReaderLike;
 	private includeReferences: boolean;
@@ -87,6 +99,9 @@ export class TextExtractor implements PageParser {
 
 	/** 2.7.8: 用户不译词表读取器 —— 表格短格的 glossary 不译证据来源。 */
 	private readonly noTranslate: () => string[];
+
+	/** 2.8.5: 每页最终走通的抽取路径。只在**返回块的那一刻**写入。 */
+	private pathByPage = new Map<number, ExtractPath>();
 
 	constructor(reader: ReaderLike, options: { includeReferences: boolean; noTranslate?: () => string[] }) {
 		this.reader = reader;
@@ -236,6 +251,7 @@ export class TextExtractor implements PageParser {
 				if (result.blocks.length) {
 					this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
 					this.auditIR(pageIndex, result.blocks);
+					this.pathByPage.set(pageIndex, 'chars');
 					return result.blocks;
 				}
 			}
@@ -251,6 +267,7 @@ export class TextExtractor implements PageParser {
 		// --- path 2: the rendered text layer (what the user can select) ------
 		const spanBlocks = await this.extractFromTextLayer(pageIndex, obstacles);
 		if (spanBlocks && spanBlocks.length) {
+			this.pathByPage.set(pageIndex, 'text-layer');
 			return spanBlocks;
 		}
 
@@ -262,12 +279,14 @@ export class TextExtractor implements PageParser {
 				referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex)
 			});
 			this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
+			this.pathByPage.set(pageIndex, 'plain-text');
 			return result.blocks;
 		}
 
 		// Nothing on this page. Only call it a scanned PDF if the WHOLE document
 		// has no extractable text — a figure-only page is perfectly normal.
 		if (await this.documentHasText(pageIndex)) {
+			this.pathByPage.set(pageIndex, 'empty');
 			return [];
 		}
 		throw new PaperMirrorError('NO_TEXT_LAYER', 'This PDF has no text layer and needs OCR.');
@@ -279,7 +298,19 @@ export class TextExtractor implements PageParser {
 	 */
 	async extractRenderedPage(pageIndex: number): Promise<SourceBlock[]> {
 		const blocks = await this.extractFromTextLayer(pageIndex, await this.obstaclesFor(pageIndex));
+		if (blocks && blocks.length) {
+			// 与 path 2 分开记: 恢复路径跳过了 getPageData 与 PDFWorker,拿到的
+			// 结构和正常走 text-layer 一样,但**触发的原因**不同,导出时要能分辨。
+			this.pathByPage.set(pageIndex, 'rendered-recovery');
+		}
 		return blocks ?? [];
+	}
+
+	/**
+	 * 这一页最后一次成功抽取走的路径;从没抽过(或从没产出块)时为 undefined。
+	 */
+	extractPathFor(pageIndex: number): ExtractPath | undefined {
+		return this.pathByPage.get(pageIndex);
 	}
 
 	/** Build blocks from the rendered PDF.js text layer, if there is one. */
