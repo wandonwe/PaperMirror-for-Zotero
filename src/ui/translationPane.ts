@@ -255,6 +255,13 @@ export interface PaneCallbacks {
 	onShowDiagnostics(): void;
 	/** 「更多」菜单「语料」(仅 debugLogging) — copy the current page's text-layer spans (CONTAINS source text). */
 	onCopyCorpus(): void;
+	/** 「更多」菜单「导出诊断文件」(2.8.8) — 整份会话的脱敏诊断写成一个 .jsonl 文件。 */
+	onExportDiagnosticsFile(): void;
+	/**
+	 * 「更多」菜单「导出翻译语料」(2.8.8) — 含原文与译文,**常驻菜单**,
+	 * 与调试日志解绑: 调试日志只决定排版探针是否采样,不该拦住语料导出。
+	 */
+	onExportCorpusFile(): void;
 	/** 菜单栏「术语」(2.3.1, item3 · WF-8) — 预览本篇学得的术语并保存到词汇表
 	 *  (去重/确认/可撤销;「仅复制 TSV」保留为确认框第二按钮)。 */
 	onSaveTerms(): void;
@@ -507,6 +514,9 @@ export class TranslationPane {
 		moreChip = this.iconButton(ICON_PATHS.more, '更多:导出译文 PDF、诊断', () => {
 			const items: { label: string; checked: boolean; onPick(): void }[] = [
 				{ label: '导出译文 PDF(单语 + 对照两份)', checked: false, onPick: () => this.callbacks.onExportPdf() },
+				// 2.8.8 (导出方案 P3): 两个文件导出入口。语料**常驻**,与调试日志解绑。
+				{ label: '导出诊断文件(整篇;不含原文/译文/密钥)', checked: false, onPick: () => this.callbacks.onExportDiagnosticsFile() },
+				{ label: '导出翻译语料(整篇;含原文与译文)', checked: false, onPick: () => this.callbacks.onExportCorpusFile() },
 				{ label: '诊断:复制脱敏指标 + 引擎自检(不含原文/密钥)', checked: false, onPick: () => this.callbacks.onShowDiagnostics() }
 			];
 			if (getPref<boolean>('debugLogging', false)) {
