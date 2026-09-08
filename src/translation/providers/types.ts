@@ -10,9 +10,18 @@ import type {
 	ValidationResult
 } from '../../types/models';
 
+import type { TokenUsage } from '../usageMeter';
+
 export interface TranslateOptions {
 	signal?: AbortSignal;
 	onProgress?: (event: TranslationProgress) => void;
+	/** 每次真正发出 HTTP 请求时回调 (2.7.7): 含适配器内部的自愈重试。 */
+	onAttempt?: () => void;
+	/**
+	 * 响应一到手就上报用量 (2.7.7),**先于**译文校验 —— 校验失败 (BAD_RESPONSE)
+	 * 的响应同样花了 token,此前随异常一起丢掉。只有数字,不附响应正文。
+	 */
+	onUsage?: (usage: TokenUsage) => void;
 }
 
 export interface TranslationProvider {

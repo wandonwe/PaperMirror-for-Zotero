@@ -108,7 +108,8 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 			body: bodyNow(),
 			timeoutMs: settings.timeoutMs,
 			signal: options.signal,
-			allowInsecureHTTP: config.allowInsecureHTTP?.(settings) ?? false
+			allowInsecureHTTP: config.allowInsecureHTTP?.(settings) ?? false,
+			onAttempt: options.onAttempt
 		});
 		for (;;) {
 			try {
@@ -196,12 +197,15 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 				// Plain-mode (兜底重译) answers are bare text — no JSON coercion.
 				...(request.plain ? {} : { response_format: { type: 'json_object' } })
 			}, settings, options);
+			// 用量先于校验 (2.7.7): 校验失败的响应同样花了 token。只读数字。
+			const usage = parseUsage(json);
+			if (usage) {
+				options.onUsage?.(usage);
+			}
 			const text = extractText(json);
 			const { translations } = request.plain
 				? parsePlainResponse(text, request.blocks[0]!.id)
 				: validateResponse(text, request.blocks.map(b => b.id));
-			// 用量计数 (2.7.0): 只读数字,响应正文不进任何日志。
-			const usage = parseUsage(json);
 			return usage ? { translations, usage } : { translations };
 		},
 

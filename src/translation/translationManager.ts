@@ -407,6 +407,16 @@ export interface PageDiagnostics {
 	cachedInputTokens?: number;
 }
 
+/**
+ * 计量回调 (2.7.7, 外部审核 第一批): 由 meteredTranslate 传给服务商适配器。
+ * onAttempt 在每次真正发出 HTTP 时触发(含适配器内部的参数自愈重试);
+ * onUsage 在响应到手、译文校验**之前**触发,校验失败的响应同样计入用量。
+ */
+export interface TranslateHooks {
+	onAttempt?: () => void;
+	onUsage?: (usage: TokenUsage) => void;
+}
+
 export interface TranslationDeps {
 	/** Extract source blocks for a page (throws PaperMirrorError on failure). */
 	extractPage(pageIndex: number): Promise<SourceBlock[]>;
@@ -417,7 +427,7 @@ export interface TranslationDeps {
 	 */
 	extractRenderedPage?(pageIndex: number): Promise<SourceBlock[]>;
 	/** Perform one provider request. */
-	translateRequest(request: TranslationRequest, signal: AbortSignal): Promise<TranslationResponse>;
+	translateRequest(request: TranslationRequest, signal: AbortSignal, hooks?: TranslateHooks): Promise<TranslationResponse>;
 	/** Cache access; may be no-ops. */
 	readCache(pageIndex: number, blocks: SourceBlock[]): Promise<TranslatedBlock[] | null>;
 	writeCache(pageIndex: number, blocks: SourceBlock[], translations: TranslatedBlock[]): Promise<void>;
@@ -505,6 +515,10 @@ export class TranslationManager {
 	private tokenUsage: TokenUsage = emptyUsage();
 	private usageReports = 0;
 	private usageMissing = 0;
+	/** 收到响应但译文校验失败的次数 (2.7.7): BAD_RESPONSE,token 已计入。 */
+	private validationFailures = 0;
+	/** 真实 HTTP 尝试总数 (2.7.7): 经 onAttempt 计,适配器不支持时按调用计 1。 */
+	private httpAttempts = 0;
 	/** 按页的 token 用量(页索引 0 起),诊断导出时并进 pages[].metrics。 */
 	private pageTokens = new Map<number, TokenUsage>();
 
@@ -512,21 +526,57 @@ export class TranslationManager {
 	 * 经计量的服务商调用 (2.7.0): 两条请求路径(整页运行与压缩重译/单块重译)
 	 * 都从这里出去,响应里的用量按页累加。只碰数字,响应正文原样透传。
 	 */
-	private async meteredTranslate(request: TranslationRequest, signal: AbortSignal): Promise<TranslationResponse> {
-		const response = await this.deps.translateRequest(request, signal);
-		if (response.usage) {
+	private async meteredTranslate(request: TranslationRequest, signal: AbortSignal, onAttempts?: (n: number) => void): Promise<TranslationResponse> {
+		let attempts = 0;
+		let reported = false;
+		let cancelledBeforeSend = false;
+		const record = (usage: TokenUsage): void => {
+			reported = true;
 			this.usageReports++;
-			addUsage(this.tokenUsage, response.usage);
+			addUsage(this.tokenUsage, usage);
 			if (typeof request.pageIndex === 'number') {
 				const page = this.pageTokens.get(request.pageIndex) ?? emptyUsage();
-				addUsage(page, response.usage);
+				addUsage(page, usage);
 				this.pageTokens.set(request.pageIndex, page);
 			}
+		};
+		const hooks: TranslateHooks = {
+			onAttempt: () => { attempts++; },
+			onUsage: record
+		};
+		try {
+			const response = await this.deps.translateRequest(request, signal, hooks);
+			// 适配器已经经 onUsage 上报的不再重复累加 (一个响应只记一次);
+			// 没走回调的 (免费引擎 / 测试桩) 沿用响应里的 usage 字段。
+			if (!reported) {
+				if (response.usage) {
+					record(response.usage);
+				}
+				else {
+					this.usageMissing++;
+				}
+			}
+			return response;
 		}
-		else {
-			this.usageMissing++;
+		catch (e) {
+			if (e instanceof PaperMirrorError && e.code === 'CANCELLED' && attempts === 0) {
+				cancelledBeforeSend = true;
+			}
+			if (e instanceof PaperMirrorError && e.code === 'BAD_RESPONSE') {
+				this.validationFailures++;
+			}
+			if (!reported && e instanceof PaperMirrorError && e.code === 'BAD_RESPONSE') {
+				this.usageMissing++; // 收到了响应却没有用量字段
+			}
+			throw e;
 		}
-		return response;
+		finally {
+			// 适配器不支持 onAttempt (免费引擎 / 桩) 时,一次调用按一次尝试计;
+			// 发出前就取消的 (attempts 仍为 0 且以 CANCELLED 结束) 不计。
+			const n = attempts || (cancelledBeforeSend ? 0 : 1);
+			this.httpAttempts += n;
+			onAttempts?.(n);
+		}
 	}
 	/** Pages whose provider has already been reported unstable (fire once). */
 	private unstableFired = new Set<number>();
@@ -673,9 +723,30 @@ export class TranslationManager {
 		this.scheduler.configureLanes(caps);
 		// 请求闸同步 (2.1.8): 每服务商真实在途请求上限 ≈ 其页面并发上限(而非
 		// 被页内 chunk/补救放大成 ×2~×4)。下限 2 以便单页的两个 chunk 仍能并行。
+		// 2.7.7: 起点用 initial 而非 max (与调度器一致),后续随 laneFeedback 同步。
 		for (const [lane, spec] of Object.entries(caps)) {
-			const pageCap = typeof spec === 'number' ? spec : spec.max;
+			const pageCap = typeof spec === 'number' ? spec : spec.initial;
 			this.requestGate.setCap(lane, Math.max(2, Math.floor(pageCap)));
+		}
+	}
+
+	/**
+	 * 一次请求结果同时反馈两层 (2.7.7, 外部审核 第一批): 页面调度器的 lane
+	 * 自适应上限 (2.0.5 起就有: 429 减半、超时减一、连续 5 次成功加一) 和
+	 * **请求闸的真实 HTTP 在途上限** —— 此前请求闸上限固定为 max(2, 页面 max),
+	 * 调度器被 429 压到 1 并行页时,闸仍放行 4 个并发请求。现在闸上限跟着
+	 * `laneCap` 走 (下限 2, 单页两个 chunk 仍可并行);429 带 Retry-After 时整个
+	 * lane 进冷却,不只撞上的那一个请求退避。两层含义不同: 一个管并行页数,
+	 * 一个管真实服务调用数,不用页面上限机械替代。
+	 */
+	private laneFeedback(lane: string, kind: 'rate' | 'timeout' | 'success', retryAfterMs?: number): void {
+		this.scheduler.laneFeedback(lane, kind);
+		const cap = this.scheduler.laneCap(lane);
+		if (Number.isFinite(cap)) {
+			this.requestGate.setCap(lane, Math.max(2, Math.floor(cap)));
+		}
+		if (kind === 'rate' && typeof retryAfterMs === 'number' && retryAfterMs > 0) {
+			this.requestGate.cooldown(lane, Date.now() + retryAfterMs);
 		}
 	}
 
@@ -1100,7 +1171,10 @@ export class TranslationManager {
 				outputTokens: this.tokenUsage.outputTokens,
 				cachedInputTokens: this.tokenUsage.cachedInputTokens,
 				usageReports: this.usageReports,
-				usageMissing: this.usageMissing
+				usageMissing: this.usageMissing,
+				// 2.7.7: 真实 HTTP 尝试 (含适配器自愈重试) 与校验失败次数。
+				httpAttempts: this.httpAttempts,
+				validationFailures: this.validationFailures
 			}
 		};
 	}
@@ -1176,6 +1250,7 @@ export class TranslationManager {
 			waiter.reject(new PaperMirrorError('CANCELLED', 'Manager disposed.'));
 		}
 		this.scheduler.dispose();
+		this.requestGate.dispose();
 		this.pages.clear();
 		this.extractZombies.clear();
 	}
@@ -1635,12 +1710,12 @@ export class TranslationManager {
 				// 上限,而真正超载的 B 的 lane 学不到任何东西。translateRequest
 				// 也是按请求时刻解析引擎的,两者现在同刻同源,必然一致。
 				const lane = this.laneFor(pageIndex);
-				metrics.attemptCount++;
 				try {
 					const response = await this.requestGate.run(
-						lane, pageIndex === this.currentPage, () => this.meteredTranslate(request, sig), sig);
+						lane, pageIndex === this.currentPage,
+						() => this.meteredTranslate(request, sig, n => { metrics.attemptCount += n; }), sig);
 					beat(); // progress: a request finished → re-arm the idle watchdog
-					this.scheduler.laneFeedback(lane, 'success');
+					this.laneFeedback(lane, 'success');
 					return response;
 				}
 				catch (e) {
@@ -1651,11 +1726,11 @@ export class TranslationManager {
 					// retries used to swallow them and the adaptive caps went blind.
 					if (err.code === 'RATE_LIMITED') {
 						metrics.rateLimited++;
-						this.scheduler.laneFeedback(lane, 'rate');
+						this.laneFeedback(lane, 'rate', (err as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs);
 					}
 					else if (err.code === 'TIMEOUT') {
 						metrics.timeouts++;
-						this.scheduler.laneFeedback(lane, 'timeout');
+						this.laneFeedback(lane, 'timeout');
 					}
 					const timeoutSpent = err.code === 'TIMEOUT' && attempt >= 1;
 					if (err.code === 'CANCELLED' || !err.retryable || timeoutSpent || attempt === REQUEST_RETRIES) {

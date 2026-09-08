@@ -7,6 +7,39 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.7.7] — 2026-09-05
+
+**外部审核·第一批(调度与计量)**。提取/结构/排版零改动,34 个布局快照与请求
+计划基线逐字节不变。
+
+### Fixed
+
+- **请求闸的真实 HTTP 上限跟着 429 走**(`translationManager.laneFeedback` →
+  `requestGate.setCap`)。页面级 lane 自适应(429 减半、超时减一、连续 5 次成功加一)
+  2.0.5 起就有,但请求闸(真实在途 HTTP)的上限固定为 max(2, 页面 max):调度器被
+  压到 1 并行页时闸仍放行 4 个并发请求。现在闸上限 = max(2, laneCap),起点用
+  `initial` 而非 `max`;两层含义保留不变——一个管并行页数,一个管真实服务调用数。
+- **服务商冷却期**(`RequestGate.cooldown`)。429 带 Retry‑After 时此前只有撞上的
+  那一个请求在退避,同 lane 其他请求照常出手。现在整个 lane 进冷却:新名额不放行、
+  在途的不打断、到点由定时器唤醒;等待者取消仍即刻 reject;别的 lane 不受影响;
+  较短的 Retry‑After 不缩短已有冷却。`dispose()` 释放定时器。
+- **计量放到正确位置**。`HttpJSONOptions.onAttempt` 在传输层每次真正发送时触发
+  ——适配器内部的参数自愈重试(剥 reasoning_effort / temperature / thinking 再发)
+  此前对 `attempts` 不可见;`TranslateOptions.onUsage` 在响应到手、译文校验**之前**
+  上报用量——校验失败(BAD_RESPONSE)的响应同样花了 token,此前随异常丢掉。三家
+  适配器同步。`meteredTranslate` 经回调计量,已回调的不再从响应字段重复累加;
+  发出前就取消的不计尝试;不支持回调的引擎按一次调用一次尝试。
+- 诊断 `usage` 新增 `httpAttempts`、`validationFailures`;baseline-report 新增
+  `httpAttempts` / `attemptsPerBatch` / `validationFailures` 列;`requests` 仍是
+  逻辑批次。
+
+### Tests
+
+- requestGate 3 例(冷却放行/唤醒/隔离、冷却中取消、冷却不被缩短)、
+  translationManager 2 例(429 → 闸上限 4→2 + 冷却;回调计量:自愈重试 4 次尝试、
+  失败响应 token 计入、缓存命中零新增)、openaiReasoningRetry 2 例(onAttempt 两次、
+  用量先于校验)。5 个突变各一红。938 全绿。
+
 ## [2.7.6] — 2026-09-05
 
 ### Fixed
