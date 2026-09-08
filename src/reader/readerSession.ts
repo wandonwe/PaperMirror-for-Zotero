@@ -871,7 +871,7 @@ export class ReaderSession {
 		// watchdog is 150 s, so a full-length request can never trip it).
 		const payloadChars = request.blocks.reduce((n, b) => n + b.text.length, 0);
 		const scaled = Math.min(120000, Math.max(settings.timeoutMs, 20000 + payloadChars * 12));
-		return provider.translate(request, { ...settings, timeoutMs: scaled }, { signal, onAttempt: hooks?.onAttempt, onUsage: hooks?.onUsage });
+		return provider.translate(request, { ...settings, timeoutMs: scaled }, { signal, onAttempt: hooks?.onAttempt, onUsage: hooks?.onUsage, onParamHeal: hooks?.onParamHeal });
 	}
 
 	private async cacheKey(pageIndex: number, texts: string[], providerId?: string): Promise<CacheKeyParts | null> {

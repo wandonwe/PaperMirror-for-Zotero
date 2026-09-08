@@ -98,3 +98,47 @@ test('服务商不报用量时计入 usageMissing,页指标不出现 token 字�
 	assert.ok(!('inputTokens' in diag.pages[0]!.metrics));
 	manager.dispose();
 });
+
+test('尝试去向明细只含枚举键与数字,错误消息一律不进诊断 (2.7.9)', async () => {
+	const { PaperMirrorError } = await import('../../src/types/models');
+	const deps = makeDeps();
+	let n = 0;
+	deps.translateRequest = async (_r, _s, hooks): Promise<TranslationResponse> => {
+		n++;
+		hooks?.onAttempt?.();
+		if (n === 1) {
+			hooks?.onParamHeal?.('temperature');
+			hooks?.onAttempt?.();
+			// 错误消息里塞进原文哨兵: 它进了 message,但绝不能进诊断。
+			throw new PaperMirrorError('NETWORK', `upstream said: ${SRC}`, { retryable: true });
+		}
+		return { translations: [{ id: 'page-0-block-0', translatedText: TGT }] };
+	};
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	await manager.ensurePage(0, 1);
+	const diag = manager.exportDiagnostics() as { usage: { paramHeals?: Record<string, number>; attemptErrors?: Record<string, number> } };
+	const json = JSON.stringify(diag);
+	assert.ok(!json.includes(SRC), '错误消息里的原文不得随 attemptErrors 泄进诊断');
+	assert.ok(!json.includes(TGT));
+	assert.deepEqual(diag.usage.paramHeals, { temperature: 1 });
+	assert.deepEqual(diag.usage.attemptErrors, { NETWORK: 1 });
+	const ENUMS = new Set(['temperature', 'reasoning_effort', 'thinking', 'model', 'other']);
+	for (const k of Object.keys(diag.usage.paramHeals ?? {})) {
+		assert.ok(ENUMS.has(k), `paramHeals 的键必须是 RejectedParam 枚举: ${k}`);
+	}
+	for (const [k, v] of Object.entries(diag.usage.attemptErrors ?? {})) {
+		assert.ok(/^[A-Z_]+$/.test(k), `attemptErrors 的键必须是错误码枚举: ${k}`);
+		assert.equal(typeof v, 'number');
+	}
+	manager.dispose();
+});
+
+test('readerSession 把三个计量钩子原样转给适配器 (结构性回归闸, 2.7.9)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const call = /provider\.translate\(request,[^;]*?\);/s.exec(src);
+	assert.ok(call, '找不到 provider.translate 调用');
+	for (const hook of ['onAttempt', 'onUsage', 'onParamHeal']) {
+		assert.ok(new RegExp(`${hook}: hooks\\?\\.${hook}`).test(call[0]),
+			`${hook} 必须转给适配器 —— 漏一个,诊断里那一类尝试就永远是 0`);
+	}
+});

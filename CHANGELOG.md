@@ -7,6 +7,35 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.7.9] — 2026-09-08
+
+**尝试去向明细**。2.7.8 装机后的首份真实诊断显示 `httpAttempts 30` 对 20 个响应
+(18 报告 + 2 缺用量)—— 多出来的 10 次发送**说不出是什么**。计量层补两个枚举
+计数器把这个洞堵上;提取/结构/排版零改动,34 个布局快照与请求计划基线逐字节不变。
+
+### Added
+
+- **`usage.paramHeals`**(`RejectedParam` 枚举计数): 适配器因 HTTP 400 剥掉参数
+  重发时报出被拒的是哪一个 —— `temperature` / `reasoning_effort`(openaiCompatible)、
+  `thinking`(geminiNative)。新钩子 `TranslateOptions.onParamHeal` 与
+  `TranslateHooks.onParamHeal`,与 2.7.7 的 `onAttempt` / `onUsage` 同路。
+- **`usage.attemptErrors`**(`PaperMirrorErrorCode` 枚举计数): 已经发出去、最终以
+  错误告终的"白发的尝试"。排队期间取消的(一次都没发出)不计;`BAD_RESPONSE`
+  已作为响应计过(`validationFailures` / `usageMissing`),不重复计。
+- 两个字段都只在非空时出现,只含枚举键与数字;错误 `message` 从不进诊断
+  (`diagnosticsPrivacy` 新增一例,用原文哨兵塞进 message 做反证)。
+  恒等式:`httpAttempts ≈ usageReports + usageMissing + paramHeals + attemptErrors`。
+- baseline-report 新增 `paramHeals` / `attemptErrors` / `unexplained` 三列,
+  `unexplained` 就是上面那个恒等式的残差 —— 对 2.7.8 的诊断跑出来正是 10。
+
+### Tests
+
+- translationManager 2 例(自愈与失败按枚举分开计 + 恒等式;干净会话省略两个字段、
+  未发出的取消与 BAD_RESPONSE 都不进 attemptErrors),openaiReasoningRetry 2 例
+  (两种参数各报各的枚举;不自愈就不回调),advancedParams 1 例(gemini thinking),
+  diagnosticsPrivacy 2 例(枚举键与数字断言 + 原文哨兵不泄;readerSession 三个钩子
+  转发的结构性回归闸)。10 个突变各一红。957 全绿。
+
 ## [2.7.8] — 2026-09-08
 
 **外部审核·第三批(表格结构)**。三项都是 `src/reader` 里的纯函数规则,排版层零改动。

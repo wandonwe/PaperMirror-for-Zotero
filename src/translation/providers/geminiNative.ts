@@ -14,7 +14,7 @@
  * Auth:     x-goog-api-key header (never in the URL, never logged).
  */
 
-import type { ProviderSettings, TranslationRequest, TranslationResponse, ValidationResult } from '../../types/models';
+import type { ProviderSettings, RejectedParam, TranslationRequest, TranslationResponse, ValidationResult } from '../../types/models';
 import { PaperMirrorError } from '../../types/models';
 import { buildSystemPrompt, buildUserPayload } from '../promptBuilder';
 import { parseUsage } from '../usageMeter';
@@ -114,7 +114,8 @@ async function requestWithThinkingHeal(
 	config: Record<string, unknown>,
 	timeoutMs: number,
 	signal?: AbortSignal,
-	onAttempt?: () => void
+	onAttempt?: () => void,
+	onParamHeal?: (param: RejectedParam) => void
 ): Promise<{ status: number; json: unknown; elapsedMs: number }> {
 	const key = thinkingHealKey(settings);
 	const strip = (c: Record<string, unknown>): Record<string, unknown> => {
@@ -136,6 +137,7 @@ async function requestWithThinkingHeal(
 			throw e;
 		}
 		thinkingRejected.add(key);
+		onParamHeal?.('thinking');
 		return requestJSON(geminiGenerateURL(settings), {
 			headers: headers(settings),
 			body: makeBody(strip(effective)),
@@ -203,7 +205,8 @@ export const geminiNativeProvider: TranslationProvider = {
 			geminiGenerationConfig(settings, { json: !request.plain }),
 			settings.timeoutMs,
 			options.signal,
-			options.onAttempt
+			options.onAttempt,
+			options.onParamHeal
 		);
 		// 用量先于校验 (2.7.7): 校验失败的响应同样花了 token。只读数字。
 		const usage = parseUsage(json);

@@ -3,6 +3,7 @@
  */
 
 import type {
+	RejectedParam,
 	ProviderSettings,
 	TranslationProgress,
 	TranslationRequest,
@@ -22,6 +23,12 @@ export interface TranslateOptions {
 	 * 的响应同样花了 token,此前随异常一起丢掉。只有数字,不附响应正文。
 	 */
 	onUsage?: (usage: TokenUsage) => void;
+	/**
+	 * 参数自愈重试时回调 (2.7.9): 适配器因 HTTP 400 剥掉某个参数并重发时,
+	 * 报出被拒的参数枚举。只有枚举,不含响应正文 —— 诊断因此能回答
+	 * "httpAttempts 比响应数多出来的那些发送是什么",而不只是"多了几次"。
+	 */
+	onParamHeal?: (param: RejectedParam) => void;
 }
 
 export interface TranslationProvider {

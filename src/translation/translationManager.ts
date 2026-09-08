@@ -14,6 +14,8 @@
 
 import type {
 	GlossaryRule,
+	PaperMirrorErrorCode,
+	RejectedParam,
 	SourceBlock,
 	TranslatedBlock,
 	TranslationRequest,
@@ -412,9 +414,19 @@ export interface PageDiagnostics {
  * onAttempt 在每次真正发出 HTTP 时触发(含适配器内部的参数自愈重试);
  * onUsage 在响应到手、译文校验**之前**触发,校验失败的响应同样计入用量。
  */
+/** 枚举计数器的两个纯工具 (2.7.9): 只碰数字与枚举键。 */
+function bump<K>(counter: Map<K, number>, key: K): void {
+	counter.set(key, (counter.get(key) ?? 0) + 1);
+}
+
+function countsOf<K extends string>(counter: Map<K, number>): Record<string, number> {
+	return Object.fromEntries([...counter].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]))));
+}
+
 export interface TranslateHooks {
 	onAttempt?: () => void;
 	onUsage?: (usage: TokenUsage) => void;
+	onParamHeal?: (param: RejectedParam) => void;
 }
 
 export interface TranslationDeps {
@@ -519,6 +531,16 @@ export class TranslationManager {
 	private validationFailures = 0;
 	/** 真实 HTTP 尝试总数 (2.7.7): 经 onAttempt 计,适配器不支持时按调用计 1。 */
 	private httpAttempts = 0;
+	/**
+	 * httpAttempts 的去向明细 (2.7.9): 尝试数减去响应数一直是个哑数字 ——
+	 * "多发了 12 次"说不出是参数自愈还是请求失败。两个计数器按枚举分类补上:
+	 *   paramHeals   适配器剥参重发 (temperature / reasoning_effort / thinking …)
+	 *   attemptErrors 整个请求以错误告终,按 PaperMirrorErrorCode 计
+	 * 都是枚举计数,不含任何文本 —— 与 diagnosticsPrivacy 的口径一致。
+	 * 恒等式: httpAttempts ≈ usageReports + usageMissing + paramHeals + attemptErrors。
+	 */
+	private paramHeals = new Map<RejectedParam, number>();
+	private attemptErrors = new Map<PaperMirrorErrorCode, number>();
 	/** 按页的 token 用量(页索引 0 起),诊断导出时并进 pages[].metrics。 */
 	private pageTokens = new Map<number, TokenUsage>();
 
@@ -542,7 +564,8 @@ export class TranslationManager {
 		};
 		const hooks: TranslateHooks = {
 			onAttempt: () => { attempts++; },
-			onUsage: record
+			onUsage: record,
+			onParamHeal: param => bump(this.paramHeals, param)
 		};
 		try {
 			const response = await this.deps.translateRequest(request, signal, hooks);
@@ -567,6 +590,12 @@ export class TranslationManager {
 			}
 			if (!reported && e instanceof PaperMirrorError && e.code === 'BAD_RESPONSE') {
 				this.usageMissing++; // 收到了响应却没有用量字段
+			}
+			// 以错误告终的请求 (2.7.9): 只有在真的发出去过时才算一次"白发的尝试";
+			// 排队期间取消的没占用任何 HTTP 尝试,不计。BAD_RESPONSE 已经作为
+			// 响应计过 (usageMissing/usage),不重复计进 attemptErrors。
+			if (attempts > 0 && e instanceof PaperMirrorError && e.code !== 'BAD_RESPONSE') {
+				bump(this.attemptErrors, e.code);
 			}
 			throw e;
 		}
@@ -1174,7 +1203,10 @@ export class TranslationManager {
 				usageMissing: this.usageMissing,
 				// 2.7.7: 真实 HTTP 尝试 (含适配器自愈重试) 与校验失败次数。
 				httpAttempts: this.httpAttempts,
-				validationFailures: this.validationFailures
+				validationFailures: this.validationFailures,
+				// 2.7.9: 多出来的尝试都去哪了 —— 按枚举计数,空表则省略。
+				...(this.paramHeals.size ? { paramHeals: countsOf(this.paramHeals) } : {}),
+				...(this.attemptErrors.size ? { attemptErrors: countsOf(this.attemptErrors) } : {})
 			}
 		};
 	}

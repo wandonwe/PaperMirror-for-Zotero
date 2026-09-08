@@ -121,6 +121,7 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 				if (!drop.reasoning && isReasoningEffortRejection(e)) {
 					drop.reasoning = true;
 					markReasoningEffortUnsupported(config.id, url, model);
+					options.onParamHeal?.('reasoning_effort');
 					continue;
 				}
 				if (!drop.temperature && isTemperatureRejection(e)) {
@@ -136,6 +137,7 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 					}
 					drop.temperature = true;
 					markTemperatureUnsupported(config.id, url, model);
+					options.onParamHeal?.('temperature');
 					continue;
 				}
 				throw e;

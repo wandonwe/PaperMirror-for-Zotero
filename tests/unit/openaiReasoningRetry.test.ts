@@ -218,3 +218,43 @@ test('用量先于校验: 译文校验失败 (BAD_RESPONSE) 时 onUsage 仍已�
 	}
 	finally { http.teardown(); }
 });
+
+// ---- 2.7.9: 自愈重试报出被拒参数的枚举 ---------------------------------------
+
+test('onParamHeal 报出被剥掉的参数枚举: reasoning_effort 与 temperature 各一次 (2.7.9)', async () => {
+	const http = installHTTP((body) => body.reasoning_effort !== undefined
+		? { status: 400, text: REJECT }
+		: { status: 200, text: OK_JSON });
+	const healed: string[] = [];
+	const req: TranslationRequest = { sourceLanguage: 'en', targetLanguage: 'zh-CN', documentTitle: 't', previousContext: '', blocks: [{ id: 'b0', type: 'paragraph', text: 'hello' }], glossary: [] };
+	try {
+		const p = createOpenAICompatibleProvider({ id: 'openai', displayName: 'OpenAI', defaultBaseURL: 'https://api.openai.com', defaultModel: 'gpt-4o' });
+		await p.translate(req, settings({ model: 'gpt-4o-heal-enum-test' }), { onParamHeal: p2 => healed.push(p2) });
+		assert.deepEqual(healed, ['reasoning_effort'], '被拒的是哪个参数,诊断才答得出多发的那次是什么');
+	}
+	finally { http.teardown(); }
+
+	const http2 = installHTTP((body) => body.temperature !== undefined
+		? { status: 400, text: TEMP_REJECT }
+		: { status: 200, text: OK_JSON });
+	try {
+		const p = createOpenAICompatibleProvider({ id: 'deepseek', displayName: 'DeepSeek', defaultBaseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-chat' });
+		healed.length = 0;
+		await p.translate(req, settings({ providerId: 'deepseek', reasoning: undefined, model: 'deepseek-heal-enum-test' }), { onParamHeal: p2 => healed.push(p2) });
+		assert.deepEqual(healed, ['temperature']);
+	}
+	finally { http2.teardown(); }
+});
+
+test('不自愈就不回调: 一次成功的请求 onParamHeal 一次都不触发 (2.7.9)', async () => {
+	const http = installHTTP(() => ({ status: 200, text: OK_JSON }));
+	try {
+		const p = createOpenAICompatibleProvider({ id: 'openai', displayName: 'OpenAI', defaultBaseURL: 'https://api.openai.com', defaultModel: 'gpt-4o' });
+		const healed: string[] = [];
+		const req: TranslationRequest = { sourceLanguage: 'en', targetLanguage: 'zh-CN', documentTitle: 't', previousContext: '', blocks: [{ id: 'b0', type: 'paragraph', text: 'hello' }], glossary: [] };
+		await p.translate(req, settings({ model: 'gpt-4o-no-heal-test', reasoning: undefined }), { onParamHeal: p2 => healed.push(p2) });
+		assert.deepEqual(healed, []);
+		assert.equal(http.bodies.length, 1);
+	}
+	finally { http.teardown(); }
+});
