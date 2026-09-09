@@ -7,6 +7,35 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.8.9] — 2026-09-09
+
+**真机修正: 保存对话框拉不起来**。2.8.8 在真机 Zotero 上直接落到了「无法打开保存
+对话框 —— 是否改为保存到 …」那条回落分支。回落本身按设计生效了(没有默默把文件
+写到别处),但对话框本该能打开。
+
+### Fixed
+
+- **`nsIFilePicker.init()` 的第一个参数**:Firefox 111+ 起要的是 **BrowsingContext**,
+  不是 window。2.8.8 传的是 `Zotero.getMainWindow()`,于是 `init` 直接抛错,每次导出
+  都退到询问备用目录。改为**三级尝试**:
+  1. Zotero 7 自带的 `FilePicker` 包装(`chrome://zotero/content/modules/filePicker.mjs`)
+     —— 它本来就是为抹平这件事存在的;注意它的 `file` 是**路径字符串**,不是 nsIFile,
+     当成对象取 `.path` 会永远拿到空;
+  2. 裸 `nsIFilePicker` + `win.browsingContext`;
+  3. 裸 `nsIFilePicker` + `win`(更老的 Zotero)。
+  三条都不成才回落到「询问备用目录」—— 那条分支原样保留,平台再变也不会变成
+  "默默写到某个地方"。
+- **拉不起来的原因现在会记进日志**(`save dialog unavailable: …`)。2.8.8 只说了句
+  "无法打开",线索当场丢掉;这次要不是回落对话框把路径显示出来,连是哪一步出错
+  都无从谈起。原因**只进日志,不进任何导出文件**。
+
+### 不变量
+
+`pickSavePath` 的决策逻辑(取消即结束、拉不起来交回调用方去问、路径为空也算取消)
+与平台细节彻底分开,平台形态换了不影响它。新增结构闸钉住三级顺序:包装拿到手
+必须**直接返回**(不能构造完又不用)、裸 picker 必须**先试 BrowsingContext 再试
+window**、包装的 `file` 必须按字符串读。6 项突变全部被杀。
+
 ## [2.8.8] — 2026-09-08
 
 **导出方案 P3: 文件真的落盘了**。P0–P2 建的是纯函数内核,一个字节都没写到磁盘上;
