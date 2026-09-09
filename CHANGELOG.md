@@ -7,6 +7,27 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.8.11] — 2026-09-09
+
+**真机修正之三: 选好位置点 Save,磁盘上一个文件都没有**。对话框正常、取消正常,
+但真正写文件那一步从第一行就失败了 —— 而且**连一句提示都没有**。
+
+### Fixed
+
+- **`IOUtils.write(..., { mode: 'append' })` 不会建文件**。Gecko 的 `WriteMode` 里
+  另有 `'appendOrCreate'`,正说明 `'append'` 要求文件已存在;而 `prepareTarget` 又
+  **刻意保证目标文件不存在**(免得追加到旧文件上拼出两份)。两条规矩正面撞车,
+  第一行就抛 `NS_ERROR_FILE_NOT_FOUND`。改为**第一行 `create`,其后 `append`**。
+- **`void this.runExport(...)` 把漏出去的异常静默吞掉**,于是失败连提示都没有。
+  `runExport` 现在有兜底 catch:导出可以失败,但**不能没有回音**。
+
+### 这次为什么没被测试挡住
+
+测试替身太宽容: 它对 `mode: 'append'` 一律照单全收,不管文件在不在。真实平台会抛。
+**替身不照平台语义走,"目标文件必须不存在"与"第一行用 append 写"这对矛盾就能一路
+绿到真机。** 现在的替身会按 Gecko 的规则拒绝(append 到不存在的文件、create 到已存在
+的文件都抛),改回任何一种写法都立刻变红 —— 4 项突变全部被杀。
+
 ## [2.8.10] — 2026-09-09
 
 **真机修正之二: 在保存对话框里点「取消」,又被追问一次**。2.8.9 的对话框能正常

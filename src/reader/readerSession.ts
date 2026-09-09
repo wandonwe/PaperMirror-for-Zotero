@@ -2562,6 +2562,19 @@ export class ReaderSession {
 	 *      逐页短时 pin 与写文件。
 	 */
 	private async runExport(kind: ExportKind): Promise<void> {
+		try {
+			await this.runExportInner(kind);
+		}
+		catch (e) {
+			// 兜底: 调用方是 `void this.runExport(...)`,漏出去的 rejection 会被
+			// 静默吞掉 —— 2.8.10 真机上"点了 Save 却毫无反应"就有它一份。
+			// 导出可以失败,但**不能没有回音**。
+			logger.warn(MODULE, 'export failed outside the write loop', e);
+			this.flashNotice(`导出失败(${e instanceof ExportStageError ? stageLabel(e.stage) : '未知阶段'})`);
+		}
+	}
+
+	private async runExportInner(kind: ExportKind): Promise<void> {
 		if (!this.manager) {
 			return;
 		}
