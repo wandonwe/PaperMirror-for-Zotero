@@ -50,8 +50,18 @@ export class FileJsonlSink implements JsonlSink {
 
 	constructor(readonly path: string) {}
 
+	/**
+	 * 写一行。
+	 *
+	 * **第一行用 `create`,其后才用 `append`** —— Gecko 的 `IOUtils` 里 `'append'`
+	 * **不会建文件**(所以才另外有 `'appendOrCreate'`),对着不存在的文件写直接抛。
+	 * 而我们又刻意保证目标文件不存在(`prepareTarget`,免得追加到旧文件上拼出
+	 * 两份)。2.8.10 在真机上正是撞了这一对: 选好位置点 Save,第一行就写不进去,
+	 * 磁盘上一个文件都没有。
+	 */
 	async append(line: string): Promise<void> {
-		await IOUtils.write(this.path, this.encoder.encode(line), { mode: 'append' });
+		await IOUtils.write(this.path, this.encoder.encode(line),
+			{ mode: this.started ? 'append' : 'create' });
 		this.started = true;
 	}
 

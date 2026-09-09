@@ -40,7 +40,20 @@ function installFs(existing: string[] = []): FakeFs {
 			if (fs.failWriteAfter !== undefined && fs.writes.length > fs.failWriteAfter) {
 				throw new Error('disk full');
 			}
-			fs.files.set(path, (fs.files.get(path) ?? '') + new TextDecoder().decode(data));
+			// —— 照平台的真实语义来 (2.8.11 真机教训)。Gecko 的 IOUtils 里
+			// 'append' **不建文件**(所以才另有 'appendOrCreate'),对着不存在的
+			// 文件写就抛 NS_ERROR_FILE_NOT_FOUND。2.8.10 的替身照单全收,于是
+			// "目标文件必须不存在" 与 "第一行用 append 写" 这对矛盾一路绿到真机。
+			const exists = fs.files.has(path);
+			const mode = options?.mode ?? 'overwrite';
+			if (mode === 'append' && !exists) {
+				throw new Error('NS_ERROR_FILE_NOT_FOUND: append to a file that does not exist');
+			}
+			if (mode === 'create' && exists) {
+				throw new Error('NS_ERROR_FILE_ALREADY_EXISTS');
+			}
+			const base = mode === 'overwrite' || mode === 'create' ? '' : (fs.files.get(path) ?? '');
+			fs.files.set(path, base + new TextDecoder().decode(data));
 			return data.length;
 		},
 		async exists(path: string): Promise<boolean> {
@@ -186,7 +199,9 @@ test('逐行追加,不整份拼字符串 (2.8.8 P3)', async () => {
 	await sink.append('{"a":1}\n');
 	await sink.append('{"a":2}\n');
 	assert.equal(fs.writes.length, 2, '两行两次 append');
-	assert.ok(fs.writes.every(w => w.mode === 'append'), '必须是追加模式 —— 覆盖模式只会剩最后一行');
+	// 第一行必须建文件('create'),其后才是 'append' —— 平台的 'append' 不建文件。
+	assert.equal(fs.writes[0]!.mode, 'create', '第一行要把文件建出来');
+	assert.ok(fs.writes.slice(1).every(w => w.mode === 'append'), '其后逐行追加 —— 覆盖模式只会剩最后一行');
 	assert.equal(fs.files.get('/d/x.jsonl'), '{"a":1}\n{"a":2}\n');
 });
 
@@ -282,7 +297,13 @@ test('保存对话框三级尝试的顺序不能乱 (结构性回归闸, 2.8.8 �
 
 test('导出流程的四条规矩都在代码里 (结构性回归闸, 2.8.8)', () => {
 	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
-	const body = src.slice(src.indexOf('private async runExport('), src.indexOf('private confirmCorpusPrivacy('));
+	// 兜底 catch: 调用方是 `void this.runExport(...)`,漏出去的 rejection 会被静默
+	// 吞掉 —— 真机上就成了"点了 Save 毫无反应"。导出可以失败,但不能没有回音。
+	const outer = src.slice(src.indexOf('private async runExport('), src.indexOf('private async runExportInner('));
+	assert.ok(/await this\.runExportInner\(kind\);/.test(outer) && /catch \(e\) \{/.test(outer)
+		&& /this\.flashNotice\(`导出失败/.test(outer),
+		'runExport 必须有兜底 catch —— 任何漏出去的异常都要变成一句提示');
+	const body = src.slice(src.indexOf('private async runExportInner('), src.indexOf('private confirmCorpusPrivacy('));
 	assert.ok(/if \(kind === 'corpus' && !this\.confirmCorpusPrivacy\(\)\) \{\s*\n\s*return;/.test(body),
 		'语料必须先过隐私确认,不同意就直接结束');
 	assert.ok(/await sink\.discardPartial\(\);/.test(body) && /导出失败\(\$\{stage\}\)/.test(body),
