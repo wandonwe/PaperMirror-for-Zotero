@@ -16,7 +16,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
 	FileJsonlSink, pickSavePath, uniquePathIn, ensureNoOverwrite, prepareTarget,
-	revealFile, stageLabel, type PickerHandle
+	revealFile, stageLabel, pickerPath, RETURN_OK, RETURN_CANCEL, RETURN_REPLACE, MODE_SAVE,
+	type PickerHandle
 } from '../../src/export/fileSink';
 import { ExportStageError } from '../../src/export/jsonlWriter';
 import { setPluginVersion, pluginVersion } from '../../src/export/pluginVersion';
@@ -81,11 +82,46 @@ test('对话框取消 = 直接结束,不写任何文件 (2.8.8 P3)', async () =>
 	assert.equal(fs.writes.length, 0, '取消后一个字节都不该写');
 });
 
-test('点了确定却拿不到路径也算取消 —— 不拿空路径去写 (2.8.8 P3)', async () => {
-	const target = await pickSavePath('a.jsonl', {
-		createPicker: () => fakePicker({ path: () => null })
+test('对话框开出来过,就绝不再问"无法打开保存对话框" (2.8.10 真机修正)', async () => {
+	// 2.8.9 真机: 用户在对话框里点了 Cancel,读路径那一步抛异常,被当成"没有
+	// 对话框",于是又追问一次"是否改为保存到 …"。取消就该是结束。
+	for (const over of [
+		{ path: (): string | null => null },
+		{ path: (): never => { throw new Error('this.file is null'); } }
+	]) {
+		const target = await pickSavePath('a.jsonl', {
+			defaultDir: '/home/u/Zotero',
+			createPicker: () => fakePicker(over)
+		});
+		assert.equal(target.kind, 'no-path',
+			'对话框工作正常、只是没给路径 —— 既不是"没有对话框",也不能说成"用户取消了"');
+	}
+	// 用户真的点了取消: 干净结束,不追问。
+	const cancelled = await pickSavePath('a.jsonl', {
+		defaultDir: '/home/u/Zotero',
+		createPicker: () => fakePicker({
+			show: async () => 'cancel',
+			path: () => { throw new Error('this.file is null'); }
+		})
 	});
-	assert.equal(target.kind, 'cancelled');
+	assert.deepEqual(cancelled, { kind: 'cancelled' },
+		'取消之后读路径抛异常也不许把结论改成"没有对话框"');
+});
+
+test('picker 的 file 三种形态都认,而且永远不抛 (2.8.10 真机修正)', () => {
+	assert.equal(pickerPath('/d/x.jsonl'), '/d/x.jsonl', 'Zotero 包装给的是路径字符串');
+	assert.equal(pickerPath({ path: '/d/x.jsonl' }), '/d/x.jsonl', '裸 XPCOM 给的是 nsIFile');
+	assert.equal(pickerPath(null), null);
+	assert.equal(pickerPath(''), null);
+	assert.equal(pickerPath({}), null);
+	// 取消后一读就抛的那种 —— 正是 2.8.9 真机上把"取消"变成"没有对话框"的元凶。
+	const explosive = { get path(): string { throw new Error('this.file is null'); } };
+	assert.equal(pickerPath(explosive), null);
+});
+
+test('XPCOM 常量写死,不依赖包装是否暴露 (2.8.10 真机修正)', () => {
+	// fp.returnCancel 读不到时,拿 undefined 去比较会把**取消也当成选好了**。
+	assert.deepEqual([RETURN_OK, RETURN_CANCEL, RETURN_REPLACE, MODE_SAVE], [0, 1, 2, 1]);
 });
 
 test('对话框拉不起来 → no-picker,绝不自己挑地方写 (2.8.8 P3)', async () => {
@@ -234,8 +270,12 @@ test('保存对话框三级尝试的顺序不能乱 (结构性回归闸, 2.8.8 �
 		'包装拿到手就得直接返回 —— 不能构造完又不用');
 	assert.ok(/\[\(win as \{ browsingContext\?: unknown \} \| null\)\?\.browsingContext, win\]/.test(body),
 		'裸 nsIFilePicker 必须先试 BrowsingContext 再试 window —— 顺序反了在新版 Zotero 上必挂');
-	assert.ok(/typeof fp\.file === 'string'/.test(body),
-		'Zotero 包装里 file 是路径字符串,不是 nsIFile —— 当成对象取 .path 会永远拿到空');
+	assert.ok(/path: \(\) => pickerPath\(fp\.file\)/.test(body) && /path: \(\) => pickerPath\(raw\.file\)/.test(body),
+		'两条路都必须走 pickerPath —— 它认字符串也认 nsIFile,而且读不出来时不抛');
+	// 判"成功"而不是判"取消": 常量读不到时,判取消会把取消当成选好了 (2.8.9 真机)。
+	assert.ok(!/\.returnCancel/.test(body), '不许再按 returnCancel 判断(注释里提它没关系)');
+	assert.equal(body.split('?? RETURN_OK').length - 1, 2, '两条路都按 returnOK/returnReplace 判成功');
+	assert.equal(body.split('?? MODE_SAVE').length - 1, 2, 'modeSave 读不到时回落到写死的数值');
 	assert.ok(/if \(!initialised\) \{[\s\S]{0,60}return null;/.test(body),
 		'三条都不成要如实返回 null,交给"询问备用目录"那条分支');
 });
@@ -259,6 +299,12 @@ test('导出流程的四条规矩都在代码里 (结构性回归闸, 2.8.8)', (
 		&& /if \(!agreed\) \{[\s\S]{0,80}return null;/.test(save),
 		'对话框不可用时必须先问,用户不同意就不写 —— 含全文的语料尤其不能默默落到别处');
 	assert.ok(/return ensureNoOverwrite\(target\.path\);/.test(save), '选定路径也要避让重名');
+	// 对话框开出来过却没给路径: 必须在"询问备用目录"之前就结束 —— 再问一次
+	// "无法打开保存对话框"是在对用户说一件不真的事 (2.8.9 真机)。
+	const noPath = save.indexOf("target.kind === 'no-path'");
+	const askFallback = save.indexOf('是否改为保存到');
+	assert.ok(noPath > 0 && noPath < askFallback, 'no-path 要在询问备用目录之前处理掉');
+	assert.ok(/没有拿到保存位置,已取消/.test(save), '如实说没拿到位置,不谎称是用户取消或没有对话框');
 
 	// 语料入口常驻菜单,不受调试日志影响。
 	const pane = readFileSync(join(process.cwd(), 'src/ui/translationPane.ts'), 'utf8');

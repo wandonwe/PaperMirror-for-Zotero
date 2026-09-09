@@ -76,7 +76,12 @@ export class FileJsonlSink implements JsonlSink {
 export type SaveTarget =
 	| { kind: 'picked'; path: string }
 	| { kind: 'cancelled' }
-	| { kind: 'no-picker'; suggestedDir: string | null; reason?: string };
+	| { kind: 'no-picker'; suggestedDir: string | null; reason?: string }
+	/**
+	 * 对话框**开出来了**,但没能拿到路径 —— 既不是"没有对话框"(不该再问备用
+	 * 目录),也不能说成"用户取消了"(他没有)。单独一档,如实说。
+	 */
+	| { kind: 'no-path'; reason?: string };
 
 /**
  * 一个"能问用户要保存路径"的东西。
@@ -86,6 +91,38 @@ export type SaveTarget =
  * 于是这里只定义**结果**,具体怎么拉起来由宿主按顺序尝试 —— 决策逻辑(取消即
  * 结束、拉不起来就交回调用方去问)留在这里,平台差异不污染它。
  */
+/**
+ * `nsIFilePicker` 的三个返回值与 modeSave —— **写死数值**。
+ *
+ * 2.8.9 真机教训: 这些常量在不同包装上不一定读得到(`fp.returnCancel` 是
+ * undefined),而拿 undefined 去比较,任何取值都成了"不是取消",于是**取消被当成
+ * 选好了**。数值是 XPCOM 接口的稳定契约,直接写死比读一个可能不存在的属性可靠。
+ */
+export const RETURN_OK = 0;
+export const RETURN_CANCEL = 1;
+export const RETURN_REPLACE = 2;
+export const MODE_SAVE = 1;
+
+/**
+ * 从 picker 的 `file` 里安全地取出路径。
+ *
+ * 三种形态都认: Zotero 包装给的是**路径字符串**,裸 XPCOM 给的是 nsIFile(取
+ * `.path`),取消后可能是 null、空串,**也可能一读就抛**(2.8.9 真机上就是它把
+ * "用户取消"变成了"没有对话框")。任何情况下都不抛。
+ */
+export function pickerPath(file: unknown): string | null {
+	try {
+		if (typeof file === 'string') {
+			return file || null;
+		}
+		const path = (file as { path?: unknown } | null | undefined)?.path;
+		return typeof path === 'string' && path ? path : null;
+	}
+	catch {
+		return null;
+	}
+}
+
 export interface PickerHandle {
 	/** 拉起对话框并等用户选完。 */
 	show(): Promise<'ok' | 'cancel'>;
@@ -118,14 +155,9 @@ export async function pickSavePath(
 	if (!picker) {
 		return { kind: 'no-picker', suggestedDir: deps.defaultDir ?? null, reason };
 	}
+	let shown: 'ok' | 'cancel';
 	try {
-		const result = await picker.show();
-		const path = picker.path();
-		if (result === 'cancel' || !path) {
-			// 取消即结束 —— 不写、不回落、不提示成功。
-			return { kind: 'cancelled' };
-		}
-		return { kind: 'picked', path };
+		shown = await picker.show();
 	}
 	catch (e) {
 		logger.warn(MODULE, 'file picker failed to open', e);
@@ -135,6 +167,24 @@ export async function pickSavePath(
 			reason: e instanceof Error ? e.message : String(e)
 		};
 	}
+	// —— 到这里对话框**确实开出来过**。此后无论出什么岔子,都不能再回头问
+	// "无法打开保存对话框" —— 2.8.9 真机上正是这样: 取消之后读路径抛了异常,
+	// 被当成"没有对话框",于是用户点了取消却又被追问要不要存到别处。
+	if (shown === 'cancel') {
+		// 取消即结束 —— 不写、不回落、不提示成功。
+		return { kind: 'cancelled' };
+	}
+	let path: string | null = null;
+	try {
+		path = picker.path();
+	}
+	catch (e) {
+		logger.warn(MODULE, 'file picker returned no usable path', e);
+		return { kind: 'no-path', reason: e instanceof Error ? e.message : String(e) };
+	}
+	return path
+		? { kind: 'picked', path }
+		: { kind: 'no-path', reason: 'the picker reported success but gave no path' };
 }
 
 /**
