@@ -30,7 +30,8 @@ import { exportFileName, type ExportKind } from '../export/exportNaming';
 import { pluginVersion } from '../export/pluginVersion';
 import {
 	FileJsonlSink, pickSavePath, prepareTarget, ensureNoOverwrite, uniquePathIn,
-	revealFile, stageLabel, type PickerHandle
+	revealFile, stageLabel, pickerPath, MODE_SAVE, RETURN_OK, RETURN_REPLACE,
+	type PickerHandle
 } from '../export/fileSink';
 import { parseGlossaryJSON, serializeGlossary, dedupeLearnedTerms } from '../translation/glossary';
 import { parseProviderProfiles, effectiveProviderConfig } from '../translation/providerProfiles';
@@ -2667,6 +2668,12 @@ export class ReaderSession {
 		if (target.kind === 'picked') {
 			return ensureNoOverwrite(target.path);
 		}
+		if (target.kind === 'no-path') {
+			// 对话框开出来过 —— 不能再问"无法打开保存对话框",也不能说"用户取消了"。
+			logger.warn(MODULE, `save dialog gave no path: ${target.reason ?? 'unknown'}`);
+			this.flashNotice('没有拿到保存位置,已取消');
+			return null;
+		}
 		// —— 对话框不可用: 先问,同意才写。
 		logger.warn(MODULE, `save dialog unavailable: ${target.reason ?? 'unknown'}`);
 		if (!target.suggestedDir) {
@@ -2718,21 +2725,29 @@ export class ReaderSession {
 					appendFilter(title: string, filter: string): void;
 					defaultString: string;
 					show(): Promise<number>;
-					file: string;
-					modeSave: number;
-					returnCancel: number;
+					file: unknown;
+					modeSave?: number;
+					returnOK?: number;
+					returnReplace?: number;
 				}) | undefined;
 				if (!Ctor) {
 					return null;
 				}
 				const fp = new Ctor();
-				fp.init(win, title, fp.modeSave);
+				fp.init(win, title, fp.modeSave ?? MODE_SAVE);
 				fp.appendFilter('JSON Lines', '*.jsonl');
 				fp.defaultString = fileName;
 				return {
-					show: async () => (await fp.show()) === fp.returnCancel ? 'cancel' : 'ok',
-					// Zotero 的包装里 file 已经是路径字符串,不是 nsIFile。
-					path: () => (typeof fp.file === 'string' && fp.file ? fp.file : null)
+					// 判"成功"而不是判"取消": 常量取不到时(包装没暴露 returnCancel
+					// 就是这种情况)未知取值会被当成 ok,于是取消也走进了后面的读路径,
+					// 而那一步一抛就被算成"没有对话框" —— 2.8.9 真机上的原样。
+					show: async () => {
+						const result = await fp.show();
+						return result === (fp.returnOK ?? RETURN_OK) || result === (fp.returnReplace ?? RETURN_REPLACE)
+							? 'ok'
+							: 'cancel';
+					},
+					path: () => pickerPath(fp.file)
 				};
 			}
 			catch (e) {
@@ -2750,9 +2765,10 @@ export class ReaderSession {
 				appendFilter(title: string, filter: string): void;
 				defaultString: string;
 				open(cb: (result: number) => void): void;
-				file: { path: string } | null;
-				modeSave: number;
-				returnCancel: number;
+				file: unknown;
+				modeSave?: number;
+				returnOK?: number;
+				returnReplace?: number;
 			} | undefined;
 		if (!raw) {
 			return null;
@@ -2763,7 +2779,7 @@ export class ReaderSession {
 		let initialised = false;
 		for (const parent of parents) {
 			try {
-				raw.init(parent, title, raw.modeSave);
+				raw.init(parent, title, raw.modeSave ?? MODE_SAVE);
 				initialised = true;
 				break;
 			}
@@ -2779,9 +2795,11 @@ export class ReaderSession {
 		return {
 			show: async () => {
 				const result = await new Promise<number>(resolve => raw.open(resolve));
-				return result === raw.returnCancel ? 'cancel' : 'ok';
+				return result === (raw.returnOK ?? RETURN_OK) || result === (raw.returnReplace ?? RETURN_REPLACE)
+					? 'ok'
+					: 'cancel';
 			},
-			path: () => raw.file?.path ?? null
+			path: () => pickerPath(raw.file)
 		};
 	}
 
