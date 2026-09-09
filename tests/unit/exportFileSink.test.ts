@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
 	FileJsonlSink, pickSavePath, uniquePathIn, ensureNoOverwrite, prepareTarget,
-	revealFile, stageLabel, type FilePickerLike
+	revealFile, stageLabel, type PickerHandle
 } from '../../src/export/fileSink';
 import { ExportStageError } from '../../src/export/jsonlWriter';
 import { setPluginVersion, pluginVersion } from '../../src/export/pluginVersion';
@@ -60,17 +60,12 @@ function installFs(existing: string[] = []): FakeFs {
 	return fs;
 }
 
-function fakePicker(over: Partial<FilePickerLike> = {}): FilePickerLike {
+function fakePicker(over: Partial<PickerHandle> = {}): PickerHandle {
 	return {
-		modeSave: 1,
-		returnCancel: 1,
-		defaultString: '',
-		file: { path: '/home/u/Downloads/PaperMirror_v2.8.8_diagnostics_x.jsonl' },
-		init() {},
-		appendFilter() {},
-		open(cb: (r: number) => void) { cb(0); },
+		async show() { return 'ok'; },
+		path: () => '/home/u/Downloads/PaperMirror_v2.8.8_diagnostics_x.jsonl',
 		...over
-	} as FilePickerLike;
+	};
 }
 
 // ---- 1./2. 保存位置 ----------------------------------------------------------
@@ -78,18 +73,17 @@ function fakePicker(over: Partial<FilePickerLike> = {}): FilePickerLike {
 test('对话框取消 = 直接结束,不写任何文件 (2.8.8 P3)', async () => {
 	const fs = installFs();
 	const target = await pickSavePath('a.jsonl', {
-		window: null,
 		defaultDir: '/home/u/Zotero',
-		createPicker: () => fakePicker({ open: (cb) => cb(1) })  // returnCancel
+		createPicker: () => fakePicker({ show: async () => 'cancel' })
 	});
 	assert.deepEqual(target, { kind: 'cancelled' },
 		'用户点取消表达的是"我不要这个文件",不是"你随便找个地方放吧"');
 	assert.equal(fs.writes.length, 0, '取消后一个字节都不该写');
 });
 
-test('选了文件但对象为空也算取消 —— 不拿空路径去写 (2.8.8 P3)', async () => {
+test('点了确定却拿不到路径也算取消 —— 不拿空路径去写 (2.8.8 P3)', async () => {
 	const target = await pickSavePath('a.jsonl', {
-		window: null, createPicker: () => fakePicker({ file: null, open: (cb) => cb(0) })
+		createPicker: () => fakePicker({ path: () => null })
 	});
 	assert.equal(target.kind, 'cancelled');
 });
@@ -98,17 +92,20 @@ test('对话框拉不起来 → no-picker,绝不自己挑地方写 (2.8.8 P3)', 
 	for (const createPicker of [
 		(): null => null,
 		(): never => { throw new Error('no such component'); },
-		(): FilePickerLike => fakePicker({ init() { throw new Error('cannot init in this window'); } })
+		(): PickerHandle => fakePicker({ show: () => Promise.reject(new Error('BrowsingContext expected')) })
 	]) {
-		const target = await pickSavePath('a.jsonl', { window: null, defaultDir: '/home/u/Zotero', createPicker });
-		assert.deepEqual(target, { kind: 'no-picker', suggestedDir: '/home/u/Zotero' },
-			'返回"没有对话框"让调用方去问用户,而不是在这里替他决定');
+		const target = await pickSavePath('a.jsonl', { defaultDir: '/home/u/Zotero', createPicker });
+		assert.equal(target.kind, 'no-picker', '返回"没有对话框"让调用方去问用户,而不是在这里替他决定');
+		assert.equal(target.kind === 'no-picker' && target.suggestedDir, '/home/u/Zotero');
+		// 失败原因只进日志与排障,不进导出文件 —— 但必须留下来,否则真机上"为什么
+		// 拉不起来"永远查不出(2.8.8 首版就是这样白丢了一次线索)。
+		assert.ok(target.kind === 'no-picker' && target.reason, '要记下拉不起来的原因');
 	}
 });
 
 test('选定的路径原样返回;备用目录只是"建议",不是已经写了 (2.8.8 P3)', async () => {
 	const fs = installFs();
-	const target = await pickSavePath('a.jsonl', { window: null, createPicker: () => fakePicker() });
+	const target = await pickSavePath('a.jsonl', { createPicker: () => fakePicker() });
 	assert.equal(target.kind, 'picked');
 	assert.equal(fs.writes.length, 0, '选好位置本身不写文件');
 });
@@ -218,6 +215,29 @@ test('startup 把运行中的版本喂进来,导出不读常量 (结构性回归
 	const startup = readFileSync(join(process.cwd(), 'src/lifecycle/startup.ts'), 'utf8');
 	assert.ok(/setPluginVersion\(params\.version\);/.test(startup),
 		'版本必须来自 startup(params) —— 硬编码的版本会把排障引到另一份代码上');
+});
+
+test('保存对话框三级尝试的顺序不能乱 (结构性回归闸, 2.8.8 真机修正)', () => {
+	// 2.8.8 首版只走裸 nsIFilePicker.init(window, …),在真机上直接落到了
+	// "无法打开保存对话框" —— Firefox 111+ 起 init() 的第一个参数是
+	// BrowsingContext,不是 window。这个闸钉住三条路都在、且顺序对。
+	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const body = src.slice(src.indexOf('private createSavePicker('), src.indexOf('/** `Zotero.File.reveal` 不一定存在'));
+	const zoteroWrapper = body.indexOf("importESModule('chrome://zotero/content/modules/filePicker.mjs')");
+	const rawComponent = body.indexOf("Components.classes['@mozilla.org/filepicker;1']");
+	assert.ok(zoteroWrapper > 0, 'Zotero 7 自带的 FilePicker 包装必须是第一选择 —— 它就是来抹平这件事的');
+	assert.ok(rawComponent > zoteroWrapper, '裸 nsIFilePicker 只作后备');
+	// 光是"文本在前面"不够: 必须真的先拿它去用(否则把它塞进一个没人读的变量,
+	// 顺序看着还是对的)。
+	const earlyReturn = body.indexOf('if (zoteroPicker) {\n\t\t\treturn zoteroPicker;');
+	assert.ok(earlyReturn > zoteroWrapper && earlyReturn < rawComponent,
+		'包装拿到手就得直接返回 —— 不能构造完又不用');
+	assert.ok(/\[\(win as \{ browsingContext\?: unknown \} \| null\)\?\.browsingContext, win\]/.test(body),
+		'裸 nsIFilePicker 必须先试 BrowsingContext 再试 window —— 顺序反了在新版 Zotero 上必挂');
+	assert.ok(/typeof fp\.file === 'string'/.test(body),
+		'Zotero 包装里 file 是路径字符串,不是 nsIFile —— 当成对象取 .path 会永远拿到空');
+	assert.ok(/if \(!initialised\) \{[\s\S]{0,60}return null;/.test(body),
+		'三条都不成要如实返回 null,交给"询问备用目录"那条分支');
 });
 
 test('导出流程的四条规矩都在代码里 (结构性回归闸, 2.8.8)', () => {

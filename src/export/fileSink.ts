@@ -10,9 +10,10 @@
  * 只给一句"已取消"。用户点"取消"表达的是"我不要这个文件",而不是"你随便找个
  * 地方放吧" —— 语料里可是整篇未发表稿件的原文。
  *
- * **2. 对话框不可用时,弹一次询问再写。** `nsIFilePicker` 在某些窗口环境下拉不
- * 起来。这时**不能**自动挑个目录写下去,而要明确告诉用户"要不要存到 <备用目录>",
- * 用户同意才写。
+ * **2. 对话框不可用时,弹一次询问再写。** 2.8.8 的真机验证印证了这条不是纸上谈兵:
+ * 裸的 `nsIFilePicker.init()` 在 Firefox 111+ 起要的是 BrowsingContext 而不是 window,
+ * 传错就直接抛。这时**不能**自动挑个目录写下去,而要明确告诉用户"要不要存到
+ * <备用目录>",用户同意才写。
  *
  * **3. 重名绝不覆盖。** 落盘前逐个探测,撞了就 `_2`、`_3`。
  *
@@ -75,59 +76,64 @@ export class FileJsonlSink implements JsonlSink {
 export type SaveTarget =
 	| { kind: 'picked'; path: string }
 	| { kind: 'cancelled' }
-	| { kind: 'no-picker'; suggestedDir: string | null };
+	| { kind: 'no-picker'; suggestedDir: string | null; reason?: string };
 
-export interface FilePickerLike {
-	init(window: unknown, title: string, mode: number): void;
-	appendFilter(title: string, filter: string): void;
-	defaultString: string;
-	displayDirectory?: unknown;
-	file: { path: string } | null;
-	open(callback: (result: number) => void): void;
-	modeSave: number;
-	returnCancel: number;
+/**
+ * 一个"能问用户要保存路径"的东西。
+ *
+ * 2.8.8 真机验证发现平台侧至少有三种形态(Zotero 7 的 FilePicker 包装、
+ * Firefox 111+ 要 BrowsingContext 的 `nsIFilePicker`、更老的要 window 的那种),
+ * 于是这里只定义**结果**,具体怎么拉起来由宿主按顺序尝试 —— 决策逻辑(取消即
+ * 结束、拉不起来就交回调用方去问)留在这里,平台差异不污染它。
+ */
+export interface PickerHandle {
+	/** 拉起对话框并等用户选完。 */
+	show(): Promise<'ok' | 'cancel'>;
+	/** 用户选定的路径;取消或没选时为 null。 */
+	path(): string | null;
 }
 
 /**
  * 拉起保存对话框。**拉不起来时返回 `no-picker`,绝不自己挑地方写。**
  *
- * @param deps 平台入口全部注入 —— 这样这段决策逻辑在单测里跑得起来,
- *             不用真的有个 Zotero 窗口。
+ * `reason` 只进日志与排障,不进任何导出文件。
  */
 export async function pickSavePath(
 	fileName: string,
 	deps: {
-		createPicker(): FilePickerLike | null;
-		window: unknown;
+		createPicker(fileName: string): PickerHandle | null;
 		defaultDir?: string | null;
-		title?: string;
 	}
 ): Promise<SaveTarget> {
-	let picker: FilePickerLike | null = null;
+	let picker: PickerHandle | null = null;
+	let reason = 'no picker implementation available';
 	try {
-		picker = deps.createPicker();
+		picker = deps.createPicker(fileName);
 	}
 	catch (e) {
+		reason = e instanceof Error ? e.message : String(e);
 		logger.warn(MODULE, 'file picker unavailable', e);
 		picker = null;
 	}
 	if (!picker) {
-		return { kind: 'no-picker', suggestedDir: deps.defaultDir ?? null };
+		return { kind: 'no-picker', suggestedDir: deps.defaultDir ?? null, reason };
 	}
 	try {
-		picker.init(deps.window, deps.title ?? '保存导出文件', picker.modeSave);
-		picker.appendFilter('JSON Lines', '*.jsonl');
-		picker.defaultString = fileName;
-		const result = await new Promise<number>(resolve => picker!.open(resolve));
-		if (result === picker.returnCancel || !picker.file) {
+		const result = await picker.show();
+		const path = picker.path();
+		if (result === 'cancel' || !path) {
 			// 取消即结束 —— 不写、不回落、不提示成功。
 			return { kind: 'cancelled' };
 		}
-		return { kind: 'picked', path: picker.file.path };
+		return { kind: 'picked', path };
 	}
 	catch (e) {
 		logger.warn(MODULE, 'file picker failed to open', e);
-		return { kind: 'no-picker', suggestedDir: deps.defaultDir ?? null };
+		return {
+			kind: 'no-picker',
+			suggestedDir: deps.defaultDir ?? null,
+			reason: e instanceof Error ? e.message : String(e)
+		};
 	}
 }
 

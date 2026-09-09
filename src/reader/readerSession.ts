@@ -30,7 +30,7 @@ import { exportFileName, type ExportKind } from '../export/exportNaming';
 import { pluginVersion } from '../export/pluginVersion';
 import {
 	FileJsonlSink, pickSavePath, prepareTarget, ensureNoOverwrite, uniquePathIn,
-	revealFile, stageLabel, type FilePickerLike
+	revealFile, stageLabel, type PickerHandle
 } from '../export/fileSink';
 import { parseGlossaryJSON, serializeGlossary, dedupeLearnedTerms } from '../translation/glossary';
 import { parseProviderProfiles, effectiveProviderConfig } from '../translation/providerProfiles';
@@ -2656,14 +2656,9 @@ export class ReaderSession {
 			}
 		})();
 		const target = await pickSavePath(fileName, {
-			window: win,
 			defaultDir: fallbackDir,
-			title: kind === 'corpus' ? '保存翻译语料' : '保存诊断文件',
-			createPicker: () => {
-				const picker = Components.classes['@mozilla.org/filepicker;1']
-					?.createInstance(Components.interfaces.nsIFilePicker);
-				return (picker as FilePickerLike | undefined) ?? null;
-			}
+			createPicker: (name) => this.createSavePicker(name,
+				kind === 'corpus' ? '保存翻译语料' : '保存诊断文件', win)
 		});
 		if (target.kind === 'cancelled') {
 			this.flashNotice('已取消');
@@ -2673,6 +2668,7 @@ export class ReaderSession {
 			return ensureNoOverwrite(target.path);
 		}
 		// —— 对话框不可用: 先问,同意才写。
+		logger.warn(MODULE, `save dialog unavailable: ${target.reason ?? 'unknown'}`);
 		if (!target.suggestedDir) {
 			this.flashNotice('无法打开保存对话框,且没有可用的备用目录 —— 已取消');
 			return null;
@@ -2694,6 +2690,99 @@ export class ReaderSession {
 			return null;
 		}
 		return uniquePathIn(target.suggestedDir, fileName);
+	}
+
+	/**
+	 * 拉起保存对话框的三级尝试 (2.8.8 真机修正)。
+	 *
+	 * 2.8.8 首版只走裸 `nsIFilePicker.init(window, …)`,在真机上直接落到了"无法打开
+	 * 保存对话框"的回落分支 —— **Firefox 111+ 起 `init()` 的第一个参数是
+	 * BrowsingContext,不是 window**,传错就抛。Zotero 7 自带的 `FilePicker` 包装
+	 * 正是为了抹平这件事,所以把它放在第一位:
+	 *
+	 *   1. `chrome://zotero/content/modules/filePicker.mjs` 的 `FilePicker`
+	 *      (`show()` 返回 Promise;`file` 直接就是路径字符串);
+	 *   2. 裸 `nsIFilePicker` + **BrowsingContext**;
+	 *   3. 裸 `nsIFilePicker` + window(更老的 Zotero)。
+	 *
+	 * 三条都不成才回落到"询问备用目录" —— 那条分支仍然保留,平台再变也不会变成
+	 * "默默写到某个地方"。
+	 */
+	private createSavePicker(fileName: string, title: string, win: unknown): PickerHandle | null {
+		const zoteroPicker = ((): PickerHandle | null => {
+			try {
+				const mod = (ChromeUtils as unknown as { importESModule(url: string): Record<string, unknown> })
+					.importESModule('chrome://zotero/content/modules/filePicker.mjs');
+				const Ctor = mod.FilePicker as (new () => {
+					init(win: unknown, title: string, mode: number): void;
+					appendFilter(title: string, filter: string): void;
+					defaultString: string;
+					show(): Promise<number>;
+					file: string;
+					modeSave: number;
+					returnCancel: number;
+				}) | undefined;
+				if (!Ctor) {
+					return null;
+				}
+				const fp = new Ctor();
+				fp.init(win, title, fp.modeSave);
+				fp.appendFilter('JSON Lines', '*.jsonl');
+				fp.defaultString = fileName;
+				return {
+					show: async () => (await fp.show()) === fp.returnCancel ? 'cancel' : 'ok',
+					// Zotero 的包装里 file 已经是路径字符串,不是 nsIFile。
+					path: () => (typeof fp.file === 'string' && fp.file ? fp.file : null)
+				};
+			}
+			catch (e) {
+				logger.debug(MODULE, 'Zotero FilePicker unavailable', e);
+				return null;
+			}
+		})();
+		if (zoteroPicker) {
+			return zoteroPicker;
+		}
+
+		const raw = Components.classes['@mozilla.org/filepicker;1']
+			?.createInstance(Components.interfaces.nsIFilePicker) as {
+				init(parent: unknown, title: string, mode: number): void;
+				appendFilter(title: string, filter: string): void;
+				defaultString: string;
+				open(cb: (result: number) => void): void;
+				file: { path: string } | null;
+				modeSave: number;
+				returnCancel: number;
+			} | undefined;
+		if (!raw) {
+			return null;
+		}
+		// Firefox 111+ 要 BrowsingContext;更老的要 window。两个都试,谁不抛用谁。
+		const parents = [(win as { browsingContext?: unknown } | null)?.browsingContext, win]
+			.filter(p => p !== undefined && p !== null);
+		let initialised = false;
+		for (const parent of parents) {
+			try {
+				raw.init(parent, title, raw.modeSave);
+				initialised = true;
+				break;
+			}
+			catch (e) {
+				logger.debug(MODULE, 'nsIFilePicker.init rejected this parent', e);
+			}
+		}
+		if (!initialised) {
+			return null;
+		}
+		raw.appendFilter('JSON Lines', '*.jsonl');
+		raw.defaultString = fileName;
+		return {
+			show: async () => {
+				const result = await new Promise<number>(resolve => raw.open(resolve));
+				return result === raw.returnCancel ? 'cancel' : 'ok';
+			},
+			path: () => raw.file?.path ?? null
+		};
 	}
 
 	/** `Zotero.File.reveal` 不一定存在 —— 拿不到就返回 undefined,由调用方回落到路径提示。 */
