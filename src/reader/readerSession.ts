@@ -2860,6 +2860,27 @@ export class ReaderSession {
 			}),
 			readPage: async (pageIndex: number): Promise<CorpusPageRecord> => {
 				const state = manager.getPageState(pageIndex);
+				const spans = this.pageSpans(pageIndex);
+				// —— 内存里还有原件就用原件 (2.8.12 真机修正)。
+				//
+				// 原方案假定"结构只能重新解析",漏了最短的一条: 没被淘汰的页,
+				// `state.blocks` 就是翻译当时用的那份结构本身。它比任何重建都硬,
+				// 译文按 id 对齐是定义上成立的。而重解析在这个文档上根本走不通 ——
+				// 它的抽取路径是 text-layer,而**文本层只对当前渲染着的那几页存在**,
+				// 导出时早翻过去了,于是 39 页全都重解析出 0 块。
+				if (state && state.blocks.length) {
+					return {
+						spans: spans ?? null,
+						...(spans ? {} : { spansMissing: 'missing:not-rendered' as const }),
+						blocks: state.blocks,
+						blocksSource: 'live',
+						check: { structureMatch: 'as-translated', blocksCompared: state.blocks.length },
+						translations: [...state.translations].map(([id, translatedText]) => ({ id, translatedText })),
+						translationSource: 'live',
+						...(this.placementProbe.has(pageIndex) ? { probe: this.placementProbe.get(pageIndex) } : {})
+					};
+				}
+				// —— 原件已被淘汰: 只能重解析,而且必须如实标注它的可信度。
 				const before = this.extractor.extractInputsFor(pageIndex);
 				// 与翻译当时**同一条**流水线,不是"另写一份检查用的解析"。
 				const rebuilt = await this.extractor.extractPage(pageIndex);
@@ -2868,17 +2889,34 @@ export class ReaderSession {
 					...this.extractor.currentExtractInputs(pageIndex),
 					...(after ? { path: after } : {})
 				});
-				// 已被淘汰的页没有留存结构可比 —— checkStructure 会如实报
-				// no-stored-structure,不是"比过了且相等"。
-				const stored = state && state.blocks.length ? state.blocks : null;
-				const check = checkStructure(stored, rebuilt, { inputsChanged });
+				// 一块都没重建出来 ≠ 这页没内容 —— 多半是文本层不在。如实说。
+				if (!rebuilt.length) {
+					return {
+						spans: spans ?? null,
+						...(spans ? {} : { spansMissing: 'missing:not-rendered' as const }),
+						blocks: [],
+						blocksSource: 're-extracted',
+						blocksMissing: 'missing:not-rendered',
+						check: {
+							structureMatch: 'unverifiable',
+							blocksCompared: 0,
+							unverifiableReasons: ['re-extraction-unavailable']
+						},
+						translations: null,
+						translationsMissing: state?.evicted ? 'missing:evicted' : 'missing:never-processed',
+						...(this.placementProbe.has(pageIndex) ? { probe: this.placementProbe.get(pageIndex) } : {})
+					};
+				}
+				// 被卸过的页没有留存结构可比 —— checkStructure 如实报 no-stored-structure,
+				// 不是"比过了且相等";这时缓存里的译文按块 id 贴过来会错位,不贴。
+				const check = checkStructure(null, rebuilt, { inputsChanged });
 				const { translations, translationSource, translationsMissing } =
 					await this.corpusTranslations(pageIndex, state, rebuilt);
-				const spans = this.pageSpans(pageIndex);
 				return {
 					spans: spans ?? null,
 					...(spans ? {} : { spansMissing: 'missing:not-rendered' as const }),
 					blocks: rebuilt,
+					blocksSource: 're-extracted',
 					check,
 					translations,
 					...(translationSource ? { translationSource } : {}),

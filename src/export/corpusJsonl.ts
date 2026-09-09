@@ -42,8 +42,22 @@ export type TranslationMissing =
 export interface CorpusPageRecord {
 	/** 重新解析出的 spans(夹具同格式)。恒标 re-extracted。 */
 	spans: unknown;
-	/** 走完整流水线重建的结构块。 */
+	/** 这一页的结构块 —— 来路见 `blocksSource`。 */
 	blocks: unknown[];
+	/**
+	 * 结构块从哪儿来 (2.8.12 真机修正):
+	 *
+	 *   `live` —— **内存里那份原件**,就是翻译当时用的结构。译文与它同源同 id,
+	 *             对齐是定义上成立的,不需要核对,也不该被"结构不匹配"扣下;
+	 *   `re-extracted` —— 页已被淘汰,只能重新解析。这份是重建的近似,译文能不能贴
+     *             取决于 `check`。
+	 */
+	blocksSource: 'live' | 're-extracted';
+	/**
+	 * 一块都没有的原因。**空数组不许标成 `re-extracted`** —— 那等于说"重解析过了,
+	 * 这页就是没内容",而真相往往是"这页没渲染过,文本层根本不在,重解析拿不到"。
+	 */
+	blocksMissing?: 'missing:not-rendered';
 	/** 结构一致性三态 + 分类计数。 */
 	check: StructureCheckResult;
 	/** 译文。结构不匹配时**会被写出器丢掉**,不写进文件。 */
@@ -81,6 +95,8 @@ export interface CorpusExportResult {
 	translationsAttached: number;
 	/** 有译文但因结构不匹配被扣下的页数 —— 必须能数出来。 */
 	translationsWithheld: number;
+	/** 结构块的来路分布 —— 一眼看出这份语料有多少是原件、多少是重建、多少压根没有。 */
+	blocksBySource: { live: number; 're-extracted': number; missing: number };
 }
 
 export async function writeCorpusJsonl(sink: JsonlSink, source: CorpusExportSource): Promise<CorpusExportResult> {
@@ -99,7 +115,8 @@ export async function writeCorpusJsonl(sink: JsonlSink, source: CorpusExportSour
 		snapshotPolicy: 'page-at-a-time',
 		// spans 不留存,导出时重解析 —— 写进文件,读的人才知道这份 spans 的性质。
 		spansPolicy: 're-extracted-at-export',
-		note: 'structureMatch=matched 只说明用同样的流水线重建出了同样的结构,不等于这就是翻译当时的 spans。',
+		note: 'structureMatch=matched 只说明用同样的流水线重建出了同样的结构,不等于这就是翻译当时的 spans;as-translated 才是内存里那份原结构。'
+			+ ' spans 与重解析都依赖 PDF.js 的文本层,而文本层只对当前渲染着的页存在 —— 已翻过去的页会标 missing:not-rendered。',
 		scope: {
 			pagesTotal: scope.length,
 			byStatus: statusTally(scope),
@@ -110,11 +127,14 @@ export async function writeCorpusJsonl(sink: JsonlSink, source: CorpusExportSour
 
 	await writer.write('summary', { kind: 'summary', ...(source.summary() as object ?? {}) });
 
-	const structureMatch: Record<StructureMatch, number> = { matched: 0, mismatched: 0, unverifiable: 0 };
+	const structureMatch: Record<StructureMatch, number> = {
+		'as-translated': 0, matched: 0, mismatched: 0, unverifiable: 0
+	};
 	let pagesWritten = 0;
 	let pageReadFailures = 0;
 	let translationsAttached = 0;
 	let translationsWithheld = 0;
+	const blocksBySource = { live: 0, 're-extracted': 0, missing: 0 };
 
 	for (const entry of scope) {
 		const read = await readPinned(entry.pageIndex, source);
@@ -132,6 +152,12 @@ export async function writeCorpusJsonl(sink: JsonlSink, source: CorpusExportSour
 		}
 		const record = read.record;
 		structureMatch[record.check.structureMatch]++;
+		if (record.blocksMissing) {
+			blocksBySource.missing++;
+		}
+		else {
+			blocksBySource[record.blocksSource]++;
+		}
 
 		// —— 唯一不能出错的地方: 结构不匹配就不贴译文,哪怕数据源给了。
 		const allowed = mayAttachTranslations(record.check);
@@ -151,12 +177,17 @@ export async function writeCorpusJsonl(sink: JsonlSink, source: CorpusExportSour
 			availability: {
 				// 最好也只到 re-extracted —— 匹配也不升格 (方案 §1.2)。
 				spans: record.spansMissing ?? 're-extracted',
-				blocks: 're-extracted',
+				// 结构块**如实报来路**: 内存原件 / 重解析 / 压根没拿到。
+				// 空数组配 're-extracted' 是在说谎 —— 那会让人以为"这页真的没内容"。
+				blocks: record.blocksMissing ?? record.blocksSource,
+				// `missing:structure-mismatch` **只在真有译文却被扣下时**才说得出口 ——
+				// 本来就没有译文的页(被卸了、缓存里也没有)报成"结构不匹配"是栽赃,
+				// 会把排查引到结构上去。
 				translations: attach
 					? (record.translationSource ?? 'live')
-					: (allowed
-						? (record.translationsMissing ?? 'missing:cache-miss')
-						: 'missing:structure-mismatch'),
+					: (hasTranslations
+						? 'missing:structure-mismatch'
+						: (record.translationsMissing ?? 'missing:cache-miss')),
 				probe: record.probe === undefined ? 'missing:not-sampled' : 'live'
 			},
 			structureMatch: record.check.structureMatch,
@@ -179,6 +210,7 @@ export async function writeCorpusJsonl(sink: JsonlSink, source: CorpusExportSour
 		pagesWritten,
 		pageReadFailures,
 		structureMatch,
+		blocksBySource,
 		translationsAttached,
 		translationsWithheld,
 		complete: true
@@ -186,6 +218,6 @@ export async function writeCorpusJsonl(sink: JsonlSink, source: CorpusExportSour
 
 	return {
 		pagesWritten, pageReadFailures, linesWritten: writer.linesWritten,
-		structureMatch, translationsAttached, translationsWithheld
+		structureMatch, blocksBySource, translationsAttached, translationsWithheld
 	};
 }

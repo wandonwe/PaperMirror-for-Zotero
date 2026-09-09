@@ -7,6 +7,47 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.8.12] — 2026-09-09
+
+**真机修正之四: 第一份语料是废的**。文件写出来了(2.8.11 起一切正常),但打开一看:
+39 页**全部** `unverifiable`、spans 全 `missing:not-rendered`、结构块全空、译文一条没带。
+诊断文件同一批导出却很干净 —— 问题出在语料的取数设计上。
+
+### Fixed — 语料的取数顺序错了
+
+方案原文假定"结构只能靠重解析",漏了最短的一条路:
+
+- **没被淘汰的页,内存里就躺着翻译当时用的那份结构**(`state.blocks`)。它不是重建的
+  近似,**就是原件**;译文与它同源同 id,对齐是定义上成立的,不需要核对,更不该被
+  "结构不匹配"扣下。新增第四档 **`structureMatch: 'as-translated'`** —— 它比 `matched`
+  强:matched 说"重建出了一样的东西",as-translated 说"这就是那个东西"。
+- **重解析在这个文档上根本走不通**:它的抽取路径是 `text-layer`,而 **PDF.js 的文本层
+  只对当前渲染着的那几页存在**,导出时早翻过去了 —— 于是 39 页全都重解析出 0 块。
+  取数顺序改为 **内存原件 → 重解析 → 如实标缺失**。
+
+### Fixed — 两处"看着有数据,其实在说谎"
+
+- **空块表被标成 `blocks: 're-extracted'`**,等于说"重解析过了,这页就是没内容"。
+  真相是"这页没渲染过,文本层不在,拿不到"。现在如实标 `missing:not-rendered`,
+  并给 `unverifiableReasons: ['re-extraction-unavailable']`。
+- **本来就没有译文的页被报成 `missing:structure-mismatch`** —— 那是栽赃,会把排查引到
+  结构上去。这个原因**只在真有译文却被扣下时**才说得出口;其余照实报
+  `missing:evicted` / `missing:cache-miss` / `missing:never-processed`。
+
+### Added
+
+- `result.blocksBySource: { live, re-extracted, missing }` —— 一眼看出这份语料有多少是
+  原件、多少是重建、多少压根没拿到。
+- manifest 的说明句点出文本层这条限制,读的人才不会以为文档半边是空的。
+
+### 不变量
+
+8 项突变全部被杀(内存原件也走重解析、原件标成 re-extracted、空块表冒充 re-extracted、
+as-translated 不许贴译文、来路不进 availability、没译文也报结构不匹配、blocksBySource
+不计数、manifest 不提文本层限制)。**诊断文件这一版未改** —— 真机产出已核对无误:
+39 页、首行 manifest、末行 result、`blockSource` 19 页走摘要(2.8.5 的淘汰页明细如设计
+生效)、端点全是枚举、无原文无译文。
+
 ## [2.8.11] — 2026-09-09
 
 **真机修正之三: 选好位置点 Save,磁盘上一个文件都没有**。对话框正常、取消正常,

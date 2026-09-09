@@ -145,6 +145,7 @@ function record(over: Partial<CorpusPageRecord> = {}): CorpusPageRecord {
 	return {
 		spans: { items: [{ str: SRC }] },
 		blocks: [{ id: 'page-0-region-0', sourceText: SRC }],
+		blocksSource: 're-extracted' as const,
 		check: { structureMatch: 'matched', blocksCompared: 1, boxTolerancePx: BOX_TOLERANCE_PX },
 		translations: [{ id: 'page-0-region-0', translatedText: TGT }],
 		translationSource: 'live',
@@ -245,8 +246,9 @@ test('三态计数进 result —— 任何一页的任何一维缺失都数得�
 			check: { structureMatch: states[pageIndex]!, blocksCompared: 1 }
 		})
 	}));
-	assert.deepEqual(result.structureMatch, { matched: 2, mismatched: 1, unverifiable: 1 });
-	assert.deepEqual((sink.parsed().at(-1)!).structureMatch, { matched: 2, mismatched: 1, unverifiable: 1 });
+	assert.deepEqual(result.structureMatch, { 'as-translated': 0, matched: 2, mismatched: 1, unverifiable: 1 });
+	assert.deepEqual((sink.parsed().at(-1)!).structureMatch,
+		{ 'as-translated': 0, matched: 2, mismatched: 1, unverifiable: 1 });
 });
 
 test('探针未采样标 not-sampled,且不阻止导出 (2.8.7 P2)', async () => {
@@ -286,6 +288,86 @@ test('语料文件同样遵守 P1 的骨架: 末行 result、逐行追加、拒�
 	await assert.rejects(() => writeCorpusJsonl(new MemorySink(), sourceOf({ pluginVersion: '' })));
 });
 
+// ---- 2.8.12 真机修正: 内存原件优先 ------------------------------------------
+
+test('内存里的原件带译文,且不需要"核对" (2.8.12 真机修正)', async () => {
+	const sink = new MemorySink();
+	const result = await writeCorpusJsonl(sink, sourceOf({
+		readPage: () => record({
+			blocksSource: 'live',
+			check: { structureMatch: 'as-translated', blocksCompared: 1 }
+		})
+	}));
+	const page = sink.parsed().find(r => r.kind === 'page')!;
+	assert.equal((page.availability as Record<string, string>).blocks, 'live',
+		'如实报来路: 这不是重建的近似,是翻译当时用的那份');
+	assert.equal(page.structureMatch, 'as-translated');
+	assert.ok(JSON.stringify(page).includes(TGT),
+		'原件与译文同源同 id,对齐是定义上成立的 —— 不该被"结构不匹配"扣下');
+	assert.equal(result.translationsAttached, 1);
+	assert.equal(result.translationsWithheld, 0);
+	assert.deepEqual(result.blocksBySource, { live: 1, 're-extracted': 0, missing: 0 });
+});
+
+test('一块都没重建出来: 标 missing,不拿空数组冒充"重解析过了" (2.8.12 真机修正)', async () => {
+	// 真机上 39 页全是这种: 抽取路径是 text-layer,而文本层只对渲染着的页存在,
+	// 导出时早翻过去了 —— 重解析拿到 0 块。旧版把它标成 're-extracted' + 空数组,
+	// 读的人会以为"这页真的没内容"。
+	const sink = new MemorySink();
+	const result = await writeCorpusJsonl(sink, sourceOf({
+		readPage: () => record({
+			blocks: [],
+			blocksSource: 're-extracted',
+			blocksMissing: 'missing:not-rendered',
+			check: {
+				structureMatch: 'unverifiable', blocksCompared: 0,
+				unverifiableReasons: ['re-extraction-unavailable']
+			},
+			translations: null,
+			translationsMissing: 'missing:evicted'
+		})
+	}));
+	const page = sink.parsed().find(r => r.kind === 'page')!;
+	assert.equal((page.availability as Record<string, string>).blocks, 'missing:not-rendered');
+	assert.deepEqual(page.unverifiableReasons, ['re-extraction-unavailable']);
+	assert.equal((page.availability as Record<string, string>).translations, 'missing:evicted');
+	assert.deepEqual(result.blocksBySource, { live: 0, 're-extracted': 0, missing: 1 });
+});
+
+test('result 里数得出这份语料有多少是原件 (2.8.12 真机修正)', async () => {
+	const sink = new MemorySink();
+	const kinds = ['live', 're-extracted', 'missing', 'live'] as const;
+	const result = await writeCorpusJsonl(sink, sourceOf({
+		scope: scopeOf(4),
+		readPage: (pageIndex) => {
+			const kind = kinds[pageIndex]!;
+			if (kind === 'live') {
+				return record({ blocksSource: 'live', check: { structureMatch: 'as-translated', blocksCompared: 1 } });
+			}
+			if (kind === 'missing') {
+				return record({
+					blocks: [], blocksSource: 're-extracted', blocksMissing: 'missing:not-rendered',
+					check: { structureMatch: 'unverifiable', blocksCompared: 0 }, translations: null
+				});
+			}
+			return record({ check: { structureMatch: 'unverifiable', blocksCompared: 0 }, translations: null });
+		}
+	}));
+	assert.deepEqual(result.blocksBySource, { live: 2, 're-extracted': 1, missing: 1 },
+		'一眼看出多少是原件、多少是重建、多少压根没有');
+	assert.deepEqual((sink.parsed().at(-1)!).blocksBySource, { live: 2, 're-extracted': 1, missing: 1 });
+	assert.equal(result.structureMatch['as-translated'], 2);
+});
+
+test('manifest 说清 spans 与重解析都依赖文本层 (2.8.12 真机修正)', async () => {
+	const sink = new MemorySink();
+	await writeCorpusJsonl(sink, sourceOf());
+	const note = String(sink.parsed()[0]!.note);
+	assert.match(note, /文本层只对当前渲染着的页存在/,
+		'读的人要知道 missing:not-rendered 是怎么来的,不然会以为文档半边是空的');
+	assert.match(note, /as-translated/, 'as-translated 是最强的一档,要在说明里点出来');
+});
+
 // ---- 结构闸 ------------------------------------------------------------------
 
 test('导出期间不发翻译请求,不碰缓存写入 (结构性回归闸, 2.8.7)', () => {
@@ -301,24 +383,38 @@ test('导出期间不发翻译请求,不碰缓存写入 (结构性回归闸, 2.8
 		'译文只在 attach 为真时才进文件');
 });
 
-test('宿主接线: 重解析走与翻译同一条流水线,四项输入先查 (结构性回归闸, 2.8.7)', () => {
+test('宿主接线: 内存里有原件就用原件,没有才重解析 (结构性回归闸, 2.8.12 真机修正)', () => {
 	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
-	const start = src.indexOf('async corpusExportSource(');
-	assert.ok(start > 0, '找不到 corpusExportSource');
-	const body = src.slice(start, src.indexOf('/** 这一页的译文:'));
-	// 只跑 buildBlocksFromSpans 不算数 —— 必须是抽取器那条完整的链,否则比出来的
-	// 差异是自己制造的。共用同一个函数是最彻底的做法。
+	const start = src.indexOf('readPage: async (pageIndex: number): Promise<CorpusPageRecord>');
+	assert.ok(start > 0, '找不到语料的 readPage');
+	const body = src.slice(start, src.indexOf('pin: (pageIndex: number) => { this.exportPins.add(pageIndex); }', start));
+
+	// 1. 最短路径优先: 没被淘汰的页,内存里那份就是翻译当时用的结构。
+	const live = body.indexOf('if (state && state.blocks.length) {');
+	const reExtract = body.indexOf('await this.extractor.extractPage(pageIndex)');
+	assert.ok(live > 0 && live < reExtract,
+		'内存里有原件就直接用 —— 重解析是退路,不是首选');
+	assert.ok(/blocks: state\.blocks,\s*\n\s*blocksSource: 'live',\s*\n\s*check: \{ structureMatch: 'as-translated'/.test(body),
+		'原件要标 as-translated: 它就是那份结构,不是"重建得一样"');
+
+	// 2. 退路仍然走与翻译相同的流水线,并且先查四项可变输入。
 	assert.ok(/const rebuilt = await this\.extractor\.extractPage\(pageIndex\);/.test(body),
 		'重解析必须直接调 extractor.extractPage —— 不能另写一份"检查用的解析"');
 	assert.ok(/const inputsChanged = changedExtractInputs\(before, \{/.test(body)
-		&& /checkStructure\(stored, rebuilt, \{ inputsChanged \}\)/.test(body),
-		'四项可变输入必须先查,而且查出来的结果要真的喂给 checkStructure');
-	assert.ok(/const stored = state && state\.blocks\.length \? state\.blocks : null;/.test(body),
-		'被卸过的页没有留存结构可比,要如实传 null');
+		&& /checkStructure\(null, rebuilt, \{ inputsChanged \}\)/.test(body),
+		'四项可变输入必须先查,而且查出来的结果要真的喂给 checkStructure;'
+		+ '被卸过的页没有留存结构可比,对照侧只能传 null');
+
+	// 3. 一块都没重建出来 ≠ 这页没内容。
+	assert.ok(/if \(!rebuilt\.length\) \{/.test(body)
+		&& /blocksMissing: 'missing:not-rendered'/.test(body)
+		&& /unverifiableReasons: \['re-extraction-unavailable'\]/.test(body),
+		'重解析拿不到块要如实说是"文本层不在",不能拿空数组冒充"重解析过了,这页就是空的"');
+
 	assert.ok(/spansMissing: 'missing:not-rendered'/.test(body),
 		'没渲染过的页拿不到文本层 —— 不拿重建结构冒充 spans');
-	assert.ok(!/translateRequest|retranslate|ensurePage/.test(body),
-		'导出绝不发起翻译');
+	assert.ok(!/translateRequest|retranslate|ensurePage/.test(body), '导出绝不发起翻译');
+
 	// 译文来路三分,缺失原因分开说。
 	const translations = src.slice(src.indexOf('private async corpusTranslations('), src.indexOf('private pageSpans('));
 	assert.ok(/translationSource: 'live'/.test(translations)
