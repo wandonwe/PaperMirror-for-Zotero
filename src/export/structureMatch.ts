@@ -36,11 +36,24 @@
 import type { SourceBlock } from '../types/models';
 import { hashSourceTexts } from '../cache/cacheSchema';
 
-export type StructureMatch = 'matched' | 'mismatched' | 'unverifiable';
+export type StructureMatch =
+	/**
+	 * **导出的就是翻译当时用的那份结构**(还在内存里,没被淘汰)—— 不是重建的近似,
+	 * 所以没有"要不要核对"这个问题,译文按块 id 对齐是天然成立的。
+	 *
+	 * 这一档是 2.8.12 真机验证补上的: 原方案假定结构只能靠重解析,漏了"内存里
+	 * 就躺着原件"这条最短路径 —— 而重解析在文本层路径的文档上导出时根本走不通
+	 * (文本层只对当前渲染着的那几页存在)。它比 `matched` 强: matched 说的是
+	 * "重建出了一样的东西",这一档说的是"这就是那个东西"。
+	 */
+	| 'as-translated'
+	| 'matched' | 'mismatched' | 'unverifiable';
 
 /** 对照不可信的原因枚举 —— 与方案 §1.2 的四项输入一一对应。 */
 export type UnverifiableReason =
 	| 'no-stored-structure'
+	/** 重解析拿不到任何块(文本层只对渲染着的页存在)—— 没东西可比。 */
+	| 're-extraction-unavailable'
 	| 'body-font-size-changed'
 	| 'references-state-unknown'
 	| 'prefs-changed'
@@ -225,5 +238,8 @@ export function checkStructure(
  * 产出一份"看起来对齐、其实错位"的语料,**比缺失更糟**:缺失看得出来,错位看不出来。
  */
 export function mayAttachTranslations(check: StructureCheckResult): boolean {
-	return check.structureMatch === 'matched';
+	// `as-translated`: 导出的就是内存里那份原结构,译文与它同源同 id,对齐是
+	// 定义上成立的 —— 比 `matched` 还硬。
+	// `matched`: 重建结构逐项等同留存结构,可以贴。
+	return check.structureMatch === 'as-translated' || check.structureMatch === 'matched';
 }
