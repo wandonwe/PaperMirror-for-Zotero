@@ -796,7 +796,10 @@
 .pm-repage-block b { font-weight: 700; }
 .pm-repage-block i { font-style: italic; }
 
-.pm-repage-block[data-pm-type="caption"] {
+/* 表标题(type="table" 指的是标题行,不是表格主体)与图注同一套行距 —— 2.8.14
+   起表题也参与原位替换,样式要跟上,否则它按正文行距排进一个矮盒里。 */
+.pm-repage-block[data-pm-type="caption"],
+.pm-repage-block[data-pm-type="table"] {
 	line-height: calc(1.4 * var(--pm-line-scale, 1));
 }
 

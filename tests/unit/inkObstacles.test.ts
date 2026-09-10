@@ -1,19 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isReplacementCandidate, selectInkObstacleBlocks, overlapsImageInk, computeExpansionAllowance } from '../../src/ui/strictPageReplacement';
+import { selectInkObstacleBlocks, overlapsImageInk, computeExpansionAllowance } from '../../src/ui/strictPageReplacement';
 import { auditPlacedBoxes } from '../../src/ui/layoutSafety';
 
 /**
- * P2-14 (2.0.4): 参考文献 / type==='table' 块被排除出替换流水线,但它们的
- * 原文墨迹仍在位图上 —— 它们必须作为遮挡物进入边界扩展与几何审计,否则
- * 扩展会把译文长进参考文献里叠印,审计也看不见。
+ * P2-14 (2.0.4): 参考文献块被排除出替换流水线,但它们的原文墨迹仍在位图上
+ * —— 它们必须作为遮挡物进入边界扩展与几何审计,否则扩展会把译文长进参考
+ * 文献里叠印,审计也看不见。
  * P2-15 (2.0.4): 遮罩对图像硬裁剪 (mask∩image===0),文本盒准入必须服从
  * 同一条规则 —— 旧的 15% 容差带内"英文透出 + 中文叠印"。
+ *
+ * 2.8.14: `type === 'table'` 从遮挡物名单里移出。它指的是**表标题那一行**
+ * (全代码库只有 blockBuilder / spanBlockBuilder 两处产生它,判的都是标题),
+ * 现在进 `geometric` 参与替换 —— 两个集合必须严格互补,否则排版成功的表题
+ * 会把自己的原盒当遮挡物,当场判自己压盖自己。
  */
 
 const rects = [[0, 0, 1, 1]]; // 任意非空 lineRectsPdf
 
-test('selectInkObstacleBlocks 与 geometric 过滤严格互补', () => {
+test('selectInkObstacleBlocks 与 geometric 过滤严格互补 (2.8.14: 表题已移出)', () => {
 	const blocks = [
 		{ id: 'ref', isReference: true, type: 'paragraph', lineRectsPdf: rects },
 		{ id: 'tbl', isReference: false, type: 'table', lineRectsPdf: rects },
@@ -22,7 +27,25 @@ test('selectInkObstacleBlocks 与 geometric 过滤严格互补', () => {
 		{ id: 'cap', isReference: false, type: 'caption', lineRectsPdf: rects }
 	];
 	const picked = selectInkObstacleBlocks(blocks).map(b => b.id);
-	assert.deepEqual(picked, ['ref', 'tbl'], '恰好是被 geometric 排除且有几何的块');
+	assert.deepEqual(picked, ['ref'], '恰好是被 geometric 排除(isReference)且有几何的块');
+	assert.ok(!picked.includes('tbl'),
+		'表题现在进替换流水线 —— 留在遮挡物里就成了"自己挡自己",扩边与审计会当场否掉它');
+});
+
+test('互补性由构造保证: 两个集合的并集恰是有几何的块,交集为空 (2.8.14)', () => {
+	const blocks = [
+		{ id: 'ref', isReference: true, type: 'paragraph', lineRectsPdf: rects },
+		{ id: 'tbl', isReference: false, type: 'table', lineRectsPdf: rects },
+		{ id: 'body', isReference: false, type: 'paragraph', lineRectsPdf: rects },
+		{ id: 'cap', isReference: false, type: 'caption', lineRectsPdf: rects },
+		{ id: 'ref-tbl', isReference: true, type: 'table', lineRectsPdf: rects }
+	];
+	// 与 buildStrictPage 里 `geometric` 的过滤条件逐字一致。
+	const geometric = blocks.filter(b => !b.isReference && !!b.lineRectsPdf?.length).map(b => b.id);
+	const ink = selectInkObstacleBlocks(blocks).map(b => b.id);
+	assert.deepEqual(geometric.filter(id => ink.includes(id)), [], '交集必须为空');
+	assert.deepEqual([...geometric, ...ink].sort(), blocks.map(b => b.id).sort(),
+		'并集必须覆盖每一个有几何的块 —— 漏掉的块既不会被替换,也不会被避让');
 });
 
 test('P2-14: 参考文献墨迹截断右向扩展(此前扩展对它失明)', () => {
@@ -69,11 +92,3 @@ test('P2-15: 图像准入阈值对齐遮罩硬裁剪 —— 旧 15% 容差带内
 	assert.equal(overlapsImageInk(box, [{ left: 500, top: 500, width: 50, height: 50 }]), false);
 	assert.equal(overlapsImageInk({ left: 0, top: 0, width: 0, height: 0 }, [img10]), false);
 });
-
- test('page 9 table caption enters replacement while table grid and references remain obstacles', () => {
-	const caption = { id: 'page-8-region-0', type: 'table', sourceText: 'Table 2. Applying Class of Recommendation and Level of Evidence to Clinical Strategies, Interventions, Treatments, or Diagnostic Testing in Patient Care', lineRectsPdf: rects };
-	const grid = { ...caption, id: 'grid', sourceText: 'Class I Class II Level A Level B' };
-	const reference = { ...caption, id: 'reference', isReference: true };
-	assert.equal(isReplacementCandidate(caption), true);
-	assert.deepEqual(selectInkObstacleBlocks([caption, grid, reference]).map(b => b.id), ['grid', 'reference']);
- });

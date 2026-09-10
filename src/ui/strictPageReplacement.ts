@@ -29,7 +29,7 @@ import * as adapter from '../reader/zoteroReaderAdapter';
 import { isMetadataBlock } from '../reader/metaFilter';
 import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
-import { isTableCaptionAnchor, detectTableRegions } from '../reader/tableGuard';
+import { detectTableRegions } from '../reader/tableGuard';
 import { buildTableModel, buildTextTableModel, cellPreserveEvidence, type CellMember } from '../reader/tableStructure';
 import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, planOverlapClips, type AuditBox, type AuditObstacles } from './layoutSafety';
 import { parseStyledSegments } from '../reader/styleRuns';
@@ -530,10 +530,31 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	page.appendChild(canvas);
 
 	// ---- 2. what may be replaced -------------------------------------------
-	const geometric = input.blocks.filter(b =>
-		isReplacementCandidate(b) && !!b.lineRectsPdf?.length);
+	// 表题进入替换流水线 (2.8.14, 真机第 9 页):
+	//
+	// `type === 'table'` 在整个代码库里**只在两处产生**(blockBuilder:415、
+	// spanBlockBuilder:541),两处判的都是**表标题那一行** ——"Table 3: …"/
+	// "表 3 …";tableGuard 也是照这个含义读它(isTableCaptionAnchor 拿它当
+	// 标题锚)。表格**主体**的格子 type 是 paragraph,靠 tableRow / `-table-T-rR-cC`
+	// 认(isTableCellBlock),从来不是 'table'。
+	//
+	// 所以旧的 `b.type !== 'table'` 挡掉的**只有表题**,一个表格主体也没挡到 ——
+	// 而表题恰恰是图注一类、最该原位替换的东西。真机第 9 页整页只抽到"表题 +
+	// 页脚"两块,两块都已有译文(state: translated),排版却是
+	// `replaceable: 0, committed: 0` —— 表题在这里被无条件丢弃,用户看到的是
+	// "这页一个字没译"。
+	//
+	// 表格的几何模型(区域探测、单元格成员)输入**维持原样**,见下面的 `tabular`:
+	// 这一版只放表题进排版,不动表格判定,免得把两个变化搅在一起。
+	const geometric = input.blocks.filter(b => !b.isReference && !!b.lineRectsPdf?.length);
+	// 表格几何模型的输入 —— 与改动前的 `geometric` 逐字相同(不含表题)。
+	// 表题不当区域种子、不当单元格成员: 它在表框外,进去只会污染区域范围。
+	const tabular = geometric.filter(b => b.type !== 'table');
 	const translatable = geometric.filter(b => b.translationMode !== 'preserve');
-	const bodySizes = translatable.map(b => b.fontSize ?? 0).filter(s => s > 0).sort((a, b) => a - b);
+	// 页面基准字号仍只看正文侧样本(不含表题)—— bodyPt 会喂给 detectTableRegions
+	// 的 em,表题字号掺进中位数就会改变表格判定,而这一版不该动表格。
+	const bodySizes = tabular.filter(b => b.translationMode !== 'preserve')
+		.map(b => b.fontSize ?? 0).filter(s => s > 0).sort((a, b) => a - b);
 	const bodyPt = bodySizes.length ? bodySizes[Math.floor(bodySizes.length / 2)]! : 10;
 	// 页面基准字号 (role_min, 0.9.28 — 审核修正: the feature had landed on the
 	// unused renderTranslatedPage path; THIS builder is what the split view
@@ -566,8 +587,11 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	}
 	const blockById = new Map(geometric.map(b => [b.id, b]));
 
-	// 墨迹遮挡物: 参考文献与非表题的 table 块被排除在
-	// `geometric` 之外(它们永不参与替换),但它们的原文墨迹仍在位图上。
+	// 墨迹遮挡物 (2.0.4, 审核 P2-14): isReference 的块被排除在 `geometric`
+	// 之外(它们永不参与替换),但它们的原文墨迹仍在位图上。
+	// 2.8.14: 表题从这份名单里移出,因为它现在**进** `geometric` 了 —— 排版
+	// 失败的表题不会失去遮挡: 下面 geometryObstacles / pmGeometryAudit 的
+	// `preserved` 本来就是"进了 geometric 却没成为 item 的块",自动接住它。
 	// 边界扩展与几何审计此前对它们**失明**: 扩展可以把译文盒子长进参考文献或
 	// 表格的原文里叠印,审计也看不见。它们以纯几何成员身份进入两处遮挡物列表
 	// (expansionAllowance 的 blockers 与 pmGeometryAudit 的 preserved),
@@ -576,7 +600,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		selectInkObstacleBlocks(input.blocks).map(b => ({ id: b.id, box: pixelBox(b, render, 1) }));
 
 	const guard = detectTableRegions(
-		geometric.map(b => ({
+		tabular.map(b => ({
 			id: b.id, text: b.sourceText, type: b.type,
 			box: pxOf.get(b.id)!, fontSize: b.fontSize, column: b.column
 		})),
@@ -604,8 +628,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// kind 必须一致,否则抽取期 preserve 的格在排版期会被当作缺译文的失败。
 	const cellEvidence = cellPreserveEvidence(input.blocks.map(b => b.sourceText), input.noTranslate ?? []);
 	allGuardRegions.forEach(({ region, text: isTextTable }, tableIndex) => {
-		const members: CellMember[] = geometric
-			.filter(b => b.type !== 'table' && containedFraction(pxOf.get(b.id)!, region) >= 0.5 && b.lineRectsPdf?.length)
+		const members: CellMember[] = tabular
+			.filter(b => containedFraction(pxOf.get(b.id)!, region) >= 0.5 && b.lineRectsPdf?.length)
 			.map(b => ({ id: b.id, box: pxOf.get(b.id)!, text: b.sourceText, fontSize: b.fontSize }));
 		if (!members.length) {
 			return;
@@ -716,7 +740,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			continue; // protected table content the cell model didn't claim
 		}
 		const box = pxOf.get(block.id)!;
-		const minWidth = block.type === 'caption' || block.type === 'table' ? 28 : 50;
+		// 表题按图注的门槛 (2.8.14): 它就是图注的一种,"Table 3." 这类短标题
+		// 的盒子天然窄,套 50px 的正文门槛会被当成噪声丢掉 —— 而它是整张表
+		// 唯一能替换的散文。
+		const minWidth = (block.type === 'caption' || block.type === 'table') ? 28 : 50;
 		if (box.width < minWidth || box.height < 9 || block.sourceText.trim().length < 6) {
 			tooSmall++;
 			continue;
@@ -1828,15 +1855,20 @@ export function flashKeptIndicator(node: HTMLElement, durationMs = 2000): HTMLEl
 	return marker;
 }
 
-/** A table caption is text, not the table grid it describes. */
-export function isReplacementCandidate(block: { isReference?: boolean; type?: string; sourceText?: string }): boolean {
-	return !block.isReference && (block.type !== 'table'
-		|| isTableCaptionAnchor(block.sourceText ?? '', block.type));
-}
-
-/** Unreplaced source ink remains an obstacle to neighbouring translations. */
-export function selectInkObstacleBlocks<T extends { isReference?: boolean; type?: string; sourceText?: string; lineRectsPdf?: unknown[] }>(blocks: T[]): T[] {
-	return blocks.filter(b => !isReplacementCandidate(b) && !!b.lineRectsPdf?.length);
+/**
+ * 墨迹遮挡物选择 (2.0.4, 审核 P2-14) — pure, unit-tested。
+ * 与 `geometric` 的过滤条件 (`!isReference`) 严格互补: 被排除出替换流水线、
+ * 但墨迹仍留在位图上的块。没有 lineRectsPdf 的块没有可用几何,无从避让,
+ * 只能排除。
+ *
+ * 2.8.14: 表题(`type === 'table'`)从这里移出 —— 它现在进 `geometric` 参与
+ * 替换,不再"永不参与"。两个集合必须**严格互补**: 表题若同时留在这里,
+ * 排版成功的表题会把自己的原盒当成遮挡物,扩边与几何审计立刻判它压盖自己。
+ * 排版失败的表题由 `preserved`(进了 geometric 却没成为 item 的块)接住,
+ * 遮挡不丢。
+ */
+export function selectInkObstacleBlocks<T extends { isReference?: boolean; type?: string; lineRectsPdf?: unknown[] }>(blocks: T[]): T[] {
+	return blocks.filter(b => !!b.isReference && !!b.lineRectsPdf?.length);
 }
 
 /**
@@ -1869,8 +1901,11 @@ export function bodyAnchorSizes(blocks: { id: string; type: string; fontSize?: n
 
 /** 末位缩字梯 (2.7.3) — pure: 孤立块三档 (…0.82),其余两档。 */
 export function shrinkStepsFor(blockType: string, opts?: { isTableCell?: boolean; tinyLine?: boolean }): number[] {
+	// 'table' = 表标题那一行 (2.8.14),不是表格主体 —— 它与 caption 同类,
+	// 是页面上的孤立小盒,缩字不会与相邻正文比出「发花」。
 	const isolated = !!opts?.isTableCell || !!opts?.tinyLine
-		|| blockType === 'heading' || blockType === 'title' || blockType === 'caption' || blockType === 'table';
+		|| blockType === 'heading' || blockType === 'title'
+		|| blockType === 'caption' || blockType === 'table';
 	return isolated ? SHRINK_STEPS_ISOLATED : SHRINK_STEPS;
 }
 
