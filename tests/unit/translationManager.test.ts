@@ -2619,3 +2619,34 @@ test('热页面数量随淘汰下降,是"当前持有完整内容"的实数 (2.8
 	assert.equal(usage.retainedPages, 30, '轻量状态仍然是 30 页 —— 两个数字分别回答两个问题');
 	manager.dispose();
 });
+
+test('long prose pages publish a completed batch while another request is pending', async () => {
+	const blocks = makeBlocks(0, 4).map(b => ({ ...b, sourceText: ('The study evaluated treatment outcomes in patients. ').repeat(30) }));
+	blocks.forEach((b, i) => { b.sourceText += String(i); });
+	let release!: () => void;
+	const pending = new Promise<void>(resolve => { release = resolve; });
+	let started = 0;
+	let published = false;
+	const { deps } = makeDeps({
+		extractPage: async () => blocks,
+		getLanguages: () => ({ source: 'en', target: 'fr' }),
+		translateRequest: async request => {
+			const index = started++;
+			assert.ok(request.blocks.reduce((n, b) => n + b.text.length, 0) <= 3200);
+			if (index > 0) await pending;
+			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: 'Traduction française.' })) };
+		}
+	});
+	const manager = new TranslationManager(deps, { onPageUpdate: state => {
+		if (state.status === 'translating' && state.translations.size > 0 && state.translations.size < blocks.length) {
+			published = true;
+			release();
+		}
+	} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	try {
+		await manager.ensurePage(0, 10);
+		assert.equal(published, true);
+		assert.ok(started >= 2);
+		assert.equal(manager.getPageState(0)!.translations.size, blocks.length);
+	} finally { release(); manager.dispose(); }
+});

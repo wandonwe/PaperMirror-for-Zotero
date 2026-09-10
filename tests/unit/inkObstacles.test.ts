@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { selectInkObstacleBlocks, overlapsImageInk, computeExpansionAllowance } from '../../src/ui/strictPageReplacement';
+import { isReplacementCandidate, selectInkObstacleBlocks, overlapsImageInk, computeExpansionAllowance } from '../../src/ui/strictPageReplacement';
 import { auditPlacedBoxes } from '../../src/ui/layoutSafety';
 
 /**
@@ -69,3 +69,11 @@ test('P2-15: 图像准入阈值对齐遮罩硬裁剪 —— 旧 15% 容差带内
 	assert.equal(overlapsImageInk(box, [{ left: 500, top: 500, width: 50, height: 50 }]), false);
 	assert.equal(overlapsImageInk({ left: 0, top: 0, width: 0, height: 0 }, [img10]), false);
 });
+
+ test('page 9 table caption enters replacement while table grid and references remain obstacles', () => {
+	const caption = { id: 'page-8-region-0', type: 'table', sourceText: 'Table 2. Applying Class of Recommendation and Level of Evidence to Clinical Strategies, Interventions, Treatments, or Diagnostic Testing in Patient Care', lineRectsPdf: rects };
+	const grid = { ...caption, id: 'grid', sourceText: 'Class I Class II Level A Level B' };
+	const reference = { ...caption, id: 'reference', isReference: true };
+	assert.equal(isReplacementCandidate(caption), true);
+	assert.deepEqual(selectInkObstacleBlocks([caption, grid, reference]).map(b => b.id), ['grid', 'reference']);
+ });

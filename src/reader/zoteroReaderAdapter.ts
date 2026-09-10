@@ -381,10 +381,35 @@ function pageViewOf(reader: ReaderLike, pageIndex: number): any {
 
 /** Does this page currently have a rendered, non-empty text layer? */
 export function hasRenderedTextLayer(reader: ReaderLike, pageIndex: number): boolean {
+	return textLayerSpanCount(reader, pageIndex) > 0;
+}
+
+/**
+ * 这一页的文本层里有多少个 span。**0 有两种含义**,靠 `textLayerExists` 区分:
+ * 层不在(页面根本没渲染)还是层在但没字(真·图片页)。
+ */
+export function textLayerSpanCount(reader: ReaderLike, pageIndex: number): number {
 	try {
 		const div = pageViewOf(reader, pageIndex)?.div as HTMLElement | undefined;
 		const layer = div?.querySelector?.('.textLayer');
-		return !!layer && !!layer.querySelector('span');
+		return layer ? layer.querySelectorAll('span').length : 0;
+	}
+	catch {
+		return 0;
+	}
+}
+
+/**
+ * 这一页的文本层节点**存在吗** —— 与"里面有没有字"是两回事。
+ *
+ * 2.8.13 真机: 抽取拿不到文字时,旧代码一律当成"这页没有可译内容"并把页面标成
+ * 完成。可**没渲染过的页压根没有文本层**,那不是"没文字",是"看不见"。这个函数
+ * 就是用来分开这两件事的。
+ */
+export function textLayerExists(reader: ReaderLike, pageIndex: number): boolean {
+	try {
+		const div = pageViewOf(reader, pageIndex)?.div as HTMLElement | undefined;
+		return !!div?.querySelector?.('.textLayer');
 	}
 	catch {
 		return false;
@@ -398,18 +423,29 @@ export function hasRenderedTextLayer(reader: ReaderLike, pageIndex: number): boo
  */
 export async function waitForTextLayer(reader: ReaderLike, pageIndex: number, timeoutMs = 2500): Promise<boolean> {
 	const deadline = Date.now() + timeoutMs;
+	// PDF.js **逐步**往文本层里塞 span。旧代码"有一个 span 就算渲染好了",于是
+	// 抽取经常读到半成品 —— 2.8.13 真机上第 9 页只抽出 2 个块(抽取耗时 7 ms),
+	// 而整页正文一个字都没进翻译。改为**等它稳定**: 连续两次采样 span 数不变
+	// 才算完成。稳定判据比"有没有"贵一次采样,但一页只付一次。
+	let last = -1;
 	while (Date.now() < deadline) {
-		if (hasRenderedTextLayer(reader, pageIndex)) {
-			return true;
+		const count = textLayerSpanCount(reader, pageIndex);
+		if (count > 0 && count === last) {
+			return true; // 两次采样之间没再长 —— 认为渲染完了
 		}
 		// Only worth waiting if PDF.js knows about the page at all.
-		if (!pageViewOf(reader, pageIndex)) {
+		if (count === 0 && !pageViewOf(reader, pageIndex)) {
 			return false;
 		}
-		await new Promise(resolve => setTimeout(resolve, 100));
+		last = count;
+		await new Promise(resolve => setTimeout(resolve, TEXT_LAYER_SETTLE_MS));
 	}
-	return hasRenderedTextLayer(reader, pageIndex);
+	// 超时: 有字就用(总比没有强),但调用方能从 span 数看出它可能是半成品。
+	return textLayerSpanCount(reader, pageIndex) > 0;
 }
+
+/** 两次采样之间的间隔 —— 也是"稳定"的判据粒度。 */
+export const TEXT_LAYER_SETTLE_MS = 100;
 
 /**
  * Read the rendered text layer of one page as positioned items in PDF space.
