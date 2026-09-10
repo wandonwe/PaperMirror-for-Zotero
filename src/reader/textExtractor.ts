@@ -311,8 +311,20 @@ export class TextExtractor implements PageParser {
 			return result.blocks;
 		}
 
-		// Nothing on this page. Only call it a scanned PDF if the WHOLE document
-		// has no extractable text — a figure-only page is perfectly normal.
+		// —— 三条路都空。这时**必须分清两件事** (2.8.13 真机):
+		//
+		//   (a) 这页真的没有可译文字(整页图、空白页)—— 返回 [],调用方标完成;
+		//   (b) 这页的**文本层根本不在**(PDF.js 只渲染视口附近那几页,预取时
+		//       抽的多半是没渲染的页)—— 那不是"没文字",是"看不见"。
+		//
+		// 旧代码把两者一律当成 (a): 预取在页面渲染前抽一次,抽到空,页面就被
+		// 永久标成"已完成、无可译内容",用户翻到那一页时一个字都没译,也不会
+		// 重试。真机 19 页里有 6 页栽在这上面 —— 而导出时那几页重解析出了
+		// 12–14 个块、约 200 个 span,证明文字一直都在。
+		if (!adapter.textLayerExists(this.reader, pageIndex)) {
+			throw new PaperMirrorError('EXTRACTION_FAILED',
+				`第 ${pageIndex + 1} 页的文字层尚未渲染,稍后重试。`, { retryable: true });
+		}
 		if (await this.documentHasText(pageIndex)) {
 			this.pathByPage.set(pageIndex, 'empty');
 			return [];

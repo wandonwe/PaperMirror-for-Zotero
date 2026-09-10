@@ -1740,6 +1740,26 @@ export class TranslationManager {
 						return;
 					}
 				}
+				else if (err.code === 'EXTRACTION_FAILED' && err.retryable) {
+					// 文本层还没渲染 (2.8.13 真机)。这**不是**"这页没有可译内容",
+					// 而是"现在看不见" —— 区别在于前者该标完成、后者必须重来。
+					//
+					// 真机 19 页里有 6 页栽在这上面: 预取在页面渲染之前抽了一次,
+					// 抽到空,页面被永久标成"已完成",用户翻过去一个字都没译,也
+					// 不会自动重试。导出时那几页重解析出 12–14 个块 —— 文字一直都在。
+					if (pageIndex === this.currentPage) {
+						state.status = 'error';
+						state.error = err;
+						this.notify(state);
+						return;
+					}
+					// 预取页: 忘掉这次结果。用户真翻过去时会重抽,那时文本层就在了。
+					if (this.pages.get(pageIndex) === state) {
+						this.pages.delete(pageIndex);
+					}
+					logger.info(MODULE, `Page ${pageIndex + 1}: text layer not rendered yet — released for retry on visit`);
+					return;
+				}
 				else {
 					throw err; // real extraction errors keep their error/no-text-layer states
 				}

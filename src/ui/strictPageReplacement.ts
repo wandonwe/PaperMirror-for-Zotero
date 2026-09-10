@@ -29,7 +29,7 @@ import * as adapter from '../reader/zoteroReaderAdapter';
 import { isMetadataBlock } from '../reader/metaFilter';
 import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
-import { detectTableRegions } from '../reader/tableGuard';
+import { isTableCaptionAnchor, detectTableRegions } from '../reader/tableGuard';
 import { buildTableModel, buildTextTableModel, cellPreserveEvidence, type CellMember } from '../reader/tableStructure';
 import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, planOverlapClips, type AuditBox, type AuditObstacles } from './layoutSafety';
 import { parseStyledSegments } from '../reader/styleRuns';
@@ -531,7 +531,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 
 	// ---- 2. what may be replaced -------------------------------------------
 	const geometric = input.blocks.filter(b =>
-		!b.isReference && b.type !== 'table' && !!b.lineRectsPdf?.length);
+		isReplacementCandidate(b) && !!b.lineRectsPdf?.length);
 	const translatable = geometric.filter(b => b.translationMode !== 'preserve');
 	const bodySizes = translatable.map(b => b.fontSize ?? 0).filter(s => s > 0).sort((a, b) => a - b);
 	const bodyPt = bodySizes.length ? bodySizes[Math.floor(bodySizes.length / 2)]! : 10;
@@ -566,7 +566,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	}
 	const blockById = new Map(geometric.map(b => [b.id, b]));
 
-	// 墨迹遮挡物 (2.0.4, 审核 P2-14): isReference / type==='table' 的块被排除在
+	// 墨迹遮挡物: 参考文献与非表题的 table 块被排除在
 	// `geometric` 之外(它们永不参与替换),但它们的原文墨迹仍在位图上。
 	// 边界扩展与几何审计此前对它们**失明**: 扩展可以把译文盒子长进参考文献或
 	// 表格的原文里叠印,审计也看不见。它们以纯几何成员身份进入两处遮挡物列表
@@ -605,7 +605,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const cellEvidence = cellPreserveEvidence(input.blocks.map(b => b.sourceText), input.noTranslate ?? []);
 	allGuardRegions.forEach(({ region, text: isTextTable }, tableIndex) => {
 		const members: CellMember[] = geometric
-			.filter(b => containedFraction(pxOf.get(b.id)!, region) >= 0.5 && b.lineRectsPdf?.length)
+			.filter(b => b.type !== 'table' && containedFraction(pxOf.get(b.id)!, region) >= 0.5 && b.lineRectsPdf?.length)
 			.map(b => ({ id: b.id, box: pxOf.get(b.id)!, text: b.sourceText, fontSize: b.fontSize }));
 		if (!members.length) {
 			return;
@@ -716,7 +716,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			continue; // protected table content the cell model didn't claim
 		}
 		const box = pxOf.get(block.id)!;
-		const minWidth = block.type === 'caption' ? 28 : 50;
+		const minWidth = block.type === 'caption' || block.type === 'table' ? 28 : 50;
 		if (box.width < minWidth || box.height < 9 || block.sourceText.trim().length < 6) {
 			tooSmall++;
 			continue;
@@ -1828,14 +1828,15 @@ export function flashKeptIndicator(node: HTMLElement, durationMs = 2000): HTMLEl
 	return marker;
 }
 
-/**
- * 墨迹遮挡物选择 (2.0.4, 审核 P2-14) — pure, unit-tested。
- * 与 `geometric` 的过滤条件 (`!isReference && type !== 'table'`) 严格互补:
- * 被排除出替换流水线、但墨迹仍留在位图上的块。没有 lineRectsPdf 的块没有
- * 可用几何,无从避让,只能排除。
- */
-export function selectInkObstacleBlocks<T extends { isReference?: boolean; type?: string; lineRectsPdf?: unknown[] }>(blocks: T[]): T[] {
-	return blocks.filter(b => (b.isReference || b.type === 'table') && !!b.lineRectsPdf?.length);
+/** A table caption is text, not the table grid it describes. */
+export function isReplacementCandidate(block: { isReference?: boolean; type?: string; sourceText?: string }): boolean {
+	return !block.isReference && (block.type !== 'table'
+		|| isTableCaptionAnchor(block.sourceText ?? '', block.type));
+}
+
+/** Unreplaced source ink remains an obstacle to neighbouring translations. */
+export function selectInkObstacleBlocks<T extends { isReference?: boolean; type?: string; sourceText?: string; lineRectsPdf?: unknown[] }>(blocks: T[]): T[] {
+	return blocks.filter(b => !isReplacementCandidate(b) && !!b.lineRectsPdf?.length);
 }
 
 /**
@@ -1869,7 +1870,7 @@ export function bodyAnchorSizes(blocks: { id: string; type: string; fontSize?: n
 /** 末位缩字梯 (2.7.3) — pure: 孤立块三档 (…0.82),其余两档。 */
 export function shrinkStepsFor(blockType: string, opts?: { isTableCell?: boolean; tinyLine?: boolean }): number[] {
 	const isolated = !!opts?.isTableCell || !!opts?.tinyLine
-		|| blockType === 'heading' || blockType === 'title' || blockType === 'caption';
+		|| blockType === 'heading' || blockType === 'title' || blockType === 'caption' || blockType === 'table';
 	return isolated ? SHRINK_STEPS_ISOLATED : SHRINK_STEPS;
 }
 
