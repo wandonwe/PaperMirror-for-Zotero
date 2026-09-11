@@ -478,6 +478,17 @@ export interface PageTranslationState {
 	extractPath?: string;
 }
 
+/** 一个翻译请求的时序切片 (2.11.0) —— 全是数字,不含任何文本。 */
+export interface RequestTiming {
+	gateMs: number;
+	sendMs: number;
+	inFlightAtStart: number;
+	foreground: boolean;
+	attempt: number;
+	blocks: number;
+	chars: number;
+}
+
 export interface PageDiagnostics {
 	/** 逻辑批次数 (预算闸口径)。 */
 	requests: number;
@@ -509,6 +520,28 @@ export interface PageDiagnostics {
 	queuedMs?: number;
 	extractMs?: number;
 	firstTextMs?: number;
+	/**
+	 * 请求级时序 (2.11.0, 真机第十一轮)。
+	 *
+	 * 2.10.2 的数据把一个缺口摆出来了:同一档输入大小的页,翻译阶段耗时
+	 * 从 **248 ms 到 28136 ms** —— 差 113 倍,而 `queuedMs` 在每一个慢页上
+	 * **都是 0**、`rateLimited` 和 `timeouts` 全是 0。
+	 *
+	 * 问题是 `queuedMs` 量的是"从 ensurePage 到调度器把这页跑起来",
+	 * **不含请求闸的等待** —— `requestGate.run` 在 try 之前 await 取名额,
+	 * 那一段时间此前谁也没记。于是「等名额」「等服务端」这两件事,
+	 * 现有字段一个也分不开,113 倍的差异无从归因。
+	 *
+	 *   gateMs           在请求闸里等名额的时间
+	 *   sendMs           拿到名额之后到响应回来的时间(真正的服务端往返)
+	 *   inFlightAtStart  出手**之前**本 lane 上已有几个在飞
+	 *   foreground       是不是当前页(前台有保留槽位,背景预取没有)
+	 *   attempt          第几次尝试(0 是首次;重试会再记一条)
+	 *   blocks / chars   这一批喂进去多少块、多少字符
+	 *
+	 * 纯观测:不改名额怎么给、给几个、等多久。
+	 */
+	requestTimings?: RequestTiming[];
 	/**
 	 * 抽取内部分段 (2.8.15, 真机第二轮)。`extractMs` 是个总数,回答不了"等在哪"。
 	 * 实测 30 页里 15 页 extractMs 在 0.8–2.6 秒,而这些页**一次请求都没发**
@@ -2283,7 +2316,15 @@ export class TranslationManager {
 		// grouping or an id-dropping provider — the log tells which.
 		// requestCount = 逻辑批次 (预算闸 canSpend 的口径); attemptCount = 实际发出的
 		// HTTP 尝试 (含请求级重试, 2.7.5 审核 P2) —— 两次 429 后成功是 1 批 / 3 次。
-		const metrics = { requestCount: 0, attemptCount: 0, salvageCount: 0, rateLimited: 0, timeouts: 0, startedAt: Date.now() };
+		const metrics = {
+			requestCount: 0, attemptCount: 0, salvageCount: 0, rateLimited: 0, timeouts: 0,
+			startedAt: Date.now(),
+			// 2.11.0: 每个请求一条 —— 门内等了多久、发出去之后等了多久、
+			// 出手时本 lane 上还有几个在飞、是不是当前页、喂进去多少字符。
+			// 2.10.2 的数据里同一档输入的页耗时差 113 倍,而页级 queuedMs 全是 0;
+			// 那个字段不含请求闸的等待,于是"等名额"和"等服务端"分不开。
+			requestTimings: [] as RequestTiming[]
+		};
 		// 止损轮次序号 (P3): 本运行的发起顺序,见 failedSegments 注释。
 		const runId = ++this.runSeq;
 		const countedTranslate = async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
@@ -2303,9 +2344,22 @@ export class TranslationManager {
 				// 也是按请求时刻解析引擎的,两者现在同刻同源,必然一致。
 				const lane = this.laneFor(pageIndex);
 				try {
+					const foreground = pageIndex === this.currentPage;
+					const promptChars = request.blocks.reduce((n, b) => n + (b.text?.length ?? 0), 0);
 					const response = await this.requestGate.run(
-						lane, pageIndex === this.currentPage,
-						() => this.meteredTranslate(request, sig, n => { metrics.attemptCount += n; }), sig);
+						lane, foreground,
+						() => this.meteredTranslate(request, sig, n => { metrics.attemptCount += n; }), sig,
+						t => {
+							// 上限 40 条:一页正常只有个位数请求,留出余量又不让导出膨胀。
+							if (metrics.requestTimings.length < 40) {
+								metrics.requestTimings.push({
+									gateMs: t.gateMs, sendMs: t.sendMs,
+									inFlightAtStart: t.inFlightAtStart,
+									foreground, attempt, blocks: request.blocks.length,
+									chars: promptChars
+								});
+							}
+						});
 					beat(); // progress: a request finished → re-arm the idle watchdog
 					this.laneFeedback(lane, 'success');
 					return response;
@@ -3055,6 +3109,8 @@ export class TranslationManager {
 			segmentHits,
 			durationMs: Date.now() - metrics.startedAt,
 			fromCache: false,
+			// 2.11.0: 没有请求就不写这个字段,免得导出里塞满空数组。
+			...(metrics.requestTimings.length ? { requestTimings: metrics.requestTimings } : {}),
 			// 注册表状态汇总 (仅计数,无文本 — 日志卫生基线)。
 			placeholderTokens: protectedBlocks.reduce((n, p) => n + p.reg.count, 0),
 			placeholderRejected: protectedBlocks.reduce((n, p) => n + p.reg.status.rejected, 0)

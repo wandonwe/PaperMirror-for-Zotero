@@ -125,13 +125,42 @@ export class RequestGate {
 	 * 取消或空闲看门狗 abort 过的那一页既不结束、也无法重新排期,用户翻回去
 	 * 只看到原文,后面的页还起不来。现在 abort 会立刻把等待者摘出队列并 reject。
 	 */
-	async run<T>(lane: string, foreground: boolean, fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+	/**
+	 * 2.11.0: `probe` 把**门内等待**与**实际发送**分开报。
+	 *
+	 * 2.10.2 的真机数据里,同一档输入大小的页,翻译阶段耗时从 248 ms 到 28136 ms
+	 * —— 差 **113 倍**,而页级的 `queuedMs` 在慢页上**全是 0**。问题是 `queuedMs`
+	 * 量的是"从 ensurePage 到调度器把这页跑起来",**不含**这一层闸的等待:
+	 * `run` 是在 `try` 之前 await 取名额的,那段时间谁也没记。
+	 *
+	 * 于是「慢在等名额」和「慢在服务端」这两件事,现有字段一个也分不开。
+	 * 这里只加观测,不改任何调度行为:名额怎么给、给几个、等多久,全不动。
+	 */
+	async run<T>(
+		lane: string,
+		foreground: boolean,
+		fn: () => Promise<T>,
+		signal?: AbortSignal,
+		probe?: (timing: { gateMs: number; sendMs: number; inFlightAtStart: number }) => void
+	): Promise<T> {
+		const askedAt = Date.now();
+		// 取名额**之前**的在飞数 —— 这才是"我前面还有几个"。取到之后再读就把
+		// 自己也算进去了,而且前面的可能已经走掉,读到的是另一个时刻的状态。
+		const inFlightAtStart = this.inFlightOf(lane);
 		await this.acquire(lane, foreground, signal);
+		const gateMs = Date.now() - askedAt;
+		const sentAt = Date.now();
 		try {
 			return await fn();
 		}
 		finally {
 			this.release(lane);
+			try {
+				probe?.({ gateMs, sendMs: Date.now() - sentAt, inFlightAtStart });
+			}
+			catch {
+				// 观测不该把请求带崩
+			}
 		}
 	}
 
