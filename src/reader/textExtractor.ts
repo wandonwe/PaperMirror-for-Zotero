@@ -175,11 +175,31 @@ export class TextExtractor implements PageParser {
 	private charsOutcome = new Map<string, number>();
 
 	private noteCharsOutcome(pageIndex: number, outcome: string | null): void {
-		if (!outcome || this.charsNoted.has(pageIndex)) {
-			return; // 一页只记第一个结论,免得同一页的多次抽取把分布压歪
+		this.noteOutcome(this.charsOutcome, this.charsNoted, pageIndex, outcome);
+	}
+
+	/**
+	 * 路径 1.5(`getTextContent`)每页的结局 (2.9.9)。
+	 *
+	 * 2.9.7 上线后 `extractPath` **一次 `text-content` 都没有**,而
+	 * `textContentMs` 整轮只有 **5 ms / 21 页** —— 跟当初 `charsPathMs` 一模一样的
+	 * 症状:立刻返回空,而日志里一个字都没有。同一个教训要付两次就太贵了。
+	 */
+	private textContentOutcome = new Map<string, number>();
+	private textContentNoted = new Set<number>();
+
+	/** 一页只记第一个结论 —— 同一页被反复抽取时不该把分布压歪。 */
+	private noteOutcome(into: Map<string, number>, seen: Set<number>, pageIndex: number, outcome: string | null): void {
+		if (!outcome || seen.has(pageIndex)) {
+			return;
 		}
-		this.charsNoted.add(pageIndex);
-		this.charsOutcome.set(outcome, (this.charsOutcome.get(outcome) ?? 0) + 1);
+		seen.add(pageIndex);
+		into.set(outcome, (into.get(outcome) ?? 0) + 1);
+	}
+
+	/** 路径 1.5 的结局分布 (2.9.9) —— 纯枚举计数。 */
+	textContentOutcomes(): Record<string, number> {
+		return Object.fromEntries([...this.textContentOutcome.entries()].sort((a, b) => b[1] - a[1]));
 	}
 
 	private charsNoted = new Set<number>();
@@ -538,7 +558,8 @@ export class TextExtractor implements PageParser {
 	 */
 	private async extractFromTextContent(pageIndex: number, obstacles: [number, number, number, number][] = []): Promise<SourceBlock[] | null> {
 		try {
-			const page = await adapter.getTextContentItems(this.reader, pageIndex);
+			const page = await adapter.getTextContentItems(this.reader, pageIndex,
+				reason => this.noteOutcome(this.textContentOutcome, this.textContentNoted, pageIndex, reason));
 			return this.blocksFromSpanPage(pageIndex, page, obstacles, 'getTextContent');
 		}
 		catch (e) {

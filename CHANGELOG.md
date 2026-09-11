@@ -7,6 +7,83 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.9.9] — 2026-09-11
+
+**2.9.7 那条新路一页都没走通。** 这一版只做一件事:让它穿过 Xray 边界,
+并且把每一页的结局记下来 —— 这样下一轮真机数据能**判定**下面这个假设,
+而不是再猜一次。
+
+### 证据链(2.9.8 真机导出)
+
+| 字段 | 值 | 说明 |
+|---|---|---|
+| `extractPath` | `{ "text-layer": 21 }` | 2.9.7 新加的 `text-content` **一次都没出现** |
+| `textContentMs` | **5 ms / 21 页** | 平均 0.24 ms —— 它是**立刻返回**,不是算得慢 |
+| `charsPath` | `{ "threw:EXTRACTION_FAILED/present": 97 }` | `getPageData` 方法**在**,97/97 页调用**全抛** |
+| `textContentApi` | `"available"` | `getPage` 探针为真 |
+
+同一轮里 `getTextLayerItems`(DOM:`querySelector('span')` +
+`getBoundingClientRect`)**一直能用**。
+
+把三条并排看,边界的形状就出来了:**凡是走 JS 对象方法的路都不通,
+走 DOM 的路都通。** `getPage` 的 `typeof` 为真、`getTextContent` 却摸不到,
+正好是这条边界在一个对象上分两层的样子。
+
+最后一个事实来自代码库本身:`grep -rn "wrappedJSObject|waiveXrays|Cu\.waive" src/`
+**零结果** —— 从头到尾没有一处穿过 Xray。
+
+### 假设(尚未证实)
+
+插件代码跑在 system principal 下,PDF.js 活在阅读器 iframe 的 content
+compartment 里。跨这条边界时 Firefox 默认给的是 **Xray 视图**:DOM 对象有完整的
+Xray 支持(所以文本层那条路一直通),而普通 JS 对象的自有方法在这个视图下
+不可见或调用失败(所以 `getPageData` 与 `getTextContent` 从来没通)。
+`wrappedJSObject` 是穿过它的标准做法。
+
+**这仍然只是假设。** 它解释了目前全部四个观测,但没有任何一条现有数据能证实它 ——
+证实或推翻它的是下一轮导出里新增的 `textContentPath` 字段。
+
+### Changed
+
+- `waive<T>(value)`:取 `value.wrappedJSObject`,取不到**退回原对象**。
+  这一层只可能让更多东西可见,不会让已经能用的变得不能用 —— 假设错了也不会更坏。
+- `getTextContentItems` 现在**四层都穿**:window → `PDFViewerApplication`
+  → `pdfDocument` → `getPage()` 返回的 `PDFPageProxy` → `getTextContent()`
+  返回的 content。少穿一层,下一层的方法就"不存在";2.9.7 正是栽在第二层之后。
+- `getPdfApplication`、`probePageDataApi`、`probeTextContentApi` 一并走 `waive`。
+
+### Added — 这条路的每一种结局都要有名字
+
+2.9.7 那一轮的真正教训不是走错了路,而是**走不通时日志里一个字都没有**:
+只能从 `textContentMs = 5 ms` 反推它"提前退出了",退在哪一步全靠猜。
+
+新增导出字段 `textContentPath`,按页记结局:`ok` / `no-getpage` /
+`no-gettextcontent` / `no-items` / `all-filtered` / `threw:<构造函数名>`。
+成功也计数 —— 只记失败的话,分布里只剩各种退出原因,看上去像"全都没通",
+而真正要判定的那一格是空的。
+
+### 下一轮看什么
+
+装 2.9.9,正常读一篇长文,导出诊断。决定性的字段是 **`textContentPath`**:
+
+- 多数页是 `ok`、`extractPath` 翻成 `text-content` → 假设成立。
+  "文本层只对正在渲染的那几页存在"从此不再是主路的毛病,
+  2.9.0–2.9.6 那一批补丁(释放记账、事件补回、距离闸、两套重试预算)
+  可以开始按证据拆除。
+- 仍然是 `no-gettextcontent` → **假设被推翻**,Xray 不是原因,
+  下一步要换方向查(worker 通道本身、fork 对标准 API 的改动)。
+
+两种结果都是有用的结果。这一版的价值在于它**能被证伪**。
+
+### Tests
+
+- `tests/unit/textContentPath.test.ts` 新增 4 项:四层穿透各钉一层;穿不过
+  退回原对象后路径照常工作;每一种退出都报一个原因;`textContentPath` 必须进导出。
+  另补一条断言:走通的页自报 `ok`。
+- 变异验证 9 项全部 kill。第一轮里"走通了不报 ok"**存活** —— 只记失败的话,
+  下一轮的分布里只剩退出原因,判定 Xray 假设的那一格恰恰是空的;补闸后 kill。
+- 1143 项全绿;37 个布局快照与请求计划基线逐字节不变 —— 这一版没有改动排版。
+
 ## [2.9.8] — 2026-09-11
 
 **原文与译文对不齐:两把尺子,零点差一个标题栏。** 这一版不来自日志 ——

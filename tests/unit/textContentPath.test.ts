@@ -98,3 +98,70 @@ test('getTextContentItems 不碰 DOM,也不等渲染 (结构性回归闸, 2.9.7)
 	assert.ok(/getTextContent/.test(fn) && /getPage\(pageIndex \+ 1\)/.test(fn),
 		'PDF.js 的 getPage 是 1-based,页号差一就会整篇错页');
 });
+
+// ---- 3. 2.9.9: 穿过 Xray ------------------------------------------------------
+//
+// 2.9.7 上线后的真机:`extractPath` **一次 `text-content` 都没有**,
+// `textContentMs` 整轮只有 **5 ms / 21 页** —— 它在 `getPage` 之后、
+// `getTextContent` 之前就退出了。
+//
+// 三件事指向同一条边界:
+//   - `getTextLayerItems` 一直能用 —— 走的是 DOM,DOM 有完整 Xray 支持;
+//   - `getPageData` typeof 为 function,但 97/97 页调用都抛错;
+//   - `getPage` 探针说 available,而 `getTextContent` 在那个视角下不可见。
+//
+// **凡是走 JS 对象方法的路都不通,走 DOM 的路都通。** 而这个代码库从头到尾
+// 没有一处 `wrappedJSObject` —— 从来没穿过 Xray。
+
+test('每一层 JS 对象都穿过 Xray (结构性回归闸, 2.9.9)', () => {
+	const src = read('src/reader/zoteroReaderAdapter.ts');
+	assert.ok(/function waive<T>\(value: T\): T \{/.test(src), '必须有一处 waive');
+	assert.ok(/wrappedJSObject/.test(src), '这是穿 Xray 的标准做法');
+	const fn = src.slice(src.indexOf('export async function getTextContentItems'),
+		src.indexOf('\n}', src.indexOf("note?.('ok')")));
+	// pdfDocument 是一层,getPage 返回的 PDFPageProxy 又是一层。少穿一层,
+	// 下一层的方法就"不存在" —— 2.9.7 正是栽在第二层。
+	assert.ok(/waive\(pdfWindow\(reader\)\?\.PDFViewerApplication\)/.test(fn), '第一层: window → app');
+	assert.ok(/waive\(\(waive\([\s\S]{0,120}\)\?\.pdfDocument\)/.test(fn), '第二层: app → pdfDocument');
+	assert.ok(/waive\(await doc\.getPage\(pageIndex \+ 1\)\)/.test(fn), '第三层: getPage → PDFPageProxy');
+	assert.ok(/waive\(await page\.getTextContent\(\)\)/.test(fn), '第四层: 返回的 content');
+});
+
+test('穿不过就退回原对象,不许因此变得更坏 (2.9.9)', async () => {
+	const { getTextContentItems } = await import('../../src/reader/zoteroReaderAdapter');
+	// 没有 wrappedJSObject 的普通对象 —— waive 必须原样返回,路径照常工作。
+	const page = {
+		getTextContent: async () => ({ items: [{ str: 'Hello', transform: [10, 0, 0, 10, 50, 700], width: 40 }] }),
+		view: [0, 0, 612, 792]
+	};
+	const reader = { _internalReader: { _primaryView: { _iframeWindow: {
+		PDFViewerApplication: { pdfDocument: { getPage: async () => page } }
+	} } } };
+	const seen: string[] = [];
+	const result = await getTextContentItems(reader as never, 0, r => seen.push(r));
+	assert.ok(result, 'waive 只可能让更多东西可见,不会让已经能用的变得不能用');
+	assert.equal(result!.items.length, 1);
+	assert.deepEqual(result!.items[0]!.rect, [50, 700, 90, 710]);
+	assert.equal(result!.pageWidth, 612);
+	// 变异验证补的闸:只报失败、不报成功,`textContentPath` 里就只剩各种退出
+	// 原因 —— 看上去像"全都没通",而真正要判定 Xray 假设成立与否的那一格是空的。
+	assert.deepEqual(seen, ['ok'], '走通的页必须自报 ok,否则下一轮没有分母');
+});
+
+test('每一种退出都报一个原因 (2.9.9)', async () => {
+	const { getTextContentItems } = await import('../../src/reader/zoteroReaderAdapter');
+	const mk = (pdfDocument: unknown): never =>
+		({ _internalReader: { _primaryView: { _iframeWindow: { PDFViewerApplication: { pdfDocument } } } } }) as never;
+	const seen: string[] = [];
+	await getTextContentItems(mk({}), 0, r => seen.push(r));
+	await getTextContentItems(mk({ getPage: async () => ({}) }), 0, r => seen.push(r));
+	await getTextContentItems(mk({ getPage: async () => ({ getTextContent: async () => ({ items: [] }) }) }), 0, r => seen.push(r));
+	await getTextContentItems(mk({ getPage: async () => { throw new TypeError('x'); } }), 0, r => seen.push(r));
+	assert.deepEqual(seen, ['no-getpage', 'no-gettextcontent', 'no-items', 'threw:TypeError'],
+		'2.9.7 那一轮:一页都没走通,而日志里一个字都没有 —— 同一个教训不付第二次');
+});
+
+test('路径 1.5 的结局分布进了导出 (结构性回归闸, 2.9.9)', () => {
+	assert.ok(/textContentPath: this\.extractor\.textContentOutcomes\(\)/.test(read('src/reader/readerSession.ts')),
+		'不进导出就等于没量');
+});

@@ -173,10 +173,48 @@ export function navigateToPage(reader: ReaderLike, pageIndex: number): void {
 	}
 }
 
+/**
+ * 穿过 Xray,拿到 content 侧**真正的** JS 对象 (2.9.9)。
+ *
+ * ## 为什么整整十轮都卡在这里
+ *
+ * 插件跑在 system principal 的沙箱里,PDF.js 跑在阅读器 iframe 的 content
+ * compartment 里。Firefox 默认给 chrome 代码 **Xray vision**:DOM 对象看得完整,
+ * 而**普通 JS 对象上自定义的方法**要么看不见,要么调用时跨 compartment 出问题。
+ *
+ * 真机把这件事的形状画得很清楚:
+ *
+ *   - `getTextLayerItems` **一直能用** —— 它走的是 DOM(`querySelector('span')`、
+ *     `getBoundingClientRect`),DOM 有完整的 Xray 支持;
+ *   - `pdfDocument.getPageData` —— `typeof === 'function'` 为真(`present`),
+ *     但 **97/97 页调用都抛错**;
+ *   - 2.9.7 新加的 `getPage(n).getTextContent()` —— `getPage` 探针说 `available`,
+ *     可整轮 `textContentMs` 只有 **5 ms / 21 页**,`extractPath` 一次
+ *     `text-content` 都没有:它在 `getPage` 之后、`getTextContent` 之前就退出了。
+ *
+ * 三件事指向同一条边界:**凡是走 JS 对象方法的路都不通,走 DOM 的路都通。**
+ * 而这个代码库从头到尾**没有一处 `wrappedJSObject`** —— 也就是从来没穿过 Xray。
+ *
+ * `wrappedJSObject` 是 Firefox/Zotero 插件访问 content JS 对象的标准做法。
+ * 拿不到就退回原对象:这一层只可能让更多东西可见,不会让已经能用的变得不能用。
+ */
+function waive<T>(value: T): T {
+	try {
+		return ((value as { wrappedJSObject?: T } | null)?.wrappedJSObject ?? value) as T;
+	}
+	catch {
+		return value;
+	}
+}
+
+/** content 侧的 window —— 已穿过 Xray (2.9.9)。 */
+function pdfWindow(reader: ReaderLike): any {
+	return waive(reader._internalReader?._primaryView?._iframeWindow as unknown);
+}
+
 /** Inner PDF.js window (reader submodule: _primaryView._iframeWindow). */
 function getPdfApplication(reader: ReaderLike): any {
-	const win = reader._internalReader?._primaryView?._iframeWindow;
-	const app = win?.PDFViewerApplication;
+	const app = waive(pdfWindow(reader)?.PDFViewerApplication);
 	if (!app) {
 		throw new PaperMirrorError('READER_API_CHANGED', 'PDFViewerApplication is not reachable; the Zotero Reader internals may have changed.');
 	}
@@ -212,7 +250,9 @@ export type PageDataApiState =
 
 export function probePageDataApi(reader: ReaderLike): PageDataApiState {
 	try {
-		const app = reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication as
+		// 2.9.9: 穿过 Xray 再看 —— 此前看的是 Xray 视角,它对普通 JS 对象的
+		// 自定义方法要么藏、要么调用时跨 compartment 出问题。
+		const app = waive(pdfWindow(reader)?.PDFViewerApplication) as
 			{ pdfDocument?: { getPageData?: unknown } } | undefined;
 		if (!app) {
 			return 'no-app';
@@ -220,7 +260,7 @@ export function probePageDataApi(reader: ReaderLike): PageDataApiState {
 		if (!app.pdfDocument) {
 			return 'no-pdfdocument';
 		}
-		return typeof app.pdfDocument.getPageData === 'function' ? 'present' : 'api-missing';
+		return typeof waive(app.pdfDocument).getPageData === 'function' ? 'present' : 'api-missing';
 	}
 	catch {
 		return 'no-app';
@@ -293,21 +333,36 @@ export function textContentItemRect(
  * `buildBlocksFromSpans → 阅读序 → 表格结构化 → 合并` 一行不改,
  * 37 个布局快照直接就是它的回归测试。
  */
-export async function getTextContentItems(reader: ReaderLike, pageIndex: number): Promise<TextLayerPage | null> {
+export async function getTextContentItems(
+	reader: ReaderLike,
+	pageIndex: number,
+	note?: (reason: string) => void
+): Promise<TextLayerPage | null> {
+	const say = (reason: string): null => {
+		note?.(reason);
+		return null;
+	};
 	try {
-		const doc = (reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication as
-			{ pdfDocument?: { getPage?: (n: number) => Promise<unknown> } } | undefined)?.pdfDocument;
+		// 2.9.9: 每一层都要穿 Xray —— `pdfDocument` 是一层,`getPage` 返回的
+		// `PDFPageProxy` 又是一层。少穿一层,下一层的方法就"不存在"。
+		// 2.9.7 正是栽在这里:`getPage` 探针说 available,而 `getTextContent`
+		// 在 Xray 视角下不可见,于是整轮 textContentMs 只有 5 ms、一页没走通。
+		const doc = waive((waive(pdfWindow(reader)?.PDFViewerApplication) as
+			{ pdfDocument?: unknown } | undefined)?.pdfDocument) as
+			{ getPage?: (n: number) => Promise<unknown> } | undefined;
 		if (typeof doc?.getPage !== 'function') {
-			return null;
+			return say('no-getpage');
 		}
-		const page = await doc.getPage(pageIndex + 1) as {
+		const page = waive(await doc.getPage(pageIndex + 1)) as {
 			getTextContent?: () => Promise<{ items?: unknown[] }>;
 			view?: number[];
 		};
 		if (typeof page?.getTextContent !== 'function') {
-			return null;
+			// 2.9.9 前这里是整条路的死穴,而日志里一个字都没有 —— 只看得到
+			// `textContentMs` 只有 5 ms 和 `extractPath` 一次 text-content 都没有。
+			return say('no-gettextcontent');
 		}
-		const content = await page.getTextContent();
+		const content = waive(await page.getTextContent());
 		const raw = Array.isArray(content?.items) ? content.items : [];
 		const items: TextLayerItem[] = [];
 		for (const entry of raw) {
@@ -323,8 +378,9 @@ export async function getTextContentItems(reader: ReaderLike, pageIndex: number)
 			items.push({ text, rect: box.rect, ...(box.fontSize ? { fontSize: box.fontSize } : {}) });
 		}
 		if (!items.length) {
-			return null;
+			return say(raw.length ? 'all-filtered' : 'no-items');
 		}
+		note?.('ok');
 		const view = Array.isArray(page.view) && page.view.length >= 4 ? page.view : null;
 		return {
 			items,
@@ -334,14 +390,14 @@ export async function getTextContentItems(reader: ReaderLike, pageIndex: number)
 	}
 	catch (e) {
 		logger.debug(MODULE, `getTextContentItems(${pageIndex}) failed`, e);
-		return null;
+		return say(`threw:${(e as { constructor?: { name?: string } })?.constructor?.name ?? 'unknown'}`);
 	}
 }
 
 export function probeTextContentApi(reader: ReaderLike): TextContentApiState {
 	try {
-		const doc = (reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication as
-			{ pdfDocument?: { getPage?: unknown } } | undefined)?.pdfDocument;
+		const doc = waive((waive(pdfWindow(reader)?.PDFViewerApplication) as
+			{ pdfDocument?: unknown } | undefined)?.pdfDocument) as { getPage?: unknown } | undefined;
 		if (!doc) {
 			return 'no-pdfdocument';
 		}

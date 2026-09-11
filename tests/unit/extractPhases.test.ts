@@ -155,9 +155,14 @@ test('路径 1 的结局只记枚举,不带原文或路径 (隐私闸, 2.9.5)', 
 	// 这里钉住"用的就是它",而不是某天顺手换成 e.message。
 	assert.ok(/failureKind\(e\)/.test(src) && !/noteCharsOutcome\([^)]*e\.message/.test(src),
 		'异常 message 可能带路径或接口返回 —— 一个字都不许进诊断');
-	const decl = src.slice(src.indexOf('private noteCharsOutcome'), src.indexOf('private charsNoted'));
-	assert.ok(/this\.charsNoted\.has\(pageIndex\)/.test(decl),
+	// 2.9.9: 去重逻辑抽成了 `noteOutcome`,两条路共用 —— 路径 1.5 的结局计数
+	// 是照着路径 1 这套做的(2.9.7 一页没走通而日志一个字都没有,教训付过一次了)。
+	const decl = src.slice(src.indexOf('private noteOutcome('), src.indexOf('textContentOutcomes()'));
+	assert.ok(/seen\.has\(pageIndex\)/.test(decl) && /seen\.add\(pageIndex\)/.test(decl),
 		'一页只记第一个结论 —— 同一页被反复抽取时(真机上很常见)不该把分布压歪');
+	assert.ok(/this\.noteOutcome\(this\.charsOutcome, this\.charsNoted/.test(src)
+		&& /this\.noteOutcome\(this\.textContentOutcome, this\.textContentNoted/.test(src),
+		'两条路共用同一份去重实现');
 });
 
 test('结局分布进了导出 (结构性回归闸, 2.9.5)', () => {
