@@ -87,8 +87,53 @@ const PRIORITY = {
 	/** Prefetch: the next page is likelier to be read than the previous. */
 	NEXT_PAGE: 100,
 	PREVIOUS_PAGE: 80,
-	SECOND_NEXT_PAGE: 20
+	SECOND_NEXT_PAGE: 20,
+	/** 被释放的页补回来 (2.9.0) —— 比预取低,绝不跟当前页抢。 */
+	RELEASED_RETRY: 10
 } as const;
+
+/**
+ * 页被"释放等重试"的原因 (2.9.0 真机第三轮)。
+ *
+ * ## 为什么必须有这个枚举
+ *
+ * 代码里有**五处**会把一页的状态从 `this.pages` 里删掉,然后指望"用户翻过去时
+ * 自然会重抽":抽取僵尸、抽取超时、文本层未渲染(2.8.13)、导航取代、请求取消。
+ * 每一处都只写一行 `logger`,**页从此在 `exportScope()` 里凭空消失** —— 不是
+ * 标成失败,是整行不见。
+ *
+ * 真机 51 页那一轮:第 **36、41、45** 页不在 scope 里,而它们两侧的页都处理过。
+ * 同一份日志里 `attemptErrors.CANCELLED = 36`。用户看到的是"这几页一个字没译",
+ * 而诊断文件里连一行记账都没有 —— 这正是这个项目从第一天起就定下的
+ * 「**不许静默漏页**」被破掉的地方。
+ *
+ * ## 两件事必须同时做
+ *
+ *   1. **记账**:释放不等于消失。释放过的页留在 `released` 里,`exportScope()`
+ *      如实报 `status: 'released'` + 原因 + 次数。哪怕补不回来,至少看得见;
+ *   2. **补回**:"等用户翻过去"这个指望有个洞 —— 单向顺读时用户**只经过一次**,
+ *      如果释放发生在他已经走过之后,就再也没有第二次。所以下一次翻页时
+ *      主动把近处释放过的页重新入队。
+ *
+ * 重试**有界**(`MAX_RELEASES`):超过次数的页转成可重试的错误状态,用户看得见
+ * 刷新入口,而不是无限重试或永远沉默。
+ */
+export type ReleaseReason =
+	/** 抽取僵尸还活着,非当前页不再起第二次 PDF-worker 抽取。 */
+	| 'extract-zombie'
+	/** 抽取超时。 */
+	| 'extract-timeout'
+	/** 文本层还没渲染 (2.8.13) —— "看不见",不是"没文字"。 */
+	| 'text-layer-not-rendered'
+	/** 抽取期间用户翻走了,这页已不在预取窗口内。 */
+	| 'navigation-superseded'
+	/** 请求被取消(多半是导航取代)。 */
+	| 'cancelled';
+
+/** 同一页最多释放几次 —— 超过就转成可重试的错误,绝不无限重试。 */
+export const MAX_RELEASES = 3;
+/** 补回的距离:只补当前页附近的,不回头扫整篇文档。 */
+export const RELEASE_RETRY_RADIUS = 3;
 
 /**
  * Accept a response as a REAL translation, not an echo or a half-translation.
@@ -566,6 +611,13 @@ export class TranslationManager {
 	private requestGate = new RequestGate();
 	private pages = new Map<number, PageTranslationState>();
 	/**
+	 * 被"释放等重试"的页 (2.9.0)。**释放 ≠ 消失** —— 见 `ReleaseReason` 的注释:
+	 * 此前五处删除都不留痕,真机上第 36/41/45 页因此整行从诊断里消失。
+	 * 这张表既是记账(导出照实报),也是补回的依据(下次翻页时重新入队)。
+	 * 上限就是文档页数,不会无界增长。
+	 */
+	private released = new Map<number, { reason: ReleaseReason; count: number }>();
+	/**
 	 * 页 → 最近一次被用到的序号 (2.8.3, 性能第四批)。单调递增,只用来排先后,
 	 * 不用时间戳: 同一毫秒内先后用到的页时间戳分不出先后。
 	 */
@@ -992,7 +1044,11 @@ export class TranslationManager {
 		//    That is what actually makes a provider pool multiply throughput.
 		//    去抖 (2.1.9): 快速跳页时不立刻发,停下才对最终页预取。
 		this.schedulePrefetch();
-		// 5. 冷页卸内容 (2.8.3): 翻页是内存该收一收的自然时机。
+		// 5. 补回释放过的页 (2.9.0)。放在预取之后: 它的优先级最低,绝不跟当前页
+		//    或预取抢。这是"等用户翻过去"那个指望的兜底 —— 单向顺读只经过一次,
+		//    没有兜底就等于没有第二次机会。
+		this.retryReleasedPages();
+		// 6. 冷页卸内容 (2.8.3): 翻页是内存该收一收的自然时机。
 		this.evictColdPages();
 	}
 
@@ -1187,6 +1243,9 @@ export class TranslationManager {
 		}
 		this.pages.delete(pageIndex);
 		this.unstableFired.delete(pageIndex); // a fresh run may report anew
+		// 2.9.0: 用户亲手点的重译要**清掉释放计数** —— 自动重试有界(MAX_RELEASES)
+		// 是为了不空转,不该用来挡住用户自己发起的那一次。
+		this.released.delete(pageIndex);
 		if (mode === 'force') {
 			// 强制重译 gives every keep-origin segment a fresh chance, and drops the
 			// page's zombie so a full-quality worker extraction may run again.
@@ -1305,9 +1364,17 @@ export class TranslationManager {
 	 * 导出器据此逐页读,不再重新枚举 `pages` —— 导出期间新完成的页不混进来。
 	 */
 	exportScope(): { pageIndex: number; status: string; evicted?: boolean }[] {
-		return [...this.pages.values()]
-			.sort((a, b) => a.pageIndex - b.pageIndex)
-			.map(s => ({ pageIndex: s.pageIndex, status: s.status, ...(s.evicted ? { evicted: true } : {}) }));
+		const rows: { pageIndex: number; status: string; evicted?: boolean }[] = [...this.pages.values()]
+			.map(s => ({ pageIndex: s.pageIndex, status: s.status as string, ...(s.evicted ? { evicted: true } : {}) }));
+		// 2.9.0: 释放过、且此刻没有页状态的页**也要出现在清单里**。
+		// 这是这个项目从第一天起的要求「不许静默漏页」—— 真机第 36/41/45 页
+		// 整行从诊断里消失,正是因为释放只删状态、不留痕。补不回来也得看得见。
+		for (const pageIndex of this.released.keys()) {
+			if (!this.pages.has(pageIndex)) {
+				rows.push({ pageIndex, status: 'released' });
+			}
+		}
+		return rows.sort((a, b) => a.pageIndex - b.pageIndex);
 	}
 
 	/**
@@ -1317,7 +1384,75 @@ export class TranslationManager {
 	 */
 	exportPageDiagnostics(pageIndex: number): unknown | null {
 		const state = this.pages.get(pageIndex);
-		return state ? this.pageDiagnosticsRow(state) : null;
+		if (state) {
+			return this.pageDiagnosticsRow(state);
+		}
+		// 2.9.0: 释放过的页**有**一行,内容就是"它为什么没有内容"。
+		// 此前这里返回 null,导出器把它记成读失败 —— 而真相是它从来没被翻译。
+		const release = this.released.get(pageIndex);
+		return release
+			? {
+				page: pageIndex + 1,
+				status: 'released',
+				error: null,
+				releaseReason: release.reason,
+				releaseCount: release.count,
+				exhausted: release.count >= MAX_RELEASES,
+				blocks: [],
+				blockSource: 'none'
+			}
+			: null;
+	}
+
+	/**
+	 * 释放一页等重试 (2.9.0) —— **五处删除唯一的出口**。
+	 *
+	 * 此前五处各自 `this.pages.delete(pageIndex)` 然后写一行日志,页就从
+	 * `exportScope()` 里凭空消失了。真机 51 页那轮的第 36/41/45 页就是这么没的:
+   * 两侧的页都处理过,中间这几页整行不见,用户看到一片英文,诊断里零线索。
+	 *
+	 * 身份校验(`this.pages.get(pageIndex) === state`)保留自原实现: 迟到的失败
+	 * 不得删掉别人已经重新建起来的状态。
+	 */
+	private releasePage(pageIndex: number, state: PageTranslationState, reason: ReleaseReason): void {
+		if (this.pages.get(pageIndex) === state) {
+			this.pages.delete(pageIndex);
+		}
+		const prior = this.released.get(pageIndex);
+		const count = (prior?.count ?? 0) + 1;
+		this.released.set(pageIndex, { reason, count });
+		logger.info(MODULE, `Page ${pageIndex + 1}: released for retry (${reason}, ${count}/${MAX_RELEASES})`);
+	}
+
+	/**
+	 * 把近处释放过的页补回来 (2.9.0)。
+	 *
+	 * "等用户翻过去时自然会重抽"这个指望有个洞: **单向顺读时用户只经过一次**。
+	 * 释放如果发生在他已经走过之后,就再也没有第二次 —— 那一页这一趟永远不译。
+	 * 所以每次翻页顺手把当前页附近释放过的页重新入队,优先级低于预取。
+	 *
+	 * 三条约束:
+	 *   - 只补 `RELEASE_RETRY_RADIUS` 以内的,不回头扫整篇文档;
+	 *   - 每页最多 `MAX_RELEASES` 次,**绝不无限重试**;
+	 *   - 超次数的页留在表里(照样导出,`exhausted: true`),不再自动重试 ——
+	 *     用户仍可手动重译,而不是被无声地耗着。
+	 */
+	private retryReleasedPages(): void {
+		if (this.disposed || !this.released.size) {
+			return;
+		}
+		for (const [pageIndex, record] of this.released) {
+			if (record.count >= MAX_RELEASES) {
+				continue; // 有界: 到次数就停,留着记账
+			}
+			if (Math.abs(pageIndex - this.currentPage) > RELEASE_RETRY_RADIUS) {
+				continue;
+			}
+			if (this.pages.has(pageIndex) || this.scheduler.isScheduled(`page-${pageIndex}`)) {
+				continue; // 已经被别的路径接手了
+			}
+			void this.ensurePage(pageIndex, PRIORITY.RELEASED_RETRY, { foreground: false });
+		}
 	}
 
 	private pageDiagnosticsRow(s: PageTranslationState): Record<string, unknown> {
@@ -1399,6 +1534,21 @@ export class TranslationManager {
 				// 它与 pageRetention 的上限一起看 —— 上限是否合适,先看这个数字。
 				hotPages: [...this.pages.values()].filter(p => p.evicted !== true).length,
 				retainedPages: this.pages.size,
+				// 2.9.0: 释放过的页 —— `released` 是"释放过至少一次"的总数,
+				// `releasedPending` 是**此刻仍然没有页状态**的,也就是用户真的
+				// 会看到一片英文的那几页。后者不为 0 就是一条必须解释的事实。
+				...(this.released.size
+					? {
+						released: this.released.size,
+						releasedPending: [...this.released.keys()].filter(p => !this.pages.has(p)).length,
+						releaseReasons: countsOf(new Map(
+							[...this.released.values()].reduce((acc, r) => {
+								acc.set(r.reason, (acc.get(r.reason) ?? 0) + 1);
+								return acc;
+							}, new Map<string, number>())
+						))
+					}
+					: {}),
 				// 2.7.9: 多出来的尝试都去哪了 —— 按枚举计数,空表则省略。
 				...(this.paramHeals.size ? { paramHeals: countsOf(this.paramHeals) } : {}),
 				...(this.attemptErrors.size ? { attemptErrors: countsOf(this.attemptErrors) } : {})
@@ -1709,7 +1859,7 @@ export class TranslationManager {
 					// one is still alive. The visible page can still be recovered from
 					// its rendered text layer (timeout-guarded like any extraction).
 					if (pageIndex !== this.currentPage) {
-						this.pages.delete(pageIndex);
+						this.releasePage(pageIndex, state, 'extract-zombie');
 						return;
 					}
 					blocks = await this.renderedWithRetry(pageIndex);
@@ -1757,10 +1907,8 @@ export class TranslationManager {
 						}
 					}
 					else {
-						if (this.pages.get(pageIndex) === state) {
-							this.pages.delete(pageIndex);
-						}
-						logger.warn(MODULE, `Page ${pageIndex + 1}: extraction timed out after ${this.extractTimeoutMs} ms — released for automatic retry on next visit`);
+						logger.warn(MODULE, `Page ${pageIndex + 1}: extraction timed out after ${this.extractTimeoutMs} ms`);
+						this.releasePage(pageIndex, state, 'extract-timeout');
 						return;
 					}
 				}
@@ -1777,11 +1925,10 @@ export class TranslationManager {
 						this.notify(state);
 						return;
 					}
-					// 预取页: 忘掉这次结果。用户真翻过去时会重抽,那时文本层就在了。
-					if (this.pages.get(pageIndex) === state) {
-						this.pages.delete(pageIndex);
-					}
-					logger.info(MODULE, `Page ${pageIndex + 1}: text layer not rendered yet — released for retry on visit`);
+					// 预取页: 忘掉这次结果,但**记账并主动补回** (2.9.0) —— 2.8.13 写的
+					// 是"用户真翻过去时会重抽",而单向顺读时用户只经过一次,释放若发生
+					// 在他走过之后就没有第二次。真机第 36/41/45 页正是这么整页消失的。
+					this.releasePage(pageIndex, state, 'text-layer-not-rendered');
 					return;
 				}
 				else {
@@ -1793,7 +1940,7 @@ export class TranslationManager {
 			}
 			if (navigationAtStart !== this.navigationGeneration
 				&& !this.wantedPages().includes(pageIndex)) {
-				this.pages.delete(pageIndex);
+				this.releasePage(pageIndex, state, 'navigation-superseded');
 				return;
 			}
 			state.blocks = blocks;
@@ -1885,9 +2032,12 @@ export class TranslationManager {
 		catch (e) {
 			const error = e instanceof PaperMirrorError ? e : new PaperMirrorError('UNKNOWN', String(e));
 			if (error.code === 'CANCELLED') {
-				// Reset so a later visit retries silently
+				// 2.9.0: 取消后照样重置,但**记账并主动补回**。真机那轮
+				// `attemptErrors.CANCELLED = 36`,而三页从诊断里整行消失 ——
+				// "a later visit retries silently" 里的 silently 正是问题本身:
+				// 没有那次 visit 时,它就只是 silent。
 				if (this.pages.get(pageIndex) === state && state.status !== 'done') {
-					this.pages.delete(pageIndex);
+					this.releasePage(pageIndex, state, 'cancelled');
 				}
 				return;
 			}
