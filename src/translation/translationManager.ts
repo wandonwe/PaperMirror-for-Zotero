@@ -456,6 +456,23 @@ export interface PageDiagnostics {
 	queuedMs?: number;
 	extractMs?: number;
 	firstTextMs?: number;
+	/**
+	 * 抽取内部分段 (2.8.15, 真机第二轮)。`extractMs` 是个总数,回答不了"等在哪"。
+	 * 实测 30 页里 15 页 extractMs 在 0.8–2.6 秒,而这些页**一次请求都没发**
+	 * (`requests: 0, fromCache: true`)—— 慢在本地,不在网络;同一条路最快的页
+	 * 只要 14 ms,所以那 2.6 秒是**等**,不是算。这几个数字把"等 PDFWorker 的
+	 * char 流"(charsPathMs)、"等 PDF.js 把文本层渲染稳定"(textLayerWaitMs)
+	 * 与"我们自己的 CPU 建块"(buildMs)分开 —— 不分开就只能猜该优化哪一边。
+	 * 纯毫秒,不含任何文本。
+	 */
+	extractPhases?: {
+		obstaclesMs: number;
+		charsPathMs: number;
+		textLayerMs: number;
+		textLayerWaitMs?: number;
+		plainTextMs: number;
+		buildMs: number;
+	};
 }
 
 /**
@@ -499,6 +516,8 @@ export interface TranslationDeps {
 	 * 只在 extractPage 刚返回时问一次,之后随页状态存着。
 	 */
 	extractPathOf?(pageIndex: number): string | undefined;
+	/** 2.8.15: 这一页抽取的分段耗时 —— 纯毫秒,回答 extractMs 花在哪一段。 */
+	extractPhasesOf?(pageIndex: number): NonNullable<PageDiagnostics['extractPhases']> | undefined;
 	/** Cache access; may be no-ops. */
 	readCache(pageIndex: number, blocks: SourceBlock[]): Promise<TranslatedBlock[] | null>;
 	writeCache(pageIndex: number, blocks: SourceBlock[], translations: TranslatedBlock[]): Promise<void>;
@@ -555,7 +574,10 @@ export class TranslationManager {
 	 * 页 → 本趟运行的时序 (2.8.4, 性能第五批)。只有毫秒数,随页级指标导出。
 	 * `firstTextAt` 由 notify 顺手记下: 第一次看到这页有译文的时刻。
 	 */
-	private pageTiming = new Map<number, { requestedAt: number; extractMs: number; queuedMs?: number; firstTextAt: number }>();
+	private pageTiming = new Map<number, {
+		requestedAt: number; extractMs: number; queuedMs?: number; firstTextAt: number;
+		extractPhases?: NonNullable<PageDiagnostics['extractPhases']>;
+	}>();
 	private touchSeq = 0;
 	/** 同时持有完整内容的已完成页上限(测试可注入)。 */
 	private retainLimit: number | undefined;
@@ -1324,7 +1346,9 @@ export class TranslationManager {
 								return {
 									extractMs: t.extractMs,
 									...(typeof t.queuedMs === 'number' ? { queuedMs: t.queuedMs } : {}),
-									...(t.firstTextAt ? { firstTextMs: t.firstTextAt - t.requestedAt } : {})
+									...(t.firstTextAt ? { firstTextMs: t.firstTextAt - t.requestedAt } : {}),
+									// 2.8.15: 抽取内部分段 —— extractMs 的去向。
+									...(t.extractPhases ? { extractPhases: t.extractPhases } : {})
 								};
 							})()
 						}
@@ -1783,10 +1807,16 @@ export class TranslationManager {
 			}
 			catch { /* 记不到就不记,绝不影响翻译 */ }
 			extractedAt = Date.now();
+			let extractPhases: NonNullable<PageDiagnostics['extractPhases']> | undefined;
+			try {
+				extractPhases = this.deps.extractPhasesOf?.(pageIndex);
+			}
+			catch { /* 量不到就不量,绝不影响翻译 */ }
 			this.pageTiming.set(pageIndex, {
 				requestedAt,
 				extractMs: extractedAt - requestedAt,
-				firstTextAt: 0
+				firstTextAt: 0,
+				...(extractPhases ? { extractPhases } : {})
 			});
 			if (!blocks.length) {
 				state.status = 'done';

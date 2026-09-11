@@ -100,18 +100,38 @@ export function statusTally(scope: PageScopeEntry[]): Record<string, number> {
 export async function readPinned<T>(
 	pageIndex: number,
 	source: { readPage(pageIndex: number): T | Promise<T>; pin?(p: number): void; unpin?(p: number): void }
-): Promise<{ ok: true; record: T } | { ok: false }> {
+): Promise<{ ok: true; record: T } | { ok: false; kind: string }> {
 	source.pin?.(pageIndex);
 	try {
 		// 语料要重新抽取(异步);诊断是同步取现成的。两边都走这里,pin 的释放
 		// 时机才只有一处 —— finally 在 await 之后执行,保护覆盖整个读取过程。
 		return { ok: true, record: await source.readPage(pageIndex) };
 	}
-	catch {
-		// 原始异常消息可能带路径或内容 —— 只留"这页读失败了"这个事实。
-		return { ok: false };
+	catch (e) {
+		// 原始异常**消息**可能带路径或内容,继续丢掉;但**种类**不带任何内容,
+		// 而它正是排查所需 (2.8.15): 真机连着两次导出各有一页读失败,
+		// `pageReadFailures: 1` 只说"有一页失败了",连是抛错、超时还是类型错都
+		// 看不出来,无从下手。这里只留枚举化的 code 或异常构造函数名。
+		return { ok: false, kind: failureKind(e) };
 	}
 	finally {
 		source.unpin?.(pageIndex);
 	}
+}
+
+/**
+ * 异常 → 一个**不含任何内容**的种类标签 (2.8.15)。
+ *
+ * 取值只有三类: PaperMirrorError 的 `code`(全是我们自己定义的大写枚举)、
+ * 内置异常的构造函数名(`TypeError` 等)、`unknown`。**绝不取 message** ——
+ * 它可能带路径、原文或接口返回。两处形状白名单就是这条保证的执行者:
+ * 任何不像枚举/类名的东西一律降成 `unknown`,宁可少说也不泄露。
+ */
+export function failureKind(e: unknown): string {
+	const code = (e as { code?: unknown } | null)?.code;
+	if (typeof code === 'string' && /^[A-Z][A-Z0-9_]{0,40}$/.test(code)) {
+		return code;
+	}
+	const name = (e as { constructor?: { name?: unknown } } | null)?.constructor?.name;
+	return typeof name === 'string' && /^[A-Za-z][A-Za-z0-9]{0,40}$/.test(name) ? name : 'unknown';
 }

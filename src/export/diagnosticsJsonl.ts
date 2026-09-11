@@ -97,7 +97,11 @@ export async function writeDiagnosticsJsonl(sink: JsonlSink, source: Diagnostics
 				kind: 'page',
 				page: entry.pageIndex + 1,
 				status: entry.status,
-				availability: { pageRecord: 'missing:read-failed' }
+				availability: { pageRecord: 'missing:read-failed' },
+				// 2.8.15: 只是异常的**种类**(枚举 code / 类名),不含任何消息内容。
+				// 真机连着两次导出各有一页读失败,旧文件只说"失败了一页",
+				// 连是抛错、超时还是类型错都看不出来。
+				readFailureKind: read.kind
 			});
 		pagesWritten++;
 		source.onProgress?.(pagesWritten, scope.length);
