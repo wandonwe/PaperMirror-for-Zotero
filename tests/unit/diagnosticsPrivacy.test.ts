@@ -229,3 +229,51 @@ test('诊断不再导出真实端点主机名 (2.8.6 P1)', () => {
 		'自检异常的原始消息常带端点 URL,只能报一个布尔');
 	assert.ok(/engineExportRow\(id, null, \{/.test(body), '失败分支也走同一个脱敏构造');
 });
+
+// ---- 请求级时序 (2.11.0) ------------------------------------------------------
+//
+// 2.10.2 真机:同一档输入大小的页,翻译阶段耗时从 **248 ms 到 28136 ms**
+// (差 113 倍),而 `queuedMs` 在每一个慢页上都是 0、`rateLimited` 与 `timeouts`
+// 全是 0。`queuedMs` 量的是"从 ensurePage 到调度器把这页跑起来",**不含请求闸
+// 的等待** —— `requestGate.run` 在 try 之前 await 取名额,那一段谁也没记。
+// 于是「等名额」与「等服务端」分不开。这一组字段就是来分开它们的。
+
+test('请求级时序只有数字与布尔,不含任何文本 (2.11.0)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const decl = src.slice(src.indexOf('export interface RequestTiming {'),
+		src.indexOf('}', src.indexOf('export interface RequestTiming {')));
+	const fields = [...decl.matchAll(/^\t(\w+):\s*([\w[\]]+);/gm)].map(m => [m[1]!, m[2]!]);
+	assert.ok(fields.length >= 7, '字段应齐全');
+	for (const [name, type] of fields) {
+		assert.ok(type === 'number' || type === 'boolean',
+			`${name} 是 ${type} —— 这一组只许出数字和布尔,一旦放进字符串,`
+			+ '模型名、lane 名、端点乃至原文片段迟早会顺着它流进导出');
+	}
+});
+
+test('门内等待与实际发送分开量 (2.11.0)', () => {
+	const gate = readFileSync(join(process.cwd(), 'src/translation/requestGate.ts'), 'utf8');
+	const run = gate.slice(gate.indexOf('\tasync run<T>('), gate.indexOf('\tprivate acquire('));
+	// gateMs 必须在 acquire **前后**各取一次时间 —— 在 acquire 之后才开始计时,
+	// 量到的就永远是 0,正是 queuedMs 现在的毛病。
+	assert.ok(/const askedAt = Date\.now\(\);[\s\S]*await this\.acquire\(/.test(run),
+		'取名额之前就要开始计时');
+	assert.ok(/const gateMs = Date\.now\(\) - askedAt;/.test(run));
+	assert.ok(/const sentAt = Date\.now\(\);[\s\S]*return await fn\(\)/.test(run),
+		'发送耗时从拿到名额之后算起');
+	// 在飞数要在**取名额之前**读 —— 取到之后读就把自己算进去了。
+	const before = run.indexOf('const inFlightAtStart');
+	assert.ok(before > 0 && before < run.indexOf('await this.acquire('),
+		'inFlightAtStart 必须在 acquire 之前读');
+	assert.ok(/catch \{/.test(run.slice(run.indexOf('probe?.('))) || /try \{\s*probe\?\./.test(run),
+		'观测不该把请求带崩');
+});
+
+test('时序进导出,且无请求时不写空数组 (2.11.0)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	assert.ok(/requestTimings\?: RequestTiming\[\];/.test(src), '要在 PageDiagnostics 上');
+	assert.ok(/\.\.\.\(metrics\.requestTimings\.length \? \{ requestTimings: metrics\.requestTimings \} : \{\}\)/.test(src),
+		'不进导出就等于没量;但没有请求的页不该塞一个空数组');
+	assert.ok(/if \(metrics\.requestTimings\.length < 40\)/.test(src),
+		'要有上限,别让一页的异常重试把导出撑爆');
+});
