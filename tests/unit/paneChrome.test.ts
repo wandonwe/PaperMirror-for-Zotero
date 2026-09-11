@@ -155,19 +155,56 @@ test('窄档换短形式,不是切一半 (2.10.0)', () => {
 		'短形式顶替时可读名不能跟着丢');
 });
 
-test('二级动作下沉到「更多」,一级动作常驻 (2.10.0)', () => {
+test('操作按语义分组,低频的进「更多」(2.10.2)', () => {
 	const src = PANE();
 	const build = src.slice(src.indexOf('private build(): void'), src.indexOf('// --- scroll body'));
-	// 「保存到笔记」和「术语」各占约 60px,是 390px 下被裁掉四个控件的主因。
-	assert.ok(!/onSaveNote\(\)\)/.test(build), '「保存到笔记」应在「更多」里');
-	assert.ok(!/onSaveTerms\(\)\)/.test(build), '「术语」应在「更多」里');
 	const more = src.slice(src.indexOf('private buildMoreButton()'), src.indexOf('\n\t}', src.indexOf('private buildMoreButton()')));
-	assert.ok(/onSaveNote\(\)/.test(more) && /onSaveTerms\(\)/.test(more),
-		'下沉不是删掉 —— 两个动作必须仍然可达');
-	// 一级:阅读时高频的几个仍在条上。
-	for (const keep of ['this.languagePill', 'providerPill', 'refreshChip', 'this.syncSwitch', 'explainButton']) {
-		assert.ok(build.includes(keep), `${keep} 属于一级操作,必须常驻`);
+
+	// 「保存到笔记」低频,留在菜单里。
+	assert.ok(!/onSaveNote\(\)\)/.test(build), '「保存到笔记」应在「更多」里');
+	assert.ok(/onSaveNote\(\)/.test(more), '下沉不是删掉 —— 动作必须仍然可达');
+
+	// 「术语」2.10.2 回到常驻,与「解析」并列;不许在菜单里重复出现 ——
+	// 同一个动作两个入口,菜单会越长越像杂物抽屉。
+	assert.ok(/termsButton/.test(build), '「术语」应常驻工具条');
+	assert.ok(!/onSaveTerms\(\)/.test(more), '常驻之后不该在菜单里重复');
+
+	for (const keep of ['this.languagePill', 'providerPill', 'refreshChip', 'this.syncSwitch', 'explainButton', 'termsButton']) {
+		assert.ok(build.includes(keep), `${keep} 必须常驻`);
 	}
+});
+
+test('同步滚动归入左组,排在全文重译之后 (2.10.2)', () => {
+	const src = PANE();
+	const append = src.slice(src.indexOf('bar.append('), src.indexOf(');', src.indexOf('bar.append(')));
+	const at = (needle: string): number => append.indexOf(needle);
+	// 它是**状态**(两边是不是跟着走),不是动作 —— 和右边那排
+	// 「对选中内容做什么」不是一类,不该被弹性空隙隔到右边去。
+	assert.ok(at('refreshChip') < at('this.syncSwitch'), '同步滚动排在全文重译之后');
+	assert.ok(at('this.syncSwitch') < at("'pm-bar-spacer'"), '同步滚动在弹性空隙之前,属于左组');
+	assert.ok(at("'pm-bar-spacer'") < at('explainButton'), '动作在弹性空隙之后,属于右组');
+	assert.ok(at('explainButton') < at('termsButton'), '术语紧跟解析');
+	assert.ok(at('termsButton') < at('this.buildMoreButton()'), '「更多」在动作之后收尾');
+});
+
+test('两个文字动作按钮同一套图标与收纳规则 (2.10.2)', () => {
+	const src = PANE();
+	assert.ok(/terms: 'M4 19\.5V5/.test(src), '「术语」要有自己的线条图标');
+	// 各写一份构造迟早会在 aria-label、图标尺寸或标签包裹上分叉。
+	// 只数构造函数出现几次是不够的 —— 旁边再写一个别的名字,计数照样是 1。
+	// 要钉的是**两个按钮都从它出来**。
+	const body = code(src);
+	for (const name of ['explainButton', 'termsButton']) {
+		assert.ok(new RegExp(`const ${name} = actionButton\\(`).test(body),
+			`${name} 必须由共用构造产出`);
+	}
+	assert.equal((body.match(/= actionButton\(/g) ?? []).length, 2,
+		'共用构造正好产出这两个按钮');
+	const css = CSS();
+	assert.ok(/\.pm-bar-action svg \{/.test(css), '图标样式对所有动作按钮生效,不是某一个专属');
+	const narrow = css.slice(css.indexOf('@media (max-width: 640px)'));
+	assert.ok(/\.pm-bar-action-explain span,\s*\n\s*\.pm-bar-action-terms span/.test(narrow),
+		'窄档两个按钮一起收成纯图标 —— 只收一个,另一个照样把控件挤出去');
 });
 
 test('表头不换行 —— 页面起点不跳靠的就是它 (2.10.0 守住既有性质)', () => {
@@ -175,6 +212,23 @@ test('表头不换行 —— 页面起点不跳靠的就是它 (2.10.0 守住既
 	const header = css.slice(css.indexOf('.pm-header {\n\tdisplay: flex'));
 	assert.ok(/flex-wrap\s*:\s*nowrap/.test(header.slice(0, 300)),
 		'一旦允许换行,表头高度会随宽度变化,而页偏移的基准里含着表头');
+});
+
+test('最窄档靠收紧间距腾地方,不靠再藏控件 (2.10.2)', () => {
+	const css = CSS();
+	// 「术语」回到常驻后多占约 28px,390px 下工具栏又溢出 24px、裁掉一个控件。
+	// 省 gap 与内边距约 32px 够用,且不损失任何信息 —— 服务标记是"当前用哪个
+	// 引擎"的唯一显示,图标按钮 28px 也已接近可点下限,两者都不该再动。
+	// 文件里有**两个** `@media (max-width: 430px)`(另一处管 .pm-scroll 的内边距),
+	// 按第一处文字出现切会切到错的那个 —— 取包含 `.pm-bar {` 的那一块。
+	const blocks = [...css.matchAll(/@media \(max-width: 430px\) \{([\s\S]*?)\n\}/g)]
+		.map(m => m[1]!);
+	const tier = blocks.find(b => /\.pm-bar \{/.test(b));
+	assert.ok(tier, '最窄档必须有一块管工具条');
+	assert.ok(/\.pm-bar \{[\s\S]{0,80}gap: 2px/.test(tier!), '最窄档收紧 gap');
+	assert.ok(/\.pm-bar-sep \{[\s\S]{0,60}margin: 0 2px/.test(tier!), '分隔线也跟着收');
+	assert.ok(!/display\s*:\s*none/.test(tier!),
+		'这一档不许再藏控件 —— 藏的是信息,收的是空白');
 });
 
 test('表头只定义一处 (2.10.0)', () => {

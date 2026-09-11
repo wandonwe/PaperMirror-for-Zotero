@@ -83,6 +83,8 @@ const ICON_PATHS = {
 	settings: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.96 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 10 3.01V3h4v.08a1.7 1.7 0 0 0 1.03 1.53 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z',
 	close: 'm6 6 12 12M18 6 6 18',
 	refresh: 'M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7',
+	// 「术语」(2.10.2): 书本 —— 与其余图标同为 1.8 描边、无填充。
+	terms: 'M4 19.5V5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2Z M4 19.5A2 2 0 0 1 6 17.5h13',
 	// 「解析」(2.10.0): 四角星 + 小星,与其余图标同为 1.8 描边、无填充。
 	// 替掉原来的 ✦ 文字前缀 —— 那是字体里的一个字形,粗细与大小跟着字体走,
 	// 与旁边的线条图标不是一套视觉语言。
@@ -536,10 +538,10 @@ export class TranslationPane {
 		let moreChip: HTMLElement;
 		moreChip = this.iconButton(ICON_PATHS.more, this.strings.more, () => {
 			const items: { label: string; checked: boolean; onPick(): void }[] = [
-				// 2.10.0: 两个二级动作从常驻按钮下沉到这里 —— 它们各占约 60px,
-				// 正是 390px 下工具栏被裁掉四个控件的原因之一。
+				// 2.10.0: 保存到笔记从常驻按钮下沉到这里。
+				// 2.10.2: 术语回到工具条常驻(与解析并列),不再在这里重复出现 ——
+				// 同一个动作两个入口,菜单会越长越像杂物抽屉。
 				{ label: this.strings.saveNote, checked: false, onPick: () => this.callbacks.onSaveNote() },
-				{ label: this.strings.terms, checked: false, onPick: () => this.callbacks.onSaveTerms() },
 				{ label: '导出译文 PDF(单语 + 对照两份)', checked: false, onPick: () => this.callbacks.onExportPdf() },
 				// 2.8.8 (导出方案 P3): 两个文件导出入口。语料**常驻**,与调试日志解绑。
 				{ label: '导出诊断文件(整篇;不含原文/译文/密钥)', checked: false, onPick: () => this.callbacks.onExportDiagnosticsFile() },
@@ -949,42 +951,51 @@ export class TranslationPane {
 			'pm-refresh'
 		);
 
-		// 2.10.0 操作层级。实测:这条工具栏挤到极限仍要 **536px**,而窗格声明的
-		// 最小宽度是 390px,`overflow: hidden` 把多出来的**直接切掉** ——
-		// 390px 时「更多 / 左右 / 设置 / 关闭」四个全部消失且点不到。
+		// 操作层级 (2.10.0 重排, 2.10.2 调整)。实测:2.9.9 的工具栏挤到极限仍要
+		// **536px**,而窗格声明的最小宽度是 390px,`overflow: hidden` 把多出来的
+		// **直接切掉** —— 390px 时「更多 / 左右 / 设置 / 关闭」四个全部消失且点不到。
 		//
 		// 修法不是缩小间距硬塞,也不是换行(换行会让表头高度变动,而表头高度
-		// 恒定 40px 正是页面起点不跳的原因)。按使用频率重排:
+		// 恒定 40px 正是页面起点不跳的原因)。按语义分组 + 窄档收标签:
 		//
-		//   一级(阅读时高频,常驻)   语言 · 服务 · 全文重译 · 同步 · 解析
-		//   二级(偶尔用,进「更多」)  保存到笔记 · 术语 · 导出 · 诊断
-		//   窗口控制(常驻)          左右 · 设置 · 关闭
+		//   左组(这一页是什么)   语言 · 服务 · 全文重译 · 同步滚动
+		//   右组(对它做什么)     解析 · 术语 · 更多
+		//   窗口控制             左右 · 设置 · 关闭
 		//
-		// 「保存到笔记」与「术语」下沉腾出约 120px;「解析」在窄档收成纯图标
-		// 再省约 44px —— 最小宽度降到约 372px,低于窗格的 390px 下限,
-		// 于是没有任何一级控件会被裁掉。
-		const explainButton = this.textButton(
-			'pm-bar-action pm-bar-action-explain',
-			'',
-			this.strings.explainTip,
+		// 2.10.2: 同步滚动归入左组 —— 它是**状态**(这两边是不是跟着走),
+		// 不是动作,和右边那排「对选中内容做什么」不是一类。术语回到常驻,
+		// 与解析并列:两者都是读到一半随手要用的,进菜单等于多两次点击。
+		//
+		// 宽度账:两个文字动作在 640px 以下各收成纯图标(标签藏起来,
+		// aria-label 与 tooltip 保留全名),各省约 44px。
+		const actionButton = (extraClass: string, icon: string, label: string, tip: string, onClick: () => void): HTMLElement => {
+			const btn = this.textButton(`pm-bar-action ${extraClass}`, '', tip, onClick);
+			// 可读名由 aria-label 承担,不依赖 tooltip —— 窄档标签藏起来之后,
+			// tooltip 是补充,不能是这个按钮唯一的含义来源。
+			btn.setAttribute('aria-label', label);
+			// 标签必须包在 <span> 里 —— 裸文本节点 CSS 藏不掉。
+			btn.append(this.svgIcon(icon), this.el('span', undefined, label));
+			return btn;
+		};
+		const explainButton = actionButton(
+			'pm-bar-action-explain', ICON_PATHS.explain,
+			this.strings.explainSelection, this.strings.explainTip,
 			() => this.callbacks.onExplainSelection()
 		);
-		// 装饰性的 ✦ 前缀换成与其他图标同一套线条语言的 SVG,窄档标签隐藏后
-		// 它就是这个按钮的图标;可读名由 aria-label 承担,不依赖 tooltip。
-		// 标签必须包在 <span> 里 —— 裸文本节点 CSS 藏不掉。
-		explainButton.setAttribute('aria-label', this.strings.explainSelection);
-		explainButton.append(
-			this.svgIcon(ICON_PATHS.explain),
-			this.el('span', undefined, this.strings.explainSelection)
+		const termsButton = actionButton(
+			'pm-bar-action-terms', ICON_PATHS.terms,
+			this.strings.terms, this.strings.termsTip,
+			() => this.callbacks.onSaveTerms()
 		);
 
 		bar.append(
 			this.languagePill,
 			providerPill,
 			refreshChip,
-			this.el('span', 'pm-bar-spacer'),
 			this.syncSwitch,
+			this.el('span', 'pm-bar-spacer'),
 			explainButton,
+			termsButton,
 			this.buildMoreButton(),
 			this.el('span', 'pm-bar-sep'),
 			this.makeSideButton(),
