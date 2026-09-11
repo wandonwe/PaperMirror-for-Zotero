@@ -292,7 +292,33 @@ export type TextContentApiState = 'available' | 'no-pdfdocument' | 'no-getpage' 
  * 四个角取 min/max 就是包围盒。**这样写而不是 `[e, f, e+width, f+height]`,
  * 是因为竖排的页边水印(真机上那条 "Downloaded from …")的 transform 是旋转的**
  * —— 直接加宽高会得到一个横躺的盒子,把半页正文都框进去。
+ *
+ * ## 2.10.1: em 盒**跨骑**基线,不是坐在基线上
+ *
+ * 2.9.7 写成从基线 `(e, f)` 向上一个 em —— 也就是盒子的下沿**恰好是基线**,
+ * 基线以下一点空间都没有。可逗号、分号、以及 g/p/y/j 的尾巴全在基线**以下**。
+ *
+ * 这个错误在 2.9.9 之前是看不见的:那时这条路径根本没跑通(Xray),
+ * 所有行矩形都来自 DOM 文本层的 `getBoundingClientRect()`,而 PDF.js 给 span
+ * 的盒子本来就含下伸部。2.9.9 把路径修通,错误的几何第一次真的上了页面 ——
+ * 真机表现是原文被遮罩盖住之后,**每一行的逗号分号尾巴从遮罩下沿漏出来**,
+ * 在译文页上留下一片规则排布的小点(作者名单那种标点密集的段落最明显)。
+ *
+ * 遮罩的 padding 补不了这个:它是按字号 8% 算、上限 3px,而下伸部约 0.22em ——
+ * 小字号下差一个数量级。要修的是矩形本身。
+ *
+ * 标准字体的量度:上伸约 0.78em、下伸约 0.22em,合起来一个 em。所以把这一个
+ * em 的盒子沿字高方向**下移 0.22em**:上沿仍然刚好盖住上伸部,下沿这才盖住
+ * 下伸部。盒子高度不变,只是放对了位置 —— 行与行的相对几何不受影响。
  */
+
+/**
+ * 基线以下的比例。多数正文字体的 descent 在 0.20–0.25 em 之间,
+ * 取 0.22 是个保守的中值:小了盖不住逗号尾巴,大了会吃到下一行的上伸部
+ * (常见行距 1.15–1.2 em,0.22 + 0.78 = 1.0,仍留有余量)。
+ */
+const DESCENDER_EM = 0.22;
+
 export function textContentItemRect(
 	transform: number[],
 	width: number
@@ -306,8 +332,16 @@ export function textContentItemRect(
 	// 前进方向的单位向量;退化(缩放为 0)时按水平处理,总比丢掉整串字强。
 	const ux = advance > 0 ? a / advance : 1;
 	const uy = advance > 0 ? b / advance : 0;
-	const xs = [e, e + ux * width, e + c, e + ux * width + c];
-	const ys = [f, f + uy * width, f + d, f + uy * width + d];
+	// 字高方向的单位向量 —— 旋转文本(页边水印)也必须沿**它自己的**下方向让开,
+	// 不能一律往 -y 挪,否则竖排水印的盒子会横向错位。
+	const dx = fontSize > 0 ? c / fontSize : 0;
+	const dy = fontSize > 0 ? d / fontSize : 1;
+	const drop = fontSize * DESCENDER_EM;
+	// 基线原点先沿字高方向的反方向退 0.22em,盒子于是跨骑基线。
+	const ox = e - dx * drop;
+	const oy = f - dy * drop;
+	const xs = [ox, ox + ux * width, ox + c, ox + ux * width + c];
+	const ys = [oy, oy + uy * width, oy + d, oy + uy * width + d];
 	return {
 		rect: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
 		fontSize: fontSize > 0 ? fontSize : undefined as unknown as number

@@ -33,11 +33,18 @@ const read = (p: string): string => readFileSync(join(process.cwd(), p), 'utf8')
 
 // ---- 1. transform → 包围盒 ----------------------------------------------------
 
-test('水平文字: 原点在基线左端,盒子向右上展开 (2.9.7)', () => {
-	// 10pt 字,从 (100, 700) 起,advance 50。
+test('水平文字: em 盒跨骑基线,下方留出下伸部 (2.10.1)', () => {
+	// 10pt 字,基线在 y = 700,advance 50。
 	const box = textContentItemRect([10, 0, 0, 10, 100, 700], 50)!;
-	assert.deepEqual(box.rect, [100, 700, 150, 710]);
+	// 2.9.7 曾是 [100, 700, 150, 710] —— 下沿**恰好是基线**,基线以下零空间。
+	// 逗号、分号、g/p/y 的尾巴全在基线以下,于是遮罩盖不住它们:真机上
+	// 原文每一行的标点尾巴从遮罩下沿漏出来,译文页上留下一片规则的小点。
+	assert.deepEqual(box.rect, [100, 697.8, 150, 707.8]);
 	assert.equal(box.fontSize, 10);
+	// 盒高仍是一个 em —— 只是放对了位置,不是变大。
+	assert.ok(Math.abs((box.rect[3] - box.rect[1]) - 10) < 1e-9);
+	// 基线必须落在盒子**内部**,不是边界上。
+	assert.ok(box.rect[1] < 700 && 700 < box.rect[3], '基线要被盒子跨骑');
 });
 
 test('竖排文字(旋转 90°)不能算成横躺的盒子 (2.9.7 真机页边水印)', () => {
@@ -45,16 +52,18 @@ test('竖排文字(旋转 90°)不能算成横躺的盒子 (2.9.7 真机页边�
 	// 若图省事写成 [e, f, e+width, f+height],会得到一个横跨半页的盒子,
 	// 把正文全框进去 —— 阅读序和分栏当场被毁。
 	const box = textContentItemRect([0, 8, -8, 0, 30, 300], 200)!;
-	// 前进方向是 +y,字高方向是 -x:x ∈ [30-8, 30],y ∈ [300, 500]
-	assert.deepEqual(box.rect, [22, 300, 30, 500]);
+	// 前进方向是 +y,字高方向是 -x。2.10.1 让盒子沿**它自己的**下方向退
+	// 0.22em —— 这里的「下」是 +x,所以整条带子右移 1.76,不是一律往 -y 挪。
+	assert.deepEqual(box.rect, [23.76, 300, 31.76, 500]);
 	assert.equal(box.fontSize, 8);
 	const [x1, , x2] = box.rect;
 	assert.ok(x2 - x1 < 20, '竖排文字的盒子必须是**窄条**,不是横躺的长条');
+	assert.ok(Math.abs((x2 - x1) - 8) < 1e-9, '盒宽仍是一个 em');
 });
 
 test('缩放为 0 的退化 transform 按水平处理,不丢字 (2.9.7)', () => {
 	const box = textContentItemRect([0, 0, 0, 10, 100, 700], 50)!;
-	assert.deepEqual(box.rect, [100, 700, 150, 710], '退化时也要给出一个可用的盒子');
+	assert.deepEqual(box.rect, [100, 697.8, 150, 707.8], '退化时也要给出一个可用的盒子');
 });
 
 test('非有限数一律丢弃,不让 NaN 流进排版 (2.9.7)', () => {
@@ -141,7 +150,7 @@ test('穿不过就退回原对象,不许因此变得更坏 (2.9.9)', async () =>
 	const result = await getTextContentItems(reader as never, 0, r => seen.push(r));
 	assert.ok(result, 'waive 只可能让更多东西可见,不会让已经能用的变得不能用');
 	assert.equal(result!.items.length, 1);
-	assert.deepEqual(result!.items[0]!.rect, [50, 700, 90, 710]);
+	assert.deepEqual(result!.items[0]!.rect, [50, 697.8, 90, 707.8]);
 	assert.equal(result!.pageWidth, 612);
 	// 变异验证补的闸:只报失败、不报成功,`textContentPath` 里就只剩各种退出
 	// 原因 —— 看上去像"全都没通",而真正要判定 Xray 假设成立与否的那一格是空的。
@@ -164,4 +173,34 @@ test('每一种退出都报一个原因 (2.9.9)', async () => {
 test('路径 1.5 的结局分布进了导出 (结构性回归闸, 2.9.9)', () => {
 	assert.ok(/textContentPath: this\.extractor\.textContentOutcomes\(\)/.test(read('src/reader/readerSession.ts')),
 		'不进导出就等于没量');
+});
+
+
+// ---- 4. 2.10.1: 下伸部必须被盖住 ---------------------------------------------
+//
+// 真机 2.10.0 的截图:作者名单那种标点密集的段落,原文被遮罩盖住之后,
+// **每一行的逗号分号尾巴从遮罩下沿漏出来**,在译文页上留下一片规则排布的小点。
+// 遮罩自己的 padding 补不了 —— 它按字号 8% 算、上限 3px,而下伸部约 0.22em,
+// 小字号下差一个数量级。错的是矩形,不是遮罩。
+
+test('基线以下留出下伸部,逗号尾巴不会漏出遮罩 (2.10.1)', () => {
+	for (const size of [6, 8, 10, 12, 18]) {
+		const box = textContentItemRect([size, 0, 0, size, 0, 1000], 100)!;
+		const belowBaseline = 1000 - box.rect[1];
+		assert.ok(belowBaseline > 0, `${size}pt: 基线以下必须有空间`);
+		// 常见正文字体 descent 在 0.20–0.25 em;低于 0.18 就盖不住逗号尾巴。
+		assert.ok(belowBaseline / size >= 0.18,
+			`${size}pt: 基线以下只有 ${(belowBaseline / size).toFixed(3)} em,盖不住下伸部`);
+		// 上限:超过 0.3 em 会吃到上一行的下沿(常见行距 1.15–1.2 em)。
+		assert.ok(belowBaseline / size <= 0.3,
+			`${size}pt: 基线以下 ${(belowBaseline / size).toFixed(3)} em 太多,会吃到相邻行`);
+	}
+});
+
+test('下移是沿字高方向,不是一律 -y (2.10.1)', () => {
+	// 旋转 180° 的文字:它的「下」是 +y。若写死 -y,盒子会朝错误方向让开,
+	// 下伸部照样漏,而上伸部被多盖一截。
+	const box = textContentItemRect([-10, 0, 0, -10, 100, 700], 50)!;
+	assert.ok(box.rect[3] > 700, '倒置文字的盒子要向 +y 让开');
+	assert.ok(Math.abs((box.rect[3] - box.rect[1]) - 10) < 1e-9, '盒高仍是一个 em');
 });
