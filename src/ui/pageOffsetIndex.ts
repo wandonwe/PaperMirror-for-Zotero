@@ -14,6 +14,39 @@
  * 高度全都自然包含在内,不必假设整篇页面等高。
  */
 
+/**
+ * 视口矩形顶边 → **滚动容器内容坐标** (2.9.8) — pure。
+ *
+ * 面板里所有涉及位置的代码原本都在做同一件事:拿 `slot.offsetTop` 当成一个
+ * `scrollTop` 值用。可 `offsetTop` 量的是"到**定位祖先**的距离" —— 而
+ * `.pm-scroll` / `.pm-article-host` / `.pm-repage-host` 都没有定位,定位祖先一路
+ * 落到 `.pm-bilingual-pane`,于是 `offsetTop` 里**含着标题栏那一行**,
+ * 而 `scrollTop` 是从滚动容器自己的内容顶边算的。两把尺子,零点差一个标题栏。
+ *
+ * 同一个错误同时污染了四处:同步落点、反向判当前页、可见窗口、渲染决策。
+ * 矩形差换算**按构造正确**:不依赖任何祖先是否定位、有没有 padding、border
+ * 或 transform。做成一个纯函数,四处就只能共用这一份口径。
+ */
+export function toScrollTop(elementRectTop: number, scrollRectTop: number, scrollTop: number): number {
+	return elementRectTop - scrollRectTop + scrollTop;
+}
+
+/**
+ * 锚点(页 + 页内比例)→ 落点 (2.9.8) — pure。
+ *
+ * **没有任何常数补偿。** 旧实现末尾挂着一个 `- 6`,那是照着上面那个零点偏差手调
+ * 出来的:既说不出 6 从哪来,也补不对(标题栏远不止 6px)。零点对齐之后它没有
+ * 存在的理由 —— 真要有视觉留白,也该来自某个说得出名字的 UI 元素。
+ */
+export function anchorScrollTarget(slotTop: number, slotHeight: number, fraction: number): number {
+	return slotTop + fraction * slotHeight;
+}
+
+/** 落点 → 锚点里的页内比例 (2.9.8) — pure。零高度的槽不产出 NaN。 */
+export function anchorFractionOf(scrollTop: number, slotTop: number, slotHeight: number): number {
+	return slotHeight > 0 ? (scrollTop - slotTop) / slotHeight : 0;
+}
+
 export interface PageOffsetIndexStats {
 	/** 建这一份索引时读了多少次几何 —— 单测用它断言"滚动不再逐页读取"。 */
 	reads: number;

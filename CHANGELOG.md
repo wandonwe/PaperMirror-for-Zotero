@@ -7,6 +7,68 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.9.8] — 2026-09-11
+
+**原文与译文对不齐:两把尺子,零点差一个标题栏。** 这一版不来自日志 ——
+现有导出里**没有任何同步遥测**,这是一次代码审计,四个缺陷都是静态可验证的。
+
+### Fixed — 同一个坐标系错误,污染了四处
+
+面板里所有涉及位置的代码都在做同一件事:**拿 `slot.offsetTop` 当成一个
+`scrollTop` 值用**。可 `offsetTop` 量的是"到**定位祖先**的距离",而
+`.pm-scroll` / `.pm-article-host` / `.pm-repage-host` **都没有 `position`**
+(translationPane.css 可查),定位祖先一路向上落到 `.pm-bilingual-pane` ——
+它才有 `position: relative`。于是 `offsetTop` 里**含着标题栏那一行**,
+而 `scrollTop` 是从滚动容器自己的内容顶边算的。
+
+一个错误,四处受害:
+
+1. `setPdfScrollFraction` —— 同步落点系统性偏低约一个标题栏;
+2. `handleScroll` —— 反向判"当前页"用的是同一把错尺子;
+3. `ensurePageIndex` → `visibleRange` —— 可见窗口、挂载与渲染决策一起偏;
+4. 落点末尾那个 **`- 6`** —— 照着这个偏差手调出来的补偿:说不出 6 从哪来,
+   也补不对(标题栏远不止 6px)。
+
+修法不是再调一个常数,而是把换算做成**三个纯函数**(`toScrollTop` /
+`anchorScrollTarget` / `anchorFractionOf`),四处共用一份口径。矩形差换算
+**按构造正确**:不依赖任何祖先是否定位、有没有 padding、border 或 transform。
+`- 6` 直接删掉 —— 零点对齐之后它没有存在的理由。
+
+### Fixed — 连续跟随不该走平滑动画
+
+`.pm-scroll` 带 `scroll-behavior: smooth`,而 `setPdfScrollFraction` 在
+`updateviewarea` 上**每滚动帧**都被调用。于是每写一次 `scrollTop` 就起一次平滑
+动画,下一帧又给它一个新目标 —— **右侧永远在追、从不到位**,动画自己还在不断发
+scroll 事件回灌。这正是"跟随慢"和抖动的来源,也是当初那个 300 ms 时间窗存在的
+原因。现在连续跟随走瞬时滚动;离散跳转(点击块、跳页)仍然平滑。
+
+实现上用临时改写 `scrollBehavior`,不用 `scrollTo({ behavior: 'instant' })`
+—— 后者在老引擎上会被当成无效值、**静悄悄回落到 CSS 的 smooth**。
+
+### Fixed — 回声窗口有两个,中间留着缝
+
+面板写 300 ms、`SyncGuard` 写 400 ms,各写各的。中间那 100 ms 里面板已经不再把
+自己的回声当回声,而 `SyncGuard` 还在压制 —— 两边对"现在谁说了算"的判断不一致,
+正是双向同步最容易打架的那种缝。现在两处读同一个 `SYNC_ECHO_MS`。
+
+### Fixed — 滚动热路径逐页扫;几何变化后按整篇百分比回位
+
+- `handleScroll` 每个事件从第 0 页线性扫,每页读 `offsetTop` + `offsetHeight`:
+  97 页的文档就是**一次滚动 194 次布局读取**。而索引(建一次、用很多次)就在
+  旁边没用上。改走二分。
+- `relayoutSlots` 用 `scrollTop / scrollHeight` 这个**整篇文档百分比**做锚点。
+  页高不是按同一个比例变的(页宽有上限、混合纸张、页间距是定值),换算完就落到
+  别的页上,**文档越长偏得越远**。改为锚在"第 N 页的百分之几"上。
+
+### 未验证 / 未改动
+
+- **这一版没有真机数据支撑,只有代码证据。** 现有导出里没有任何同步遥测 ——
+  页级匹配率、页内锚点误差、同步延迟一个都量不到。四个缺陷都是静态可验证的
+  (CSS 里查得到、函数里读得出),但"修完偏差是否归零"必须真机验证。
+- 纯 mock 不能证明浏览器真实滚动与 scroll anchoring 的行为:本版测试覆盖的是
+  **算术与接线**,不是渲染引擎。
+- 2.9.7 的新抽取路径同样尚未真机验证 —— 两版改动一起装,若出问题需要分辨来源。
+
 ## [2.9.7] — 2026-09-11
 
 **抽取不再依赖页面有没有被渲染。** 连着两版只量不改,换来的是一次有把握的改动。

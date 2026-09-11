@@ -19,7 +19,9 @@ import { isFormulaRun } from '../reader/formulaGuard';
 import { stripStyleMarkers } from '../reader/styleRuns';
 import * as logger from '../utils/logger';
 import { RenderPump } from './renderPump';
-import { CachedPageIndex, type PageOffsetIndex } from './pageOffsetIndex';
+import { CachedPageIndex, anchorFractionOf, anchorScrollTarget, toScrollTop, type PageOffsetIndex } from './pageOffsetIndex';
+// 回声抑制窗口与 SyncGuard 共用同一个常量 (2.9.8) —— 两处各写各的会留出缝隙。
+import { SYNC_ECHO_MS } from '../reader/scrollSynchronizer';
 import { getPref } from '../utils/prefs';
 import type { ExplanationSection } from '../translation/explainer';
 import type { PageTranslationState } from '../translation/translationManager';
@@ -64,6 +66,8 @@ const BRAND_SVGS: Record<string, string> = {
 };
 
 const MODULE = 'translationPane';
+
+
 /**
  * 一页最多重试几次降级重建 (2.5.2)。够覆盖偶发失败(底图被淘汰、页刚被
  * PDF.js 销毁、字体未就绪),又不至于让确定性失败的页每 2.5 秒空转一次。
@@ -421,6 +425,7 @@ export class TranslationPane {
 	private mounted = new Set<number>();
 	/** Echo guard: ignore our own programmatic scrolls. */
 	private suppressScrollUntil = 0;
+
 	/** Width the slots were laid out for. */
 	private layoutWidth = 0;
 	/**
@@ -1260,10 +1265,13 @@ export class TranslationPane {
 		if (!force && Math.abs(fresh - this.layoutWidth) < 8) {
 			return;
 		}
-		// Keep the same document position through the resize.
-		const anchorFraction = this.scroll.scrollHeight > 0
-			? this.scroll.scrollTop / this.scroll.scrollHeight
-			: 0;
+		// 2.9.8: 用**页 + 页内比例**当锚点,不用整篇文档的滚动百分比。
+		//
+		// 旧实现是 `scrollTop / scrollHeight`,变宽/缩放后再乘回新的 `scrollHeight`。
+		// 页高不是按同一个比例变的(页宽有上限、混合纸张、页间距是定值),所以这个
+		// 百分比换算完就落到别的页上了 —— 文档越长偏得越远。锚在页上就没有这个问题:
+		// 无论几何怎么变,"第 N 页的 37% 处"始终指同一段字。
+		const anchor = this.readingAnchor();
 		this.layoutWidth = fresh;
 		// 页宽/缩放变了 —— 位置索引整体作废 (2.8.0 第二批)。
 		this.invalidatePageIndex();
@@ -1277,8 +1285,34 @@ export class TranslationPane {
 			}
 		}
 		this.mounted.clear();
-		this.scroll.scrollTop = anchorFraction * this.scroll.scrollHeight;
+		// 索引已作废,重建一次再落点 —— 用新几何解析旧锚点。
+		this.invalidatePageIndex();
+		if (anchor) {
+			this.setPdfScrollFraction(anchor.pageIndex, anchor.fraction);
+		}
 		this.scheduleEnsure();
+	}
+
+	/**
+	 * 此刻的阅读锚点: **哪一页的百分之几** (2.9.8)。
+	 *
+	 * 几何要变之前先拍下来,变完之后按新几何解析回去。它代表的是"用户在读哪一段
+	 * 字",而不是滚动条的百分比 —— 后者在页宽、缩放、混合纸张变化时会指到别的页。
+	 * 页还没建好时返回 null,调用方不动位置(比瞎落一个位置强)。
+	 */
+	private readingAnchor(): { pageIndex: number; fraction: number } | null {
+		if (this.viewKind !== 'page' || !this.slots.length) {
+			return null;
+		}
+		const index = this.ensurePageIndex();
+		const top = this.scroll.scrollTop;
+		const hit = index?.rangeFor(top, top + 1);
+		const pageIndex = hit ? hit[0] : this.currentPage;
+		const slot = this.slots[pageIndex];
+		if (!slot || !slot.offsetHeight) {
+			return null;
+		}
+		return { pageIndex, fraction: anchorFractionOf(top, this.slotTopInScroll(slot), slot.offsetHeight) };
 	}
 
 	/**
@@ -1395,10 +1429,47 @@ export class TranslationPane {
 	 * 页位置索引 —— 没有就建一次。**一趟批量读完**所有槽的几何,读写不交错。
 	 */
 	private ensurePageIndex(): PageOffsetIndex | null {
+		// 2.9.8: 用**滚动容器内容坐标**建索引,不再用 `offsetTop`。
+		// 见 `slotTopBase()` —— `offsetTop` 量的是"到定位祖先(面板根)的距离",
+		// 里面含着标题栏;而索引的每一次使用都拿它跟 `scrollTop` 比。
+		// 容器矩形只读一次,整趟仍是 n+1 次几何读取,与旧实现同量级。
+		const base = this.slotTopBase();
 		return this.pageIndex.get(this.slots.length, page => {
 			const slot = this.slots[page]!;
-			return { top: slot.offsetTop, height: slot.offsetHeight };
+			const rect = slot.getBoundingClientRect();
+			return { top: rect.top + base, height: slot.offsetHeight };
 		});
+	}
+
+	/**
+	 * 把"槽的视口矩形顶边"换算到**滚动容器内容坐标**要加的常量 (2.9.8)。
+	 *
+	 * ## 这一版修的是什么
+	 *
+	 * 面板里所有涉及位置的代码都在做同一件事:拿 `slot.offsetTop` 当成一个
+	 * `scrollTop` 值用。可 `offsetTop` 量的是"到**定位祖先**的距离",而
+	 * `.pm-scroll` / `.pm-article-host` / `.pm-repage-host` **都没有定位**,
+	 * 于是定位祖先一路向上落到 `.pm-bilingual-pane`(它才有 `position: relative`)。
+	 * 也就是说 `offsetTop` 里**含着标题栏那一行的高度**,而 `scrollTop` 是从滚动
+	 * 容器自己的内容顶边算的。两把尺子,零点差一个标题栏。
+	 *
+	 * 这一个错误同时污染了四处:
+	 *   - `setPdfScrollFraction`(同步落点)—— 右侧总是偏低约一个标题栏;
+	 *   - `handleScroll`(反向判定当前页);
+	 *   - `ensurePageIndex` → `visibleRange`(可见窗口、挂载与渲染决策);
+	 *   - 以及 `setPdfScrollFraction` 里那个 `- 6` —— 那是照着这个偏差手调出来的
+	 *     补偿值,既解释不了来源,也补不对(标题栏远不止 6px)。
+	 *
+	 * 用矩形差换算是**按构造正确**的:不依赖任何祖先是否定位、有没有 padding、
+	 * border 或 transform。把它做成唯一的换算口,四处就不会再各自跑偏。
+	 */
+	private slotTopBase(): number {
+		return this.scroll.scrollTop - this.scroll.getBoundingClientRect().top;
+	}
+
+	/** 槽顶边在**滚动容器内容坐标**里的位置 (2.9.8)。四处共用这一份口径。 */
+	private slotTopInScroll(slot: HTMLElement): number {
+		return toScrollTop(slot.getBoundingClientRect().top, this.scroll.getBoundingClientRect().top, this.scroll.scrollTop);
 	}
 
 	/**
@@ -1579,11 +1650,32 @@ export class TranslationPane {
 		if (!slot) {
 			return;
 		}
-		const target = slot.offsetTop + fraction * slot.offsetHeight - 6;
+		// 2.9.8: 换算到滚动容器内容坐标(见 slotTopBase),并**去掉那个 `- 6`**。
+		// 那 6px 是照着"offsetTop 含标题栏"这个偏差手调出来的补偿,来源解释不了、
+		// 数值也补不对 —— 零点对齐之后它没有存在的理由。
+		const target = anchorScrollTarget(this.slotTopInScroll(slot), slot.offsetHeight, fraction);
 		const max = Math.max(0, this.scroll.scrollHeight - this.scroll.clientHeight);
-		this.suppressScrollUntil = Date.now() + 300;
-		this.scroll.scrollTop = Math.max(0, Math.min(target, max));
+		this.suppressScrollUntil = Date.now() + SYNC_ECHO_MS;
+		// 2.9.8: **连续跟随必须是瞬时的**。`.pm-scroll` 带 `scroll-behavior: smooth`,
+		// 而这个函数在 `updateviewarea` 上**每滚动帧**都被调用 —— 每写一次 scrollTop
+		// 就起一次平滑动画,下一帧又给它一个新目标,右侧永远在追、从不到位,
+		// 而且动画自己还在不断发 scroll 事件回灌。离散跳转(点击块、跳页)仍走平滑。
+		this.scrollInstantly(Math.max(0, Math.min(target, max)));
 		this.scheduleEnsure();
+	}
+
+	/**
+	 * 立刻把滚动容器移到 `top` —— 不走 CSS 的平滑动画 (2.9.8)。
+	 *
+	 * 不用 `scrollTo({ behavior: 'instant' })`: 那个取值在老一些的引擎上会被当作
+	 * 无效而回落到 CSS 的 `smooth`,失败得静悄悄。临时改写 `scrollBehavior`
+	 * 在所有版本上行为一致。
+	 */
+	private scrollInstantly(top: number): void {
+		const previous = this.scroll.style.scrollBehavior;
+		this.scroll.style.scrollBehavior = 'auto';
+		this.scroll.scrollTop = top;
+		this.scroll.style.scrollBehavior = previous;
 	}
 
 	/**
@@ -1812,14 +1904,17 @@ export class TranslationPane {
 			if (Date.now() < this.suppressScrollUntil) {
 				return;
 			}
+			// 2.9.8: 阅读线落在哪一页 —— 走**二分**,不再逐页扫。
+			//
+			// 旧实现每个 scroll 事件都从第 0 页线性扫,每页读 `offsetTop` 与
+			// `offsetHeight`:97 页的文档就是一次滚动 194 次布局读取,而且读的还是
+			// **另一把尺子**(offsetTop 含标题栏,anchor 却是 scrollTop 坐标),
+			// 于是连判出来的"当前页"都偏。索引本来就在(建一次、用很多次),
+			// 这里本该用它。
 			const anchor = this.scroll.scrollTop + this.scroll.clientHeight * 0.35;
-			for (let i = 0; i < this.slots.length; i++) {
-				const slot = this.slots[i]!;
-				if (slot.offsetTop <= anchor && slot.offsetTop + slot.offsetHeight > anchor) {
-					best = i;
-					break;
-				}
-			}
+			const index = this.ensurePageIndex();
+			const hit = index?.rangeFor(anchor, anchor + 1);
+			best = hit ? hit[0] : null;
 			if (best !== null && best !== this.currentPage) {
 				this.currentPage = best;
 				this.callbacks.onScrolledToPage(best);

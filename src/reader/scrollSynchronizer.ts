@@ -10,6 +10,15 @@
 
 export type SyncSide = 'pdf' | 'pane';
 
+/**
+ * 回声抑制窗口的**唯一来源** (2.9.8)。
+ *
+ * 此前面板用 300 ms、这里用 400 ms,各写各的。中间那 100 ms 里面板已经不再把
+ * 自己的回声当回声,而 SyncGuard 还在压制 —— 两边对"现在谁说了算"的判断不一致,
+ * 正是双向同步最容易打架的那种缝。两处现在读同一个常量。
+ */
+export const SYNC_ECHO_MS = 400;
+
 export interface SyncGuardOptions {
 	cooldownMs: number;
 	now?: () => number;
@@ -21,7 +30,7 @@ export class SyncGuard {
 	private suppressUntil: Partial<Record<SyncSide, number>> = {};
 
 	constructor(options?: Partial<SyncGuardOptions>) {
-		this.cooldownMs = options?.cooldownMs ?? 400;
+		this.cooldownMs = options?.cooldownMs ?? SYNC_ECHO_MS;
 		this.now = options?.now ?? (() => Date.now());
 	}
 
