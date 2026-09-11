@@ -126,8 +126,27 @@ test('路径 1 的每一种结局都有枚举计数 (结构性回归闸, 2.9.5)'
 	for (const outcome of ['no-chars-array', 'empty-chars', 'undecoded-cid', 'chars-but-no-blocks', 'ok']) {
 		assert.ok(fn.includes(`'${outcome}'`), `结局 ${outcome} 必须被记下来`);
 	}
-	assert.ok(/this\.noteCharsOutcome\(pageIndex, `threw:\$\{failureKind\(e\)\}`\)/.test(fn),
-		'抛错的种类是排查这条路的关键 —— 此前它只进了 logger');
+	// 2.9.6: `EXTRACTION_FAILED` 太笼统 —— 真机 98/98 页全落在它上面,而"调用抛错"
+	// 与"这个 API 根本不存在"是两件修法完全不同的事,所以补一个同步探针。
+	assert.ok(/this\.noteCharsOutcome\(pageIndex,\s*`threw:\$\{failureKind\(e\)\}\/\$\{adapter\.probePageDataApi\(this\.reader\)\}`\)/.test(fn),
+		'抛错的种类 + API 在不在,两者都要 —— 只有种类时 98/98 页都是同一个 code,等于没说');
+});
+
+test('两个探针都是同步的,不发 RPC (2.9.6)', () => {
+	const src = read('src/reader/zoteroReaderAdapter.ts');
+	for (const name of ['probePageDataApi', 'probeTextContentApi']) {
+		const fn = src.slice(src.indexOf(`export function ${name}`), src.indexOf('\n}', src.indexOf(`export function ${name}`)));
+		assert.ok(fn.length > 0, `${name} 必须存在`);
+		assert.ok(!/await|async|\.then\(/.test(fn),
+			`${name} 只看对象和函数在不在 —— 探针本身绝不能变成新的等待`);
+		assert.ok(/catch/.test(fn), '探针不许抛 —— 它是诊断,不该影响抽取');
+	}
+});
+
+test('出路探针进了导出 (结构性回归闸, 2.9.6)', () => {
+	const src = read('src/reader/readerSession.ts');
+	assert.ok(/textContentApi: this\.extractor\.textContentApiState\(\)/.test(src),
+		'getTextContent 是公开 API 且不依赖渲染 —— 它可用与否决定下一步往哪走,必须进文件');
 });
 
 test('路径 1 的结局只记枚举,不带原文或路径 (隐私闸, 2.9.5)', () => {
@@ -145,4 +164,24 @@ test('结局分布进了导出 (结构性回归闸, 2.9.5)', () => {
 	const src = read('src/reader/readerSession.ts');
 	assert.ok(/charsPath: this\.extractor\.charsPathOutcomes\(\)/.test(src),
 		'不进导出就等于没量');
+});
+
+test('两个探针都按"是不是函数"判,不按"真不真" (2.9.6)', async () => {
+	const { probePageDataApi, probeTextContentApi } = await import('../../src/reader/zoteroReaderAdapter');
+	const reader = (app: unknown): never =>
+		({ _internalReader: { _primaryView: { _iframeWindow: { PDFViewerApplication: app } } } }) as never;
+
+	assert.equal(probePageDataApi(reader(undefined)), 'no-app');
+	assert.equal(probePageDataApi(reader({})), 'no-pdfdocument');
+	assert.equal(probePageDataApi(reader({ pdfDocument: {} })), 'api-missing');
+	assert.equal(probePageDataApi(reader({ pdfDocument: { getPageData: () => {} } })), 'present');
+	// 属性存在但不是函数 —— fork 换实现时很容易留下一个占位值。
+	assert.equal(probePageDataApi(reader({ pdfDocument: { getPageData: true } })), 'api-missing',
+		'"有这个属性"不等于"能调用" —— 判据必须是 typeof === function');
+
+	assert.equal(probeTextContentApi(reader({})), 'no-pdfdocument');
+	assert.equal(probeTextContentApi(reader({ pdfDocument: {} })), 'no-getpage');
+	assert.equal(probeTextContentApi(reader({ pdfDocument: { getPage: () => {} } })), 'available');
+	assert.equal(probeTextContentApi(reader({ pdfDocument: { getPage: 1 } })), 'no-getpage',
+		'同上 —— 这条探针决定下一步往哪走,报错了比不报更糟');
 });
