@@ -2544,6 +2544,10 @@ export class ReaderSession {
 					return session;
 				})(),
 				render: this.pane?.renderMetrics() ?? null,
+				// 2.9.5: 路径 1(不依赖渲染的 char 流)每页的结局分布。
+				// `charsPathMs` 约 1 ms/页 说明它是立刻失败或立刻返回空 —— 到底是
+				// 哪一种,这里回答。它若能修好,整条"等文本层渲染"的时序难题就绕过去了。
+				charsPath: this.extractor.charsPathOutcomes(),
 				cacheWrites: cacheManager.cacheWriteStats()
 			}),
 			readPage: (pageIndex: number) => {

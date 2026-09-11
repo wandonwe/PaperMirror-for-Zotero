@@ -110,3 +110,39 @@ test('两个写出器都把种类写进失败那一行 (结构性回归闸, 2.8.
 			`${file}: pageReadFailures 只说"失败了一页",连是抛错还是类型错都看不出来 —— 种类必须落进文件`);
 	}
 });
+
+// ---- 5. 2.9.5: 路径 1 为什么不出活 --------------------------------------------
+//
+// 真机第七轮:`charsPathMs` 整轮 **80 ms / 85 页**,约 **1 ms 一页**。PDFWorker
+// 的 RPC 往返不可能这么快 —— 这不是"慢",是**立刻失败或立刻返回空**。
+//
+// 这件事要紧,是因为路径 1 是唯一**不依赖页面渲染**的抽取方式。2.9.0–2.9.4 五个
+// 版本都在绕"文本层什么时候渲染好"这个时序难题;路径 1 若能用,这个难题从根上
+// 就不存在了。而现有日志对它一个字都没有。
+
+test('路径 1 的每一种结局都有枚举计数 (结构性回归闸, 2.9.5)', () => {
+	const src = read('src/reader/textExtractor.ts');
+	const fn = src.slice(src.indexOf('async extractPage(pageIndex: number)'), src.indexOf('async extractRenderedPage'));
+	for (const outcome of ['no-chars-array', 'empty-chars', 'undecoded-cid', 'chars-but-no-blocks', 'ok']) {
+		assert.ok(fn.includes(`'${outcome}'`), `结局 ${outcome} 必须被记下来`);
+	}
+	assert.ok(/this\.noteCharsOutcome\(pageIndex, `threw:\$\{failureKind\(e\)\}`\)/.test(fn),
+		'抛错的种类是排查这条路的关键 —— 此前它只进了 logger');
+});
+
+test('路径 1 的结局只记枚举,不带原文或路径 (隐私闸, 2.9.5)', () => {
+	const src = read('src/reader/textExtractor.ts');
+	// failureKind 已经把 message 挡在外面(见 jsonlWriter 的白名单);
+	// 这里钉住"用的就是它",而不是某天顺手换成 e.message。
+	assert.ok(/failureKind\(e\)/.test(src) && !/noteCharsOutcome\([^)]*e\.message/.test(src),
+		'异常 message 可能带路径或接口返回 —— 一个字都不许进诊断');
+	const decl = src.slice(src.indexOf('private noteCharsOutcome'), src.indexOf('private charsNoted'));
+	assert.ok(/this\.charsNoted\.has\(pageIndex\)/.test(decl),
+		'一页只记第一个结论 —— 同一页被反复抽取时(真机上很常见)不该把分布压歪');
+});
+
+test('结局分布进了导出 (结构性回归闸, 2.9.5)', () => {
+	const src = read('src/reader/readerSession.ts');
+	assert.ok(/charsPath: this\.extractor\.charsPathOutcomes\(\)/.test(src),
+		'不进导出就等于没量');
+});
