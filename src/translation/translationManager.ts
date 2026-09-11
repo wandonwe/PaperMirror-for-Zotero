@@ -626,6 +626,15 @@ export class TranslationManager {
 	 */
 	private released = new Map<number, { reason: ReleaseReason; count: number; renderRetries: number }>();
 	/**
+	 * 渲染事件补回被**哪一道闸**挡掉了,各多少次 (2.9.4)。
+	 *
+	 * 装它的直接原因: 2.9.3 真机上第 42–45 页释放了 1/3/4/5 次、原因全是
+	 * `text-layer-not-rendered`,而 `renderRetries` 全是 0 —— 补回一次都没发起,
+	 * 可日志里**分不出是哪一道闸挡的**,只能猜。猜出来的结论不配写进代码。
+	 * 纯计数,不含任何文本。
+	 */
+	private renderRetryBlocked = new Map<string, number>();
+	/**
 	 * 页 → 最近一次被用到的序号 (2.8.3, 性能第四批)。单调递增,只用来排先后,
 	 * 不用时间戳: 同一毫秒内先后用到的页时间戳分不出先后。
 	 */
@@ -1485,7 +1494,22 @@ export class TranslationManager {
 			return;
 		}
 		const record = this.released.get(pageIndex);
-		if (!record || this.pages.has(pageIndex) || record.renderRetries >= MAX_RENDER_RETRIES) {
+		// 2.9.4: **每一道闸挡掉了多少次,如实计数**。
+		//
+		// 2.9.3 真机那轮出现了一件光看结果解释不了的事: 第 42–45 页(用户这一趟的
+		// 起始几页)连续被释放 1/3/4/5 次,原因全是 `text-layer-not-rendered`,
+		// 而 `renderRetries` **全是 0** —— 事件补回一次都没成功发起。原因闸放行了,
+		// 那它就是被窗口闸、`pages.has` 或 `isScheduled` 挡掉的,可**日志里分不出是
+		// 哪一道**,只能猜。猜出来的结论不配写进代码,所以先把闸装上计数器。
+		if (!record) {
+			return;
+		}
+		if (this.pages.has(pageIndex)) {
+			bump(this.renderRetryBlocked, 'has-state');
+			return;
+		}
+		if (record.renderRetries >= MAX_RENDER_RETRIES) {
+			bump(this.renderRetryBlocked, 'budget-spent');
 			return;
 		}
 		// 2.9.3: **只对"渲染时机"类的释放生效**。
@@ -1502,14 +1526,22 @@ export class TranslationManager {
 		//   `cancelled` / `navigation-superseded` = "**用户已经不在这页了**" ——
 		//   该等他回来(翻页轮询 / 当前页那条无条件路径),不该被一个滚动事件拽起来。
 		if (record.reason !== 'text-layer-not-rendered' && record.reason !== 'extract-timeout') {
+			bump(this.renderRetryBlocked, 'reason');
 			return;
 		}
-		// 还得**仍在预取窗口内**: 渲染事件对已经滚出去的页一样会发,拉起一页
-		// 用户正在远离的内容只是再烧一次配额。
-		if (!this.wantedPages().includes(pageIndex)) {
+		// 距离闸 (2.9.4 放宽): 2.9.3 用的是 `wantedPages().includes(...)`,
+		// 而预取窗口只有 **current ±1**,一共 3 页宽。渲染事件到达时用户常常已经
+		// 走过两三页 —— 真机第 42–45 页正卡在这里。
+		//
+		// 收窄成这样是过头了: 渲染事件**本身就是**"这一页现在抽得到"的确定信息,
+		// 它不需要再被预取窗口背书。真正要防的只有"拉起一页用户已经远离的内容",
+		// 那用距离判断就够,半径与翻页轮询取同一个 `RELEASE_RETRY_RADIUS`。
+		if (Math.abs(pageIndex - this.currentPage) > RELEASE_RETRY_RADIUS) {
+			bump(this.renderRetryBlocked, 'too-far');
 			return;
 		}
 		if (this.scheduler.isScheduled(`page-${pageIndex}`)) {
+			bump(this.renderRetryBlocked, 'already-queued');
 			return;
 		}
 		record.renderRetries++;
@@ -1642,6 +1674,8 @@ export class TranslationManager {
 						releasedPending: [...this.released.keys()].filter(p => !this.pages.has(p)).length,
 						// 2.9.2: 由 `textlayerrendered` 事件(而不是盲目轮询)发起的重抽次数。
 						renderRetries: [...this.released.values()].reduce((n, r) => n + r.renderRetries, 0),
+						// 2.9.4: 补回被哪一道闸挡掉了 —— 没有它就只能猜。
+						...(this.renderRetryBlocked.size ? { renderRetryBlocked: countsOf(this.renderRetryBlocked) } : {}),
 						releaseReasons: countsOf(new Map(
 							[...this.released.values()].reduce((acc, r) => {
 								acc.set(r.reason, (acc.get(r.reason) ?? 0) + 1);

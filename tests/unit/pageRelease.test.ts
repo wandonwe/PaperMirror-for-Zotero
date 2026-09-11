@@ -452,6 +452,64 @@ test('事件补回的两道新条件都在 (结构性回归闸, 2.9.3)', () => {
 		src.indexOf('void this.ensurePage(pageIndex, PRIORITY.RELEASED_RETRY', src.indexOf('onPageRendered(pageIndex: number): void')));
 	assert.ok(/record\.reason !== 'text-layer-not-rendered' && record\.reason !== 'extract-timeout'/.test(fn),
 		'按释放原因分流 —— cancelled / navigation-superseded 是"用户走了",该等他回来');
-	assert.ok(/!this\.wantedPages\(\)\.includes\(pageIndex\)/.test(fn),
-		'还得仍在预取窗口内 —— 渲染事件对滚出去的页一样会发');
+	// 2.9.4: 距离闸取代了窗口闸。预取窗口只有 current ±1(3 页宽),渲染事件到达时
+	// 用户常常已经走过两三页 —— 真机第 42–45 页正卡在这里,renderRetries 全是 0。
+	assert.ok(/Math\.abs\(pageIndex - this\.currentPage\) > RELEASE_RETRY_RADIUS/.test(fn),
+		'距离闸: 渲染事件本身就是"这一页现在抽得到"的确定信息,不需要预取窗口再背书;'
+		+ '要防的只有"拉起一页用户已经远离的内容"');
+	assert.ok(!/wantedPages\(\)\.includes\(pageIndex\)/.test(fn),
+		'不许退回 ±1 的预取窗口 —— 那把 2.9.2 的本体能力一起压住了');
+});
+
+test('每一道闸挡掉多少次都要计数 (结构性回归闸, 2.9.4)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const fn = src.slice(src.indexOf('onPageRendered(pageIndex: number): void'),
+		src.indexOf('void this.ensurePage(pageIndex, PRIORITY.RELEASED_RETRY', src.indexOf('onPageRendered(pageIndex: number): void')));
+	for (const kind of ['has-state', 'budget-spent', 'reason', 'too-far', 'already-queued']) {
+		assert.ok(new RegExp(`bump\\(this\\.renderRetryBlocked, '${kind}'\\)`).test(fn),
+			`${kind} 这道闸必须记数 —— 2.9.3 上第 42–45 页 renderRetries 全是 0,`
+			+ '而日志分不出是哪一道挡的,只能猜;猜出来的结论不配写进代码');
+	}
+	assert.ok(/renderRetryBlocked: countsOf\(this\.renderRetryBlocked\)/.test(src),
+		'计数要进导出,否则下一轮还是看不见');
+});
+
+test('渲染事件到达时用户已走过两三页,照样补得回来 (2.9.4 真机第 42–45 页)', async () => {
+	const { deps } = depsFailing(20, 1);
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: true, prefetchDebounceMs: 100000, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(19);
+	await settle();
+	await manager.ensurePage(20, 10); // 释放: text-layer-not-rendered
+
+	// 用户继续往后读 —— 第 20 页已经**不在** current ±1 的预取窗口内了。
+	// 2.9.3 的窗口闸正是在这里把补回挡死的: 真机第 42–45 页 renderRetries 全是 0。
+	manager.setCurrentPage(22);
+	await settle();
+	manager.onPageRendered(20);
+	await settle();
+	assert.equal(manager.getPageState(20)?.status, 'done',
+		'渲染事件本身就是"这一页现在抽得到"的确定信息 —— 不该再要求它落在 3 页宽的预取窗口里');
+	manager.dispose();
+});
+
+test('被挡掉的每一次都进了计数,且只有枚举不含文本 (2.9.4)', async () => {
+	const { deps } = depsCancelling(20);
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: true, prefetchDebounceMs: 100000, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(19);
+	await settle();
+	await manager.ensurePage(20, 10); // 释放: cancelled
+	manager.onPageRendered(20);        // 被原因闸挡
+	manager.setCurrentPage(40);
+	await settle();
+	manager.onPageRendered(20);        // 走远了 —— 被距离闸挡(原因闸也会挡,先到先算)
+	await settle();
+	const usage = (manager.exportDiagnostics() as { usage: Record<string, unknown> }).usage;
+	const blocked = usage.renderRetryBlocked as Record<string, number>;
+	assert.ok(blocked && (blocked.reason ?? 0) >= 1,
+		'挡掉就要记 —— 2.9.3 上第 42–45 页 renderRetries 全是 0,而分不出是哪一道闸,只能猜');
+	assert.ok(Object.keys(blocked).every(k => /^[a-z-]+$/.test(k)),
+		'键只能是枚举名,不含页码、路径或任何文本');
+	manager.dispose();
 });
