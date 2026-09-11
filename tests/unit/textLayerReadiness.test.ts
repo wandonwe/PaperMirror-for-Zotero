@@ -113,8 +113,13 @@ test('预取页遇到"层不在"要重来,当前页要报错,都不许标完成 
 	const branch = src.slice(start, src.indexOf('// real extraction errors keep their error', start));
 	assert.ok(/if \(pageIndex === this\.currentPage\) \{[\s\S]{0,200}state\.status = 'error';/.test(branch),
 		'当前页: 如实报可重试的错');
-	assert.ok(/this\.pages\.delete\(pageIndex\);/.test(branch),
-		'预取页: 忘掉这次结果,等用户翻过去重抽');
+	// 2.9.0: 预取页仍然忘掉这次结果,但必须**走 releasePage** —— 裸 delete 会让
+	// 这一页从 exportScope 里整行消失(真机第 36/41/45 页就是这么没的),而且
+	// 没有任何东西保证 2.8.13 指望的那次"用户翻过去"真的会发生。
+	assert.ok(/this\.releasePage\(pageIndex, state, 'text-layer-not-rendered'\);/.test(branch),
+		'预取页: 释放并记账,而不是裸 delete');
+	assert.ok(!/this\.pages\.delete\(pageIndex\)/.test(branch),
+		'不许绕过 releasePage 直接删 —— 删了就没人知道这一页存在过');
 	assert.ok(!/state\.status = 'done'/.test(branch),
 		'无论如何都不许标完成 —— 标了就永远不会再抽,用户翻过去一个字没译');
 });
