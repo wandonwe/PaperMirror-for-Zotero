@@ -417,25 +417,89 @@ export function textLayerExists(reader: ReaderLike, pageIndex: number): boolean 
 }
 
 /**
+ * PDF.js 的 `PDFPageView.renderingState` (2.9.1)。
+ *
+ * `RenderingStates`: 0 = INITIAL(还没排上)、1 = RUNNING(正在渲)、
+ * 2 = PAUSED(排过又被推迟 —— 离视口太远)、3 = FINISHED。
+ *
+ * 拿不到就返回 null(fork 改过 API / 页对象不在)。调用方另有兜底,
+ * **绝不据此做出"这页没文字"这种定论**。
+ */
+export function pageRenderState(reader: ReaderLike, pageIndex: number): number | null {
+	try {
+		const state = (pageViewOf(reader, pageIndex) as { renderingState?: unknown } | null)?.renderingState;
+		return typeof state === 'number' ? state : null;
+	}
+	catch {
+		return null;
+	}
+}
+
+/** `renderingState` 里"等下去没意义"的两档: 还没排上 / 排过又被推迟。 */
+const RENDER_STATE_INITIAL = 0;
+const RENDER_STATE_PAUSED = 2;
+
+/**
  * Wait (briefly) for PDF.js to render the text layer of a page. Resolves false
  * if the page never renders one — the caller then falls through to the next
  * extraction path rather than reporting "no text layer".
+ *
+ * ## 2.9.1: 别再对着没渲染的页干等 2.5 秒
+ *
+ * 真机第四轮把账算清楚了: 59 页的 `extractMs` 合计 50,987 ms,其中
+ * **`textLayerWaitMs` 占 40,729 ms(80%)**;而我原先怀疑的 PDFWorker char 流
+ * (`charsPathMs`)**整轮只有 19 ms** —— 那条假设被彻底证伪。最慢的页
+ * `tlWait` 在 1.4–2.6 秒,p28=2583、p29=2527 **直接跑满** 2500 ms 上限。
+ *
+ * 原因是下面那条早退 `count === 0 && !pageViewOf(...)` **永远不触发**:
+ * PDF.js 给文档里**每一页**都建了 PDFPageView 对象,`pageViewOf` 对任何页号
+ * 都返回非空。于是预取去抽一个没渲染的页 = 白等满 2.5 秒 = 抽不到 = 释放;
+ * 2.9.0 的补回再试一次 = 再白等 2.5 秒。同一轮
+ * `releaseReasons['text-layer-not-rendered'] = 29`。
+ *
+ * 而这 2.5 秒还占着抽取信号量(最多 2 个并发)—— 白等的同时挡住用户正看的页。
+ *
+ * 两道闸,任一成立就立刻返回 false:
+ *   1. **渲染状态**说这页还没排上或已被推迟(INITIAL / PAUSED),且一个 span
+ *      都没有 —— 精确,但依赖 fork 保留这个字段;
+ *   2. **冷启动上限** `coldMs`: 一个 span 都没出现就最多等这么久。真在渲的页
+ *      几十毫秒内就会吐出第一批 span,所以这条不依赖任何 PDF.js 内部 API,
+ *      是闸 1 拿不到状态时的兜底。
+ *
+ * 完整的 `timeoutMs` 只留给**已经开始长 span** 的页 —— 那时候等才有意义。
  */
-export async function waitForTextLayer(reader: ReaderLike, pageIndex: number, timeoutMs = 2500): Promise<boolean> {
-	const deadline = Date.now() + timeoutMs;
+export async function waitForTextLayer(
+	reader: ReaderLike,
+	pageIndex: number,
+	timeoutMs = 2500,
+	coldMs = TEXT_LAYER_COLD_MS
+): Promise<boolean> {
+	const startedAt = Date.now();
+	const deadline = startedAt + timeoutMs;
 	// PDF.js **逐步**往文本层里塞 span。旧代码"有一个 span 就算渲染好了",于是
 	// 抽取经常读到半成品 —— 2.8.13 真机上第 9 页只抽出 2 个块(抽取耗时 7 ms),
 	// 而整页正文一个字都没进翻译。改为**等它稳定**: 连续两次采样 span 数不变
 	// 才算完成。稳定判据比"有没有"贵一次采样,但一页只付一次。
 	let last = -1;
+	let sawSpans = false;
 	while (Date.now() < deadline) {
 		const count = textLayerSpanCount(reader, pageIndex);
-		if (count > 0 && count === last) {
-			return true; // 两次采样之间没再长 —— 认为渲染完了
+		if (count > 0) {
+			sawSpans = true;
+			if (count === last) {
+				return true; // 两次采样之间没再长 —— 认为渲染完了
+			}
 		}
-		// Only worth waiting if PDF.js knows about the page at all.
-		if (count === 0 && !pageViewOf(reader, pageIndex)) {
-			return false;
+		if (!sawSpans) {
+			// 闸 1: PDF.js 自己说这页还没排上 / 已被推迟。等下去毫无意义。
+			const state = pageRenderState(reader, pageIndex);
+			if (state === RENDER_STATE_INITIAL || state === RENDER_STATE_PAUSED) {
+				return false;
+			}
+			// 闸 2: 冷启动上限 —— 不依赖任何 PDF.js 内部字段的兜底。
+			if (Date.now() - startedAt >= coldMs) {
+				return false;
+			}
 		}
 		last = count;
 		await new Promise(resolve => setTimeout(resolve, TEXT_LAYER_SETTLE_MS));
@@ -446,6 +510,13 @@ export async function waitForTextLayer(reader: ReaderLike, pageIndex: number, ti
 
 /** 两次采样之间的间隔 —— 也是"稳定"的判据粒度。 */
 export const TEXT_LAYER_SETTLE_MS = 100;
+
+/**
+ * 一个 span 都还没出现时最多等多久 (2.9.1)。真在渲的页几十毫秒内就会吐出
+ * 第一批 span;等满 2.5 秒只会发生在**根本没在渲**的页上,那是纯浪费 ——
+ * 真机一轮白等掉 40.7 秒,还占着抽取信号量挡住当前页。
+ */
+export const TEXT_LAYER_COLD_MS = 400;
 
 /**
  * Read the rendered text layer of one page as positioned items in PDF space.

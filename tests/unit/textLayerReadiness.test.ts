@@ -81,7 +81,7 @@ test('一直是 0 就不算就绪 (2.8.13 真机修正)', async () => {
 test('就绪判据真的按"稳定"写,不是按"有没有" (结构性回归闸, 2.8.13)', () => {
 	const src = readFileSync(join(process.cwd(), 'src/reader/zoteroReaderAdapter.ts'), 'utf8');
 	const wait = src.slice(src.indexOf('export async function waitForTextLayer'), src.indexOf('export const TEXT_LAYER_SETTLE_MS'));
-	assert.ok(/if \(count > 0 && count === last\) \{/.test(wait),
+	assert.ok(/if \(count > 0\) \{[\s\S]{0,200}if \(count === last\) \{/.test(wait),
 		'必须是"连续两次采样相同且非零"才算渲染完');
 	assert.ok(!/if \(hasRenderedTextLayer\(reader, pageIndex\)\) \{\s*\n\s*return true;/.test(wait),
 		'不许退回"有一个 span 就返回"的旧判据');
@@ -91,6 +91,85 @@ test('就绪判据真的按"稳定"写,不是按"有没有" (结构性回归闸,
 	const existsStart = src.indexOf('export function textLayerExists');
 	const exists = src.slice(existsStart, src.indexOf('\n}', existsStart));
 	assert.ok(!/span/.test(exists), 'textLayerExists 只看层在不在,不看有没有 span');
+});
+
+// ---- 4. 2.9.1: 别再对着没渲染的页干等 2.5 秒 --------------------------------
+//
+// 真机第四轮的账: 59 页 `extractMs` 合计 50,987 ms,其中 `textLayerWaitMs`
+// **占 40,729 ms(80%)**;而我原先怀疑的 PDFWorker char 流 `charsPathMs`
+// **整轮只有 19 ms** —— 那条假设被证伪。最慢的页 p28=2583、p29=2527 直接跑满
+// 2500 ms 上限,同一轮 `releaseReasons['text-layer-not-rendered'] = 29`。
+//
+// 根因: 旧的早退 `count === 0 && !pageViewOf(...)` **永远不触发** —— PDF.js
+// 给文档里每一页都建了 PDFPageView,`pageViewOf` 对任何页号都返回非空。
+
+/** 只实现这三个函数需要的最小 reader 形状。 */
+function fakeReader(pages: Record<number, { spans: number; renderingState?: number }>): unknown {
+	return {
+		_internalReader: { _primaryView: { _iframeWindow: { PDFViewerApplication: { pdfViewer: {
+			getPageView: (i: number) => {
+				const page = pages[i];
+				if (!page) {
+					return null;
+				}
+				return {
+					renderingState: page.renderingState,
+					div: { querySelector: (sel: string) => sel === '.textLayer'
+						? { querySelectorAll: () => ({ length: page.spans }) }
+						: null }
+				};
+			}
+		} } } } }
+	};
+}
+
+test('PDF.js 说这页还没排上(INITIAL)就立刻返回,不等 (2.9.1 真机第四轮)', async () => {
+	const { waitForTextLayer } = await import('../../src/reader/zoteroReaderAdapter');
+	const started = Date.now();
+	const ok = await waitForTextLayer(fakeReader({ 7: { spans: 0, renderingState: 0 } }) as never, 7);
+	assert.equal(ok, false);
+	assert.ok(Date.now() - started < 200,
+		'旧代码在这里白等满 2500 ms —— 真机一轮为此烧掉 40.7 秒,还占着抽取信号量挡住当前页');
+});
+
+test('PAUSED(排过又被推迟,离视口太远)同样立刻返回 (2.9.1)', async () => {
+	const { waitForTextLayer } = await import('../../src/reader/zoteroReaderAdapter');
+	const started = Date.now();
+	assert.equal(await waitForTextLayer(fakeReader({ 7: { spans: 0, renderingState: 2 } }) as never, 7), false);
+	assert.ok(Date.now() - started < 200, 'PAUSED 就是"PDF.js 决定先不渲这页",等它毫无意义');
+});
+
+test('拿不到 renderingState 时,冷启动上限兜底 (2.9.1)', async () => {
+	const { waitForTextLayer } = await import('../../src/reader/zoteroReaderAdapter');
+	// fork 改了 API / 字段缺失 —— 闸 1 失效,闸 2 必须接住。
+	const started = Date.now();
+	const ok = await waitForTextLayer(fakeReader({ 7: { spans: 0 } }) as never, 7, 2500, 250);
+	const spent = Date.now() - started;
+	assert.equal(ok, false);
+	assert.ok(spent >= 250 && spent < 900,
+		`冷启动上限之后就该放手,实际等了 ${spent} ms —— 这条不依赖任何 PDF.js 内部字段`);
+});
+
+test('正在渲染(RUNNING)的页照常等,且仍要等它长稳 (2.9.1)', async () => {
+	const { waitForTextLayer } = await import('../../src/reader/zoteroReaderAdapter');
+	// 第一拍就有 span → 两道冷启动闸都不适用,走 2.8.13 的稳定判据。
+	const ok = await waitForTextLayer(fakeReader({ 7: { spans: 193, renderingState: 1 } }) as never, 7);
+	assert.equal(ok, true, '已经在长 span 的页,等才是有意义的 —— 这一版没有削弱它');
+});
+
+test('冷启动上限只管"一个 span 都没有"的情形 (结构性回归闸, 2.9.1)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/reader/zoteroReaderAdapter.ts'), 'utf8');
+	const wait = src.slice(src.indexOf('export async function waitForTextLayer'), src.indexOf('export const TEXT_LAYER_SETTLE_MS'));
+	assert.ok(/if \(!sawSpans\) \{/.test(wait),
+		'两道闸必须都挂在 `一个 span 都没见过` 之下 —— 否则会把正在长 span 的页也砍掉,那就退回 2.8.13 之前的半成品抽取');
+	assert.ok(/state === RENDER_STATE_INITIAL \|\| state === RENDER_STATE_PAUSED/.test(wait),
+		'闸 1: 只认 INITIAL / PAUSED;RUNNING 与 FINISHED 都该继续等');
+	assert.ok(/Date\.now\(\) - startedAt >= coldMs/.test(wait), '闸 2: 冷启动上限');
+	assert.ok(!/if \(count === 0 && !pageViewOf\(reader, pageIndex\)\)/.test(wait),
+		'不许退回那条永不触发的旧早退 —— PDF.js 给每一页都建了 PDFPageView');
+	const state = src.slice(src.indexOf('export function pageRenderState'), src.indexOf('const RENDER_STATE_INITIAL'));
+	assert.ok(/return null;/.test(state) && /catch/.test(state),
+		'拿不到渲染状态要返回 null,交给冷启动上限 —— 绝不据此断言"这页没文字"');
 });
 
 test('抽不出文字时,"层不在"与"真没文字"必须分开 (结构性回归闸, 2.8.13)', () => {
