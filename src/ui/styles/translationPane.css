@@ -1247,14 +1247,17 @@
 	display: none;
 }
 
-/* 「解析」的图标与标签 —— 与 .pm-icon-button 的描边风格保持一套。 */
-.pm-bar-action-explain {
+/* 文字动作按钮的图标与标签 —— 与 .pm-icon-button 的描边风格保持一套。
+   2.10.2: 从「解析」专属推广到所有带图标的动作按钮(现在还有「术语」),
+   各写一份迟早会在描边粗细或尺寸上悄悄分叉。 */
+.pm-bar-action-explain,
+.pm-bar-action-terms {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
 }
 
-.pm-bar-action-explain svg {
+.pm-bar-action svg {
 	width: 15px;
 	height: 15px;
 	fill: none;
@@ -1430,11 +1433,32 @@
 	.pm-bar .pm-switch-label span:last-child {
 		display: none;
 	}
-	.pm-bar-action-explain span {
+	.pm-bar-action-explain span,
+	.pm-bar-action-terms span {
 		display: none;
 	}
-	.pm-bar-action-explain {
+	.pm-bar-action-explain,
+	.pm-bar-action-terms {
 		padding: 0 6px;
+	}
+}
+
+/* 最窄档:收紧间距,而不是再藏一个控件 (2.10.2)。
+ *
+ * 「术语」回到常驻之后多占约 28px,390px(窗格声明的 min-width)下工具栏又
+ * 溢出 24px、裁掉一个控件。能省的地方有两处:12 个条目之间的 gap,以及
+ * 工具条自己的左右内边距 —— 加起来约 32px,正好够,而且**不损失任何信息**。
+ *
+ * 不选的方案:再藏一个控件(服务标记是"当前用哪个引擎"的唯一显示),
+ * 或者把图标按钮改小(28px 已经接近可点的下限)。间距紧一点,
+ * 总好过一个点不到的按钮。 */
+@media (max-width: 430px) {
+	.pm-bar {
+		gap: 2px;
+		padding: 0 4px;
+	}
+	.pm-bar-sep {
+		margin: 0 2px;
 	}
 }
 

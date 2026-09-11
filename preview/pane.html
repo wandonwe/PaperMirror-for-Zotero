@@ -22,6 +22,7 @@ const ICON = {
 	close: 'm6 6 12 12M18 6 6 18',
 	refresh: 'M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7',
 	more: 'M5 12h.01 M12 12h.01 M19 12h.01',
+	terms: 'M4 19.5V5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2Z M4 19.5A2 2 0 0 1 6 17.5h13',
 	explain: 'M12 3.5 13.9 9l5.6 1.9-5.6 1.9L12 18.5l-1.9-5.7L4.5 10.9 10.1 9 12 3.5Z M18.5 16.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z'
 };
 function el(tag, cls, text) {
@@ -110,12 +111,18 @@ function buildPane(opts) {
 	bar.append(
 		langPill, provPill,
 		iconButton(ICON.refresh, '全文重译(丢失已翻译内容)', 'pm-refresh'),
-		el('span', 'pm-bar-spacer'),
 		switchControl('同步滚动', true),
+		el('span', 'pm-bar-spacer'),
 		(() => {
 			const b = textButton('pm-bar-action pm-bar-action-explain', '', '解析 PDF 中选中的文字(先选中,再点这里)');
 			b.setAttribute('aria-label', '解析');
 			b.append(svgIcon(ICON.explain), el('span', undefined, '解析'));
+			return b;
+		})(),
+		(() => {
+			const b = textButton('pm-bar-action pm-bar-action-terms', '', '预览本篇自动学得的术语');
+			b.setAttribute('aria-label', '术语');
+			b.append(svgIcon(ICON.terms), el('span', undefined, '术语'));
 			return b;
 		})(),
 		iconButton(ICON.more, '更多:导出译文 PDF、诊断'),
