@@ -406,7 +406,12 @@ export class TranslationPane {
 	 * `cancelled` 大 = 第一批的取消在频繁生效(翻页快),不是故障;
 	 * 它与 `layoutMs` 一起看才知道"排版耗时"是被谁吃掉的。
 	 */
-	private renderStats = { started: 0, committed: 0, cancelled: 0, failed: 0, totalMs: 0 };
+	// 2.8.15: `superseded` / `notReady` 是真机上那 27 次"起了但既没提交也没取消"
+	// 的去向。旧的四个计数器 started=79 / committed=47 / cancelled=5 / failed=0
+	// 留了 34% 的缺口,而缺口既可能是合法路径(渲染期间被更新的结果取代、或
+	// 渲染器报"这页还没内容")也可能是泄漏 —— 数字本身分不出来,于是只能猜。
+	// 现在两条合法路径各自记数,`started` 与其余五项必须对得上账。
+	private renderStats = { started: 0, committed: 0, cancelled: 0, failed: 0, superseded: 0, notReady: 0, totalMs: 0 };
 	/**
 	 * 页位置索引 (2.8.0 第二批): 建一次、二分查,滚动期间零 DOM 读取。
 	 * 几何真的变了(页宽 / 缩放 / 页面尺寸)才作废重建。
@@ -1475,7 +1480,10 @@ export class TranslationPane {
 	 */
 	private commitRender(page: number, result: PageRenderResult, aborted: boolean): void {
 		if (this.slotToken[page] !== this.slotRenderSeq[page] || this.viewKind !== 'page') {
-			return; // superseded while rendering
+			// 渲染期间这一页又被标脏/换了视图 —— 结果作废。合法路径,但**必须记数**:
+			// 不记就成了 started 与 committed 之间无从解释的缺口 (2.8.15)。
+			this.renderStats.superseded++;
+			return;
 		}
 		if (aborted) {
 			this.renderStats.cancelled++;
@@ -1484,6 +1492,10 @@ export class TranslationPane {
 		}
 		if (result !== false) {
 			this.renderStats.committed++;
+		}
+		else {
+			// 渲染器说"这页还没内容"(尚无译文/槽已回收)—— 同样是合法路径。
+			this.renderStats.notReady++;
 		}
 		const next = nextSlotState(result, this.slotDegradeTries[page] ?? 0, Date.now());
 		if (result !== false) {

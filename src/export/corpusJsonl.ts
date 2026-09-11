@@ -144,7 +144,9 @@ export async function writeCorpusJsonl(sink: JsonlSink, source: CorpusExportSour
 				kind: 'page',
 				page: entry.pageIndex + 1,
 				status: entry.status,
-				availability: { spans: 'missing:read-failed', blocks: 'missing:read-failed', translations: 'missing:read-failed' }
+				availability: { spans: 'missing:read-failed', blocks: 'missing:read-failed', translations: 'missing:read-failed' },
+				// 2.8.15: 只是异常的**种类**(枚举 code / 类名),不含任何消息内容。
+				readFailureKind: read.kind
 			});
 			pagesWritten++;
 			source.onProgress?.(pagesWritten, scope.length);

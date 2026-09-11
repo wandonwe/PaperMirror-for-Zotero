@@ -612,6 +612,7 @@ export class ReaderSession {
 				extractPage: pageIndex => this.extractor.extractPage(pageIndex),
 				extractRenderedPage: pageIndex => this.extractor.extractRenderedPage(pageIndex),
 				extractPathOf: pageIndex => this.extractor.extractPathFor(pageIndex),
+				extractPhasesOf: pageIndex => this.extractor.extractPhasesFor(pageIndex),
 				translateRequest: (request, signal, hooks) => this.translateRequest(request, signal, hooks),
 				readCache: async (pageIndex, blocks) => {
 					const texts = blocks.map(b => b.sourceText);

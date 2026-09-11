@@ -102,6 +102,31 @@ export interface ExtractInputs {
 	noTranslateHash: string;
 }
 
+/**
+ * 一次抽取的分段耗时 (2.8.15)。
+ *
+ * 为什么要分段: 真机 30 页里 15 页的 `extractMs` 在 0.8–2.6 秒,而这些页
+ * **一次请求都没发**(`requests: 0, fromCache: true`)—— 用户感到的"越翻越慢"
+ * 落在抽取里,不在网络上。可 `extractMs` 是个总数,回答不了"等在哪":
+ *
+ *   - `charsPathMs`   路径 1(fork 的 char 流)整趟。本文档 30/30 页最终都落到
+ *                     text-layer,说明这趟**每次都白跑** —— 它到底多贵,要量;
+ *   - `textLayerWaitMs` 等 PDF.js 把文本层渲染稳定的纯等待;
+ *   - `textLayerMs`   路径 2 整趟(含上面那段等待 + 建块);
+ *   - `plainTextMs`   路径 3(PDFWorker 全文)。
+ *
+ * 同一条路最快的页只要 14 ms,所以那 2.6 秒是**等**,不是算。三个数字把
+ * "等 PDFWorker"与"等文本层渲染"分开 —— 不分开就只能猜。
+ */
+export interface ExtractPhases {
+	obstaclesMs: number;
+	charsPathMs: number;
+	textLayerMs: number;
+	textLayerWaitMs?: number;
+	plainTextMs: number;
+	buildMs: number;
+}
+
 export class TextExtractor implements PageParser {
 	private reader: ReaderLike;
 	private includeReferences: boolean;
@@ -127,6 +152,8 @@ export class TextExtractor implements PageParser {
 	private pathByPage = new Map<number, ExtractPath>();
 	/** 2.8.7: 每页抽取当时的可变输入快照,导出核对结构一致性时用。 */
 	private inputsByPage = new Map<number, Omit<ExtractInputs, 'path'>>();
+	/** 2.8.15: 每页最近一次抽取的分段耗时 —— 回答"抽取等在哪一段"。 */
+	private phasesByPage = new Map<number, ExtractPhases>();
 
 	constructor(reader: ReaderLike, options: { includeReferences: boolean; noTranslate?: () => string[] }) {
 		this.reader = reader;
@@ -240,10 +267,21 @@ export class TextExtractor implements PageParser {
 		// 2.8.7: 先把这次抽取实际依赖的可变输入拍下来 —— 事后重解析时逐项比对,
 		// 变了就把结构比对结论降为 unverifiable,不拿"碰巧相等"当证据。
 		this.inputsByPage.set(pageIndex, this.currentExtractInputs(pageIndex));
+		// 2.8.15: 分段计时。真机 30 页里有 15 页 `extractMs` 在 0.8–2.6 秒,而这些页
+		// **一次接口请求都没发**(requests:0, fromCache:true)—— 用户感到的"翻到后面
+		// 越来越慢"落在抽取里,不在网络上。但 `extractMs` 是个总数,分不清等在哪:
+		// 是 getPageData 这趟 PDFWorker 往返(本文档 30/30 页都落到 text-layer,
+		// 说明这趟每次都白跑),还是文本层就绪轮询。同一条路最快的页只要 14 ms,
+		// 所以那 2.6 秒是**等**,不是算 —— 到底等谁,这三个数字才回答得了。
+		const t0 = Date.now();
+		const phases: ExtractPhases = { obstaclesMs: 0, charsPathMs: 0, textLayerMs: 0, plainTextMs: 0, buildMs: 0 };
+		this.phasesByPage.set(pageIndex, phases);
 		// 边框硬屏障: real figure boundaries participate in extraction — in-figure
 		// labels stay out of the flow, and nothing merges across a figure.
 		const obstacles = await this.obstaclesFor(pageIndex);
+		phases.obstaclesMs = Date.now() - t0;
 		// --- path 1: the fork's char stream (best structure) -----------------
+		const charsStartedAt = Date.now();
 		try {
 			const { pageData, pageWidth, pageHeight } = await this.getPageData(pageIndex);
 			// 扫描件/坏字体页检测 (参照 BabelDOC midend/detect_scanned_file.py 的
@@ -291,16 +329,22 @@ export class TextExtractor implements PageParser {
 			}
 			logger.warn(MODULE, `getPageData path failed for page ${pageIndex}; trying the text layer`, e);
 		}
+		// 走通与走不通都记 —— 走不通的那趟正是"白付的往返",它的耗时才是问题。
+		phases.charsPathMs = Date.now() - charsStartedAt;
 
 		// --- path 2: the rendered text layer (what the user can select) ------
+		const textLayerStartedAt = Date.now();
 		const spanBlocks = await this.extractFromTextLayer(pageIndex, obstacles);
+		phases.textLayerMs = Date.now() - textLayerStartedAt;
 		if (spanBlocks && spanBlocks.length) {
 			this.pathByPage.set(pageIndex, 'text-layer');
 			return spanBlocks;
 		}
 
 		// --- path 3: PDFWorker plain text ------------------------------------
+		const plainTextStartedAt = Date.now();
 		const pageText = await this.fullTextForPage(pageIndex);
+		phases.plainTextMs = Date.now() - plainTextStartedAt;
 		if (pageText.trim()) {
 			const result = buildBlocksFromPlainText(pageText, pageIndex, {
 				includeReferences: this.includeReferences,
@@ -353,6 +397,12 @@ export class TextExtractor implements PageParser {
 		return this.pathByPage.get(pageIndex);
 	}
 
+	/** 这一页最近一次抽取的分段耗时 (2.8.15);没抽过则 undefined。 */
+	extractPhasesFor(pageIndex: number): ExtractPhases | undefined {
+		const phases = this.phasesByPage.get(pageIndex);
+		return phases ? { ...phases } : undefined;
+	}
+
 	/** 这一页抽取当时的可变输入(含最终走通的路径);没抽过则 undefined。 */
 	extractInputsFor(pageIndex: number): ExtractInputs | undefined {
 		const inputs = this.inputsByPage.get(pageIndex);
@@ -372,13 +422,25 @@ export class TextExtractor implements PageParser {
 	/** Build blocks from the rendered PDF.js text layer, if there is one. */
 	private async extractFromTextLayer(pageIndex: number, obstacles: [number, number, number, number][] = []): Promise<SourceBlock[] | null> {
 		try {
-			if (!adapter.hasRenderedTextLayer(this.reader, pageIndex)) {
-				await adapter.waitForTextLayer(this.reader, pageIndex);
+			// 2.8.15: **无条件**等就绪。此前这里有一道 `if (!hasRenderedTextLayer)`
+			// 短路 —— 而 `hasRenderedTextLayer` 就是"span 数 > 0",于是 2.8.13 那条
+			// 「等它两次采样不变」的稳定判据,恰恰在**它唯一要防的情形**下被跳过:
+			// 文本层已经长出了第一批 span、还在继续长,短路当场放行,读到半成品。
+			// 真机第 9 页当初只抽出 2 个块、抽取耗时 7 ms,就是这条短路放的行;
+			// 2.8.13 只堵住了"层根本不在"那一半。
+			// 代价是已就绪的页多付一次采样(约 100 ms)—— 与实测 0.8–2.6 秒的抽取
+			// 等待相比是噪声,而少抽半页是用户直接看得见的错。
+			const waitStartedAt = Date.now();
+			await adapter.waitForTextLayer(this.reader, pageIndex);
+			const phases = this.phasesByPage.get(pageIndex);
+			if (phases) {
+				phases.textLayerWaitMs = (phases.textLayerWaitMs ?? 0) + (Date.now() - waitStartedAt);
 			}
 			const page = adapter.getTextLayerItems(this.reader, pageIndex);
 			if (!page || !page.items.length) {
 				return null;
 			}
+			const buildStartedAt = Date.now();
 			const result = buildBlocksFromSpans(page.items, {
 				pageIndex,
 				pageHeight: page.pageHeight,
@@ -394,6 +456,11 @@ export class TextExtractor implements PageParser {
 			const tableCells = structured.filter(b => b.translationMode !== undefined);
 			const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
 			result.blocks = orderBlocksForReading([...prose, ...tableCells]);
+			// 建块是**同步 CPU 段**,与上面的等待是两回事 —— 主线程卡不卡看这个数,
+			// 等得久不久看 textLayerWaitMs。混在一起就分不出该优化哪边。
+			if (phases) {
+				phases.buildMs += Date.now() - buildStartedAt;
+			}
 			this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
 			this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
 			logger.info(MODULE, `Page ${pageIndex + 1}: extracted ${result.blocks.length} block(s) from the text layer`);
