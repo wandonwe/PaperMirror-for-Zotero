@@ -238,12 +238,15 @@ test('补回有界、低优先级、不与当前页抢 (结构性回归闸, 2.9.
 test('文本层渲染完的那一刻立刻重抽 —— 不等用户翻页 (2.9.2)', async () => {
 	const { deps } = depsFailing(20, 1); // 第一次抽失败(页还没渲染),之后成功
 	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
-		{ prefetch: false, delayFn: () => Promise.resolve() });
-	manager.setCurrentPage(0);
+		{ prefetch: true, prefetchDebounceMs: 100000, delayFn: () => Promise.resolve() });
+	// 用户停在第 19 页 —— 第 20 页在预取窗口内(2.9.3 的条件),但去抖长到
+	// 测试期内不会自己触发预取,所以下面观察到的重抽只可能来自渲染事件。
+	manager.setCurrentPage(19);
+	await settle();
 	await manager.ensurePage(20, 10);
 	assert.equal(scopeOf(manager).get(20), 'released');
 
-	// PDF.js 渲染到这一页 —— 当前页仍停在 0,没有任何翻页动作。
+	// PDF.js 渲染到这一页 —— 没有任何翻页动作。
 	manager.onPageRendered(20);
 	await settle();
 	assert.equal(manager.getPageState(20)?.status, 'done',
@@ -254,8 +257,9 @@ test('文本层渲染完的那一刻立刻重抽 —— 不等用户翻页 (2.9.
 test('事件补回不消耗盲目轮询的配额 —— 两套预算分开 (2.9.2)', async () => {
 	const { deps, attempts } = depsFailing(20, 99); // 永远失败
 	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
-		{ prefetch: false, delayFn: () => Promise.resolve() });
-	manager.setCurrentPage(0);
+		{ prefetch: true, prefetchDebounceMs: 100000, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(19);
+	await settle();
 	await manager.ensurePage(20, 10);
 
 	// 先把事件补回的配额用光 —— 它**不该**动到 releaseCount。
@@ -277,8 +281,9 @@ test('事件补回不消耗盲目轮询的配额 —— 两套预算分开 (2.9.
 test('释放过、但已经补回来的页,事件不再重复触发 (2.9.2)', async () => {
 	const { deps, attempts } = depsFailing(20, 1); // 只失败一次
 	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
-		{ prefetch: false, delayFn: () => Promise.resolve() });
-	manager.setCurrentPage(0);
+		{ prefetch: true, prefetchDebounceMs: 100000, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(19);
+	await settle();
 	await manager.ensurePage(20, 10);          // 失败 → 释放(留下 released 记录)
 	manager.onPageRendered(20);                 // 事件补回 → 成功,页状态回来了
 	await settle();
@@ -355,4 +360,98 @@ test('事件补回接线在 readerSession 里,且只认 textlayerrendered (结�
 		"必须单独订阅 textlayerrendered —— 上面那个订阅收全部渲染事件、分不出种类,"
 		+ "而 pagerendered(画布画完)早于文本层,拿它当信号会又一次落空");
 	assert.ok(/this\.disposeTextLayerEvents\?\.\(\);/.test(src), '订阅要能解绑,否则换文档就漏一个监听器');
+});
+
+// ---- 7. 2.9.3: 事件补回与导航取消别再打架 -------------------------------------
+//
+// 2.9.2 真机 103 页那轮,尾部第 88–93 页释放了 **5–11 次**,原因多为 `cancelled`;
+// `attemptErrors.CANCELLED` 涨到 58/174(33%),`segmentHitRate` 从 0.851 掉到
+// 0.479。那不是重试,是**抖动**: 用户在末尾来回滚动 → cancelExcept 撤掉离开窗口
+// 的任务 → 释放(cancelled)→ 滚动中 `textlayerrendered` 对刚离开的页照样发 →
+// 事件补回又把它拉起来 → 又被撤掉。
+//
+// 两类释放的语义本来就不同:
+//   `text-layer-not-rendered` = "当时看不见",渲染完就该立刻重来;
+//   `cancelled` / `navigation-superseded` = "**用户已经不在这页了**"。
+
+/** 造一个"因取消而释放"的页: 抽取阶段直接抛 CANCELLED。 */
+function depsCancelling(failPage: number): { deps: TranslationDeps; attempts: () => number } {
+	let attempts = 0;
+	const { deps } = depsFailing(-1, 0);
+	return {
+		deps: {
+			...deps,
+			extractPage: async (pageIndex: number) => {
+				if (pageIndex === failPage) {
+					attempts++;
+					throw new PaperMirrorError('CANCELLED', 'Superseded by navigation.');
+				}
+				return blocksFor(pageIndex);
+			}
+		},
+		attempts: () => attempts
+	};
+}
+
+test('因取消而释放的页,渲染事件不许把它拉起来 (2.9.3)', async () => {
+	const { deps, attempts } = depsCancelling(20);
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: true, prefetchDebounceMs: 100000, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(19);
+	await settle();
+	await manager.ensurePage(20, 10);
+	const row = manager.exportPageDiagnostics(20) as Record<string, unknown>;
+	assert.equal(row.releaseReason, 'cancelled');
+
+	const before = attempts();
+	for (let i = 0; i < 5; i++) {
+		manager.onPageRendered(20);
+	}
+	await settle();
+	assert.equal(attempts(), before,
+		'取消 = 用户已经不在这页了。滚动时 textlayerrendered 对刚离开的页照样发,'
+		+ '被它拉起来就会"起来→又被撤→再起来" —— 真机上第 88–93 页因此释放了 5–11 次');
+	manager.dispose();
+});
+
+test('已经滚出预取窗口的页,渲染事件也不拉 (2.9.3)', async () => {
+	const { deps, attempts } = depsFailing(20, 99);
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: true, prefetchDebounceMs: 100000, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(19);
+	await settle();
+	await manager.ensurePage(20, 10); // 释放,原因 text-layer-not-rendered
+	// 用户走远了 —— 第 20 页早已不在 current±1 里。
+	manager.setCurrentPage(60);
+	await settle();
+	const before = attempts();
+	manager.onPageRendered(20);
+	await settle();
+	assert.equal(attempts(), before,
+		'渲染事件对已经滚出去的页一样会发 —— 拉起一页用户正在远离的内容只是再烧一次配额');
+	manager.dispose();
+});
+
+test('仍在窗口内的"看不见"型释放,事件照常拉起 —— 2.9.2 的能力没被削掉 (2.9.3)', async () => {
+	const { deps } = depsFailing(20, 1);
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: true, prefetchDebounceMs: 100000, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(19);
+	await settle();
+	await manager.ensurePage(20, 10);
+	manager.onPageRendered(20);
+	await settle();
+	assert.equal(manager.getPageState(20)?.status, 'done',
+		'这一条是 2.9.2 的本体 —— 收窄条件不能把它一起收掉');
+	manager.dispose();
+});
+
+test('事件补回的两道新条件都在 (结构性回归闸, 2.9.3)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const fn = src.slice(src.indexOf('onPageRendered(pageIndex: number): void'),
+		src.indexOf('void this.ensurePage(pageIndex, PRIORITY.RELEASED_RETRY', src.indexOf('onPageRendered(pageIndex: number): void')));
+	assert.ok(/record\.reason !== 'text-layer-not-rendered' && record\.reason !== 'extract-timeout'/.test(fn),
+		'按释放原因分流 —— cancelled / navigation-superseded 是"用户走了",该等他回来');
+	assert.ok(/!this\.wantedPages\(\)\.includes\(pageIndex\)/.test(fn),
+		'还得仍在预取窗口内 —— 渲染事件对滚出去的页一样会发');
 });
