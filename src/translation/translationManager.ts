@@ -478,7 +478,32 @@ export interface PageTranslationState {
 	extractPath?: string;
 }
 
-/** 一个翻译请求的时序切片 (2.11.0) —— 全是数字,不含任何文本。 */
+/**
+ * 服务商 id 的形状闸 (2.11.1)。
+ *
+ * `lane` 是运行期拼出来的字符串。今天它等于服务商 id,明天有人往里加个后缀
+ * (`openai@custom-endpoint`、`openai#gw.corp.internal`)就会把端点带进一份
+ * "可以放心贴进 issue"的诊断 —— 2.8.6 已经为 `endpointHost` 付过一次这个账。
+ * 这里只放行枚举形状,别的一律记成 `other`:导出永远拿不到自由文本。
+ */
+function sanitizeProviderId(lane: string): string {
+	return /^[a-z0-9-]{1,32}$/.test(lane) ? lane : 'other';
+}
+
+/**
+ * 一个翻译请求的时序切片 (2.11.0)。
+ *
+ * 2.11.1 起多一个 `provider`。这是这一组里**唯一**的字符串,理由要写清楚:
+ * 2.11.0 的真机数据把「慢在等名额还是等服务端」答了 —— `gateMs` 在每个请求上
+ * 都是 0 或 1,全部时间在 `sendMs`。但随之而来的问题现有字段仍答不了:
+ * 快页(约 5300–9200 字符/秒)与慢页(约 515–585 字符/秒)差 **十几倍**,
+ * 而快页的 5 个请求**一个都没报 token 用量**(`usageMissing: 5` 正好等于它们),
+ * 同时 `engineRotations: 0`。是不是同一个引擎在服务,现在完全看不出来。
+ *
+ * 服务商 id 是枚举(`openai` / `bing-free` / `deepseek` …),不是端点、不是
+ * 密钥、不是模型参数 —— summary 里本来就按 id 导出引擎清单。为防它日后变成
+ * 一个什么都能塞的字段,privacy 闸对它做形状校验:只允许小写字母、数字和连字符。
+ */
 export interface RequestTiming {
 	gateMs: number;
 	sendMs: number;
@@ -487,6 +512,10 @@ export interface RequestTiming {
 	attempt: number;
 	blocks: number;
 	chars: number;
+	/** 服务商 id 枚举(非端点/非密钥);池只有一个成员时同样如实写出。 */
+	provider: string;
+	/** 本次请求时刻的池大小 —— 1 表示根本没走按页分配。 */
+	poolSize: number;
 }
 
 export interface PageDiagnostics {
@@ -623,6 +652,8 @@ export interface TranslationDeps {
 	 * current page's provider. Omitted → single shared lane (old behaviour).
 	 */
 	laneFor?(pageIndex: number): string;
+	/** 2.11.1: 当前服务商池大小 —— 1 表示根本没走按页分配。 */
+	poolSize?(): number;
 	/** Config snapshot getters. */
 	getLanguages(sampleText: string): { source: string; target: string };
 	getDocumentTitle(): string;
@@ -2356,7 +2387,10 @@ export class TranslationManager {
 									gateMs: t.gateMs, sendMs: t.sendMs,
 									inFlightAtStart: t.inFlightAtStart,
 									foreground, attempt, blocks: request.blocks.length,
-									chars: promptChars
+									chars: promptChars,
+									// lane 就是这一页解析出来的服务商(laneFor → providerForPage)。
+									provider: sanitizeProviderId(lane),
+									poolSize: this.deps.poolSize?.() ?? 1
 								});
 							}
 						});

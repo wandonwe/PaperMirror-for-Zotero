@@ -718,7 +718,8 @@ export class ReaderSession {
 				pageCount: () => adapter.getPageCount(this.reader),
 				// Each page's provider LANE — lets the scheduler cap providers
 				// independently and reserve a foreground slot for the current one.
-				laneFor: (pageIndex: number) => this.providerForPage(pageIndex)
+				laneFor: (pageIndex: number) => this.providerForPage(pageIndex),
+				poolSize: () => this.pool.length
 			},
 			{
 				onPageUpdate: state => this.onPageUpdate(state),

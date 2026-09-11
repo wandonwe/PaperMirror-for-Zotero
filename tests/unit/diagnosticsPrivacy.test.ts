@@ -243,12 +243,30 @@ test('请求级时序只有数字与布尔,不含任何文本 (2.11.0)', () => {
 	const decl = src.slice(src.indexOf('export interface RequestTiming {'),
 		src.indexOf('}', src.indexOf('export interface RequestTiming {')));
 	const fields = [...decl.matchAll(/^\t(\w+):\s*([\w[\]]+);/gm)].map(m => [m[1]!, m[2]!]);
-	assert.ok(fields.length >= 7, '字段应齐全');
+	assert.ok(fields.length >= 9, '字段应齐全');
+	// 2.11.1: `provider` 是这一组里唯一的字符串,而且是**有意**加的 ——
+	// 2.11.0 的数据答了「慢在等名额还是等服务端」(全在 sendMs),却答不了
+	// 「是不是同一个引擎在服务」。服务商 id 是枚举,summary 里本来就按 id 导出。
+	// 例外只此一个,且必须过形状闸;其余一律只许数字与布尔。
+	const STRING_ALLOWED = new Set(['provider']);
 	for (const [name, type] of fields) {
+		if (STRING_ALLOWED.has(name!)) {
+			assert.equal(type, 'string', `${name} 应为枚举形状的字符串`);
+			continue;
+		}
 		assert.ok(type === 'number' || type === 'boolean',
-			`${name} 是 ${type} —— 这一组只许出数字和布尔,一旦放进字符串,`
+			`${name} 是 ${type} —— 除白名单外只许数字和布尔,一旦放进字符串,`
 			+ '模型名、lane 名、端点乃至原文片段迟早会顺着它流进导出');
 	}
+});
+
+test('服务商 id 过形状闸,自由文本进不了导出 (2.11.1)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	assert.ok(/function sanitizeProviderId\(lane: string\): string \{/.test(src));
+	assert.ok(/\/\^\[a-z0-9-\]\{1,32\}\$\/\.test\(lane\) \? lane : 'other'/.test(src),
+		'lane 是运行期拼出来的字符串 —— 哪天带上 @端点 或 #网关主机名,'
+		+ '就会把端点带进一份"可以放心贴进 issue"的诊断(2.8.6 已经为 endpointHost 付过一次)');
+	assert.ok(/provider: sanitizeProviderId\(lane\)/.test(src), '写入时必须走这道闸,不能直接塞 lane');
 });
 
 test('门内等待与实际发送分开量 (2.11.0)', () => {
