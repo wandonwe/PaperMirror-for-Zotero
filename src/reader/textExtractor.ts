@@ -79,7 +79,11 @@ export interface PathReport {
  *
  * 只记枚举,不记内容。
  */
-export type ExtractPath = 'chars' | 'text-layer' | 'plain-text' | 'rendered-recovery' | 'empty';
+export type ExtractPath = 'chars' | 'text-content' | 'text-layer' | 'plain-text' | 'rendered-recovery' | 'empty';
+//                                  ^^^^^^^^^^^^^^ 2.9.7: 标准 PDF.js `getTextContent()`
+// —— **不依赖这一页有没有被渲染**。与 `text-layer` 的区别正在这里:后者读的是 DOM,
+// 而 DOM 只对 PDF.js 正在渲染的那几页存在;这一条走 worker 的解析结果,任何页随时可读。
+// (声明写成单行不是随意: diagnosticsPrivacy 的枚举闸要能一眼扫完这个联合类型。)
 
 /**
  * 一次抽取所依赖的**跨页累积 / 可中途改变**的输入 (2.8.7, 导出方案 P2 · 方案 §1.2)。
@@ -122,6 +126,8 @@ export interface ExtractInputs {
 export interface ExtractPhases {
 	obstaclesMs: number;
 	charsPathMs: number;
+	/** 2.9.7: 标准 PDF.js `getTextContent()` 整趟 —— 不依赖渲染的那条路。 */
+	textContentMs?: number;
 	textLayerMs: number;
 	textLayerWaitMs?: number;
 	plainTextMs: number;
@@ -313,7 +319,7 @@ export class TextExtractor implements PageParser {
 		// 说明这趟每次都白跑),还是文本层就绪轮询。同一条路最快的页只要 14 ms,
 		// 所以那 2.6 秒是**等**,不是算 —— 到底等谁,这三个数字才回答得了。
 		const t0 = Date.now();
-		const phases: ExtractPhases = { obstaclesMs: 0, charsPathMs: 0, textLayerMs: 0, plainTextMs: 0, buildMs: 0 };
+		const phases: ExtractPhases = { obstaclesMs: 0, charsPathMs: 0, textContentMs: 0, textLayerMs: 0, plainTextMs: 0, buildMs: 0 };
 		this.phasesByPage.set(pageIndex, phases);
 		// 边框硬屏障: real figure boundaries participate in extraction — in-figure
 		// labels stay out of the flow, and nothing merges across a figure.
@@ -392,6 +398,22 @@ export class TextExtractor implements PageParser {
 		}
 		// 走通与走不通都记 —— 走不通的那趟正是"白付的往返",它的耗时才是问题。
 		phases.charsPathMs = Date.now() - charsStartedAt;
+
+		// --- path 1.5: 标准 PDF.js getTextContent —— **不依赖渲染** (2.9.7) ----
+		//
+		// 这一条摆在 DOM 文本层**之前**,因为它没有文本层那个固有毛病:
+		// DOM 只对 PDF.js 正在渲染的那几页存在,而这一条走 worker 里的解析结果,
+		// 任何页随时可读。2.9.0–2.9.6 七个版本(释放记账、事件补回、原因分流、
+		// 距离闸……)都是在给那个毛病打补丁 —— 这一条通了,补丁才有可能拆。
+		//
+		// 取数与建块都与文本层路径**同构**,于是 37 个布局快照直接就是它的回归测试。
+		const textContentStartedAt = Date.now();
+		const contentBlocks = await this.extractFromTextContent(pageIndex, obstacles);
+		phases.textContentMs = Date.now() - textContentStartedAt;
+		if (contentBlocks && contentBlocks.length) {
+			this.pathByPage.set(pageIndex, 'text-content');
+			return contentBlocks;
+		}
 
 		// --- path 2: the rendered text layer (what the user can select) ------
 		const textLayerStartedAt = Date.now();
@@ -498,40 +520,76 @@ export class TextExtractor implements PageParser {
 				phases.textLayerWaitMs = (phases.textLayerWaitMs ?? 0) + (Date.now() - waitStartedAt);
 			}
 			const page = adapter.getTextLayerItems(this.reader, pageIndex);
-			if (!page || !page.items.length) {
-				return null;
-			}
-			const buildStartedAt = Date.now();
-			const result = buildBlocksFromSpans(page.items, {
-				pageIndex,
-				pageHeight: page.pageHeight,
-				pageWidth: page.pageWidth,
-				includeReferences: this.includeReferences,
-				referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
-				imageRectsPdf: obstacles
-			});
-			// Rebuild semantic regions from whatever fragments extraction
-			// produced: whole regions translate as whole sentences.
-			const sourceBlockCount = result.blocks.length;
-			const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe());
-			const tableCells = structured.filter(b => b.translationMode !== undefined);
-			const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
-			result.blocks = orderBlocksForReading([...prose, ...tableCells]);
-			// 建块是**同步 CPU 段**,与上面的等待是两回事 —— 主线程卡不卡看这个数,
-			// 等得久不久看 textLayerWaitMs。混在一起就分不出该优化哪边。
-			if (phases) {
-				phases.buildMs += Date.now() - buildStartedAt;
-			}
-			this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
-			this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
-			logger.info(MODULE, `Page ${pageIndex + 1}: extracted ${result.blocks.length} block(s) from the text layer`);
-			this.auditIR(pageIndex, result.blocks);
-			return result.blocks;
+			return this.blocksFromSpanPage(pageIndex, page, obstacles, 'the text layer');
 		}
 		catch (e) {
 			logger.warn(MODULE, `Text-layer extraction failed for page ${pageIndex}`, e);
 			return null;
 		}
+	}
+
+	/**
+	 * 读一页的文字并建块,**不等渲染** (2.9.7)。
+	 *
+	 * 与 `extractFromTextLayer` 唯一的区别就是取数那一步:那边读 DOM(只有渲染
+	 * 着的页才有),这边读 worker 的解析结果(任何页随时可读)。建块之后的每一步
+	 * 都走同一个 `blocksFromSpanPage`,所以两条路产出的结构**按构造相同** ——
+	 * 这也是 37 个布局快照能直接当它回归测试的原因。
+	 */
+	private async extractFromTextContent(pageIndex: number, obstacles: [number, number, number, number][] = []): Promise<SourceBlock[] | null> {
+		try {
+			const page = await adapter.getTextContentItems(this.reader, pageIndex);
+			return this.blocksFromSpanPage(pageIndex, page, obstacles, 'getTextContent');
+		}
+		catch (e) {
+			logger.warn(MODULE, `getTextContent extraction failed for page ${pageIndex}`, e);
+			return null;
+		}
+	}
+
+	/**
+	 * span 条目 → 结构块。**两条基于 span 的路径共用的唯一实现** (2.9.7)。
+	 *
+	 * 抽成一个函数不是为了少写几行:`text-layer` 与 `text-content` 若各写一遍,
+	 * 两条路迟早会在阅读序、表格结构化或合并上悄悄分叉,而分叉出来的差异会伪装成
+	 * "这一页的结构变了",把语料的结构比对引向错误的结论。
+	 */
+	private blocksFromSpanPage(
+		pageIndex: number,
+		page: adapter.TextLayerPage | null,
+		obstacles: [number, number, number, number][],
+		sourceLabel: string
+	): SourceBlock[] | null {
+		if (!page || !page.items.length) {
+			return null;
+		}
+		const phases = this.phasesByPage.get(pageIndex);
+		const buildStartedAt = Date.now();
+		const result = buildBlocksFromSpans(page.items, {
+			pageIndex,
+			pageHeight: page.pageHeight,
+			pageWidth: page.pageWidth,
+			includeReferences: this.includeReferences,
+			referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
+			imageRectsPdf: obstacles
+		});
+		// Rebuild semantic regions from whatever fragments extraction
+		// produced: whole regions translate as whole sentences.
+		const sourceBlockCount = result.blocks.length;
+		const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe());
+		const tableCells = structured.filter(b => b.translationMode !== undefined);
+		const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
+		result.blocks = orderBlocksForReading([...prose, ...tableCells]);
+		// 建块是**同步 CPU 段**,与等待是两回事 —— 主线程卡不卡看这个数,
+		// 等得久不久看 textLayerWaitMs。混在一起就分不出该优化哪边。
+		if (phases) {
+			phases.buildMs += Date.now() - buildStartedAt;
+		}
+		this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
+		this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
+		logger.info(MODULE, `Page ${pageIndex + 1}: extracted ${result.blocks.length} block(s) from ${sourceLabel}`);
+		this.auditIR(pageIndex, result.blocks);
+		return result.blocks;
 	}
 
 	private async loadFullText(): Promise<adapter.FullTextInfo | null> {

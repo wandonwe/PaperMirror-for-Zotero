@@ -521,6 +521,7 @@ export interface PageDiagnostics {
 	extractPhases?: {
 		obstaclesMs: number;
 		charsPathMs: number;
+		textContentMs?: number;
 		textLayerMs: number;
 		textLayerWaitMs?: number;
 		plainTextMs: number;
