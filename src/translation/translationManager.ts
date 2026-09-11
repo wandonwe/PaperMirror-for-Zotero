@@ -1488,6 +1488,27 @@ export class TranslationManager {
 		if (!record || this.pages.has(pageIndex) || record.renderRetries >= MAX_RENDER_RETRIES) {
 			return;
 		}
+		// 2.9.3: **只对"渲染时机"类的释放生效**。
+		//
+		// 2.9.2 真机 103 页那轮,尾部第 88–93 页释放了 **5–11 次**,原因多为
+		// `cancelled`,`attemptErrors.CANCELLED` 涨到 58/174(33%),
+		// `segmentHitRate` 从 0.851 掉到 0.479 —— 那不是重试,那是**抖动**:
+		// 用户在末尾来回滚动 → `setCurrentPage` 的 cancelExcept 撤掉离开窗口的任务
+		// → 释放(cancelled)→ 滚动中 `textlayerrendered` 对刚离开的页照样发
+		// → 事件补回又把它拉起来 → 又被撤掉。**事件补回和导航取消打起来了。**
+		//
+		// 两类释放的语义本来就不同:
+		//   `text-layer-not-rendered` = "当时看不见" —— 渲染完就该立刻重来,正是这个事件;
+		//   `cancelled` / `navigation-superseded` = "**用户已经不在这页了**" ——
+		//   该等他回来(翻页轮询 / 当前页那条无条件路径),不该被一个滚动事件拽起来。
+		if (record.reason !== 'text-layer-not-rendered' && record.reason !== 'extract-timeout') {
+			return;
+		}
+		// 还得**仍在预取窗口内**: 渲染事件对已经滚出去的页一样会发,拉起一页
+		// 用户正在远离的内容只是再烧一次配额。
+		if (!this.wantedPages().includes(pageIndex)) {
+			return;
+		}
 		if (this.scheduler.isScheduled(`page-${pageIndex}`)) {
 			return;
 		}
