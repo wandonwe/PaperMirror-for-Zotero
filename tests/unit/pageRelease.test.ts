@@ -28,7 +28,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { TranslationManager, MAX_RELEASES, RELEASE_RETRY_RADIUS, type TranslationDeps } from '../../src/translation/translationManager';
+import { TranslationManager, MAX_RELEASES, MAX_RENDER_RETRIES, RELEASE_RETRY_RADIUS, type TranslationDeps } from '../../src/translation/translationManager';
 import { PaperMirrorError, type SourceBlock, type TranslationRequest, type TranslationResponse } from '../../src/types/models';
 
 function blocksFor(pageIndex: number): SourceBlock[] {
@@ -223,4 +223,136 @@ test('补回有界、低优先级、不与当前页抢 (结构性回归闸, 2.9.
 	const setCurrent = src.slice(src.indexOf('setCurrentPage(pageIndex: number): void'));
 	assert.ok(setCurrent.indexOf('this.retryReleasedPages();') > setCurrent.indexOf('this.schedulePrefetch();'),
 		'补回排在预取之后');
+});
+
+// ---- 5. 2.9.2: 事件驱动补回,别再靠翻页去猜 ------------------------------------
+//
+// 2.9.1 让抽取遇到"没渲染"时立刻放手,抽取人均 864 ms → 139 ms;但同一份日志里
+// `text-layer-not-rendered` 释放 **29 → 52**、`releasedPending` **8 → 27**、
+// 21 页 `exhausted`。原因很直白: **预取本来就发生在页面渲染之前** —— 以前那
+// 2.5 秒干等里 PDF.js 常常正好把页渲染完,于是歪打正着;不等了,预取就必然落空。
+//
+// 靠翻页轮询补回是在**猜**"现在渲染好了吗",猜错要付一次配额。而 PDF.js 自己
+// 会在渲染完文本层时发 `textlayerrendered` —— 那是确定的信号,不是猜。
+
+test('文本层渲染完的那一刻立刻重抽 —— 不等用户翻页 (2.9.2)', async () => {
+	const { deps } = depsFailing(20, 1); // 第一次抽失败(页还没渲染),之后成功
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: false, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(0);
+	await manager.ensurePage(20, 10);
+	assert.equal(scopeOf(manager).get(20), 'released');
+
+	// PDF.js 渲染到这一页 —— 当前页仍停在 0,没有任何翻页动作。
+	manager.onPageRendered(20);
+	await settle();
+	assert.equal(manager.getPageState(20)?.status, 'done',
+		'渲染完成是确定的信号,这一刻重抽命中率接近 100% —— 不该等用户正好翻到附近');
+	manager.dispose();
+});
+
+test('事件补回不消耗盲目轮询的配额 —— 两套预算分开 (2.9.2)', async () => {
+	const { deps, attempts } = depsFailing(20, 99); // 永远失败
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: false, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(0);
+	await manager.ensurePage(20, 10);
+
+	// 先把事件补回的配额用光 —— 它**不该**动到 releaseCount。
+	for (let i = 0; i < MAX_RENDER_RETRIES + 3; i++) {
+		manager.onPageRendered(20);
+		await settle();
+	}
+	assert.equal(attempts(), 1 + MAX_RENDER_RETRIES,
+		`事件补回自己有一个很小的上限(${MAX_RENDER_RETRIES})防病态 —— 文本层都出来了还抽不到,再试只是重复同一个失败`);
+
+	const row = manager.exportPageDiagnostics(20) as Record<string, unknown>;
+	assert.equal(row.renderRetries, MAX_RENDER_RETRIES);
+	// 关键: 翻页轮询的配额一分没被花掉。
+	assert.ok((row.releaseCount as number) <= MAX_RENDER_RETRIES + 1,
+		'两套预算必须分开 —— 猜错的配额不该拖累确定信号触发的重抽');
+	manager.dispose();
+});
+
+test('释放过、但已经补回来的页,事件不再重复触发 (2.9.2)', async () => {
+	const { deps, attempts } = depsFailing(20, 1); // 只失败一次
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: false, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(0);
+	await manager.ensurePage(20, 10);          // 失败 → 释放(留下 released 记录)
+	manager.onPageRendered(20);                 // 事件补回 → 成功,页状态回来了
+	await settle();
+	assert.equal(manager.getPageState(20)?.status, 'done');
+	const before = attempts();
+	const budget = (): number =>
+		((manager.exportDiagnostics() as { usage: { renderRetries?: number } }).usage.renderRetries ?? 0);
+	assert.equal(budget(), 1, '刚才那次事件补回花掉一次配额');
+	// released 记录仍在(释放计数是整轮会话的账),但这一页此刻**有页状态** ——
+	// 再收到渲染事件(滚动来回、缩放每次都会重发)既不许再抽,**也不许烧配额**。
+	for (let i = 0; i < 4; i++) {
+		manager.onPageRendered(20);
+	}
+	await settle();
+	assert.equal(attempts(), before,
+		'`textlayerrendered` 在滚动/缩放时会反复发 —— 只要这一页此刻有页状态就不该再抽');
+	assert.equal(budget(), 1,
+		'配额也不能被滚动事件烧掉 —— 烧光了,这一页日后真需要重抽时就没预算了');
+	manager.dispose();
+});
+
+test('没释放过的页,事件什么也不做 (2.9.2)', async () => {
+	const { deps, attempts } = depsFailing(-1, 0); // 从不失败
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: false, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(0);
+	const before = attempts();
+	manager.onPageRendered(33); // 这一页压根没碰过
+	await settle();
+	assert.equal(attempts(), before, '事件只唤醒"释放过且此刻没有页状态"的页');
+	manager.dispose();
+});
+
+// ---- 6. 2.9.2: 中间的洞必须自己跳出来 ----------------------------------------
+
+test('会话完全没碰过、却夹在碰过的页之间的页号要报出来 (2.9.2)', async () => {
+	const { deps } = depsFailing(-1, 0);
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: false, delayFn: () => Promise.resolve() });
+	// 从第 7 页开始读 —— setCurrentPage 自己也会翻译当前页,它同样算"碰过"。
+	manager.setCurrentPage(7);
+	await settle();
+	for (const p of [8, 11, 12]) {
+		await manager.ensurePage(p, 10);
+	}
+	// 真机 2.9.1 那轮处理了第 8–88 页,中间第 9、25、26、27 页**完全不在清单里** ——
+	// 既没有页状态,也不在 released 里。导出文件里它长得跟"用户没读到这儿"一样。
+	assert.deepEqual(manager.scopeGaps(), [9, 10],
+		'中间的洞要摆出来。这个函数不解释原因(现有数据解释不了),只陈述事实');
+	manager.dispose();
+});
+
+test('只碰过一页时没有"洞"可言 (2.9.2)', async () => {
+	const { deps } = depsFailing(-1, 0);
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: false, delayFn: () => Promise.resolve() });
+	manager.setCurrentPage(5);
+	await settle();
+	assert.deepEqual(manager.scopeGaps(), [], '一个点构不成区间,别报假洞');
+	manager.dispose();
+});
+
+test('一页都没碰过时也不报洞 (2.9.2)', () => {
+	const { deps } = depsFailing(-1, 0);
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} },
+		{ prefetch: false, delayFn: () => Promise.resolve() });
+	assert.deepEqual(manager.scopeGaps(), [], '空会话没有区间,更没有洞');
+	manager.dispose();
+});
+
+test('事件补回接线在 readerSession 里,且只认 textlayerrendered (结构性回归闸, 2.9.2)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	assert.ok(/onPdfRenderEvents\(this\.reader, \(pageIndex\) => \{[\s\S]{0,300}this\.manager\?\.onPageRendered\(pageIndex\);[\s\S]{0,120}\}, \['textlayerrendered'\]\)/.test(src),
+		"必须单独订阅 textlayerrendered —— 上面那个订阅收全部渲染事件、分不出种类,"
+		+ "而 pagerendered(画布画完)早于文本层,拿它当信号会又一次落空");
+	assert.ok(/this\.disposeTextLayerEvents\?\.\(\);/.test(src), '订阅要能解绑,否则换文档就漏一个监听器');
 });
