@@ -25,9 +25,7 @@ papermirror-status-cached = 已从缓存加载
 papermirror-status-error = 出错
 papermirror-no-text-layer = 该 PDF 没有文本层,需要先进行 OCR。
 papermirror-page = 第
-papermirror-sync-on = 🔗 同步滚动
-papermirror-sync-off = ⛓ 同步关闭
-papermirror-retranslate = 重新翻译
+papermirror-retranslate = 全文重译(丢弃已翻译内容)
 papermirror-cancel = 取消
 papermirror-save-note = 保存到笔记
 papermirror-settings = 设置
@@ -95,3 +93,12 @@ papermirror-view-page = 整页对照
 papermirror-export-running = 正在生成译文PDF (%n%%)…
 papermirror-export-done = 译文PDF已生成并添加为附件
 papermirror-export-failed = 译文PDF生成失败
+
+# 2.10.0: 工具栏文案(此前在源码里写死为简体中文)
+papermirror-switch-language = 切换语言
+papermirror-switch-provider = 切换翻译服务
+papermirror-terms = 术语
+papermirror-terms-tip = 预览本篇自动学得的术语,可保存到词汇表(可撤销)或仅复制 TSV
+papermirror-more = 更多:保存到笔记、术语、导出、诊断
+papermirror-configure-provider = 配置翻译服务 →
+papermirror-configure-provider-tip = 打开设置选择翻译服务商 / 填写 API Key

@@ -119,7 +119,16 @@ function paneStrings(): PaneStrings {
 		viewArticle: getString('papermirror-view-article'),
 		viewPage: getString('papermirror-view-page'),
 		privacyNotice: getString('papermirror-privacy-notice'),
-		privacyAccept: getString('papermirror-privacy-accept')
+		privacyAccept: getString('papermirror-privacy-accept'),
+		// 2.10.0: 这几条原先是 translationPane.ts 里写死的简体中文,
+		// en-US 与 zh-TW 用户同样看到简体。
+		switchLanguage: getString('papermirror-switch-language'),
+		switchProvider: getString('papermirror-switch-provider'),
+		terms: getString('papermirror-terms'),
+		termsTip: getString('papermirror-terms-tip'),
+		more: getString('papermirror-more'),
+		configureProvider: getString('papermirror-configure-provider'),
+		configureProviderTip: getString('papermirror-configure-provider-tip')
 	};
 }
 
@@ -166,6 +175,8 @@ export class ReaderSession {
 	private disposeTextLayerEvents: (() => void) | null = null;
 	/** visibilitychange 监听的解除器 (2.2.9, item1 不可见即停)。 */
 	private disposeVisibility: (() => void) | null = null;
+	/** 2.10.0: 主题变更订阅 —— 开着窗格切主题时窗格要跟着变。 */
+	private disposeTheme: (() => void) | null = null;
 	private pageRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 	/** 缓存身份 pref 观察者 (2.0.9, 审核 P2-4) 与其去抖定时器。 */
 	private identityPrefObservers: (symbol | string)[] = [];
@@ -411,6 +422,11 @@ export class ReaderSession {
 			}
 		});
 		this.pane.setTheme(adapter.isDarkTheme(this.reader) ? 'dark' : 'light');
+		// 此前主题只在这里读一次,之后窗格永远停在建立时的那个主题 ——
+		// 开着窗格切换系统/Zotero 主题,Zotero 其余界面当场变,窗格不变。
+		this.disposeTheme = adapter.watchTheme(this.reader, (dark) => {
+			this.pane?.setTheme(dark ? 'dark' : 'light');
+		});
 		this.pane.setPaneSide(getPref<string>('paneSide', 'right') === 'left' ? 'left' : 'right');
 		this.pane.setShowOriginal(getPref<boolean>('showOriginal', false));
 		this.pane.setSyncEnabled(getPref<boolean>('syncScroll', true));
@@ -3338,6 +3354,8 @@ export class ReaderSession {
 		this.disposePdfEvents = null;
 		this.disposeTextLayerEvents?.();
 		this.disposeTextLayerEvents = null;
+		this.disposeTheme?.();
+		this.disposeTheme = null;
 		this.disposeVisibility?.();
 		this.disposeVisibility = null;
 		this.overlay?.destroy();

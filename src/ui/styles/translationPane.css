@@ -34,9 +34,12 @@
 	border-right: 1px solid var(--pm-splitter-grip);
 }
 
+/* 2.10.0: 原为硬编码 `#cbdafe` —— 一个浅蓝,深色模式下不跟着变,
+   手一碰分隔条就闪出一条亮蓝。改走强调色的低透明度混合,两个主题都成立。
+   分隔条是拖拽目标,hover 反馈要明确但不能抢眼。 */
 .pm-bilingual-divider:hover,
 .pm-bilingual-divider.pm-dragging {
-	background: #cbdafe;
+	background: color-mix(in srgb, var(--pm-accent) 28%, var(--pm-splitter));
 }
 
 /* ===== pane shell (demo .translation-side) ===== */
@@ -132,7 +135,20 @@
 	bottom: 22px;
 }
 
-.pm-bilingual-pane button {
+/* 按钮重置 (2.10.0 降特指度)。
+ *
+ * 原先写作 `.pm-bilingual-pane button` —— 类 + 类型 = 特指度 **0,1,1**,
+ * 压过任何单类名组件规则的 0,1,0。后果是整条工具栏的层级设计从来没生效过:
+ *
+ *   .pm-bar-action   写 background: var(--pm-accent) / color:#fff → 实际透明 + 正文色
+ *   .pm-chip         写 color: var(--pm-muted)                    → 实际正文色
+ *   .pm-icon-button  写 color: var(--pm-icon)                     → 实际正文色
+ *   .pm-mini-explain / .pm-card-close / .pm-footer-button          → 同上
+ *
+ * 6 个类、9 条着色声明,一条都没落地,工具栏因此塌成同一个正文色 ——
+ * 比阅读内容还响。`:where()` 把特指度归零 (0,0,1),重置仍然生效,
+ * 但任何组件类都压得过它。这是让**已有设计**生效,不是新加装饰。 */
+:where(.pm-bilingual-pane) button {
 	font: inherit;
 	border: 0;
 	background: none;
@@ -140,11 +156,37 @@
 	cursor: pointer;
 }
 
+/* 焦点环 (2.10.0)。整张样式表此前 **0 条** focus 规则 —— 键盘用户只有浏览器
+   默认描边,在自绘控件上几乎看不见。:focus-visible 只在键盘路径亮起,
+   鼠标点击不出现;用 outline + offset 而非 box-shadow,不参与布局、
+   不改任何几何。 */
+:where(.pm-bilingual-pane) :is(button, [role="switch"], a, input, select):focus-visible {
+	outline: 2px solid var(--pm-accent);
+	outline-offset: 2px;
+	border-radius: 7px;
+}
+
 /* ===== header (demo .translation-header) ===== */
 
+/* 表头 (2.10.0 三代合一)。
+ *
+ * 这条规则此前在文件里出现**三次** —— 堆叠表头时代(padding: 20px 24px 13px)、
+ * 紧凑表头时代(padding: 4px 10px 4px 12px; min-height: 40px)、
+ * 以及当前(padding: 0)。后面的覆盖前面的,读代码的人要翻三处才知道真实值,
+ * 而三处里只有一处算数。合并成一份,值与合并前**逐条相同**
+ * (headerH = 41px、scrollTop = 41px,390/430/720/1100 四个宽度实测一致)。
+ *
+ * flex-wrap: nowrap 不是随手写的:表头一旦换行,高度就随宽度变,
+ * 而页偏移的基准里含着表头 —— 高度一变,同步落点整体平移。 */
 .pm-header {
+	display: flex;
+	align-items: center;
+	flex-wrap: nowrap;
+	gap: 8px;
 	flex: none;
-	padding: 20px 24px 13px;
+	padding: 0;
+	min-height: 40px;
+	box-sizing: border-box;
 	border-bottom: 1px solid var(--pm-line);
 }
 
@@ -266,9 +308,14 @@
 	max-width: 48%;
 }
 
+/* 服务标记 (2.10.0)。原为 `bold italic 16px Georgia` + 硬编码 `#198c86` ——
+   一排无衬线线条图标里混进一个青色斜体衬线字母,既不是同一套视觉语言,
+   深色下也不跟着主题走。有品牌图标的服务走 SVG(providerBadge),
+   这里只在没有图标时兜底,所以跟随界面字体与主题色即可。 */
 .pm-provider-mark {
-	font: bold italic 16px Georgia, serif;
-	color: #198c86;
+	font-size: 12px;
+	font-weight: 600;
+	color: inherit;
 	flex: none;
 }
 
@@ -282,18 +329,55 @@
 .pm-refreshing .pm-refresh svg {
 	animation: pm-spin .8s linear infinite;
 }
+
+/* 「全文重译」是破坏性且会产生翻译费用的动作,静止时与设置/关闭长得一模一样
+   (2.10.0)。它不该常驻吸引注意,但**手停上去时必须与普通阅读动作分开** ——
+   所以只在 hover/focus 时转成警示色。确认对话框仍在 readerSession 侧,
+   这一层只是让「我正要点的是哪一个」在点下去之前就看得出来。 */
+.pm-refresh:hover,
+.pm-refresh:focus-visible {
+	background: color-mix(in srgb, var(--pm-error) 12%, transparent);
+	color: var(--pm-error);
+}
 /* The whole-page dim during a refresh was removed: fading the translated text
    to 45% read as "the translation vanished". The spinning button + the status
    capsule are enough feedback that work is in flight. */
 /* ===== scroll body (demo .translation-scroll) ===== */
 
+/* 阅读区不再默认平滑滚动 (2.10.0)。
+ *
+ * `scroll-behavior: smooth` 与**连续跟随**天然冲突:`setPdfScrollFraction`
+ * 在 `updateviewarea` 上每滚动帧被调用一次,每写一次 `scrollTop` 就起一次
+ * 动画,新的一帧又打断上一帧 —— 译文永远追在原文后面,而且追得一顿一顿。
+ *
+ * 2.9.8 已经发现这件事,但当时的修法是 `scrollInstantly()` 在写之前临时把
+ * 行内 `style.scrollBehavior` 改成 `auto`、写完再改回来 —— 只护住了
+ * `setPdfScrollFraction` 这**一条**路径。任何其他写 `scrollTop` 的地方
+ * (以及日后新加的)仍然走平滑动画,同一个毛病换个入口再来一次。
+ *
+ * 现在把默认值改成瞬时:跟随是「跟上」,不是「播一段动画」。
+ * 确实需要动画的地方(比如点击块跳转)自己显式指定,而不是反过来
+ * 让每一次跟随都去关掉它。滚动几何不受影响 —— 这个属性只管怎么到,
+ * 不管到哪里。 */
 .pm-scroll {
 	flex: 1;
 	overflow-y: auto;
 	overflow-x: hidden;
-	scroll-behavior: smooth;
+	scroll-behavior: auto;
 	padding: 0 30px 60px;
 	overscroll-behavior: contain;
+}
+
+/* 尊重「减少动态效果」:系统开了就连显式的平滑滚动也不做。 */
+@media (prefers-reduced-motion: reduce) {
+	.pm-bilingual-pane *,
+	.pm-bilingual-pane *::before,
+	.pm-bilingual-pane *::after {
+		animation-duration: .01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: .01ms !important;
+		scroll-behavior: auto !important;
+	}
 }
 
 .pm-page-marker {
@@ -496,8 +580,8 @@
 }
 
 .pm-card-titles small {
-	font-size: 9px;
-	color: #7f8998;
+	font-size: 10px;
+	color: var(--pm-caption-ink);
 	margin-top: 2px;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -508,7 +592,7 @@
 	margin-left: auto;
 	font-size: 18px;
 	line-height: 1;
-	color: #7d8692;
+	color: var(--pm-icon);
 	flex: none;
 }
 
@@ -697,9 +781,6 @@
 
 /* demo @media(max-width:900px) equivalent for a narrow pane */
 @media (max-width: 430px) {
-	.pm-header {
-		padding: 16px;
-	}
 	.pm-scroll {
 		padding: 0 20px 50px;
 	}
@@ -924,16 +1005,6 @@
    the left, so the spread starts at the same height on both sides.
    ========================================================================== */
 
-.pm-header {
-	display: flex;
-	align-items: center;
-	flex-wrap: nowrap;
-	gap: 8px;
-	padding: 4px 10px 4px 12px;
-	min-height: 40px;
-	box-sizing: border-box;
-}
-
 /* The old stacked rows flatten into the one flex line. */
 .pm-title-row,
 .pm-title-col,
@@ -968,9 +1039,6 @@
 }
 
 @media (max-width: 430px) {
-	.pm-header {
-		padding: 4px 8px;
-	}
 	.pm-title {
 		display: none;
 	}
@@ -1130,10 +1198,6 @@
    the live sync switch carry colour, so the eye lands on them first.
    ========================================================================== */
 
-.pm-header {
-	padding: 0;
-}
-
 .pm-bar {
 	/* .pm-header is itself a row flex container (legacy compact-header rule),
 	   which sized this bar to its CONTENT — the spacer had no room to grow and
@@ -1152,6 +1216,12 @@
 
 /* --- chips: language pair and engine --- */
 
+/* 胶囊不再被压扁 (2.10.0)。
+ *
+ * 旧的 `flex: 0 1 auto` + `overflow: hidden` 会在窗格变窄时把整个胶囊挤到
+ * **16px**(实测 640px 处),屏幕上只剩一个字符。挤到不可读和换一个短形式
+ * 是两件事 —— 现在不许挤(`flex-shrink: 0`),窄了由媒体查询整块换成
+ * 「EN → 简」,信息始终完整。 */
 .pm-chip {
 	display: flex;
 	align-items: center;
@@ -1163,9 +1233,36 @@
 	color: var(--pm-muted);
 	font-size: 11.5px;
 	white-space: nowrap;
-	min-width: 0;
-	flex: 0 1 auto;
-	overflow: hidden;
+	flex: 0 0 auto;
+}
+
+/* 语言对的两份写法:宽档用全名,窄档用短形式。默认显示全名。 */
+.pm-lang-full {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.pm-lang-short {
+	display: none;
+}
+
+/* 「解析」的图标与标签 —— 与 .pm-icon-button 的描边风格保持一套。 */
+.pm-bar-action-explain {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.pm-bar-action-explain svg {
+	width: 15px;
+	height: 15px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	flex: none;
 }
 
 .pm-chip:hover {
@@ -1173,8 +1270,10 @@
 	color: var(--pm-ink);
 }
 
+/* 2.10.0: 原为 `flex-shrink: 3` —— 让语言胶囊**优先**被压,于是它第一个塌成
+   16px。窄档现在换短形式,不再靠压缩腾地方。 */
 .pm-chip-lang {
-	flex-shrink: 3;
+	flex-shrink: 0;
 }
 
 .pm-lang-from,
@@ -1230,12 +1329,24 @@
 	height: 16px;
 }
 
+/* 工具栏动作按钮 (2.10.0 重定层级)。
+ *
+ * 特指度修好之后,原来的 `background: var(--pm-accent); color:#fff` 会**第一次
+ * 真的生效** —— 那就是三个并排的实心蓝药丸,阅读区上方一条品牌色横幅,
+ * 正好是要避免的「大面积品牌色占据阅读区」。
+ *
+ * 这条工具栏里其实没有主操作:翻译由原文侧工具栏发起,这里全是二级动作。
+ * 所以全部保持安静,靠 hover 给反馈 —— 与胶囊、图标按钮同一套语言。
+ *
+ * 另外,旧的 `:hover { filter: brightness(1.08) }` 作用在透明背景上等于**零反馈**
+ * (实测 hover 前后 backgroundColor 与 color 完全不变)。换成背景变化,
+ * 与 .pm-chip / .pm-icon-button 的 hover 一致。 */
 .pm-bar-action {
 	height: 26px;
-	padding: 0 11px;
+	padding: 0 10px;
 	border-radius: 7px;
-	background: var(--pm-accent);
-	color: #fff;
+	background: transparent;
+	color: var(--pm-muted);
 	font-size: 11.5px;
 	font-weight: 500;
 	white-space: nowrap;
@@ -1243,7 +1354,8 @@
 }
 
 .pm-bar-action:hover {
-	filter: brightness(1.08);
+	background: var(--pm-soft);
+	color: var(--pm-ink);
 }
 
 /* 「诊断」+「语料」共用一个显隐开关(debugLogging)但必须各自是独立按钮
@@ -1271,13 +1383,58 @@
 	color: var(--pm-ink);
 }
 
-/* Narrow panes drop the labels rather than truncating everything. */
-@media (max-width: 620px) {
+/* ===== 窄窗格:渐进收纳,不是挤扁也不是裁掉 (2.10.0) =====================
+ *
+ * 实测旧行为(真实 CSS + 真实 DOM,headless 量的):
+ *
+ *   宽度   语言胶囊   服务名   弹性空隙   溢出     被裁控件
+ *   900    158px 完整  完整     70px      0        0
+ *   800    134px      截断     **0**     0        0
+ *   640    **16px**   截断     0         0        0
+ *   520    16px       16px     0         16px     1
+ *   390    16px       16px     0         **146px** **6**
+ *
+ * 两个毛病:
+ *   1. `.pm-chip { flex: 0 1 auto; overflow: hidden }` 让胶囊被**压扁**到
+ *      16px —— 屏幕上一个字符,读不出任何东西;
+ *   2. 压无可压之后开始**溢出**,而 `.pm-bilingual-pane { overflow: hidden }`
+ *      把溢出的部分直接切掉:390px(窗格自己声明的 min-width)时
+ *      「更多 / 左右 / 设置 / 关闭」全部消失且**点不到**。
+ *
+ * 现在:胶囊一律 `flex-shrink: 0`,宁可整块换短形式也不挤烂;三档按真实
+ * 测量点设置,每一档去掉的是**标签**而不是**控件**,可读名与 tooltip 全保留。
+ * 表头不换行、恒高 40px 这个性质不动 —— 页面起点不跳靠的就是它。 */
+
+/* 服务名:实测 800px 就开始截断,860 留出余量。图标仍在,身份不丢。 */
+@media (max-width: 860px) {
+	.pm-chip-provider .pm-provider-name {
+		display: none;
+	}
+}
+
+/* 语言对:换成短形式「EN → 简」,而不是把「English → 简体中文」切一半。
+   两份都在 DOM 里,切换只是 display,不触发任何重新测量。 */
+@media (max-width: 760px) {
+	.pm-chip-lang .pm-lang-full {
+		display: none;
+	}
+	.pm-chip-lang .pm-lang-short {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+}
+
+/* 同步开关与「解析」收成纯图标。两者都有 aria-label,tooltip 只是补充。 */
+@media (max-width: 640px) {
 	.pm-bar .pm-switch-label span:last-child {
 		display: none;
 	}
-	.pm-chip-provider .pm-provider-name {
+	.pm-bar-action-explain span {
 		display: none;
+	}
+	.pm-bar-action-explain {
+		padding: 0 6px;
 	}
 }
 
