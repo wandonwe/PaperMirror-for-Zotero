@@ -7,6 +7,47 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.9.6] — 2026-09-11
+
+**路径 1 不是慢,是每一页都抛错。** 2.9.5 的那个字段一次就把话说清楚了。
+
+### 2.9.5 真机验收(98 页)
+
+```
+charsPath: { "threw:EXTRACTION_FAILED": 98 }
+```
+
+**98/98 页,每一页都抛错。** 不是"慢"、不是字体编码(`undecoded-cid` 一次没出现)、
+不是返回空 —— 整条路**根本走不通**,而且从来如此。`extractPath` 分布也印证:
+90/90 页全是 `text-layer`。
+
+这解释了 2.9.0–2.9.5 六个版本的处境:**插件一直只靠文本层活着**,而文本层只对
+PDF.js 正在渲染的那几页存在。所谓"文本层什么时候渲染好"的时序难题,不是一个要
+绕的边界情况 —— 它是唯一那条路的固有属性。我在它周围造了六版脚手架。
+
+这一轮其他数字(供对照,行为未改):`pageCacheHitRate` **0.713**(历次最好),
+`segmentHitRate` 0.89,`render` 159 起 / 156 提交 / `notReady` **2**,
+`releasedPending` **8/98**。
+
+### Added — 两个同步探针,一轮定去向
+
+- `EXTRACTION_FAILED` 太笼统:调用抛错、chars 不是数组,都归它。
+  **分不出是"这篇 PDF 不行"还是"这个 API 没了"**,而两者修法完全不同。
+  新增 `probePageDataApi`:`no-app` / `no-pdfdocument` / **`api-missing`** /
+  `present`,接在结局枚举后面(`threw:<种类>/<API 状态>`)。
+- 更要紧的是**出路**:标准 PDF.js 的 `pdfDocument.getPage(n).getTextContent()`
+  是**公开 API**(不是 fork 的私有 `getPageData`),而且**同样不依赖页面渲染**
+  —— 文本层本身就是用它渲出来的。新增 `textContentApi` 探针:
+  `available` / `no-pdfdocument` / `no-getpage` / `unreachable`。
+- 两个探针都是**同步的、不发 RPC** 的:只看对象和函数在不在,`typeof === 'function'`
+  (属性存在不等于能调用 —— fork 换实现时很容易留下占位值)。探针自己不抛。
+
+### 未改动(有意为之)
+
+- **行为仍然一个字没改**,连着两版纯加计量。下一步是改抽取主路,那是这轮
+  2.9.x 里最大的一次改动,不该踩着猜测动手。
+- 补回策略、原因闸、距离闸、分批预算、并发、预取窗口、缓存策略,全部原样。
+
 ## [2.9.5] — 2026-09-11
 
 **我上一版的假设被自己加的计数器证伪了。** 这一版不再在补回策略上打转 ——

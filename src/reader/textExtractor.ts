@@ -183,6 +183,17 @@ export class TextExtractor implements PageParser {
 		return Object.fromEntries([...this.charsOutcome.entries()].sort((a, b) => b[1] - a[1]));
 	}
 
+	/**
+	 * **出路探针** (2.9.6): 标准 PDF.js 的 `getPage(n).getTextContent()` 在不在。
+	 *
+	 * 它是公开 API(不是 fork 的私有 `getPageData`),而且**同样不依赖页面渲染**
+	 * —— 文本层本身就是用它渲出来的。若可用,2.9.0–2.9.5 六个版本一直在绕的
+	 * 「文本层只对渲染着的页存在」就有了从根上绕开的办法。同步,不发 RPC。
+	 */
+	textContentApiState(): string {
+		return adapter.probeTextContentApi(this.reader);
+	}
+
 	constructor(reader: ReaderLike, options: { includeReferences: boolean; noTranslate?: () => string[] }) {
 		this.reader = reader;
 		this.includeReferences = options.includeReferences;
@@ -371,7 +382,12 @@ export class TextExtractor implements PageParser {
 			}
 			// 抛错的**种类**是排查这条路的关键,而它此前只进了 logger。
 			// 只取枚举化的 code 或异常类名 —— message 可能带路径或内容,一个字不带。
-			this.noteCharsOutcome(pageIndex, `threw:${failureKind(e)}`);
+			//
+			// 2.9.6: `EXTRACTION_FAILED` 太笼统了 —— 真机 98/98 页全落在它上面,
+			// 而"调用抛错"与"这个 API 根本不存在"是两件修法完全不同的事。
+			// 这里补一个**同步、不发 RPC** 的探针,直接看方法在不在。
+			this.noteCharsOutcome(pageIndex,
+				`threw:${failureKind(e)}/${adapter.probePageDataApi(this.reader)}`);
 			logger.warn(MODULE, `getPageData path failed for page ${pageIndex}; trying the text layer`, e);
 		}
 		// 走通与走不通都记 —— 走不通的那趟正是"白付的往返",它的耗时才是问题。

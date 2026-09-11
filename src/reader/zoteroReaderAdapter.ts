@@ -190,6 +190,70 @@ export interface RawPageInfo {
 }
 
 /**
+ * 路径 1(`pdfDocument.getPageData`)到底断在哪一环 (2.9.6)。
+ *
+ * 真机第八轮给了一个决定性的数字:`charsPath = { "threw:EXTRACTION_FAILED": 98 }`
+ * —— **98/98 页,每一页都抛错**。不是慢、不是字体编码,是整条路根本走不通。
+ * 而 `EXTRACTION_FAILED` 是个笼统的 code:调用抛错、返回的 chars 不是数组,
+ * 都归它。**分不出是哪一种,就分不清是"这篇 PDF 不行"还是"这个 API 没了"**,
+ * 而这两件事的修法完全不同。
+ *
+ * 这个探针是同步的、不发 RPC 的:只看对象和函数在不在。
+ */
+export type PageDataApiState =
+	/** 连 PDFViewerApplication 都够不着。 */
+	| 'no-app'
+	/** 有 app,没有 pdfDocument(文档还没加载完?)。 */
+	| 'no-pdfdocument'
+	/** **有 pdfDocument,但它没有 `getPageData` 这个方法** —— fork 的私有 API 没了。 */
+	| 'api-missing'
+	/** 方法在,那失败就出在调用本身。 */
+	| 'present';
+
+export function probePageDataApi(reader: ReaderLike): PageDataApiState {
+	try {
+		const app = reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication as
+			{ pdfDocument?: { getPageData?: unknown } } | undefined;
+		if (!app) {
+			return 'no-app';
+		}
+		if (!app.pdfDocument) {
+			return 'no-pdfdocument';
+		}
+		return typeof app.pdfDocument.getPageData === 'function' ? 'present' : 'api-missing';
+	}
+	catch {
+		return 'no-app';
+	}
+}
+
+/**
+ * 标准 PDF.js 的 `getPage(n).getTextContent()` 在不在 (2.9.6)。
+ *
+ * 这是**出路探针**,不是诊断:`getTextContent` 是 PDF.js 的**公开标准 API**,
+ * 与 fork 的私有 `getPageData` 不同,而且**同样不依赖页面渲染** —— 文本层本身
+ * 就是用它渲出来的。若它可用,2.9.0–2.9.5 六个版本一直在绕的那个难题
+ * (「文本层只对渲染着的页存在」)就有了从根上绕开的办法。
+ *
+ * 同步、不发 RPC:只看函数在不在。
+ */
+export type TextContentApiState = 'available' | 'no-pdfdocument' | 'no-getpage' | 'unreachable';
+
+export function probeTextContentApi(reader: ReaderLike): TextContentApiState {
+	try {
+		const doc = (reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication as
+			{ pdfDocument?: { getPage?: unknown } } | undefined)?.pdfDocument;
+		if (!doc) {
+			return 'no-pdfdocument';
+		}
+		return typeof doc.getPage === 'function' ? 'available' : 'no-getpage';
+	}
+	catch {
+		return 'unreachable';
+	}
+}
+
+/**
  * Fetch the char stream for one page via Zotero's PDF.js fork.
  * Throws NO_TEXT_LAYER / PDF_ENCRYPTED / READER_API_CHANGED as appropriate.
  */

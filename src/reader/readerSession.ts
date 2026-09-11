@@ -2548,6 +2548,9 @@ export class ReaderSession {
 				// `charsPathMs` 约 1 ms/页 说明它是立刻失败或立刻返回空 —— 到底是
 				// 哪一种,这里回答。它若能修好,整条"等文本层渲染"的时序难题就绕过去了。
 				charsPath: this.extractor.charsPathOutcomes(),
+				// 2.9.6: 出路探针 —— 标准 PDF.js 的 getTextContent 在不在。
+				// 它不依赖页面渲染,可用就意味着那个绕了六个版本的难题有了根治办法。
+				textContentApi: this.extractor.textContentApiState(),
 				cacheWrites: cacheManager.cacheWriteStats()
 			}),
 			readPage: (pageIndex: number) => {
