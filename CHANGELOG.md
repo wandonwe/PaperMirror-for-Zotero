@@ -7,6 +7,53 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.9.1] — 2026-09-11
+
+**别再对着没渲染的页干等 2.5 秒。** 2.9.0 装上的分段计时第一轮就把账算清了,
+而且把我自己的假设证伪了。
+
+### 证据(真机第四轮,74 页,2.9.0)
+
+- 59 页的 `extractMs` 合计 **50,987 ms**,其中 **`textLayerWaitMs` 占 40,729 ms(80%)**;
+- 我原先怀疑的 PDFWorker char 流 `charsPathMs` —— **整轮只有 19 ms**。那条假设错了,
+  「文档级 char 流闩」这条分叉作废;
+- 我们自己的 CPU 建块 `buildMs` 合计 410 ms,可以忽略;
+- 最慢的页 `textLayerWaitMs` 1.4–2.6 秒,p28=2583、p29=2527 **直接跑满 2500 ms 上限**;
+- 同一轮 `releaseReasons['text-layer-not-rendered'] = 29`。
+
+### Fixed — 那条早退永远不触发
+
+- `waitForTextLayer` 原本有一条 `count === 0 && !pageViewOf(...)` 的早退,意图是
+  "PDF.js 都不知道这页就别等了"。可 **PDF.js 给文档里每一页都建了 PDFPageView**,
+  `pageViewOf` 对任何页号都返回非空 —— 这条早退**从来没有触发过**。
+  于是预取去抽一个没渲染的页 = 白等满 2.5 秒 = 抽不到 = 释放;2.9.0 的补回再试
+  一次 = 再白等 2.5 秒。而这 2.5 秒还占着抽取信号量(最多 2 个并发)——
+  **白等的同时挡住用户正在看的那一页**。
+- 换成两道闸,任一成立立刻返回:
+  1. `renderingState` 是 INITIAL(还没排上)或 PAUSED(排过又被推迟)—— 精确,
+     但依赖 fork 保留该字段;
+  2. **冷启动上限** `TEXT_LAYER_COLD_MS = 400`:一个 span 都没出现就最多等这么久。
+     真在渲的页几十毫秒内就会吐出第一批 span,所以这条不依赖任何 PDF.js 内部 API,
+     是闸 1 拿不到状态时的兜底。
+- 两道闸都**只管「一个 span 都没见过」的情形**。已经开始长 span 的页照旧按
+  完整的 `timeoutMs` 等它长稳 —— 2.8.13 那条稳定判据一个字没削弱。
+- `pageRenderState` 拿不到就返回 `null`,交给冷启动上限,**绝不据此断言「这页没文字」**。
+
+### 2.9.0 真机验收(同一份日志)
+
+- **scope `pages: [1..74]` 连续无洞** —— 上一轮缺的第 36/41/45 页不再出现。
+  `released: 49`(其中 41 次被补回)、`releasedPending: 8`、
+  `releaseReasons: {text-layer-not-rendered: 29, cancelled: 19, navigation-superseded: 1}`。
+  释放这件事一直在高频发生,只是以前完全看不见。
+- **渲染记账对上了**:`started 205 = committed 149 + cancelled 7 + failed 0 +
+  superseded 0 + notReady 49`。
+
+### 未改动(有意为之)
+
+- 分批预算、并发、预取窗口、缓存策略一律没动。
+- 新发现但本版不碰:`render.notReady = 49 / 205`(24% 的渲染是对还没译文的页空跑);
+  `attemptErrors.CANCELLED = 46 / 161`(29%)。各自单独排期。
+
 ## [2.9.0] — 2026-09-11
 
 **2.9.x 第一步:整页凭空消失。** 本版同时包含未单独发布的 2.8.15(抽取分段计时、
