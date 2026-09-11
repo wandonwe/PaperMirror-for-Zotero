@@ -239,6 +239,105 @@ export function probePageDataApi(reader: ReaderLike): PageDataApiState {
  */
 export type TextContentApiState = 'available' | 'no-pdfdocument' | 'no-getpage' | 'unreachable';
 
+/**
+ * 一个 `getTextContent()` 条目 → PDF 用户空间的轴对齐包围盒 (2.9.7) — pure。
+ *
+ * PDF.js 给的是 `transform = [a, b, c, d, e, f]`(文本空间 → 用户空间)、
+ * 加上已经换算到用户空间的 `width`。于是:
+ *
+ *   - 原点 `(e, f)` 是这一串字的**基线左端**;
+ *   - 前进方向是 `(a, b)` 的单位向量,长度 `width`;
+ *   - 上方向是 `(c, d)`,长度就是字高 `hypot(c, d)`。
+ *
+ * 四个角取 min/max 就是包围盒。**这样写而不是 `[e, f, e+width, f+height]`,
+ * 是因为竖排的页边水印(真机上那条 "Downloaded from …")的 transform 是旋转的**
+ * —— 直接加宽高会得到一个横躺的盒子,把半页正文都框进去。
+ */
+export function textContentItemRect(
+	transform: number[],
+	width: number
+): { rect: [number, number, number, number]; fontSize: number } | null {
+	const [a, b, c, d, e, f] = transform as [number, number, number, number, number, number];
+	if (![a, b, c, d, e, f, width].every(Number.isFinite)) {
+		return null;
+	}
+	const fontSize = Math.hypot(c, d);
+	const advance = Math.hypot(a, b);
+	// 前进方向的单位向量;退化(缩放为 0)时按水平处理,总比丢掉整串字强。
+	const ux = advance > 0 ? a / advance : 1;
+	const uy = advance > 0 ? b / advance : 0;
+	const xs = [e, e + ux * width, e + c, e + ux * width + c];
+	const ys = [f, f + uy * width, f + d, f + uy * width + d];
+	return {
+		rect: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
+		fontSize: fontSize > 0 ? fontSize : undefined as unknown as number
+	};
+}
+
+/**
+ * 读一页的文字 —— **不依赖这一页有没有被渲染** (2.9.7)。
+ *
+ * ## 为什么要有它
+ *
+ * 真机第八、九轮钉死了两件事:
+ *   - `charsPath = { "threw:EXTRACTION_FAILED/present": 97 }` —— fork 的私有
+ *     `getPageData` **方法在**,但 97/97 页调用都失败,路径 1 从来就没通过;
+ *   - `textContentApi = "available"` —— 标准 PDF.js 的 `getPage()` 可用。
+ *
+ * 于是插件一直只剩 DOM 文本层一条路,而**文本层只对 PDF.js 正在渲染的那几页存在**。
+ * 2.9.0–2.9.6 七个版本(释放记账、事件补回、原因分流、距离闸……)全都是在给这个
+ * 固有属性打补丁。`getTextContent()` 是公开 API,走的是 worker 里的解析结果,
+ * **任何页随时可读** —— 从根上不需要那些补丁。
+ *
+ * 输出刻意与 `getTextLayerItems` **同构**(同样的 `TextLayerPage`),于是下游
+ * `buildBlocksFromSpans → 阅读序 → 表格结构化 → 合并` 一行不改,
+ * 37 个布局快照直接就是它的回归测试。
+ */
+export async function getTextContentItems(reader: ReaderLike, pageIndex: number): Promise<TextLayerPage | null> {
+	try {
+		const doc = (reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication as
+			{ pdfDocument?: { getPage?: (n: number) => Promise<unknown> } } | undefined)?.pdfDocument;
+		if (typeof doc?.getPage !== 'function') {
+			return null;
+		}
+		const page = await doc.getPage(pageIndex + 1) as {
+			getTextContent?: () => Promise<{ items?: unknown[] }>;
+			view?: number[];
+		};
+		if (typeof page?.getTextContent !== 'function') {
+			return null;
+		}
+		const content = await page.getTextContent();
+		const raw = Array.isArray(content?.items) ? content.items : [];
+		const items: TextLayerItem[] = [];
+		for (const entry of raw) {
+			const it = entry as { str?: unknown; transform?: unknown; width?: unknown };
+			const text = typeof it.str === 'string' ? it.str : '';
+			if (!text.trim() || !Array.isArray(it.transform) || typeof it.width !== 'number') {
+				continue; // 空串与结构标记(marked content)不是字
+			}
+			const box = textContentItemRect(it.transform as number[], it.width);
+			if (!box) {
+				continue;
+			}
+			items.push({ text, rect: box.rect, ...(box.fontSize ? { fontSize: box.fontSize } : {}) });
+		}
+		if (!items.length) {
+			return null;
+		}
+		const view = Array.isArray(page.view) && page.view.length >= 4 ? page.view : null;
+		return {
+			items,
+			pageWidth: view ? Number(view[2]) - Number(view[0]) : 612,
+			pageHeight: view ? Number(view[3]) - Number(view[1]) : 792
+		};
+	}
+	catch (e) {
+		logger.debug(MODULE, `getTextContentItems(${pageIndex}) failed`, e);
+		return null;
+	}
+}
+
 export function probeTextContentApi(reader: ReaderLike): TextContentApiState {
 	try {
 		const doc = (reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication as

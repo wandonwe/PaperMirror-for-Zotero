@@ -206,11 +206,11 @@ test('extractPath 是枚举,永远装不下真实文件路径 (2.8.5 P0)', async
 	assert.ok(decl, '找不到 ExtractPath 的声明');
 	const values = decl![1]!.split('|').map(s => s.trim());
 	assert.deepEqual(values.slice().sort(),
-		["'chars'", "'empty'", "'plain-text'", "'rendered-recovery'", "'text-layer'"],
-		'只允许这五个枚举值 —— 新增取值必须是枚举,不能是路径/文件名/URL');
-	// 记录现场也只能写这五个字面量,不能写变量。
+		["'chars'", "'empty'", "'plain-text'", "'rendered-recovery'", "'text-content'", "'text-layer'"],
+		'只允许这六个枚举值 —— 新增取值必须是枚举,不能是路径/文件名/URL');
+	// 记录现场也只能写这几个字面量,不能写变量。
 	const sets = [...src.matchAll(/this\.pathByPage\.set\(pageIndex, ([^)]+)\)/g)].map(m => m[1]!.trim());
-	assert.equal(sets.length, 5, '五个出口各记一次');
+	assert.equal(sets.length, 6, '六个出口各记一次(2.9.7 起多了 text-content)');
 	for (const value of sets) {
 		assert.ok(values.includes(value), `记的必须是枚举字面量,实际 ${value}`);
 	}
