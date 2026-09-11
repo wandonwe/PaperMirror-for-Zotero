@@ -24,9 +24,7 @@ papermirror-status-cached = Loaded from cache
 papermirror-status-error = Error
 papermirror-no-text-layer = This PDF has no text layer and needs OCR.
 papermirror-page = Page
-papermirror-sync-on = 🔗 Sync
-papermirror-sync-off = ⛓ Sync off
-papermirror-retranslate = Re-translate
+papermirror-retranslate = Re-translate whole document (discards translated content)
 papermirror-cancel = Cancel
 papermirror-save-note = Save to note
 papermirror-settings = Settings
@@ -94,3 +92,12 @@ papermirror-view-page = Page view
 papermirror-export-running = Generating translated PDF (%n%%)…
 papermirror-export-done = Translated PDF attached to the item
 papermirror-export-failed = Translated PDF generation failed
+
+# 2.10.0: 工具栏文案(此前在源码里写死为简体中文)
+papermirror-switch-language = Switch languages
+papermirror-switch-provider = Switch translation service
+papermirror-terms = Terms
+papermirror-terms-tip = Preview the terms learned from this paper; save to the glossary (undoable) or just copy TSV
+papermirror-more = More: save to note, terms, export, diagnostics
+papermirror-configure-provider = Configure service →
+papermirror-configure-provider-tip = Open settings to pick a provider / enter an API key

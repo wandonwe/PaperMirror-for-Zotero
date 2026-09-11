@@ -1449,3 +1449,43 @@ export function isDarkTheme(reader: ReaderLike): boolean {
 	}
 	return false;
 }
+
+/**
+ * 订阅主题变化 (2.10.0)。
+ *
+ * 在此之前 `isDarkTheme` 只在建窗格时读**一次**(readerSession 里一处调用),
+ * 之后再没人问过。于是开着窗格切换系统/Zotero 主题,窗格会一直停在旧主题,
+ * 直到关掉重开 —— 而 Zotero 的其余界面当场就变了,窗格成了唯一不变的那块。
+ *
+ * 返回取消订阅函数。拿不到 matchMedia 就返回一个空函数,调用方不必分支。
+ */
+export function watchTheme(reader: ReaderLike, onChange: (dark: boolean) => void): () => void {
+	try {
+		const win = reader._iframeWindow;
+		if (!win || !('matchMedia' in win)) {
+			return () => { /* 无法订阅 */ };
+		}
+		const mql = (win as Window).matchMedia('(prefers-color-scheme: dark)');
+		const handler = (): void => {
+			try {
+				onChange(mql.matches);
+			}
+			catch (e) {
+				logger.debug(MODULE, 'theme change handler failed', e);
+			}
+		};
+		mql.addEventListener('change', handler);
+		return () => {
+			try {
+				mql.removeEventListener('change', handler);
+			}
+			catch {
+				// 阅读器已经拆掉了,没什么可解绑的
+			}
+		};
+	}
+	catch (e) {
+		logger.debug(MODULE, 'watchTheme unavailable', e);
+		return () => { /* 无法订阅 */ };
+	}
+}

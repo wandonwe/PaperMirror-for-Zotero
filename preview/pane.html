@@ -1,0 +1,178 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- 真实样式表，未做任何修改 -->
+<link rel="stylesheet" href="../src/ui/styles/translationPane.css">
+<style>
+	/* 仅为把窗格放进预览页而存在的脚手架，不属于产品样式 */
+	html, body { margin: 0; height: 100%; }
+	body { display: flex; height: 100vh; background: #8a8f98; }
+	#host { display: flex; flex: 1; min-width: 0; }
+	.pm-bilingual-pane { height: 100vh; }
+</style>
+</head>
+<body>
+<div id="host"></div>
+<script>
+const SVG = 'http://www.w3.org/2000/svg';
+const ICON = {
+	swap: 'm7 7-4 4 4 4M3 11h13M17 17l4-4-4-4M21 13H8',
+	settings: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.96 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 10 3.01V3h4v.08a1.7 1.7 0 0 0 1.03 1.53 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z',
+	close: 'm6 6 12 12M18 6 6 18',
+	refresh: 'M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7',
+	more: 'M5 12h.01 M12 12h.01 M19 12h.01',
+	explain: 'M12 3.5 13.9 9l5.6 1.9-5.6 1.9L12 18.5l-1.9-5.7L4.5 10.9 10.1 9 12 3.5Z M18.5 16.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z'
+};
+function el(tag, cls, text) {
+	const n = document.createElementNS('http://www.w3.org/1999/xhtml', tag);
+	if (cls) n.className = cls;
+	if (text !== undefined) n.textContent = text;
+	return n;
+}
+function svgIcon(paths) {
+	const svg = document.createElementNS(SVG, 'svg');
+	svg.setAttribute('viewBox', '0 0 24 24');
+	for (const d of paths.split(' M').map((p, i) => (i === 0 ? p : 'M' + p))) {
+		const p = document.createElementNS(SVG, 'path');
+		p.setAttribute('d', d);
+		svg.appendChild(p);
+	}
+	return svg;
+}
+function iconButton(d, title, extra) {
+	const b = el('button', 'pm-icon-button' + (extra ? ' ' + extra : ''));
+	b.setAttribute('title', title); b.setAttribute('aria-label', title);
+	b.appendChild(svgIcon(d));
+	return b;
+}
+function textButton(cls, label, title) {
+	const b = el('button', cls, label);
+	b.setAttribute('title', title);
+	return b;
+}
+function switchControl(label, on) {
+	const w = el('span', 'pm-switch-label');
+	w.setAttribute('data-pm-on', String(on));
+	w.setAttribute('title', label);
+	w.setAttribute('role', 'switch');
+	w.setAttribute('aria-checked', String(on));
+	w.setAttribute('tabindex', '0');
+	w.append(el('span', 'pm-switch'), el('span', undefined, label));
+	return w;
+}
+function brandIcon() {
+	const wrap = el('span', 'pm-brand');
+	const svg = document.createElementNS(SVG, 'svg');
+	svg.setAttribute('viewBox', '0 0 24 24');
+	const defs = document.createElementNS(SVG, 'defs');
+	const g = document.createElementNS(SVG, 'linearGradient');
+	g.setAttribute('id', 'pm-brand-grad'); g.setAttribute('x1','0'); g.setAttribute('y1','0'); g.setAttribute('x2','0'); g.setAttribute('y2','1');
+	for (const [o, c] of [['0','#5b8dff'], ['1','#2f6fed']]) {
+		const s = document.createElementNS(SVG, 'stop');
+		s.setAttribute('offset', o); s.setAttribute('stop-color', c); g.appendChild(s);
+	}
+	defs.appendChild(g); svg.appendChild(defs);
+	const r = document.createElementNS(SVG, 'rect');
+	r.setAttribute('x','3'); r.setAttribute('y','3'); r.setAttribute('width','18'); r.setAttribute('height','18');
+	r.setAttribute('rx','4'); r.setAttribute('fill','url(#pm-brand-grad)');
+	svg.appendChild(r);
+	wrap.appendChild(svg);
+	return wrap;
+}
+function sideButton() {
+	const b = el('button', 'pm-icon-button');
+	b.setAttribute('title', '切换左右');
+	b.appendChild(svgIcon(ICON.swap));
+	return b;
+}
+
+function buildPane(opts) {
+	const pane = el('div', 'pm-bilingual-pane');
+	pane.setAttribute('data-pm-theme', opts.theme || 'light');
+	const header = el('div', 'pm-header');
+	const bar = el('div', 'pm-bar');
+
+	bar.appendChild(brandIcon());
+	const langPill = el('button', 'pm-chip pm-chip-lang');
+	langPill.setAttribute('title', '切换语言');
+	const full = el('span','pm-lang-full');
+	full.append(el('span','pm-lang-from','English'), el('i','pm-lang-arrow','→'), el('span','pm-lang-to','简体中文'));
+	const shortL = el('span','pm-lang-short');
+	shortL.append(el('span','pm-lang-from','EN'), el('i','pm-lang-arrow','→'), el('span','pm-lang-to','简'));
+	langPill.append(full, shortL);
+
+	const provPill = el('button', 'pm-chip pm-chip-provider');
+	provPill.setAttribute('title', '切换翻译服务');
+	provPill.append(el('span','pm-provider-mark','D'), el('span','pm-provider-name', opts.provider || 'DeepSeek'));
+	provPill.setAttribute('aria-label', '切换翻译服务');
+
+	bar.append(
+		langPill, provPill,
+		iconButton(ICON.refresh, '全文重译(丢失已翻译内容)', 'pm-refresh'),
+		el('span', 'pm-bar-spacer'),
+		switchControl('同步滚动', true),
+		(() => {
+			const b = textButton('pm-bar-action pm-bar-action-explain', '', '解析 PDF 中选中的文字(先选中,再点这里)');
+			b.setAttribute('aria-label', '解析');
+			b.append(svgIcon(ICON.explain), el('span', undefined, '解析'));
+			return b;
+		})(),
+		iconButton(ICON.more, '更多:导出译文 PDF、诊断'),
+		el('span', 'pm-bar-sep'),
+		sideButton(),
+		iconButton(ICON.settings, '设置'),
+		iconButton(ICON.close, '关闭')
+	);
+	header.append(bar);
+
+	const scroll = el('div', 'pm-scroll');
+	scroll.setAttribute('data-pm-view', 'article');
+	const art = el('div', 'pm-article-host');
+
+	const marker = el('div', 'pm-page-marker');
+	marker.append(el('i'), el('span', undefined, '第 3 页'), el('i'));
+	art.appendChild(marker);
+
+	if (opts.status) {
+		const st = el('div', 'pm-status-inline' + (opts.statusError ? ' pm-error' : ''), opts.status);
+		art.appendChild(st);
+	}
+
+	const paras = opts.paras || [
+		['Recent advances in transformer architectures have substantially improved the sample efficiency of large language models across a range of downstream tasks.',
+		 '近年来 Transformer 架构的进展，在一系列下游任务上显著提升了大语言模型的样本效率。'],
+		['We evaluate our method on three benchmarks and observe consistent gains over the strongest baseline, particularly in the low-resource regime.',
+		 '我们在三个基准上评估了所提方法，观察到相对最强基线的一致增益，在低资源场景下尤为明显。'],
+		['Table 2 reports ablation results. Removing the auxiliary loss degrades accuracy by 3.1 points, confirming its contribution.',
+		 '表 2 给出了消融结果。去掉辅助损失会使准确率下降 3.1 个点，印证了它的贡献。']
+	];
+	for (const [src, dst] of paras) {
+		const b = el('div', 'pm-block');
+		b.append(el('p', 'pm-block-original', src), el('p', 'pm-block-text', dst));
+		art.appendChild(b);
+	}
+	if (opts.pending) {
+		const b = el('div', 'pm-block pm-pending');
+		b.append(el('p', 'pm-block-original', 'The remaining paragraphs of this page are still being translated.'));
+		const t = el('p', 'pm-block-text');
+		t.append(el('span', 'pm-bilingual-spinner'), document.createTextNode('…'));
+		b.appendChild(t);
+		art.appendChild(b);
+	}
+	scroll.appendChild(art);
+	pane.append(header, scroll);
+	return pane;
+}
+window.render = function (opts) {
+	const host = document.getElementById('host');
+	host.textContent = '';
+	if (opts.divider) {
+		const d = el('div', 'pm-bilingual-divider');
+		host.appendChild(d);
+	}
+	host.appendChild(buildPane(opts));
+};
+</script>
+</body>
+</html>

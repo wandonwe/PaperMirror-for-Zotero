@@ -24,9 +24,7 @@ papermirror-status-cached = 已從快取載入
 papermirror-status-error = 發生錯誤
 papermirror-no-text-layer = 該 PDF 沒有文字層,需要先進行 OCR。
 papermirror-page = 第
-papermirror-sync-on = 🔗 同步捲動
-papermirror-sync-off = ⛓ 同步關閉
-papermirror-retranslate = 重新翻譯
+papermirror-retranslate = 全文重譯(捨棄已翻譯內容)
 papermirror-cancel = 取消
 papermirror-save-note = 儲存到筆記
 papermirror-settings = 設定
@@ -94,3 +92,12 @@ papermirror-view-page = 整頁對照
 papermirror-export-running = 正在產生譯文PDF (%n%%)…
 papermirror-export-done = 譯文PDF已產生並加入為附件
 papermirror-export-failed = 譯文PDF產生失敗
+
+# 2.10.0: 工具栏文案(此前在源码里写死为简体中文)
+papermirror-switch-language = 切換語言
+papermirror-switch-provider = 切換翻譯服務
+papermirror-terms = 術語
+papermirror-terms-tip = 預覽本篇自動學得的術語,可儲存到詞彙表(可復原)或僅複製 TSV
+papermirror-more = 更多:儲存到筆記、術語、匯出、診斷
+papermirror-configure-provider = 設定翻譯服務 →
+papermirror-configure-provider-tip = 開啟設定選擇翻譯服務商 / 填寫 API Key

@@ -20,6 +20,7 @@ import { stripStyleMarkers } from '../reader/styleRuns';
 import * as logger from '../utils/logger';
 import { RenderPump } from './renderPump';
 import { CachedPageIndex, anchorFractionOf, anchorScrollTarget, toScrollTop, type PageOffsetIndex } from './pageOffsetIndex';
+import { shortLangLabel } from './barLabels';
 // 回声抑制窗口与 SyncGuard 共用同一个常量 (2.9.8) —— 两处各写各的会留出缝隙。
 import { SYNC_ECHO_MS } from '../reader/scrollSynchronizer';
 import { getPref } from '../utils/prefs';
@@ -82,6 +83,10 @@ const ICON_PATHS = {
 	settings: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.96 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 10 3.01V3h4v.08a1.7 1.7 0 0 0 1.03 1.53 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z',
 	close: 'm6 6 12 12M18 6 6 18',
 	refresh: 'M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7',
+	// 「解析」(2.10.0): 四角星 + 小星,与其余图标同为 1.8 描边、无填充。
+	// 替掉原来的 ✦ 文字前缀 —— 那是字体里的一个字形,粗细与大小跟着字体走,
+	// 与旁边的线条图标不是一套视觉语言。
+	explain: 'M12 3.5 13.9 9l5.6 1.9-5.6 1.9L12 18.5l-1.9-5.7L4.5 10.9 10.1 9 12 3.5Z M18.5 16.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z',
 	// 三点「更多」(2.4.2): h.01 + stroke-linecap:round = 三个圆点。
 	more: 'M5 12h.01 M12 12h.01 M19 12h.01'
 } as const;
@@ -115,6 +120,14 @@ export interface PaneStrings {
 	viewPage: string;
 	privacyNotice: string;
 	privacyAccept: string;
+	/* 2.10.0: 以下几条此前是源码里写死的简体中文,en-US / zh-TW 用户也看到简体。 */
+	switchLanguage: string;
+	switchProvider: string;
+	terms: string;
+	termsTip: string;
+	more: string;
+	configureProvider: string;
+	configureProviderTip: string;
 }
 
 /**
@@ -521,8 +534,12 @@ export class TranslationPane {
 	 */
 	private buildMoreButton(): HTMLElement {
 		let moreChip: HTMLElement;
-		moreChip = this.iconButton(ICON_PATHS.more, '更多:导出译文 PDF、诊断', () => {
+		moreChip = this.iconButton(ICON_PATHS.more, this.strings.more, () => {
 			const items: { label: string; checked: boolean; onPick(): void }[] = [
+				// 2.10.0: 两个二级动作从常驻按钮下沉到这里 —— 它们各占约 60px,
+				// 正是 390px 下工具栏被裁掉四个控件的原因之一。
+				{ label: this.strings.saveNote, checked: false, onPick: () => this.callbacks.onSaveNote() },
+				{ label: this.strings.terms, checked: false, onPick: () => this.callbacks.onSaveTerms() },
 				{ label: '导出译文 PDF(单语 + 对照两份)', checked: false, onPick: () => this.callbacks.onExportPdf() },
 				// 2.8.8 (导出方案 P3): 两个文件导出入口。语料**常驻**,与调试日志解绑。
 				{ label: '导出诊断文件(整篇;不含原文/译文/密钥)', checked: false, onPick: () => this.callbacks.onExportDiagnosticsFile() },
@@ -537,17 +554,42 @@ export class TranslationPane {
 		return moreChip;
 	}
 
-	/** demo .switch-label — label + iOS-style toggle */
+	/**
+	 * demo .switch-label — label + iOS-style toggle
+	 *
+	 * 2.10.0 可访问性:这是一个 `<span>` 上挂 click,实测 `tabIndex = -1`、
+	 * `aria-checked = null` —— 键盘**完全够不到**同步开关,屏幕阅读器也读不出
+	 * 开还是关(`role="switch"` 缺 `aria-checked` 本身就是无效的)。
+	 * 补 tabindex + aria-checked + Enter/Space,并让状态改变走同一条路径,
+	 * 免得 click 与键盘各写一份、日后分叉。
+	 */
 	private switchControl(label: string, initial: boolean, onChange: (on: boolean) => void): HTMLElement {
 		const wrap = this.el('span', 'pm-switch-label');
 		wrap.setAttribute('data-pm-on', String(initial));
 		wrap.setAttribute('title', label);
 		wrap.setAttribute('role', 'switch');
+		wrap.setAttribute('aria-checked', String(initial));
+		wrap.setAttribute('aria-label', label);
+		wrap.setAttribute('tabindex', '0');
 		wrap.append(this.el('span', 'pm-switch'), this.el('span', undefined, label));
-		wrap.addEventListener('click', () => {
+		const toggle = (): void => {
 			const next = wrap.getAttribute('data-pm-on') !== 'true';
 			wrap.setAttribute('data-pm-on', String(next));
+			wrap.setAttribute('aria-checked', String(next));
 			onChange(next);
+		};
+		wrap.addEventListener('keydown', (event) => {
+			const key = (event as KeyboardEvent).key;
+			if (key !== 'Enter' && key !== ' ' && key !== 'Spacebar') {
+				return;
+			}
+			// 空格在滚动容器里默认翻页 —— 开关吃掉它,不让阅读位置跟着跳。
+			event.preventDefault();
+			event.stopPropagation();
+			toggle();
+		});
+		wrap.addEventListener('click', () => {
+			toggle();
 		});
 		return wrap;
 	}
@@ -877,7 +919,7 @@ export class TranslationPane {
 		bar.appendChild(this.makeBrandIcon());
 
 		this.languagePill = this.el('button', 'pm-chip pm-chip-lang');
-		this.languagePill.setAttribute('title', '切换语言');
+		this.languagePill.setAttribute('title', this.strings.switchLanguage);
 		this.languagePill.addEventListener('click', (event) => {
 			event.stopPropagation();
 			this.openLanguageMenu();
@@ -885,7 +927,8 @@ export class TranslationPane {
 
 		const providerPill = this.el('button', 'pm-chip pm-chip-provider');
 		this.providerPill = providerPill;
-		providerPill.setAttribute('title', '切换翻译服务');
+		providerPill.setAttribute('title', this.strings.switchProvider);
+		providerPill.setAttribute('aria-label', this.strings.switchProvider);
 		this.providerMark = this.el('span', 'pm-provider-mark');
 		this.providerName = this.el('span', 'pm-provider-name', '');
 		providerPill.append(this.providerMark, this.providerName);
@@ -901,9 +944,38 @@ export class TranslationPane {
 		// 本页」仍在状态胶囊圆环上,不占菜单栏。
 		const refreshChip = this.iconButton(
 			ICON_PATHS.refresh,
-			'全文重译(丢失已翻译内容)',
+			this.strings.retranslate,
 			() => this.callbacks.onRetranslate(),
 			'pm-refresh'
+		);
+
+		// 2.10.0 操作层级。实测:这条工具栏挤到极限仍要 **536px**,而窗格声明的
+		// 最小宽度是 390px,`overflow: hidden` 把多出来的**直接切掉** ——
+		// 390px 时「更多 / 左右 / 设置 / 关闭」四个全部消失且点不到。
+		//
+		// 修法不是缩小间距硬塞,也不是换行(换行会让表头高度变动,而表头高度
+		// 恒定 40px 正是页面起点不跳的原因)。按使用频率重排:
+		//
+		//   一级(阅读时高频,常驻)   语言 · 服务 · 全文重译 · 同步 · 解析
+		//   二级(偶尔用,进「更多」)  保存到笔记 · 术语 · 导出 · 诊断
+		//   窗口控制(常驻)          左右 · 设置 · 关闭
+		//
+		// 「保存到笔记」与「术语」下沉腾出约 120px;「解析」在窄档收成纯图标
+		// 再省约 44px —— 最小宽度降到约 372px,低于窗格的 390px 下限,
+		// 于是没有任何一级控件会被裁掉。
+		const explainButton = this.textButton(
+			'pm-bar-action pm-bar-action-explain',
+			'',
+			this.strings.explainTip,
+			() => this.callbacks.onExplainSelection()
+		);
+		// 装饰性的 ✦ 前缀换成与其他图标同一套线条语言的 SVG,窄档标签隐藏后
+		// 它就是这个按钮的图标;可读名由 aria-label 承担,不依赖 tooltip。
+		// 标签必须包在 <span> 里 —— 裸文本节点 CSS 藏不掉。
+		explainButton.setAttribute('aria-label', this.strings.explainSelection);
+		explainButton.append(
+			this.svgIcon(ICON_PATHS.explain),
+			this.el('span', undefined, this.strings.explainSelection)
 		);
 
 		bar.append(
@@ -912,9 +984,7 @@ export class TranslationPane {
 			refreshChip,
 			this.el('span', 'pm-bar-spacer'),
 			this.syncSwitch,
-			this.textButton('pm-bar-action', `✦ ${this.strings.explainSelection}`, this.strings.explainTip, () => this.callbacks.onExplainSelection()),
-			this.textButton('pm-bar-action', this.strings.saveNote, this.strings.saveNote, () => this.callbacks.onSaveNote()),
-			this.textButton('pm-bar-action', '术语', '预览本篇自动学得的术语,可保存到词汇表(可撤销)或仅复制 TSV', () => this.callbacks.onSaveTerms()),
+			explainButton,
 			this.buildMoreButton(),
 			this.el('span', 'pm-bar-sep'),
 			this.makeSideButton(),
@@ -992,16 +1062,35 @@ export class TranslationPane {
 
 	setSyncEnabled(enabled: boolean): void {
 		this.syncSwitch?.setAttribute('data-pm-on', String(enabled));
+		// 2.10.0: 外部改状态时 aria-checked 必须跟着走,否则屏幕阅读器读到的
+		// 是上一次的值 —— 比没有更糟。
+		this.syncSwitch?.setAttribute('aria-checked', String(enabled));
 	}
 
 	setLanguagePair(source: string, target: string): void {
 		// One chip, both languages. Two separate truncating pills turned this
 		// into "Eng… → 简体…", which tells the reader nothing.
-		this.languagePill.replaceChildren(
+		//
+		// 2.10.0: 合并解决了两次截断,没解决**被压扁** —— 实测 640px 时整个胶囊
+		// 只剩 16px。现在同时挂一份短形式,窄档由 CSS 整体换过去(见
+		// translationPane.css 的 .pm-lang-short),始终给完整可读的信息,
+		// 而不是把词切一半。两份都在 DOM 里,切换不触发任何重新测量。
+		const full = this.el('span', 'pm-lang-full');
+		full.append(
 			this.el('span', 'pm-lang-from', source),
 			this.el('i', 'pm-lang-arrow', '→'),
 			this.el('span', 'pm-lang-to', target)
 		);
+		const short = this.el('span', 'pm-lang-short');
+		short.append(
+			this.el('span', 'pm-lang-from', shortLangLabel(source)),
+			this.el('i', 'pm-lang-arrow', '→'),
+			this.el('span', 'pm-lang-to', shortLangLabel(target))
+		);
+		this.languagePill.replaceChildren(full, short);
+		// 短形式顶替时可读名不能跟着丢 —— 无障碍名与 tooltip 始终是全名。
+		this.languagePill.setAttribute('aria-label', `${this.strings.switchLanguage}:${source} → ${target}`);
+		this.languagePill.setAttribute('title', `${this.strings.switchLanguage}:${source} → ${target}`);
 	}
 
 	setProviderInfo(displayName: string, providerId?: string): void {
@@ -1033,7 +1122,7 @@ export class TranslationPane {
 		// 服务 —— 加一个「配置翻译服务 →」直达设置页,不必先接受再自己找设置。
 		const actions = this.el('div', 'pm-notice-actions');
 		actions.append(
-			this.textButton('pm-footer-button', '配置翻译服务 →', '打开设置选择翻译服务商 / 填写 API Key', () => this.callbacks.onOpenSettings()),
+			this.textButton('pm-footer-button', this.strings.configureProvider, this.strings.configureProviderTip, () => this.callbacks.onOpenSettings()),
 			this.textButton('pm-footer-button pm-primary', this.strings.privacyAccept, this.strings.privacyAccept, () => {
 				notice.remove();
 				this.privacyNoticeEl = null;
@@ -1656,10 +1745,14 @@ export class TranslationPane {
 		const target = anchorScrollTarget(this.slotTopInScroll(slot), slot.offsetHeight, fraction);
 		const max = Math.max(0, this.scroll.scrollHeight - this.scroll.clientHeight);
 		this.suppressScrollUntil = Date.now() + SYNC_ECHO_MS;
-		// 2.9.8: **连续跟随必须是瞬时的**。`.pm-scroll` 带 `scroll-behavior: smooth`,
-		// 而这个函数在 `updateviewarea` 上**每滚动帧**都被调用 —— 每写一次 scrollTop
-		// 就起一次平滑动画,下一帧又给它一个新目标,右侧永远在追、从不到位,
-		// 而且动画自己还在不断发 scroll 事件回灌。离散跳转(点击块、跳页)仍走平滑。
+		// 2.9.8: **连续跟随必须是瞬时的**。这个函数在 `updateviewarea` 上
+		// **每滚动帧**都被调用 —— 一旦走平滑动画,下一帧又给它一个新目标,
+		// 右侧永远在追、从不到位,动画自己还在不断发 scroll 事件回灌。
+		//
+		// 2.10.0: `.pm-scroll` 的默认值已经从 smooth 改成 auto(见 CSS),
+		// 这一句于是成了**第二道防线** —— 防的是任何地方临时写了行内
+		// `style.scrollBehavior`。两层都在,少哪一层都不至于立刻出问题,
+		// 但少了 CSS 那层,别的写 scrollTop 的路径又会各自中招。
 		this.scrollInstantly(Math.max(0, Math.min(target, max)));
 		this.scheduleEnsure();
 	}
