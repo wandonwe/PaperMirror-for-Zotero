@@ -130,10 +130,18 @@ export type ReleaseReason =
 	/** 请求被取消(多半是导航取代)。 */
 	| 'cancelled';
 
-/** 同一页最多释放几次 —— 超过就转成可重试的错误,绝不无限重试。 */
+/** 盲目轮询补回时,同一页最多释放几次 —— 绝不无限重试。 */
 export const MAX_RELEASES = 3;
-/** 补回的距离:只补当前页附近的,不回头扫整篇文档。 */
+/** 盲目轮询补回的距离:只补当前页附近的,不回头扫整篇文档。 */
 export const RELEASE_RETRY_RADIUS = 3;
+/**
+ * **事件驱动**补回的上限 (2.9.2)。与 `MAX_RELEASES` 是两套预算,故意分开:
+ * 翻页轮询是在猜"现在渲染好了吗",猜错要付配额,所以给得紧;
+ * `textlayerrendered` 是 PDF.js 自己说"渲染好了",是确定的信号 ——
+ * 在那一刻重抽命中率接近 100%,不该被猜错的配额拖累。
+ * 留一个很小的上限只为防病态:文本层都出来了还抽不到,再试也是重复同一个失败。
+ */
+export const MAX_RENDER_RETRIES = 2;
 
 /**
  * Accept a response as a REAL translation, not an echo or a half-translation.
@@ -616,7 +624,7 @@ export class TranslationManager {
 	 * 这张表既是记账(导出照实报),也是补回的依据(下次翻页时重新入队)。
 	 * 上限就是文档页数,不会无界增长。
 	 */
-	private released = new Map<number, { reason: ReleaseReason; count: number }>();
+	private released = new Map<number, { reason: ReleaseReason; count: number; renderRetries: number }>();
 	/**
 	 * 页 → 最近一次被用到的序号 (2.8.3, 性能第四批)。单调递增,只用来排先后,
 	 * 不用时间戳: 同一毫秒内先后用到的页时间戳分不出先后。
@@ -1378,6 +1386,31 @@ export class TranslationManager {
 	}
 
 	/**
+	 * 本次会话**完全没碰过**的页,夹在碰过的页之间 (2.9.2)。
+	 *
+	 * 导出清单只报"处理过的页",于是"这一页从来没进过流水线"这件事在文件里
+	 * 长得跟"用户根本没读到这里"一模一样。真机 2.9.1 那轮:处理了第 8–88 页,
+	 * 中间**第 9、25、26、27 页完全不在清单里** —— 它们既没有页状态,也不在
+	 * `released` 里,说明 `ensurePage` 从头到尾没被调用过。
+	 *
+	 * 这个函数不解释原因(现有数据解释不了),只把事实摆出来: **中间有洞**。
+	 * 没有它,下一轮还是只能靠人肉比对页号才发现。
+	 */
+	scopeGaps(): number[] {
+		const touched = new Set<number>([...this.pages.keys(), ...this.released.keys()]);
+		// 不设 size 闸: 0 页和 1 页时下面的区间本来就是空的,多一道闸只是多一条
+		// 测不到的分支。区间由「碰过的最小页 → 最大页」定义,洞只可能在里面。
+		const sorted = [...touched].sort((a, b) => a - b);
+		const gaps: number[] = [];
+		for (let p = (sorted[0] ?? 0) + 1; p < (sorted[sorted.length - 1] ?? 0); p++) {
+			if (!touched.has(p)) {
+				gaps.push(p);
+			}
+		}
+		return gaps;
+	}
+
+	/**
 	 * 单页诊断 (2.8.6, 导出方案 P1): 与整份导出**走同一个** `pageDiagnosticsRow`,
 	 * 于是"一次性导出"与"逐页流式导出"永远是同一份口径。页不存在时返回 null ——
 	 * 导出器把它记成缺失,不静默跳过。
@@ -1397,6 +1430,9 @@ export class TranslationManager {
 				error: null,
 				releaseReason: release.reason,
 				releaseCount: release.count,
+				renderRetries: release.renderRetries,
+				// 「盲目轮询的配额用完了」—— 不等于"彻底不再尝试":
+				// `textlayerrendered` 事件仍会唤醒它,用户真翻到这一页也会无条件再抽。
 				exhausted: release.count >= MAX_RELEASES,
 				blocks: [],
 				blockSource: 'none'
@@ -1420,8 +1456,44 @@ export class TranslationManager {
 		}
 		const prior = this.released.get(pageIndex);
 		const count = (prior?.count ?? 0) + 1;
-		this.released.set(pageIndex, { reason, count });
+		this.released.set(pageIndex, { reason, count, renderRetries: prior?.renderRetries ?? 0 });
 		logger.info(MODULE, `Page ${pageIndex + 1}: released for retry (${reason}, ${count}/${MAX_RELEASES})`);
+	}
+
+	/**
+	 * PDF.js 刚把这一页的文本层渲染出来 (2.9.1 真机 → 2.9.2)。
+	 *
+	 * ## 为什么必须由事件驱动
+	 *
+	 * 2.9.1 让抽取遇到"没渲染"时**立刻**放手(不再干等 2.5 秒),抽取耗时从人均
+	 * 864 ms 降到 139 ms。但代价立刻出现在同一份日志里:
+	 * `text-layer-not-rendered` 释放 **29 → 52**,`releasedPending` **8 → 27**,
+	 * 21 页 `exhausted`。原因很直白 —— **预取本来就发生在页面渲染之前**,
+	 * 以前那 2.5 秒的干等里 PDF.js 常常正好把页渲染完了,于是"歪打正着";
+	 * 现在不等了,预取就几乎必然落空。
+	 *
+	 * 靠翻页去轮询补回是在**猜**"现在渲染好了吗",猜不中就消耗一次配额。而
+	 * PDF.js 自己会在渲染完时发 `textlayerrendered` —— 那是确定的信号,不是猜。
+	 * 在那一刻重抽,命中率接近 100%,一次配额都不浪费。
+	 *
+	 * 所以这条路**不消耗** `MAX_RELEASES`(那是给盲目轮询用的),自己有一个很小的
+	 * 独立上限 `MAX_RENDER_RETRIES` 防病态:文本层都渲染出来了还抽不到,再试也
+	 * 只是重复同一个失败。
+	 */
+	onPageRendered(pageIndex: number): void {
+		if (this.disposed) {
+			return;
+		}
+		const record = this.released.get(pageIndex);
+		if (!record || this.pages.has(pageIndex) || record.renderRetries >= MAX_RENDER_RETRIES) {
+			return;
+		}
+		if (this.scheduler.isScheduled(`page-${pageIndex}`)) {
+			return;
+		}
+		record.renderRetries++;
+		logger.info(MODULE, `Page ${pageIndex + 1}: text layer rendered — retrying (${record.renderRetries}/${MAX_RENDER_RETRIES})`);
+		void this.ensurePage(pageIndex, PRIORITY.RELEASED_RETRY, { foreground: false });
 	}
 
 	/**
@@ -1537,10 +1609,18 @@ export class TranslationManager {
 				// 2.9.0: 释放过的页 —— `released` 是"释放过至少一次"的总数,
 				// `releasedPending` 是**此刻仍然没有页状态**的,也就是用户真的
 				// 会看到一片英文的那几页。后者不为 0 就是一条必须解释的事实。
+				// 2.9.2: 本次会话完全没碰过、却夹在碰过的页之间的页号。
+				// 「中间有洞」这件事必须自己跳出来,不该靠人肉比对页号才发现。
+				...((): Record<string, unknown> => {
+					const gaps = this.scopeGaps();
+					return gaps.length ? { untouchedGaps: gaps } : {};
+				})(),
 				...(this.released.size
 					? {
 						released: this.released.size,
 						releasedPending: [...this.released.keys()].filter(p => !this.pages.has(p)).length,
+						// 2.9.2: 由 `textlayerrendered` 事件(而不是盲目轮询)发起的重抽次数。
+						renderRetries: [...this.released.values()].reduce((n, r) => n + r.renderRetries, 0),
 						releaseReasons: countsOf(new Map(
 							[...this.released.values()].reduce((acc, r) => {
 								acc.set(r.reason, (acc.get(r.reason) ?? 0) + 1);

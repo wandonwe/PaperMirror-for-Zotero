@@ -162,6 +162,8 @@ export class ReaderSession {
 	private viewMode: ViewMode = 'split';
 	private onViewModeChanged: ((mode: ViewMode) => void) | null = null;
 	private disposePdfEvents: (() => void) | null = null;
+	/** 2.9.2: 只订阅 `textlayerrendered` —— 释放过的页在这一刻被捡回来。 */
+	private disposeTextLayerEvents: (() => void) | null = null;
 	/** visibilitychange 监听的解除器 (2.2.9, item1 不可见即停)。 */
 	private disposeVisibility: (() => void) | null = null;
 	private pageRefreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -521,6 +523,23 @@ export class ReaderSession {
 				}
 			}
 		});
+
+		// 2.9.2: 文本层渲染完的那一刻,把释放过的页立刻捡回来。
+		//
+		// 2.9.1 让抽取遇到"没渲染"时立刻放手(抽取人均 864 ms → 139 ms),但同一份
+		// 日志里 `text-layer-not-rendered` 释放 29 → 52、`releasedPending` 8 → 27 ——
+		// 因为**预取本来就发生在页面渲染之前**,不等就几乎必然落空。靠翻页轮询去
+		// 补是在猜"现在渲染好了吗";而 PDF.js 自己会在渲染完时发这个事件,那是
+		// 确定的信号。在这一刻重抽,命中率接近 100%,一次配额都不浪费。
+		//
+		// 单独订阅 `textlayerrendered`:上面那个订阅收的是全部渲染事件,分不出
+		// 是哪一种,而 `pagerendered`(画布画完)早于文本层,拿它当信号会又一次落空。
+		this.disposeTextLayerEvents = adapter.onPdfRenderEvents(this.reader, (pageIndex) => {
+			if (this.destroyed || pageIndex === null) {
+				return;
+			}
+			this.manager?.onPageRendered(pageIndex);
+		}, ['textlayerrendered']);
 
 		this.installIdentityPrefObservers();
 		this.startPolling();
@@ -3308,6 +3327,8 @@ export class ReaderSession {
 		this.baseBitmaps.clear(); // 释放缓存的底图 canvas
 		this.disposePdfEvents?.();
 		this.disposePdfEvents = null;
+		this.disposeTextLayerEvents?.();
+		this.disposeTextLayerEvents = null;
 		this.disposeVisibility?.();
 		this.disposeVisibility = null;
 		this.overlay?.destroy();
