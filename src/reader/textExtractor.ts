@@ -18,6 +18,7 @@
  */
 
 import { hashSourceTexts } from '../cache/cacheSchema';
+import { failureKind } from '../export/jsonlWriter';
 import type { SourceBlock } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
@@ -154,6 +155,33 @@ export class TextExtractor implements PageParser {
 	private inputsByPage = new Map<number, Omit<ExtractInputs, 'path'>>();
 	/** 2.8.15: 每页最近一次抽取的分段耗时 —— 回答"抽取等在哪一段"。 */
 	private phasesByPage = new Map<number, ExtractPhases>();
+	/**
+	 * 路径 1(fork 的 char 流)每页的结局,按枚举计数 (2.9.5)。
+	 *
+	 * 真机第七轮:`charsPathMs` 整轮 **80 ms / 85 页**,约 **1 ms 一页** ——
+	 * PDFWorker 的 RPC 往返不可能这么快,这不是"慢",是**立刻失败或立刻返回空**。
+	 * 而路径 1 是唯一**不依赖页面渲染**的抽取方式:它若能用,整条"等文本层渲染"
+	 * 的时序难题(2.9.0–2.9.4 五个版本都在绕它)就从根上绕过去了。
+	 * 所以它为什么不出活是眼下最值得问的问题,而现有日志一个字都没有。
+	 *
+	 * 只记枚举与计数,不含页码以外的任何内容。
+	 */
+	private charsOutcome = new Map<string, number>();
+
+	private noteCharsOutcome(pageIndex: number, outcome: string | null): void {
+		if (!outcome || this.charsNoted.has(pageIndex)) {
+			return; // 一页只记第一个结论,免得同一页的多次抽取把分布压歪
+		}
+		this.charsNoted.add(pageIndex);
+		this.charsOutcome.set(outcome, (this.charsOutcome.get(outcome) ?? 0) + 1);
+	}
+
+	private charsNoted = new Set<number>();
+
+	/** 路径 1 的结局分布 (2.9.5) —— 纯枚举计数。 */
+	charsPathOutcomes(): Record<string, number> {
+		return Object.fromEntries([...this.charsOutcome.entries()].sort((a, b) => b[1] - a[1]));
+	}
 
 	constructor(reader: ReaderLike, options: { includeReferences: boolean; noTranslate?: () => string[] }) {
 		this.reader = reader;
@@ -284,6 +312,17 @@ export class TextExtractor implements PageParser {
 		const charsStartedAt = Date.now();
 		try {
 			const { pageData, pageWidth, pageHeight } = await this.getPageData(pageIndex);
+			// 2.9.5: 路径 1 到底**为什么**没产出块 —— 枚举,不是猜。
+			//
+			// 真机第七轮量到一个说不通的数: `charsPathMs` 整轮 **80 ms / 85 页**,
+			// 约 **1 ms 一页**。PDFWorker 的 RPC 往返不可能这么快 —— 这不是"慢",
+			// 是**立刻失败或立刻返回空**。而路径 1 是唯一**不依赖页面渲染**的抽取
+			// 方式:它能用,整条"等文本层渲染"的时序难题就绕过去了。所以它为什么
+			// 不出活,是眼下最值得问的一个问题,而现有日志一个字都没有。
+			this.noteCharsOutcome(pageIndex,
+				!Array.isArray(pageData.chars) ? 'no-chars-array'
+					: pageData.chars.length === 0 ? 'empty-chars'
+						: null);
 			// 扫描件/坏字体页检测 (参照 BabelDOC midend/detect_scanned_file.py 的
 			// 思想): char 流大半是未解码的 (cid:N) 时,buildBlocks 只会产出乱码
 			// 块并送去翻译烧请求 —— 按"无可用文本"处理,落到文本层路径,那边
@@ -293,6 +332,7 @@ export class TextExtractor implements PageParser {
 				if (cid / pageData.chars.length > 0.6) {
 					logger.warn(MODULE, `Page ${pageIndex + 1}: ${cid}/${pageData.chars.length} chars are undecoded (cid:) — treating char stream as unusable`);
 					pageData.chars = [];
+					this.noteCharsOutcome(pageIndex, 'undecoded-cid');
 				}
 			}
 			if (pageData.chars.length) {
@@ -318,8 +358,10 @@ export class TextExtractor implements PageParser {
 					this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
 					this.auditIR(pageIndex, result.blocks);
 					this.pathByPage.set(pageIndex, 'chars');
+					this.noteCharsOutcome(pageIndex, 'ok');
 					return result.blocks;
 				}
+				this.noteCharsOutcome(pageIndex, 'chars-but-no-blocks');
 			}
 			logger.debug(MODULE, `getPageData returned no usable text for page ${pageIndex}; trying the text layer`);
 		}
@@ -327,6 +369,9 @@ export class TextExtractor implements PageParser {
 			if (e instanceof PaperMirrorError && e.code === 'PDF_ENCRYPTED') {
 				throw e;
 			}
+			// 抛错的**种类**是排查这条路的关键,而它此前只进了 logger。
+			// 只取枚举化的 code 或异常类名 —— message 可能带路径或内容,一个字不带。
+			this.noteCharsOutcome(pageIndex, `threw:${failureKind(e)}`);
 			logger.warn(MODULE, `getPageData path failed for page ${pageIndex}; trying the text layer`, e);
 		}
 		// 走通与走不通都记 —— 走不通的那趟正是"白付的往返",它的耗时才是问题。
