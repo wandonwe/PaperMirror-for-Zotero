@@ -7,6 +7,91 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.12.1] — 2026-09-12
+
+查 bing-free 与 deepseek 为什么慢。**deepseek 是真 bug,已修;bing-free 是架构差异,不改。**
+
+### DeepSeek:它一直在思考,而我们从没让它别想
+
+按服务商拆开算输出 token(同一篇论文、同一个翻译任务):
+
+| 服务商 | 出 tok / 原文字符 | 出 tok / 入 tok |
+|---|---|---|
+| **deepseek** | **6.71** | **5.92** |
+| openai | 0.56 | 0.40 |
+| gemini | 0.44 | 0.60 |
+
+**24661 字原文吐了 165385 个输出 token** —— 中文译文本身大约只值 10000,
+也就是它生成了约 **16 倍于译文**的内容,而那些内容全被丢弃(我们只取最终答案)。
+
+这完全解释了 65 字符/秒:不是网络慢,是在思考。实测单请求中位 22 秒、
+P90 52 秒、最长 **73 秒**,期间**无限流、无报错** —— 它不是在失败重试。
+
+根因:DeepSeek 官方文档写着「Thinking mode is enabled by default, with the
+default effort being `high`」,而 `REASONING_EFFORT_PROVIDERS` 只含 openai /
+openrouter —— **我们从来没给 deepseek 发过任何思考相关的参数**,一直吃着
+high 强度的默认思考。
+
+同一份文档还说明:thinking 模式下 `temperature` **无效**。我们给 deepseek 发的
+`temperature: 0`(翻译要确定性)因此一直被忽略 —— 关掉思考之后它才真的生效。
+
+**Fixed**:默认发 `thinking: { type: 'disabled' }`。翻译不需要思维链,
+我们连读都不读它。用户在高级设置里显式要了强度,就按他要的开
+(我们的 minimal/low → `low`,medium/high → `high`,xhigh → `max`);
+`supportsReasoningControl` 把 deepseek 纳入,否则设置界面上根本改不了。
+
+用的是 DeepSeek 自己的 `thinking` 对象,**不是** OpenAI 的顶层 `reasoning_effort`
+—— 两套词汇不能混,混了就是一个 400。
+
+### DeepSeek:型号名已经换了
+
+核对官方变更日志(2026-09-10):当前名是 `deepseek-flash`(V4.1 Flash);
+`deepseek-v4-flash` 只是**暂时**路由过去的过渡名。更要紧的是 `deepseek-v4-pro`
+在 **2026-09-14 之后**也会被路由到 V4.1 Flash —— 选它已经拿不到 Pro。
+
+目录里推荐项改为 `deepseek-flash`,两个旧名降为 legacy(不再标 quality 误导);
+注册表默认值同步改到当前名。**已显式选过型号的用户不受影响** —— 这只是没选时的默认。
+
+### bing-free:架构差异,不是 bug,所以不改
+
+它和 google-free 同为免费机器翻译,吞吐却差 **27 倍**(238 vs 6435 字符/秒),
+中位 2798 ms vs **281 ms**。原因在请求形状:
+
+- **google-free** 有 `batchPieces()`:把多个片段打包进一个请求,上限 1600 字符。
+  一页约 2 个请求。
+- **bing-free** 没有打包:先按 `\n\n` 切段,每段再按 900 字符切片,
+  **每一片一个 HTTP 往返**。一页 20 个短段就是 20 个往返,
+  `runPool(tasks, 3)` 三个并发 → 约 7 轮 × 400 ms ≈ **2.8 秒**,与实测中位吻合。
+
+看上去该给它加打包,但**主路做不到**:`translateOne` 先走 `translateViaScrape`
+(注释写着「The Bing web channel is the one that currently works」),
+而那个端点一次只收一个 `text`。能收数组的是 `translateViaEdge`,
+但它是 5 分钟熔断后的兜底,不是常态路径。
+
+在没法对活端点实测的前提下,提高并发、放大 900 的切片上限、或者把短段拼起来
+再按分隔符切回来 —— 每一条都是拿正确性赌速度。**所以这一版不动它。**
+结论是给用户的:要快的免费引擎,google-free 在这份证据上严格更优。
+
+### Tests
+
+- 更新 6 项既有断言(它们钉的正是"deepseek 不带 thinking"和旧型号名),
+  每一条都写清了为什么该改。
+- 新增 1 项:`''` / `disabled` / `auto` 都必须**显式**发 `{type:'disabled'}`
+  —— 不发等于吃 high 强度的默认思考;五档强度各自映射正确;
+  不能同时发顶层 `reasoning_effort`。
+- 变异验证 8 项全 kill:不发 thinking、默认改 enabled、错用顶层字段、
+  阶梯全映到 max、disabled 也当成要思考、设置界面不给开关、
+  目录退回过渡名、注册表与目录不一致。
+- 1192 项全绿;37 个布局快照与请求计划基线逐字节不变。
+
+### 下一轮看什么
+
+装 2.12.1,照常读一篇长文,导出诊断。看 `providerThroughput.deepseek`:
+
+- 吞吐从 65 跳到几百字符/秒 → 思考确实是主因,权重会自动跟着重算;
+- 仍然是几十字符/秒 → 参数没被接受(或者慢另有原因),
+  那时 `出tok/原字符` 会告诉我们思考是不是真的关掉了。
+
 ## [2.12.0] — 2026-09-12
 
 **按实测速度加权分页。** 权重来自**本会话自己的测量**,不是我硬编码某一次导出的数字 ——

@@ -45,9 +45,12 @@ const presetProviders: TranslationProvider[] = [
 		id: 'deepseek',
 		displayName: 'DeepSeek 深度求索',
 		defaultBaseURL: 'https://api.deepseek.com',
-		// deepseek-chat/deepseek-reasoner were discontinued 2026-07-24; V4-Flash
-		// is the current default (verified 2026-08-10, api-docs.deepseek.com).
-		defaultModel: 'deepseek-v4-flash'
+		// deepseek-chat/deepseek-reasoner were discontinued 2026-07-24.
+		// 2.12.1 (核对 api-docs.deepseek.com/updates, 2026-09-10): 当前名是
+		// `deepseek-flash`(V4.1 Flash);`deepseek-v4-flash` 只是**暂时**路由
+		// 过去的过渡名 —— 默认值留在过渡名上迟早会断,改到当前名。
+		// 已显式选过型号的用户不受影响(这里只是没选时的默认)。
+		defaultModel: 'deepseek-flash'
 	}),
 	createOpenAICompatibleProvider({
 		id: 'moonshot',

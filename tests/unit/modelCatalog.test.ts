@@ -23,7 +23,9 @@ test('providerNeedsModel: false for fixed MT engines, true for LLMs', () => {
 
 test('recommendedModelFor returns the recommended (or first) entry', () => {
 	assert.equal(recommendedModelFor('openai'), 'gpt-5.6-luna');
-	assert.equal(recommendedModelFor('deepseek'), 'deepseek-v4-flash');
+	// 2.12.1: 官方 2026-09-10 起当前名是 deepseek-flash;deepseek-v4-flash 只是
+	// 暂时路由过去的过渡名,默认值不该留在过渡名上。
+	assert.equal(recommendedModelFor('deepseek'), 'deepseek-flash');
 	// Free-tier Gemini keys only get 2.5-flash/lite (2026-04 tightening) — the
 	// default must work for every account.
 	assert.equal(recommendedModelFor('gemini'), 'gemini-2.5-flash');

@@ -21,7 +21,7 @@ test('normalizeReasoning keeps valid levels (incl. xhigh), drops anything else',
 test('default temperature 0 for safe providers; openai/openrouter left alone', () => {
 	// 温度默认 0(翻译更稳定)— but openai gpt-5.x / openrouter auto-routing only
 	// accept the default temperature, so no default is injected there.
-	assert.deepEqual(openaiChatExtras(base({}), 'deepseek'), { temperature: 0 });
+	assert.deepEqual(openaiChatExtras(base({}), 'deepseek'), { temperature: 0, thinking: { type: 'disabled' } });
 	assert.deepEqual(openaiChatExtras(base({}), 'qwen'), { temperature: 0 });
 	assert.deepEqual(openaiChatExtras(base({}), 'openai'), {});
 	assert.deepEqual(openaiChatExtras(base({}), 'openrouter'), {});
@@ -29,14 +29,14 @@ test('default temperature 0 for safe providers; openai/openrouter left alone', (
 
 test('openaiChatExtras: explicit temperature always passes through', () => {
 	assert.deepEqual(openaiChatExtras(base({ temperature: 0 }), 'openai'), { temperature: 0 });
-	assert.deepEqual(openaiChatExtras(base({ temperature: 0.7 }), 'deepseek'), { temperature: 0.7 });
+	assert.deepEqual(openaiChatExtras(base({ temperature: 0.7 }), 'deepseek'), { temperature: 0.7, thinking: { type: 'disabled' } });
 });
 
 test('openaiChatExtras: max tokens key differs for the official OpenAI endpoint', () => {
 	assert.deepEqual(openaiChatExtras(base({ maxOutputTokens: 500 }), 'openai'), { max_completion_tokens: 500 });
 	assert.deepEqual(
 		openaiChatExtras(base({ maxOutputTokens: 500 }), 'deepseek'),
-		{ temperature: 0, max_tokens: 500 }
+		{ temperature: 0, max_tokens: 500, thinking: { type: 'disabled' } }
 	);
 	// zero / negative is ignored
 	assert.deepEqual(openaiChatExtras(base({ maxOutputTokens: 0 }), 'openai'), {});
@@ -82,7 +82,35 @@ test('reasoning_effort mapping: official levels for OpenAI/OpenRouter only', () 
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'xhigh' }), 'openai'), { reasoning_effort: 'xhigh' });
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'low' }), 'openrouter'), { reasoning_effort: 'low' });
 	// providers not known to accept it → omitted (never risk a 400)
-	assert.deepEqual(openaiChatExtras(base({ reasoning: 'high' }), 'deepseek'), { temperature: 0 });
+	assert.deepEqual(openaiChatExtras(base({ reasoning: 'high' }), 'qwen'), { temperature: 0 });
+	// DeepSeek 走的是它自己的 `thinking` 对象,不是 reasoning_effort 顶层字段
+	// (官方文档:thinking.type = enabled|disabled,effort = none|low|high|max)。
+	assert.deepEqual(openaiChatExtras(base({ reasoning: 'high' }), 'deepseek'),
+		{ temperature: 0, thinking: { type: 'enabled', reasoning_effort: 'high' } });
+	assert.ok(!('reasoning_effort' in openaiChatExtras(base({ reasoning: 'high' }), 'deepseek')),
+		'不能同时发顶层 reasoning_effort —— 那是 OpenAI 的词汇');
+});
+
+test('DeepSeek 默认关思考:翻译只要最终译文 (2.12.1)', () => {
+	// 真机:同一篇论文里 deepseek 的出 tok/原文字符 = 6.71,而 openai 0.56、
+	// gemini 0.44 —— 24661 字原文吐了 165385 个输出 token,约 16 倍于译文本身。
+	// 官方文档:「Thinking mode is enabled by default, with the default effort
+	// being high」,而我们此前从没发过任何思考参数。
+	for (const level of ['', 'disabled', 'auto'] as const) {
+		const extras = openaiChatExtras(base(level ? { reasoning: level } : {}), 'deepseek');
+		assert.deepEqual(extras.thinking, { type: 'disabled' },
+			`reasoning='${level}' 时必须显式关掉 —— 不发等于吃 high 强度的默认思考`);
+	}
+	// 用户显式要了强度就按他要的来,那是他的决定。
+	const ladder: Record<string, string> = {
+		minimal: 'low', low: 'low', medium: 'high', high: 'high', xhigh: 'max'
+	};
+	for (const [ours, theirs] of Object.entries(ladder)) {
+		assert.deepEqual(
+			openaiChatExtras(base({ reasoning: ours as never }), 'deepseek').thinking,
+			{ type: 'enabled', reasoning_effort: theirs },
+			`${ours} 应映射到 DeepSeek 的 ${theirs}`);
+	}
 });
 
 test('supportsReasoningControl: LLM reasoning providers only', () => {
@@ -90,7 +118,8 @@ test('supportsReasoningControl: LLM reasoning providers only', () => {
 	assert.equal(supportsReasoningControl('gemini'), true);
 	assert.equal(supportsReasoningControl('openrouter'), true);
 	assert.equal(supportsReasoningControl('anthropic'), true);
-	assert.equal(supportsReasoningControl('deepseek'), false);
+	// 2.12.1: DeepSeek 默认开思考,用户必须能在设置里改 —— 改不了就只能吃默认。
+	assert.equal(supportsReasoningControl('deepseek'), true);
 	assert.equal(supportsReasoningControl('bing-free'), false);
 });
 
