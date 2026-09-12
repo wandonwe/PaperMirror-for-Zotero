@@ -245,6 +245,29 @@ export function buildTableModel(
 		slot.straddles = slot.straddles || col.straddles;
 		slots.set(key, slot);
 	}
+	// 2.12.3: 数值路径也要并折行。行带来自 Y 区间聚类,一条多行标题的第二行
+	// 与第一行**不重叠**,天生自成一带 → 自成一行,年份/缩写却还留在第一行上。
+	// 文本表路径早有 mergeContinuationRows,数值路径一直没接 —— 而"一列年份"
+	// 足以让指南清单表被判成数值表(用户截图 2 正是这条路径)。同一套判据,
+	// 不另立规则。
+	{
+		// em 由成员自己给出,不加参数 —— buildTableModel 有抽取期与排版期两个
+		// 调用点,这个仓库为"两端参数漂移"付过代价 (格 id 必须逐字一致)。
+		// 字号缺失时退回行高中位数。
+		const sizes = members.map(m => m.fontSize ?? 0).filter(n => n > 0).sort((a, b) => a - b);
+		const heights = members.map(m => m.box.height).filter(n => n > 0).sort((a, b) => a - b);
+		const pick = sizes.length ? sizes : heights;
+		const em = pick.length ? pick[Math.floor(pick.length / 2)]! : 10;
+		const drafts = [...slots].map(([key, slot]) => {
+			const [row, col] = key.split(':').map(Number) as [number, number];
+			return { members: slot.members, straddles: slot.straddles, row, col };
+		});
+		mergeContinuationRows(drafts, rowBands.length, em);
+		slots.clear();
+		for (const d of drafts) {
+			slots.set(`${d.row}:${d.col}`, { members: d.members, straddles: d.straddles });
+		}
+	}
 
 	const cells: TableCell[] = [];
 	// 表级 email 探测 (2.5.13): 纯人名格保留规则的前提 —— 见下方 nameOnly。
@@ -375,6 +398,24 @@ export function buildTextTableModel(
 			byCol[a.index]!.push(m);
 		}
 	}
+	// 2.12.3 分组阈值改用**表格自己的**行内行距,不是绝对的 em*0.8。
+	//
+	// 只占一列的**小节子标题行**("Imaging outcomes")产生不了跨列行起点,
+	// 全靠列内分组把它断出来;而紧排期刊表格的行间隙常只有 0.6~0.7 个字号,
+	// 够不着 em*0.8,于是子标题从一开始就被分进了上一行(nejm-defuse3-p7
+	// 实测: 折行间隙 1.0,真行间隙 5.8,阈值 8.0 —— 两者都不断)。
+	// 本表最紧的那种间隙就是行内行距,超过它就是换行不是折行。取 min 保证
+	// 永远不比原来更迟钝。
+	const tightSplit = (() => {
+		const gaps: number[] = [];
+		for (const colMembers of byCol) {
+			const s = [...colMembers].sort((x, y) => x.box.top - y.box.top);
+			for (let i = 1; i < s.length; i++) {
+				gaps.push(Math.max(0, s[i]!.box.top - (s[i - 1]!.box.top + s[i - 1]!.box.height)));
+			}
+		}
+		return Math.min(em * 0.8, (gaps.length ? Math.min(...gaps) : 0) + em * 0.25);
+	})();
 	byCol.forEach((colMembers, col) => {
 		const sorted = [...colMembers].sort((x, y) => x.box.top - y.box.top);
 		let cur: CellMember[] = [];
@@ -386,7 +427,7 @@ export function buildTextTableModel(
 			}
 		};
 		for (const m of sorted) {
-			if (cur.length && m.box.top - bottom > em * 0.8) {
+			if (cur.length && m.box.top - bottom > tightSplit) {
 				flush();
 			}
 			cur.push(m);
@@ -401,25 +442,42 @@ export function buildTextTableModel(
 	// 数据行只隔 0.55em,每一列的表头都和首行并成一组,组顶给不出首行起点,
 	// 整张表的表头和第一行熔成一格。补一类起点: ≥3 个成员顶边对齐 (±0.3em)、
 	// 且各自贴着所在列带左沿 (悬挂缩进的折行不算) —— 那是行首的硬几何。
+	// 2.12.3: 行首的硬几何是"**≥2 个不同列**在同一顶边开始",不是"≥3 个成员"。
+	//
+	// 原来的 ≥3 个成员是个代理判据,在 2~3 列的表上永远凑不够 —— 而紧排表格
+	// 恰恰全靠它兜底:列内分组的断点阈值 em*0.8 是**绝对**值,期刊表格的记录
+	// 间隙常只有 0.6~0.7 个字号,一个断点都产生不出来。两条一起失效的后果不是
+	// 错一行,是**整张表塌成一行**:三条各自带年份的记录会被焊成
+	// r1-c0="标题一 标题二 标题三"、r1-c1="2019 2020 2021"(见
+	// tests/unit/tableRowFidelity.test.ts 的反向锁夹具)。用户截图 2 里
+	// "第一列多个标题连续堆到上方、下面全是空白格"就是这个形状。
+	//
+	// 换成列数判据后对宽表反而更严(5 列表仍要 3 个成员,且必须跨 ≥2 列),
+	// 只对 2~3 列的表放开它本来就够不到的那道门。
 	const alignedStarts: number[] = [];
 	{
 		const flush = members
 			.filter(m => !groups.some(g => g.straddles && g.members[0] === m))
-			.map(m => ({ top: m.box.top, atStart: m.box.left <= colBands[assignBand(m.box.left, m.box.left + m.box.width, colBands).index]!.start + em * 0.5 }))
+			.map(m => {
+				const col = assignBand(m.box.left, m.box.left + m.box.width, colBands).index;
+				return { top: m.box.top, col, atStart: m.box.left <= colBands[col]!.start + em * 0.5 };
+			})
 			.filter(m => m.atStart)
 			.sort((a, b) => a.top - b.top);
-		let run: number[] = [];
+		const quorum = Math.min(3, colBands.length);
+		let run: { top: number; col: number }[] = [];
 		const commit = (): void => {
-			if (run.length >= 3) {
-				alignedStarts.push(Math.min(...run));
+			const cols = new Set(run.map(r => r.col));
+			if (run.length >= quorum && cols.size >= 2) {
+				alignedStarts.push(Math.min(...run.map(r => r.top)));
 			}
 			run = [];
 		};
 		for (const m of flush) {
-			if (run.length && m.top - run[0]! > em * 0.3) {
+			if (run.length && m.top - run[0]!.top > em * 0.3) {
 				commit();
 			}
-			run.push(m.top);
+			run.push({ top: m.top, col: m.col });
 		}
 		commit();
 	}
@@ -500,6 +558,25 @@ function mergeContinuationRows(
 	const topOf = (d: { members: CellMember[] }): number => Math.min(...d.members.map(m => m.box.top));
 	const firstText = (d: { members: CellMember[] }): string =>
 		[...d.members].sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left).map(m => m.text.trim()).find(Boolean) ?? '';
+	// 表内"最紧的一种竖向间隙" = 行内折行的行距 (2.12.3)。逐列取纵向相邻草稿
+	// 的间隙,取全表最小的正值;负值(框重叠)按 0 计。加 em*0.25 的容差吸收
+	// 取整误差。表格若通篇只有一种间隙,这把尺就分不开折行与新行 —— 那正是
+	// 纯文字几何的极限,只有边框线能判(见模块顶部说明)。
+	const tightLimit = (() => {
+		const gaps: number[] = [];
+		const cols = new Set(drafts.map(d => d.col));
+		for (const c of cols) {
+			// 量【成员】之间的间隙,不是草稿之间的 —— 文本表路径里折行常常已经
+			// 被 rowOf 并进同一个草稿,草稿之间就只剩行间距,尺子会失去分辨力
+			// (本文件的"小节子标题"夹具正是这样红的)。
+			const ms = drafts.filter(d => d.col === c).flatMap(d => d.members)
+				.sort((a, b) => a.box.top - b.box.top);
+			for (let i = 1; i < ms.length; i++) {
+				gaps.push(Math.max(0, ms[i]!.box.top - (ms[i - 1]!.box.top + ms[i - 1]!.box.height)));
+			}
+		}
+		return (gaps.length ? Math.min(...gaps) : 0) + em * 0.25;
+	})();
 	let removed = 0;
 	for (let row = 1; row < rowCount; row++) {
 		const cur = drafts.filter(d => d.row === row);
@@ -515,11 +592,31 @@ function mergeContinuationRows(
 			continue;
 		}
 		const prevOf = (col: number): Draft | undefined => prevRow.find(d => d.col === col);
+		// 2.12.3 列覆盖证据: CONTINUATION_START(以小写字母/续行标点开头)对散文
+		// 成立,对**文献标题**完全失效 —— 标题是 Title Case,"Cardiovascular
+		// Disease"、"Acute Ischemic Stroke" 条条大写开头,于是指南清单表里每条
+		// 多行标题的折行都被判成新记录,标题与年份、缩写整体错位(用户截图 2)。
+		//
+		// 补一条不依赖大小写的几何证据:**真正的新记录会填上一行填过的那些列**
+		// (那正是它成为一条记录的原因),而折行只延长它自己那一列。所以"本行的
+		// 列集合是上一行列集合的真子集"就是续行 —— 列数相同的行永远不并
+		// (反向锁夹具: 三条各自带年份的记录必须留成三行)。
+		//
+		// 光有列覆盖还不够: 表内的**小节子标题行**("Imaging outcomes**"、
+		// "Safety outcomes — no. (%)")同样只占第一列,列覆盖分不开它和折行。
+		// 加一把行距的尺 —— 而且是**表格自己的**尺,不是又一个绝对常数:
+		// nejm-defuse3-p7 实测,折行与上一行的间隙是 **1.0**,而每一条真行
+		// (含那两个子标题)都是 **5.8**,差 6 倍;但两者都远小于 em*0.8=8.0,
+		// 固定阈值永远分不开。表内最紧的那种间隙就是行内行距,续行必须贴着它。
+		const curCols = new Set(cur.map(d => d.col));
+		const prevCols = new Set(prevRow.map(d => d.col));
+		const fewerColumns = curCols.size < prevCols.size && [...curCols].every(c => prevCols.has(c));
 		const continuation = cur.every(d => {
 			const prev = prevOf(d.col);
+			const gap = prev ? topOf(d) - bottomOf(prev) : Infinity;
 			return !d.straddles && !!prev
-				&& CONTINUATION_START.test(firstText(d))
-				&& topOf(d) - bottomOf(prev) <= em * 0.8;
+				&& (CONTINUATION_START.test(firstText(d)) || (fewerColumns && gap <= tightLimit))
+				&& gap <= em * 0.8;
 		});
 		if (!continuation) {
 			continue;

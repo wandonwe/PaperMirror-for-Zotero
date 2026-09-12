@@ -306,7 +306,7 @@
 		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "preserve",
-		"text": "144 × 0.4 mm (SR);"
+		"text": "144 × 0.4 mm (SR); 120 × 0.2 mm (UHR)"
 	},
 	{
 		"type": "paragraph",
@@ -315,7 +315,7 @@
 		"tableRow": 2,
 		"tableCol": 3,
 		"mode": "preserve",
-		"text": "4 (SR);"
+		"text": "4 (SR); 2 (UHR)"
 	},
 	{
 		"type": "paragraph",
@@ -358,24 +358,6 @@
 		"column": 0,
 		"readingIndex": 40,
 		"tableRow": 3,
-		"tableCol": 2,
-		"mode": "preserve",
-		"text": "120 × 0.2 mm (UHR)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 41,
-		"tableRow": 3,
-		"tableCol": 3,
-		"mode": "preserve",
-		"text": "2 (UHR)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 42,
-		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "Silicon"
@@ -383,8 +365,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 43,
-		"tableRow": 4,
+		"readingIndex": 41,
+		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "*"
@@ -392,8 +374,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 44,
-		"tableRow": 4,
+		"readingIndex": 42,
+		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "8"
@@ -401,8 +383,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 45,
-		"tableRow": 4,
+		"readingIndex": 43,
+		"tableRow": 3,
 		"tableCol": 4,
 		"mode": "translate",
 		"text": "Full body"
@@ -410,8 +392,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 46,
-		"tableRow": 4,
+		"readingIndex": 44,
+		"tableRow": 3,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "50"
@@ -419,8 +401,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 47,
-		"tableRow": 4,
+		"readingIndex": 45,
+		"tableRow": 3,
 		"tableCol": 6,
 		"mode": "preserve",
 		"text": "No"
@@ -428,8 +410,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 48,
-		"tableRow": 4,
+		"readingIndex": 46,
+		"tableRow": 3,
 		"tableCol": 7,
 		"mode": "preserve",
 		"text": "92"
@@ -437,8 +419,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 49,
-		"tableRow": 5,
+		"readingIndex": 47,
+		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "CdZnTe"
@@ -446,8 +428,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 50,
-		"tableRow": 5,
+		"readingIndex": 48,
+		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "64 × 0.275 mm"
@@ -455,8 +437,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 51,
-		"tableRow": 5,
+		"readingIndex": 49,
+		"tableRow": 4,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "5"
@@ -464,8 +446,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 52,
-		"tableRow": 5,
+		"readingIndex": 50,
+		"tableRow": 4,
 		"tableCol": 4,
 		"mode": "translate",
 		"text": "Full body"
@@ -473,8 +455,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 53,
-		"tableRow": 5,
+		"readingIndex": 51,
+		"tableRow": 4,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "50"
@@ -482,8 +464,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 54,
-		"tableRow": 5,
+		"readingIndex": 52,
+		"tableRow": 4,
 		"tableCol": 6,
 		"mode": "preserve",
 		"text": "No"
@@ -491,8 +473,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 55,
-		"tableRow": 5,
+		"readingIndex": 53,
+		"tableRow": 4,
 		"tableCol": 7,
 		"mode": "preserve",
 		"text": "93"
@@ -500,8 +482,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 56,
-		"tableRow": 6,
+		"readingIndex": 54,
+		"tableRow": 5,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "CdZnTe"
@@ -509,17 +491,17 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 57,
-		"tableRow": 6,
+		"readingIndex": 55,
+		"tableRow": 5,
 		"tableCol": 2,
 		"mode": "preserve",
-		"text": "16 × 0.62 mm (SR);"
+		"text": "16 × 0.62 mm (SR); 48 × 0.21 mm (UHR)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 58,
-		"tableRow": 6,
+		"readingIndex": 56,
+		"tableRow": 5,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "6"
@@ -527,8 +509,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 59,
-		"tableRow": 6,
+		"readingIndex": 57,
+		"tableRow": 5,
 		"tableCol": 4,
 		"mode": "translate",
 		"text": "Full body"
@@ -536,8 +518,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 60,
-		"tableRow": 6,
+		"readingIndex": 58,
+		"tableRow": 5,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "50"
@@ -545,8 +527,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 61,
-		"tableRow": 6,
+		"readingIndex": 59,
+		"tableRow": 5,
 		"tableCol": 6,
 		"mode": "preserve",
 		"text": "No"
@@ -554,8 +536,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 62,
-		"tableRow": 6,
+		"readingIndex": 60,
+		"tableRow": 5,
 		"tableCol": 7,
 		"mode": "preserve",
 		"text": "94"
@@ -563,17 +545,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 63,
-		"tableRow": 7,
-		"tableCol": 2,
-		"mode": "preserve",
-		"text": "48 × 0.21 mm (UHR)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 64,
-		"tableRow": 8,
+		"readingIndex": 61,
+		"tableRow": 6,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "CdTe"
@@ -581,8 +554,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 65,
-		"tableRow": 8,
+		"readingIndex": 62,
+		"tableRow": 6,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "80 × 0.15 mm"
@@ -590,8 +563,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 66,
-		"tableRow": 8,
+		"readingIndex": 63,
+		"tableRow": 6,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "3"
@@ -599,8 +572,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 67,
-		"tableRow": 8,
+		"readingIndex": 64,
+		"tableRow": 6,
 		"tableCol": 4,
 		"mode": "translate",
 		"text": "Head and neck"
@@ -608,8 +581,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 68,
-		"tableRow": 8,
+		"readingIndex": 65,
+		"tableRow": 6,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "25"
@@ -617,8 +590,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 69,
-		"tableRow": 8,
+		"readingIndex": 66,
+		"tableRow": 6,
 		"tableCol": 6,
 		"mode": "translate",
 		"text": "Yes"
@@ -626,8 +599,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 70,
-		"tableRow": 8,
+		"readingIndex": 67,
+		"tableRow": 6,
 		"tableCol": 7,
 		"mode": "preserve",
 		"text": "95"
@@ -635,8 +608,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 71,
-		"tableRow": 10,
+		"readingIndex": 68,
+		"tableRow": 7,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "CdZnTe"
@@ -644,8 +617,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 72,
-		"tableRow": 10,
+		"readingIndex": 69,
+		"tableRow": 7,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "128 × 0.11 mm"
@@ -653,8 +626,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 73,
-		"tableRow": 10,
+		"readingIndex": 70,
+		"tableRow": 7,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "5"
@@ -662,8 +635,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 74,
-		"tableRow": 10,
+		"readingIndex": 71,
+		"tableRow": 7,
 		"tableCol": 4,
 		"mode": "translate",
 		"text": "Extremities"
@@ -671,8 +644,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 75,
-		"tableRow": 10,
+		"readingIndex": 72,
+		"tableRow": 7,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "12, 5"
@@ -680,8 +653,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 76,
-		"tableRow": 10,
+		"readingIndex": 73,
+		"tableRow": 7,
 		"tableCol": 6,
 		"mode": "preserve",
 		"text": "No"
@@ -689,8 +662,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 77,
-		"tableRow": 10,
+		"readingIndex": 74,
+		"tableRow": 7,
 		"tableCol": 7,
 		"mode": "preserve",
 		"text": "96"
@@ -698,7 +671,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 78,
+		"readingIndex": 75,
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "translate",
@@ -707,7 +680,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 79,
+		"readingIndex": 76,
 		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "translate",
@@ -716,26 +689,17 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 80,
+		"readingIndex": 77,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Siemens Healthcare"
+		"text": "Siemens Healthcare (Naeotom Alpha)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 81,
+		"readingIndex": 78,
 		"tableRow": 3,
-		"tableCol": 0,
-		"mode": "translate",
-		"text": "(Naeotom Alpha)"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 82,
-		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "GE HealthCare"
@@ -743,8 +707,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 83,
-		"tableRow": 5,
+		"readingIndex": 79,
+		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Philips Healthcare"
@@ -752,8 +716,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 84,
-		"tableRow": 6,
+		"readingIndex": 80,
+		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Canon Medical Research"
@@ -761,70 +725,55 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 85,
-		"tableRow": 8,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "Samsung/NeuroLogica"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 86,
-		"tableRow": 9,
+		"readingIndex": 81,
+		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "(OmniTom Elite PCD)"
+		"text": "Samsung/NeuroLogica (OmniTom Elite PCD)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 87,
-		"tableRow": 10,
+		"readingIndex": 82,
+		"tableRow": 7,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "MARS Bioimaging"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 88,
-		"text": "(extremity 5 × 120)"
+		"text": "MARS Bioimaging (extremity 5 × 120)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 89,
+		"readingIndex": 83,
 		"text": "recommend coronary CT angiography as the"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 90,
+		"readingIndex": 84,
 		"text": "These limitations derive from a combinat"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 91,
+		"readingIndex": 85,
 		"text": "spatial resolution of EID CT and bloomin"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 92,
+		"readingIndex": 86,
 		"text": "Note.CdTe = cadmium telluride, CdZnTe ="
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 93,
+		"readingIndex": 87,
 		"text": "Coronary Artery Disease"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 94,
+		"readingIndex": 88,
 		"text": "Nowadays, CT is the imaging modality of "
 	}
 ]
