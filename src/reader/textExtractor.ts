@@ -144,6 +144,15 @@ export interface ExtractPhases {
 	/** 是否拿到了运行时真实的 OPS 表(false = 用的内置默认码)。 */
 	edgeRealOps?: boolean;
 	/**
+	 * 码对上了、可参数形状两种编码都不认识的条数 (2.12.9)。
+	 *
+	 * 2.12.8 缺的就是这一笔:那时候这种情况在计数前被 continue 掉,遥测里
+	 * `edgeByCode` 恒为 0,把"参数形状变了"读成了"操作符码错了",方向整个反了。
+	 */
+	edgeShapeUnknown?: number;
+	/** 用新版(pdf.js 5.3+ 扁平指令流)编码解出来的路径数 (2.12.9)。 */
+	edgeNewShape?: number;
+	/**
 	 * 2.12.8: 这一页取到的**图片矩形**数。同样是"从未被观测过"的东西 ——
 	 * getImageRectsPdf 与边框取证是同一段未 waive 的代码,极可能一直静默返回
 	 * 空数组,图表屏障一路靠亮度网格兜底。补上 waive 之后这个数应该从 0 变正。
@@ -382,6 +391,8 @@ export class TextExtractor implements PageParser {
 				phases.edgeByShape = scan.byShape;
 				phases.edgeSkipped = scan.skipped;
 				phases.edgeRealOps = scan.realOps;
+				phases.edgeShapeUnknown = scan.shapeUnknown;
+				phases.edgeNewShape = scan.newShape;
 			}
 			phases.gridCols = grid ? grid.columns.length - 1 : -1;
 			phases.gridRows = grid ? grid.rows.length - 1 : -1;

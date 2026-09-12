@@ -240,20 +240,37 @@ export interface SegmentScanStats {
 	byCode: number;
 	/** 码认不出、靠**参数形状**认出来的 constructPath 数。 */
 	byShape: number;
-	/** 子操作码映射对不上(坐标数消耗不平)而整条路径被跳过的数量。 */
+	/** 子操作码映射对不上(坐标数消耗不平、或包围盒与 minMax 对不上)而整条路径被跳过的数量。 */
 	skipped: number;
 	/** 调用方是否拿到了真实的 OPS 表(false = 用的是内置默认码)。 */
 	realOps: boolean;
+	/**
+	 * 码对上了、可参数形状两种编码都不认识的条数 (2.12.9)。
+	 *
+	 * 这是 2.12.8 留下的遥测盲点:那时候「码对上但形状不认识」会在计数**之前**
+	 * 被 continue 掉,于是真机上 `byCode` 恒为 0,看起来像「操作符码错了」,
+	 * 实际是「参数形状换了」—— 方向完全反了,白查一轮。编码以后再变,
+	 * 这个计数器会直接指出来。
+	 */
+	shapeUnknown: number;
+	/** 用新版(扁平指令流)编码解出来的路径条数 (2.12.9)。 */
+	newShape: number;
 }
 
 /**
  * 这一条参数看起来像不像 constructPath (2.12.7)。
  *
  * **为什么需要形状判据**: 真机 2.12.6 的遥测显示每一页 `edgeSegments` 都是 0 ——
- * 操作符列表拿到了(gridMs≈55ms),却一条线段都没认出来。原因是 Zotero 的阅读器
- * iframe 里 `win.pdfjsLib` 取不到,两处取证都退回了内置的码表;而内置的
- * `constructPath: 91` 与 Zotero 那版 pdf.js 不一致,于是那一支分支永远进不去。
- * (顺带说明图片矩形那条路可能也一直静默失效 —— 它有亮度网格兜底,没人会发现。)
+ * 一条线段都没认出来,而当时的遥测说不出是哪一层断的。
+ *
+ * **2.12.9 更正**: 上面这段当时给的解释("`win.pdfjsLib` 取不到、退回了内置码表、
+ * 内置的 constructPath:91 与 Zotero 不一致")**是错的**,这里留着不删,因为
+ * 它连着两版把我带偏了方向。2.12.8 的遥测把它逐条证伪:`edgeRealOps=true`
+ * (真的拿到了 OPS 表)、`edgeOps` 400~1200(真的拿到了操作符列表)。
+ * 2.12.6 那一版真正断的地方是 Xray waiver(2.12.8 修掉的),而这一版发现:
+ * 码从来就没错过,**换的是参数形状**(见下面 looksLikeNewConstructPath)。
+ *
+ * 形状判据本身仍然值得留着 —— 它是码对不上时的兜底 —— 只是它当初的立论依据不成立。
  *
  * constructPath 的参数形状很独特: `[子操作码数组, 坐标数组, ...]` —— 两个都是
  * 数字型 ArrayLike。别的操作符没有这个形状(`transform` 是 6 个数的平坦数组,
@@ -281,6 +298,127 @@ function coordCost(sub: number, OP: typeof DEFAULT_PATH_OPS): number {
 	return -1;
 }
 
+/* ────────────────────────────── 新版路径编码 (2.12.9) ────────────────────────────── */
+
+/**
+ * pdf.js 5.3+ 的路径子操作枚举。
+ *
+ * 取值不是猜的,是 pdf.js 自己的源码常量(`pdf.worker.mjs` 里
+ * `{ moveTo: 0, lineTo: 1, curveTo: 2, quadraticCurveTo: 3, closePath: 4 }`),
+ * 并且由下面的 minMax 交叉验证在两份真实期刊 PDF、共 11630 条路径上逐条复核过
+ * (包围盒全部零误差吻合)。
+ *
+ * 注意 `quadraticCurveTo` 吃 4 个坐标而不是 6 —— 三次曲线才是 6。
+ */
+const DRAW_OPS = { moveTo: 0, lineTo: 1, curveTo: 2, quadraticCurveTo: 3, closePath: 4 } as const;
+
+function drawCost(sub: number): number {
+	if (sub === DRAW_OPS.moveTo || sub === DRAW_OPS.lineTo) { return 2; }
+	if (sub === DRAW_OPS.curveTo) { return 6; }
+	if (sub === DRAW_OPS.quadraticCurveTo) { return 4; }
+	if (sub === DRAW_OPS.closePath) { return 0; }
+	return -1;
+}
+
+function numericArrayLike(v: unknown): v is ArrayLike<number> {
+	return !!v && typeof v === 'object' && typeof (v as ArrayLike<number>).length === 'number'
+		&& (v as ArrayLike<number>).length > 0 && typeof (v as ArrayLike<number>)[0] === 'number';
+}
+
+/**
+ * 这一条参数是不是**新版** constructPath: `[收尾绘制码, [扁平指令流, ...], minMax]`。
+ *
+ * 与旧版的区别在第一个参数:旧版是子操作码**数组**,新版是一个**数字**
+ * (收尾的绘制操作符,实测只见 stroke=20 / fill=22 / eoFill=28)。
+ * 第二个参数是一组指令流,每条流把指令和坐标交错放在同一个数组里。
+ */
+function looksLikeNewConstructPath(args: unknown): args is [number, ArrayLike<ArrayLike<number>>, ArrayLike<number>?] {
+	if (!Array.isArray(args) || args.length < 2) { return false; }
+	const [paint, streams] = args as [unknown, unknown];
+	if (typeof paint !== 'number') { return false; }
+	if (!streams || typeof streams !== 'object') { return false; }
+	const len = (streams as ArrayLike<unknown>).length;
+	if (typeof len !== 'number' || len < 1) { return false; }
+	return numericArrayLike((streams as ArrayLike<unknown>)[0]);
+}
+
+/**
+ * 解一条新版 constructPath。**先自证再交货**:
+ *
+ *  1. 指令流必须按枚举**刚好消耗完** —— 不平就整条丢掉,绝不按猜出来的步长继续读;
+ *  2. 解出来的包围盒必须与 pdf.js 自己算好的 `minMax` 吻合 —— 这一条是白送的交叉
+ *     验证,`minMax` 与原始坐标同在路径空间(未过 CTM),对不上就说明我的解码跑偏了。
+ *
+ * 第 2 条是防「假网格」的关键:坐标错位的线段拼出来的网格看着像模像样,
+ * 比没有网格更糟。宁可这一页没有边框证据,也不交一张编出来的表。
+ *
+ * 返回 null = 这条路径不可信,调用方计入 skipped。
+ */
+function decodeNewPath(
+	streams: ArrayLike<ArrayLike<number>>,
+	minMax: ArrayLike<number> | undefined,
+	ctm: Matrix,
+	out: Segment[]
+): boolean {
+	const pending: Segment[] = [];
+	let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+	let seen = 0;
+	for (let si = 0; si < streams.length; si++) {
+		const s = streams[si];
+		if (!numericArrayLike(s)) { return false; }
+		let k = 0;
+		let cur: [number, number] | null = null;
+		let start: [number, number] | null = null;
+		while (k < s.length) {
+			const sub = s[k]!;
+			const need = drawCost(sub);
+			if (need < 0 || k + 1 + need > s.length) { return false; }
+			// 包围盒按**原始坐标**累计(minMax 也在这个空间),曲线控制点一并计入 ——
+			// 实测 pdf.js 的 minMax 就是这么算的。
+			for (let j = 0; j < need; j += 2) {
+				const x = s[k + 1 + j]!, y = s[k + 2 + j]!;
+				if (x < minx) { minx = x; } if (x > maxx) { maxx = x; }
+				if (y < miny) { miny = y; } if (y > maxy) { maxy = y; }
+				seen++;
+			}
+			if (sub === DRAW_OPS.moveTo) {
+				cur = apply(ctm, s[k + 1]!, s[k + 2]!);
+				start = cur;
+			}
+			else if (sub === DRAW_OPS.lineTo) {
+				const p = apply(ctm, s[k + 1]!, s[k + 2]!);
+				if (cur) { pending.push([cur[0], cur[1], p[0], p[1]]); }
+				cur = p;
+			}
+			else if (sub === DRAW_OPS.curveTo || sub === DRAW_OPS.quadraticCurveTo) {
+				// 表格线不会是曲的;跳过并断开连线,免得把曲线两端连成一条假直线。
+				cur = null;
+			}
+			else if (sub === DRAW_OPS.closePath) {
+				// 闭合边是**真的被画出来的**那一条,不是补出来的:新编码里矩形就是
+				// moveTo + 三条 lineTo + closePath,少了它每个矩形都缺一条边。
+				// (旧编码有独立的 rectangle 子操作,四条边齐全,所以以前没暴露。)
+				// 只在当前点与起点确实不同时才出线段;曲线之后 cur 为 null,不补。
+				if (cur && start && (cur[0] !== start[0] || cur[1] !== start[1])) {
+					pending.push([cur[0], cur[1], start[0], start[1]]);
+				}
+				cur = start;
+			}
+			k += 1 + need;
+		}
+	}
+	// minMax 交叉验证。Float32 的值在两边完全一致,容差只是防浮点噪声。
+	if (minMax && minMax.length >= 4 && seen > 0) {
+		const tol = 0.01;
+		if (Math.abs(minx - minMax[0]!) > tol || Math.abs(miny - minMax[1]!) > tol
+			|| Math.abs(maxx - minMax[2]!) > tol || Math.abs(maxy - minMax[3]!) > tol) {
+			return false;
+		}
+	}
+	for (const seg of pending) { out.push(seg); }
+	return true;
+}
+
 /**
  * 走一遍操作符列表,交出页面用户空间里的线段。矩形拆成四条边 —— 期刊表格
  * 两种画法都有(Powers 2019 p4 是 129 条 lineTo + 3 个矩形,Gulati 2021 p21
@@ -289,6 +427,13 @@ function coordCost(sub: number, OP: typeof DEFAULT_PATH_OPS): number {
  * 2.12.7: 子操作码映射先**自证**再用 —— 按映射把坐标消耗一遍,必须刚好用完
  * `coords.length`。不平就整条路径跳过并计数,而不是继续按错的步长读下去
  * (那样产出的线段坐标全是错位的,比没有更糟)。
+ *
+ * 2.12.9: 认**两种**编码。pdf.js 5.3+ 把 constructPath 的参数从
+ * `[子操作码数组, 坐标数组, minMax]` 换成了 `[收尾绘制码, [扁平指令流, ...], minMax]`,
+ * 指令与坐标交错在一个数组里,子操作码也换成了路径内部的小枚举。Zotero 用的就是
+ * 新版 —— 真机 2.12.8 遥测每页 `edgeSegments=0`、`byCode=0`、`byShape=2`,
+ * 与本地同一份 PDF 换到 5.7.284 跑出来的数字逐页吻合(46 页里 42 页分毫不差)。
+ * 旧编码这一支照旧保留:不知道用户装的是哪个 Zotero,两边都得认。
  */
 export function segmentsFromOperatorList(
 	fnArray: ArrayLike<number>,
@@ -305,6 +450,8 @@ export function segmentsFromOperatorList(
 		stats.byShape = 0;
 		stats.skipped = 0;
 		stats.realOps = Object.keys(ops).length > 0;
+		stats.shapeUnknown = 0;
+		stats.newShape = 0;
 	}
 	try {
 		let ctm: Matrix = IDENTITY;
@@ -320,8 +467,27 @@ export function segmentsFromOperatorList(
 			}
 			const isPath = fn === OP.constructPath;
 			const args = argsArray[i];
-			if (!isPath && !looksLikeConstructPath(args)) { continue; }
-			if (!looksLikeConstructPath(args)) { continue; }
+
+			// 新编码优先判:它的第一个参数是数字,旧编码是数组,两者不会混淆。
+			if (looksLikeNewConstructPath(args)) {
+				if (stats) {
+					if (isPath) { stats.byCode++; }
+					else { stats.byShape++; }
+					stats.newShape++;
+				}
+				const [, streams, minMax] = args;
+				if (!decodeNewPath(streams, minMax, ctm, out)) {
+					if (stats) { stats.skipped++; }
+				}
+				continue;
+			}
+
+			if (!looksLikeConstructPath(args)) {
+				// 码对上了、两种形状都不认识 —— 单独记一笔。2.12.8 就是缺了这一笔,
+				// 才把「参数形状变了」误读成「操作符码错了」。
+				if (isPath && stats) { stats.shapeUnknown++; }
+				continue;
+			}
 			if (stats) {
 				if (isPath) { stats.byCode++; }
 				else { stats.byShape++; }
