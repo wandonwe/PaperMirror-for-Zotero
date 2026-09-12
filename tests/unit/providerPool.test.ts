@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildPool, pickProviderForPage, rankProvidersForPage, laneBandFor, poolLanePlan, prefetchWindowFor, normalizeGlobalMax, normalizePerfMode, customLaneRange, customBandFor } from '../../src/translation/providerPool';
+import { buildPool, MIN_SAMPLES, pickProviderForPage, pickWeightedProviderForPage, weightsFromThroughput, type ProviderThroughput, rankProvidersForPage, laneBandFor, poolLanePlan, prefetchWindowFor, normalizeGlobalMax, normalizePerfMode, customLaneRange, customBandFor } from '../../src/translation/providerPool';
 
 test('page→provider is deterministic and every provider gets some pages', () => {
 	const pool = ['openai', 'deepseek', 'moonshot'];
@@ -274,4 +274,131 @@ test('末位字符的改动要扩散到全部 32 位 (2.11.2 盯根因)', () => 
 		'FNV 循环之后要有 移位-异或-乘法 的雪崩步骤');
 	assert.ok((fn.match(/h \^= h >>> /g) ?? []).length >= 3,
 		'至少三次移位异或 —— 少了扩散不充分');
+});
+
+// ---- 按实测速度加权分页 (2.12.0) ---------------------------------------------
+//
+// 真机第十二轮:同一篇文档里 google-free 约 6000 字符/秒、openai 约 500、
+// gemini 约 200 —— 等额分页会让最慢的那家连着吃掉一整段连续阅读。
+// 权重来自会话自己的测量,不是我硬编码某一次导出的数字。
+
+const T = (samples: number, charsPerSecond: number): ProviderThroughput => ({ samples, charsPerSecond });
+
+test('样本不足一律按 1 —— 冷启动与新加的引擎不该被一两个样本定性 (2.12.0)', () => {
+	// 阈值本身也要钉住:拿 MIN_SAMPLES 去构造样本数,等于用被测的常量证明自己,
+	// 把门槛调成 0 测试照样绿(变异验证第一轮就是这么漏过去的)。
+	assert.ok(MIN_SAMPLES >= 3, '门槛太低就等于凭一两个样本给引擎定性');
+	for (const n of [0, 1, 2, 3]) {
+		const w = weightsFromThroughput({ openai: T(n, 6000), gemini: T(n, 200) });
+		assert.deepEqual(w, { openai: 1, gemini: 1 }, `${n} 个样本就不该加权`);
+	}
+	// 到了门槛才开始加权。
+	const w = weightsFromThroughput({ openai: T(MIN_SAMPLES, 6000), gemini: T(MIN_SAMPLES, 200) });
+	assert.notEqual(w['openai'], w['gemini'], '样本够了就该分出快慢');
+});
+
+test('只有一家有数据时不加权 —— "相对谁"无从谈起 (2.12.0)', () => {
+	const w = weightsFromThroughput({ openai: T(50, 500), gemini: T(0, 0) });
+	assert.deepEqual(w, { openai: 1, gemini: 1 });
+});
+
+test('快的多分、慢的少分,但都不为零 (2.12.0)', () => {
+	const w = weightsFromThroughput({
+		'google-free': T(20, 6000),
+		openai: T(20, 500),
+		gemini: T(20, 200)
+	});
+	assert.ok(w['google-free']! > w['openai']!, '快的权重更高');
+	assert.ok(w['openai']! > w['gemini']!, '慢的权重更低');
+	for (const [id, v] of Object.entries(w)) {
+		assert.ok(v > 0, `${id} 的权重不能是 0 —— 加权是让慢的少分,不是替用户把它踢出池`);
+	}
+});
+
+test('权重有上下限,30 倍的吞吐差不会变成"悄悄移除" (2.12.0)', () => {
+	const w = weightsFromThroughput({
+		'google-free': T(20, 6000),
+		gemini: T(20, 200),
+		openai: T(20, 500)
+	});
+	const ratio = Math.max(...Object.values(w)) / Math.min(...Object.values(w));
+	assert.ok(ratio <= 16, `权重跨度 ${ratio} 太大 —— 实测吞吐差 30 倍,不夹住就等于把 gemini 踢出去`);
+	assert.ok(Math.max(...Object.values(w)) <= 4);
+	assert.ok(Math.min(...Object.values(w)) >= 0.25);
+});
+
+test('以中位数为基准,不被极端值拽走 (2.12.0)', () => {
+	// 用平均数的话,google-free 的 6000 会把均值拉到 2233,
+	// 于是 openai 和 gemini 双双落到下限、彼此分不出来 —— 那就白加权了。
+	const w = weightsFromThroughput({
+		'google-free': T(20, 6000),
+		openai: T(20, 500),
+		gemini: T(20, 200)
+	});
+	assert.notEqual(w['openai'], w['gemini'], '两家 LLM 之间仍要分得出快慢');
+});
+
+test('权重量化,吞吐小幅抖动不会让页面归属跟着抖 (2.12.0)', () => {
+	// 不量化的话权重每请求都变 → 页面归属变 → 页缓存被反复打穿。
+	const a = weightsFromThroughput({ x: T(20, 1000), y: T(20, 1000) });
+	const b = weightsFromThroughput({ x: T(20, 1010), y: T(20, 1000) });
+	assert.deepEqual(a, b, '1% 的吞吐变化不该改变权重');
+	for (const v of Object.values(weightsFromThroughput({ x: T(20, 1234), y: T(20, 567) }))) {
+		assert.equal(v % 0.25, 0, `权重 ${v} 不是 0.25 的整数倍`);
+	}
+});
+
+test('权重全相等时与不加权的 HRW 完全一致 (2.12.0 向后兼容)', () => {
+	// 没有实测数据时的行为必须与 2.11.2 一模一样 —— 不是另起一套分流。
+	const equal = Object.fromEntries(POOL5.map(p => [p, 1]));
+	for (let i = 0; i < 60; i++) {
+		assert.equal(pickWeightedProviderForPage(POOL5, i, equal), pickProviderForPage(POOL5, i),
+			`第 ${i} 页:等权重的加权分页必须与 HRW 同解`);
+	}
+	// 空权重表同样退回等权重。
+	for (let i = 0; i < 20; i++) {
+		assert.equal(pickWeightedProviderForPage(POOL5, i, {}), pickProviderForPage(POOL5, i));
+	}
+});
+
+test('页数份额确实随权重走 (2.12.0)', () => {
+	const pool = ['openai', 'gemini'];
+	const share = (wa: number, N = 3000): number => {
+		let a = 0;
+		for (let i = 0; i < N; i++) {
+			if (pickWeightedProviderForPage(pool, i, { openai: wa, gemini: 1 }) === 'openai') {
+				a++;
+			}
+		}
+		return a / N;
+	};
+	// 加权 rendezvous 的份额是 w/(w+1):2:1 → 0.667,4:1 → 0.80。
+	// 容差要够窄才分得开别的写法 —— 比如 `weight * u`,它给的是
+	// 1 - 1/(2w):2:1 → 0.75,4:1 → 0.875,两档都落在 0.05 之外。
+	for (const [wa, expected] of [[2, 2 / 3], [4, 0.8], [1, 0.5]] as const) {
+		const got = share(wa);
+		assert.ok(Math.abs(got - expected) < 0.05,
+			`权重 ${wa}:1 应给约 ${(expected * 100).toFixed(0)}%,实得 ${(got * 100).toFixed(1)}%`);
+	}
+});
+
+test('加权仍是纯的、确定的,且保住最小扰动 (2.12.0)', () => {
+	const w: Record<string, number> = { openai: 2, gemini: 1, deepseek: 1 };
+	const before = ['openai', 'gemini'];
+	const after = ['openai', 'gemini', 'deepseek'];
+	let moved = 0, ontoNew = 0;
+	for (let i = 0; i < 200; i++) {
+		assert.equal(pickWeightedProviderForPage(before, i, w), pickWeightedProviderForPage(before, i, w),
+			'同样输入必须同样输出');
+		const a = pickWeightedProviderForPage(before, i, w);
+		const b = pickWeightedProviderForPage(after, i, w);
+		if (a !== b) {
+			moved++;
+			if (b === 'deepseek') {
+				ontoNew++;
+			}
+		}
+	}
+	assert.equal(moved, ontoNew,
+		'加一家服务商时,变动的页只能是迁到新来的那家 —— 其余一页都不该动');
 });

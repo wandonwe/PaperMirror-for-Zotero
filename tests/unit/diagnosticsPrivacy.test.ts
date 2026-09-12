@@ -295,3 +295,42 @@ test('时序进导出,且无请求时不写空数组 (2.11.0)', () => {
 	assert.ok(/if \(metrics\.requestTimings\.length < 40\)/.test(src),
 		'要有上限,别让一页的异常重试把导出撑爆');
 });
+
+test('只有成功的请求进吞吐统计 (2.12.0)', () => {
+	// 快速失败的引擎看上去会很"快":一个一直 4xx 的服务 sendMs 极小。
+	// 不设这道门,加权会把页越分越多给一个一直在失败的服务。
+	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	assert.ok(/let succeeded = false;/.test(src), '要有成功标记');
+	assert.ok(/succeeded = true;\n\t{6,}return r;/.test(src) || /succeeded = true;/.test(src),
+		'只有拿回响应才置位');
+	assert.ok(/if \(succeeded && t\.sendMs > 0 && promptChars > 0\) \{/.test(src),
+		'累计吞吐必须由 succeeded 把门 —— 去掉它,失败越快的引擎分到的页越多');
+	const acc = src.slice(src.indexOf('if (succeeded &&'), src.indexOf('});', src.indexOf('if (succeeded &&')));
+	assert.ok(/providerSuccess\.set/.test(acc));
+});
+
+test('加权分页可审计:测量与权重都进导出 (2.12.0)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	// 会话级汇总有**三条**导出路径:诊断文件、语料文件、复制诊断。
+	// 只断言"存在"是不够的 —— 漏掉其中两条,断言照样为真(变异验证 M9b 就这么活下来的)。
+	// 拿 engineRotations 当基准:它是同一批汇总字段里最老的一个,
+	// 哪天新增第四条导出路径而忘了带上新字段,这条闸会当场发现。
+	const paths = (src.match(/engineRotations: this\.pageProviderOffset\.size,/g) ?? []).length;
+	assert.ok(paths >= 3, `会话级汇总应有至少三条导出路径,实得 ${paths}`);
+	for (const [field, why] of [
+		['providerThroughput: this\\.manager\\?\\.providerThroughput\\(\\)', '权重是从哪些测量算出来的,要能在导出里对上'],
+		['providerWeights: this\\.manager\\?\\.providerWeights\\(\\)', '算成了多少也要能对上 —— 否则"自调"就是黑箱'],
+		['poolSize: this\\.pool\\.length', '池大小决定了分页有没有意义']
+	] as const) {
+		const n = (src.match(new RegExp(field, 'g')) ?? []).length;
+		assert.equal(n, paths, `${why}(${n}/${paths} 条导出路径带了这个字段)`);
+	}
+});
+
+test('熔断轮换时不走加权,走确定的次序 (2.12.0)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const fn = src.slice(src.indexOf('private providerForPage('), src.indexOf('\n\t}', src.indexOf('private providerForPage(')));
+	assert.ok(/if \(offset === 0\) \{/.test(fn),
+		'offset 非零意味着熔断/手动轮换正在让这一页退让,那时要的是"下一名"这个确定的序');
+	assert.ok(/rankProvidersForPage\(this\.pool, pageIndex\)/.test(fn), '退让仍走原来的降序榜');
+});

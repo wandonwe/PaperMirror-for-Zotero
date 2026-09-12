@@ -35,6 +35,7 @@ import { capLearnedRules, matchRules, mergeGlossaries } from './glossary';
 import { DocumentMemory, extractTermPairs } from './docMemory';
 import { RequestScheduler } from './requestScheduler';
 import { RequestGate } from './requestGate';
+import { weightsFromThroughput, type ProviderThroughput } from './providerPool';
 import { planChunks, trailingContext, type PlannedChunk } from './segmenter';
 import { buildLayoutModules } from '../reader/layoutModules';
 import { fnv1a64 } from '../cache/cacheSchema';
@@ -755,6 +756,14 @@ export class TranslationManager {
 	private tokenUsage: TokenUsage = emptyUsage();
 	private usageReports = 0;
 	private usageMissing = 0;
+
+	/**
+	 * 每家服务商的实测吞吐累计 (2.12.0) —— 只计**成功**的请求。
+	 *
+	 * 快速失败的引擎看上去会很"快":一个一直 4xx 的服务 sendMs 极小,不设这道
+	 * 门就会把页越分越多给它。只有真的把译文拿回来了才计入。
+	 */
+	private providerSuccess = new Map<string, { samples: number; ms: number; chars: number }>();
 	/** 收到响应但译文校验失败的次数 (2.7.7): BAD_RESPONSE,token 已计入。 */
 	private validationFailures = 0;
 	/** 真实 HTTP 尝试总数 (2.7.7): 经 onAttempt 计,适配器不支持时按调用计 1。 */
@@ -1013,6 +1022,26 @@ export class TranslationManager {
 		catch {
 			return true; // 问不出来就当作在用 —— 宁可多占内存,不冒丢译文的险
 		}
+	}
+
+	/**
+	 * 每家服务商的实测吞吐 (2.12.0)。给两处用:会话内的加权分页,以及诊断导出。
+	 * 纯读,不带任何文本。
+	 */
+	providerThroughput(): Record<string, ProviderThroughput> {
+		const out: Record<string, ProviderThroughput> = {};
+		for (const [id, a] of this.providerSuccess) {
+			out[id] = {
+				samples: a.samples,
+				charsPerSecond: a.ms > 0 ? Math.round(a.chars / (a.ms / 1000)) : 0
+			};
+		}
+		return out;
+	}
+
+	/** 当前生效的分页权重 (2.12.0) —— 样本不足时全是 1,即与 2.11.2 行为一致。 */
+	providerWeights(): Record<string, number> {
+		return weightsFromThroughput(this.providerThroughput());
 	}
 
 	private laneFor(pageIndex: number): string {
@@ -2377,10 +2406,24 @@ export class TranslationManager {
 				try {
 					const foreground = pageIndex === this.currentPage;
 					const promptChars = request.blocks.reduce((n, b) => n + (b.text?.length ?? 0), 0);
+					let succeeded = false;
 					const response = await this.requestGate.run(
 						lane, foreground,
-						() => this.meteredTranslate(request, sig, n => { metrics.attemptCount += n; }), sig,
+						async () => {
+							const r = await this.meteredTranslate(request, sig, n => { metrics.attemptCount += n; });
+							succeeded = true;
+							return r;
+						}, sig,
 						t => {
+							// 2.12.0: 只有成功的请求进吞吐统计(见 providerSuccess 注释)。
+							if (succeeded && t.sendMs > 0 && promptChars > 0) {
+								const id = sanitizeProviderId(lane);
+								const acc = this.providerSuccess.get(id) ?? { samples: 0, ms: 0, chars: 0 };
+								acc.samples++;
+								acc.ms += t.sendMs;
+								acc.chars += promptChars;
+								this.providerSuccess.set(id, acc);
+							}
 							// 上限 40 条:一页正常只有个位数请求,留出余量又不让导出膨胀。
 							if (metrics.requestTimings.length < 40) {
 								metrics.requestTimings.push({
