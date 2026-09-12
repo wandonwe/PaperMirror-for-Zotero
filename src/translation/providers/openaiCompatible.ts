@@ -17,6 +17,9 @@ import {
 	isReasoningEffortRejection,
 	markReasoningEffortUnsupported,
 	reasoningEffortUnsupported,
+	isThinkingParamRejection,
+	markThinkingParamUnsupported,
+	thinkingParamUnsupported,
 	isTemperatureRejection,
 	markTemperatureUnsupported,
 	temperatureUnsupported
@@ -87,7 +90,11 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 		// 端点 A 的「不支持」不再波及端点 B。url 即含 baseURL 与 API path。
 		const drop = {
 			reasoning: reasoningEffortUnsupported(config.id, url, model),
-			temperature: temperatureUnsupported(config.id, url, model)
+			temperature: temperatureUnsupported(config.id, url, model),
+			// 2.12.2: thinking / enable_thinking 是各家自己的非标准字段。
+			// 按 providerId 放行,但同一个 id 可能指向用户的代理或网关,
+			// 那些后端见到不认识的字段会直接 400 —— 与 reasoning_effort 同构地自愈。
+			thinking: thinkingParamUnsupported(config.id, url, model)
 		};
 		// 只有插件自动加的默认温度可以静默剥离 (审核 P2): 用户显式设置的温度被
 		// 拒时,这是一个该浮出的配置错误,不是该吞的兼容性问题。
@@ -100,6 +107,10 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 			}
 			if (drop.temperature) {
 				delete extras.temperature;
+			}
+			if (drop.thinking) {
+				delete extras.thinking;
+				delete extras.enable_thinking;
 			}
 			return { ...baseBody, ...extras };
 		};
@@ -122,6 +133,12 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 					drop.reasoning = true;
 					markReasoningEffortUnsupported(config.id, url, model);
 					options.onParamHeal?.('reasoning_effort');
+					continue;
+				}
+				if (!drop.thinking && isThinkingParamRejection(e)) {
+					drop.thinking = true;
+					markThinkingParamUnsupported(config.id, url, model);
+					options.onParamHeal?.('thinking');
 					continue;
 				}
 				if (!drop.temperature && isTemperatureRejection(e)) {

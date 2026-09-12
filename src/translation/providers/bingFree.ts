@@ -33,6 +33,58 @@ const PAGE_URL = 'https://www.bing.com/translator';
 const API_BASE = 'https://www.bing.com';
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const REQUEST_CHAR_LIMIT = 900;
+/**
+ * 打包分隔符与上限 (2.12.2)。
+ *
+ * ## 为什么要打包
+ *
+ * 真机实测,bing-free 与 google-free 同为免费机器翻译,吞吐却差一个数量级,
+ * 两次独立会话一致:
+ *
+ *   2.12.0   google-free 6435 / bing-free 238 字符每秒 → **27 倍**
+ *   2.12.1   google-free 8795 / bing-free 351 字符每秒 → **25 倍**
+ *
+ * 差别不在端点快慢(单请求中位 2798 ms vs 281 ms),在请求条数:
+ *
+ *   google-free  有 `batchPieces()`,多个片段打包进一个请求(上限 1600 字符)
+ *                —— 一页约 **2 个**请求;
+ *   bing-free    先按空行切段、每段再按 900 字符切片,**每片一个 HTTP 往返**
+ *                —— 一页 20 个短段就是 **20 个**往返。`runPool(tasks, 3)`
+ *                三并发 → 约 7 轮 × 400 ms ≈ 2.8 秒,与实测中位吻合。
+ *
+ * ## 为什么以前没打包
+ *
+ * 主路 `translateViaScrape` 的端点(`/ttranslatev3`)是 form-urlencoded 的
+ * **单条** `&text=`,不像 Edge 通道(`translateViaEdge`)收数组。能收数组的那条
+ * 是 5 分钟熔断后的兜底,不是常态路径。
+ *
+ * ## 怎么安全地打包
+ *
+ * 端点保留输入里的换行,响应是**一个字符串**。所以把多个片段用 `\n` 连起来
+ * 发一次,再按 `\n` 拆回。这件事本身是脆的 —— 引擎可能吞掉、合并或多吐换行。
+ * 所以它是**自验证**的:拆出来的条数与送进去的对不上,就把这一组退回逐条翻译。
+ * 最坏情况多一次往返,最好情况省掉十几次;**任何情况下都不会把译文错位**。
+ *
+ * 只打包**不含换行**的片段(按空行切段之后,段内仍可能有软换行)——
+ * 这样 `\n` 一定是我们自己加的,拆分无歧义。含换行的片段照旧单独发,
+ * 送出去的文本与 2.12.1 逐字节相同。
+ *
+ * ## 实际省了多少(2.12.1 语料,62 页,离线重放分组算法)
+ *
+ *   分组前 1738 个请求 → 分组后 431 个,**减少 75.2%**,平均每组 4.03 个片段;
+ *   每页中位数 **19.5 → 7.0**。三并发下约 7 轮变约 2.3 轮。
+ *
+ * 这是往返次数的账,不是 27 倍的账 —— 单次请求的服务端延迟一点没动,
+ * 别把这条当成"追平 google-free"。
+ *
+ * ## 上限为什么仍是 900
+ *
+ * 与 `REQUEST_CHAR_LIMIT` 取同一个数,是因为 900 字符的请求**今天就在跑**
+ * (切片上限就是它),打包后送出的单条不会比现在已经成功的更长。往上调需要
+ * 先测出端点真实上限,没测之前不调 —— 不把一个没验证过的预算当万能参数。
+ */
+const GROUP_CHAR_LIMIT = 900;
+const GROUP_SEPARATOR = '\n';
 
 /**
  * Primary flow since the bing.com page scrape broke: the Edge browser's own
@@ -425,6 +477,81 @@ async function translateViaScrape(
 	return unescapeHTML(translated);
 }
 
+/**
+ * 把片段下标按字符预算分组 (2.12.2)。只合并**不含换行**的片段 ——
+ * 含换行的单独成组,送出去的文本与打包前逐字节相同。
+ */
+export function groupTasks(tasks: { text: string }[]): number[][] {
+	const groups: number[][] = [];
+	let current: number[] = [];
+	let size = 0;
+	const flush = (): void => {
+		if (current.length) {
+			groups.push(current);
+			current = [];
+			size = 0;
+		}
+	};
+	tasks.forEach((task, index) => {
+		if (task.text.includes('\n')) {
+			flush();
+			groups.push([index]);
+			return;
+		}
+		// +1 是分隔符自己占的位置。
+		const cost = task.text.length + (current.length ? GROUP_SEPARATOR.length : 0);
+		if (current.length && size + cost > GROUP_CHAR_LIMIT) {
+			flush();
+		}
+		current.push(index);
+		size += cost;
+	});
+	flush();
+	return groups;
+}
+
+/**
+ * 把打包译文拆回 N 条 (2.12.2)。**条数对不上就返回 null** —— 调用方据此退回
+ * 逐条翻译。单独成函数是为了让这条自验证能脱离 HTTP 被直接测到。
+ */
+export function splitGroupResult(joined: string, expected: number): string[] | null {
+	const parts = joined.split(GROUP_SEPARATOR);
+	return parts.length === expected ? parts : null;
+}
+
+/**
+ * 一组片段一次请求,再按分隔符拆回 (2.12.2)。
+ *
+ * **自验证**:拆出来的条数与送进去的对不上,就退回逐条翻译。引擎吞换行、
+ * 合并换行、或多吐一个换行 —— 任何一种都会被这一条接住,代价是这一组多一次
+ * 往返,而不是把整组译文错位到别的段落上。错位比慢严重得多。
+ */
+async function translateGroup(
+	texts: string[],
+	sl: string,
+	tl: string,
+	settings: ProviderSettings,
+	signal: AbortSignal | undefined
+): Promise<string[]> {
+	if (texts.length === 1) {
+		return [await translateOne(texts[0]!, sl, tl, settings, signal)];
+	}
+	const joined = await translateOne(texts.join(GROUP_SEPARATOR), sl, tl, settings, signal);
+	const parts = splitGroupResult(joined, texts.length);
+	if (parts) {
+		return parts;
+	}
+	logger.debug(MODULE, `grouped translate did not split back into ${texts.length} part(s); falling back to one-by-one`);
+	const out: string[] = [];
+	for (const text of texts) {
+		if (signal?.aborted) {
+			throw new PaperMirrorError('CANCELLED', 'Cancelled.');
+		}
+		out.push(await translateOne(text, sl, tl, settings, signal));
+	}
+	return out;
+}
+
 export const bingFreeProvider: TranslationProvider = {
 	id: 'bing-free',
 	displayName: 'Microsoft 微软翻译',
@@ -466,11 +593,21 @@ export const bingFreeProvider: TranslationProvider = {
 				});
 			});
 		});
-		const translated = await runPool(tasks, 3, async (task) => {
+		// 2.12.2: 把连续的短片段打包成一个请求(见 GROUP_SEPARATOR 上方的证据)。
+		// 分组只看字符预算与"片段里没有换行",不跨块/不改顺序 —— 拆回来之后
+		// 仍按 taskIndex 归位,下游一个字都不用改。
+		const groups = groupTasks(tasks);
+		const perGroup = await runPool(groups, 3, async (group) => {
 			if (options.signal?.aborted) {
 				throw new PaperMirrorError('CANCELLED', 'Cancelled.');
 			}
-			return translateOne(task.text, sl, tl, settings, options.signal);
+			return translateGroup(group.map(i => tasks[i]!.text), sl, tl, settings, options.signal);
+		});
+		const translated = new Array<string>(tasks.length);
+		groups.forEach((group, groupIndex) => {
+			group.forEach((taskIndex, slot) => {
+				translated[taskIndex] = perGroup[groupIndex]![slot]!;
+			});
 		});
 		request.blocks.forEach((block, blockIndex) => {
 			const paragraphs: string[][] = shape[blockIndex]!.map(count => new Array<string>(count));

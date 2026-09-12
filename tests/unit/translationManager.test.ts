@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { TranslationManager, looksContextBleed, looksTranslated, untranslatedLatinWords, type PageTranslationState, type TranslationDeps } from '../../src/translation/translationManager';
+import { DEFAULT_CHUNK_BUDGET } from '../../src/translation/segmenter';
 import type { GlossaryRule, SourceBlock, TranslationRequest, TranslationResponse } from '../../src/types/models';
 
 function makeBlocks(pageIndex: number, n: number): SourceBlock[] {
@@ -2620,19 +2621,37 @@ test('热页面数量随淘汰下降,是"当前持有完整内容"的实数 (2.8
 	manager.dispose();
 });
 
+/**
+ * 2.12.2 修复一条**过期**的测试,而不是删掉它。
+ *
+ * 原样子写死了 `<= 3200`,那是当年 DEFAULT_CHUNK_BUDGET 的值。预算后来调到
+ * 8000,这页 6244 字符于是一个请求就装下了 —— 「另一个请求还在飞的时候先发
+ * 已完成的那批」这件事根本没被触发,断言在 translateRequest 回调里抛出又被
+ * 当成请求失败吞掉,变成重试三次再挂死。整条用例从"守护渐进发布"退化成了
+ * 一个挂起的空壳。
+ *
+ * 现在:输入放大到必然跨块,预算断言改对**当前**的 DEFAULT_CHUNK_BUDGET
+ * (守的是"分块尊重配置的预算",不是某个字面量),渐进发布那条照旧守住 ——
+ * 它是"翻译完成 ≠ 译文已显示"的第一道防线:整页翻完才显示,用户盯着的是
+ * 一片空白。回调里的断言改为记录后置校验,不再被重试路径吞掉。
+ */
 test('long prose pages publish a completed batch while another request is pending', async () => {
-	const blocks = makeBlocks(0, 4).map(b => ({ ...b, sourceText: ('The study evaluated treatment outcomes in patients. ').repeat(30) }));
+	// 每块约 1560 字符 × 8 块 ≈ 12.5k,必然被切成 ≥2 个请求(预算 8000)。
+	const blocks = makeBlocks(0, 8).map(b => ({ ...b, sourceText: ('The study evaluated treatment outcomes in patients. ').repeat(30) }));
 	blocks.forEach((b, i) => { b.sourceText += String(i); });
 	let release!: () => void;
 	const pending = new Promise<void>(resolve => { release = resolve; });
 	let started = 0;
 	let published = false;
+	const sizes: number[] = [];
 	const { deps } = makeDeps({
 		extractPage: async () => blocks,
 		getLanguages: () => ({ source: 'en', target: 'fr' }),
 		translateRequest: async request => {
 			const index = started++;
-			assert.ok(request.blocks.reduce((n, b) => n + b.text.length, 0) <= 3200);
+			// 不在回调里 assert:这里抛出会被当成"请求失败"吞进重试路径,
+			// 测试就从红变成挂死。记下来,最后再判。
+			sizes.push(request.blocks.reduce((n, b) => n + b.text.length, 0));
 			if (index > 0) await pending;
 			return { translations: request.blocks.map(b => ({ id: b.id, translatedText: 'Traduction française.' })) };
 		}
@@ -2645,8 +2664,11 @@ test('long prose pages publish a completed batch while another request is pendin
 	} }, { prefetch: false, delayFn: () => Promise.resolve() });
 	try {
 		await manager.ensurePage(0, 10);
-		assert.equal(published, true);
-		assert.ok(started >= 2);
+		assert.ok(started >= 2, `输入必须跨块才谈得上"另一个还在飞",实际只发了 ${started} 个请求`);
+		for (const n of sizes) {
+			assert.ok(n <= DEFAULT_CHUNK_BUDGET, `单个请求 ${n} 字符,超过预算 ${DEFAULT_CHUNK_BUDGET}`);
+		}
+		assert.equal(published, true, '已完成的那批必须在整页翻完之前就发出去');
 		assert.equal(manager.getPageState(0)!.translations.size, blocks.length);
 	} finally { release(); manager.dispose(); }
 });

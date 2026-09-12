@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeReasoning, openaiChatExtras, supportsReasoningControl, isReasoningEffortRejection, reasoningEffortUnsupported, markReasoningEffortUnsupported } from '../../src/translation/providers/advancedParams';
+import { normalizeReasoning, openaiChatExtras, supportsReasoningControl, isReasoningEffortRejection, reasoningEffortUnsupported, markReasoningEffortUnsupported, isThinkingParamRejection } from '../../src/translation/providers/advancedParams';
 import { PaperMirrorError } from '../../src/types/models';
 import { resolveChatURL } from '../../src/translation/providers/urls';
 import { geminiGenerateURL, geminiGenerationConfig } from '../../src/translation/providers/geminiNative';
@@ -22,7 +22,10 @@ test('default temperature 0 for safe providers; openai/openrouter left alone', (
 	// 温度默认 0(翻译更稳定)— but openai gpt-5.x / openrouter auto-routing only
 	// accept the default temperature, so no default is injected there.
 	assert.deepEqual(openaiChatExtras(base({}), 'deepseek'), { temperature: 0, thinking: { type: 'disabled' } });
-	assert.deepEqual(openaiChatExtras(base({}), 'qwen'), { temperature: 0 });
+	// 2.12.2: qwen 默认开思考(官方文档明写 qwen3.7-plus 系列),所以它现在还带
+	// enable_thinking: false。groq 跑 llama,没有思考,是"只有温度"的干净样本。
+	assert.deepEqual(openaiChatExtras(base({}), 'qwen'), { temperature: 0, enable_thinking: false });
+	assert.deepEqual(openaiChatExtras(base({}), 'groq'), { temperature: 0 });
 	assert.deepEqual(openaiChatExtras(base({}), 'openai'), {});
 	assert.deepEqual(openaiChatExtras(base({}), 'openrouter'), {});
 });
@@ -82,7 +85,7 @@ test('reasoning_effort mapping: official levels for OpenAI/OpenRouter only', () 
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'xhigh' }), 'openai'), { reasoning_effort: 'xhigh' });
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'low' }), 'openrouter'), { reasoning_effort: 'low' });
 	// providers not known to accept it → omitted (never risk a 400)
-	assert.deepEqual(openaiChatExtras(base({ reasoning: 'high' }), 'qwen'), { temperature: 0 });
+	assert.deepEqual(openaiChatExtras(base({ reasoning: 'high' }), 'groq'), { temperature: 0 });
 	// DeepSeek 走的是它自己的 `thinking` 对象,不是 reasoning_effort 顶层字段
 	// (官方文档:thinking.type = enabled|disabled,effort = none|low|high|max)。
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'high' }), 'deepseek'),
@@ -219,4 +222,84 @@ test('gemini 思考自愈也报枚举: onParamHeal("thinking") 一次,成功路�
 		assert.deepEqual(healed, [], '一次就成的请求不报自愈');
 	}
 	finally { http2.teardown(); }
+});
+
+// ---- 每一家预置 LLM 的思考默认值 (2.12.2) ------------------------------------
+//
+// 真机第十三轮修好 deepseek 之后(出tok/原字符 6.71 → 0.30,吞吐 65 → 837),
+// 照同样的方法把每一家都对着官方文档核了一遍。**四家默认开思考,而我们一个
+// 参数都没发过。** 三种关法,发错词汇就是一个 400,所以每家钉死自己的那一种。
+
+test('默认关思考:thinking 对象派 (deepseek / zhipu, 2.12.2)', () => {
+	for (const id of ['deepseek', 'zhipu']) {
+		assert.deepEqual(openaiChatExtras(base({}), id).thinking, { type: 'disabled' },
+			`${id} 默认开思考,不显式关就白烧十几倍的输出 token`);
+		assert.ok(!('enable_thinking' in openaiChatExtras(base({}), id)),
+			`${id} 用的是 thinking 对象,混进 enable_thinking 就是一个 400`);
+	}
+});
+
+test('默认关思考:enable_thinking 派 (qwen / siliconflow, 2.12.2)', () => {
+	for (const id of ['qwen', 'siliconflow']) {
+		const extras = openaiChatExtras(base({}), id);
+		assert.equal(extras.enable_thinking, false,
+			`${id} 默认开思考(官方文档),必须显式关`);
+		assert.ok(!('thinking' in extras), `${id} 用的是顶层布尔,不是 thinking 对象`);
+		// 用户要思考就打开。
+		assert.equal(openaiChatExtras(base({ reasoning: 'high' }), id).enable_thinking, true);
+	}
+});
+
+test('关不掉的那家取最低档 (moonshot, 2.12.2)', () => {
+	// 官方原话:「You can't — K3 always thinks」,只能调强度,默认是 max。
+	assert.equal(openaiChatExtras(base({}), 'moonshot').reasoning_effort, 'low',
+		'翻译丢弃思维链,默认 max 是纯浪费');
+	assert.equal(openaiChatExtras(base({ reasoning: 'xhigh' }), 'moonshot').reasoning_effort, 'max');
+	assert.ok(!('thinking' in openaiChatExtras(base({}), 'moonshot')));
+	assert.ok(!('enable_thinking' in openaiChatExtras(base({}), 'moonshot')));
+});
+
+test('没中招的几家一个思考字段都不带 (2.12.2)', () => {
+	// openai 走 reasoning_effort(本来就是我们这条路);gemini 走原生 thinkingConfig
+	// (另一条适配器);anthropic 的扩展思考是 opt-in;groq 跑 llama,没有思考。
+	for (const id of ['openai', 'openrouter', 'groq', 'ollama', 'openai-compatible', 'custom']) {
+		const extras = openaiChatExtras(base({}), id);
+		assert.ok(!('thinking' in extras), `${id} 不该带 thinking`);
+		assert.ok(!('enable_thinking' in extras), `${id} 不该带 enable_thinking`);
+	}
+	// 这几家也不该被塞一个我们自作主张的 reasoning_effort。
+	for (const id of ['groq', 'ollama', 'custom']) {
+		assert.ok(!('reasoning_effort' in openaiChatExtras(base({}), id)), `${id} 不该带 reasoning_effort`);
+	}
+});
+
+test('三种关法互斥,每家只发自己的那一种 (2.12.2)', () => {
+	const all = ['deepseek', 'zhipu', 'qwen', 'siliconflow', 'moonshot', 'openai', 'groq'];
+	for (const id of all) {
+		const extras = openaiChatExtras(base({ reasoning: 'high' }), id);
+		const used = ['thinking', 'enable_thinking', 'reasoning_effort'].filter(k => k in extras);
+		assert.ok(used.length <= 1,
+			`${id} 同时发了 ${used.join(' + ')} —— 词汇混用就是一个 400`);
+	}
+});
+
+test('设置界面给得出思考开关的,正是会思考的那几家 (2.12.2)', () => {
+	for (const id of ['deepseek', 'zhipu', 'qwen', 'siliconflow', 'moonshot', 'openai', 'gemini', 'anthropic']) {
+		assert.equal(supportsReasoningControl(id), true, `${id} 会思考,用户必须能改`);
+	}
+	for (const id of ['groq', 'bing-free', 'google-free', 'deepl']) {
+		assert.equal(supportsReasoningControl(id), false, `${id} 没有思考,不该给一个空开关`);
+	}
+});
+
+test('思考参数被拒能自愈,不把整家打死 (2.12.2)', () => {
+	// 按 providerId 放行,但同一个 id 可能指向用户的代理或网关 —— 那些后端见到
+	// 不认识的字段会直接 400。与 reasoning_effort 的自愈(1.1.11)同构。
+	const rej = (msg: string): unknown =>
+		new PaperMirrorError('UNKNOWN', msg, { httpStatus: 400 });
+	assert.ok(isThinkingParamRejection(rej('Unrecognized request argument supplied: enable_thinking')));
+	assert.ok(isThinkingParamRejection(rej('invalid parameter: thinking')));
+	assert.ok(!isThinkingParamRejection(rej('Unrecognized request argument supplied: temperature')));
+	assert.ok(!isThinkingParamRejection(new PaperMirrorError('UNKNOWN', 'thinking', { httpStatus: 500 })),
+		'只有 400 才是参数被拒 —— 500 是服务端的事,剥字段没用');
 });
