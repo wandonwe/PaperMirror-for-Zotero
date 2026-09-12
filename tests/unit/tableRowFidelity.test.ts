@@ -371,3 +371,150 @@ test('按网格建格:落在网格外的块不得被强行塞进表里 (2.12.4)'
 	assert.deepEqual(model.cells[0]!.memberIds, ['in']);
 	assert.ok(!model.cells.some(c => c.text.includes('outside')), '表外的正文绝不能进格');
 });
+
+test('接线后的真机页:边框网格接管,Document Title 列回到表里 (2.12.5)', async () => {
+	// 真机 2.12.4 导出确认过:这一页的表格模型只有 2 列(年份、缩写),
+	// 整个 Document Title 列在表外,那些标题以普通块散落在 x=53。
+	// 接上边框后,structureTableCells 必须给出 3 列、每条记录同行。
+	const { readFileSync } = await import('node:fs');
+	const { buildBlocksFromSpans } = await import('../../src/reader/spanBlockBuilder');
+	const { orderBlocksForReading } = await import('../../src/reader/readingOrder');
+	const { structureTableCells } = await import('../../src/reader/tableStructure');
+	const { borderGrid } = await import('../../src/reader/tableBorders');
+	const d = JSON.parse(readFileSync('tests/fixtures/layout/powers2019-p4-p1.spans.json', 'utf8'));
+	const e = JSON.parse(readFileSync('tests/fixtures/layout/powers2019-p4-p1.edges.json', 'utf8'));
+	const grid = borderGrid(e.segments, { pageHeight: e.pageHeight });
+	const r = buildBlocksFromSpans(d.items, { pageIndex: 0, pageHeight: d.pageHeight, pageWidth: d.pageWidth });
+	const blocks = orderBlocksForReading(r.blocks);
+
+	// 不给网格 = 2.12.4 的行为:第一列整列不在表里。
+	const without = structureTableCells(blocks, 0, 9).filter(b => b.translationMode !== undefined);
+	const colsWithout = new Set(without.map(b => /-c(\d+)$/.exec(b.id)?.[1]));
+	assert.equal(colsWithout.size, 2, `不给网格时应仍是 2 列(实得 ${colsWithout.size})—— 这条锁住"问题确实存在"`);
+
+	// 给网格 = 边框接管。
+	const cells = structureTableCells(blocks, 0, 9, [], grid).filter(b => b.translationMode !== undefined);
+	const rows = new Map<number, Map<number, string>>();
+	for (const b of cells) {
+		const m = /-r(\d+)-c(\d+)/.exec(b.id);
+		if (m) {
+			const row = rows.get(Number(m[1])) ?? new Map<number, string>();
+			row.set(Number(m[2]), b.sourceText.replace(/\s+/g, ' ').trim());
+			rows.set(Number(m[1]), row);
+		}
+	}
+	const colsWith = new Set(cells.map(b => /-c(\d+)$/.exec(b.id)?.[1]));
+	assert.equal(colsWith.size, 3, `给网格后必须是 3 列(实得 ${colsWith.size})`);
+
+	// 逐条核对(真值由 pdfplumber 按边框独立切表得到)。最后两行的年份在建块
+	// 阶段就丢了(见下一条用例),所以这里核对前 15 条。
+	const expect: [number, string, string][] = [
+		[1, '2009', 'N/A'], [2, '2011', 'N/A'], [3, '2013', '2013 AIS Guidelines'],
+		[4, '2013', '2013 Stroke Systems of Care'], [5, '2014', 'N/A'], [6, '2014', '2014 Brain Swelling'],
+		[7, '2014', '2014 Palliative Care'], [8, '2014', '2014 Secondary Prevention'], [9, '2014', 'N/A'],
+		[10, '2015', '2015 CPR/ECC'], [11, '2015', '2015 Endovascular'], [12, '2015', '2015 IV Alteplase'],
+		[13, '2016', '2016 Rehab Guidelines'], [14, '2017', 'N/A'], [15, '2017', 'N/A']
+	];
+	for (const [row, year, abbr] of expect) {
+		const r2 = rows.get(row);
+		assert.ok(r2, `第 ${row} 行必须存在`);
+		assert.equal(r2!.get(1), year, `第 ${row} 行的年份`);
+		assert.equal(r2!.get(2), abbr, `第 ${row} 行的缩写`);
+		assert.ok((r2!.get(0) ?? '').length > 20, `第 ${row} 行必须有文献标题(实得 "${(r2!.get(0) ?? '').slice(0, 30)}")`);
+	}
+});
+
+test('没有边框的页面行为逐字节不变 (2.12.5 惰性保证)', async () => {
+	// 这是整条路的安全性所在:绝大多数页面没有表格线,borderGrid 返回 null,
+	// structureTableCells 走原路。传 null 与不传必须产出完全一样的结果。
+	const { readFileSync } = await import('node:fs');
+	const { buildBlocksFromSpans } = await import('../../src/reader/spanBlockBuilder');
+	const { orderBlocksForReading } = await import('../../src/reader/readingOrder');
+	const { structureTableCells } = await import('../../src/reader/tableStructure');
+	for (const name of ['nejm-defuse3-p7', 'chen2023-p10', 'wu2026-p6']) {
+		const d = JSON.parse(readFileSync(`tests/fixtures/layout/${name}.spans.json`, 'utf8'));
+		const r = buildBlocksFromSpans(d.items, { pageIndex: 0, pageHeight: d.pageHeight, pageWidth: d.pageWidth });
+		const blocks = orderBlocksForReading(r.blocks);
+		const a = structureTableCells(blocks, 0, 10);
+		const b = structureTableCells(blocks, 0, 10, [], null);
+		assert.deepEqual(b.map(x => x.id), a.map(x => x.id), `${name}: 传 null 不得改变任何东西`);
+		assert.deepEqual(b.map(x => x.sourceText), a.map(x => x.sourceText), `${name}: 文本也必须一致`);
+	}
+});
+
+test('接线的四条约束:阈值、剩余块、格盒来源、data 保留原文 (2.12.5)', async () => {
+	const { readFileSync } = await import('node:fs');
+	const { buildBlocksFromSpans } = await import('../../src/reader/spanBlockBuilder');
+	const { orderBlocksForReading } = await import('../../src/reader/readingOrder');
+	const { structureTableCells } = await import('../../src/reader/tableStructure');
+	const { borderGrid } = await import('../../src/reader/tableBorders');
+	const d = JSON.parse(readFileSync('tests/fixtures/layout/powers2019-p4-p1.spans.json', 'utf8'));
+	const e = JSON.parse(readFileSync('tests/fixtures/layout/powers2019-p4-p1.edges.json', 'utf8'));
+	const grid = borderGrid(e.segments, { pageHeight: e.pageHeight })!;
+	const r = buildBlocksFromSpans(d.items, { pageIndex: 0, pageHeight: d.pageHeight, pageWidth: d.pageWidth });
+	const blocks = orderBlocksForReading(r.blocks);
+	const out = structureTableCells(blocks, 0, 9, [], grid);
+	const cells = out.filter(b => b.translationMode !== undefined);
+
+	// (a) 格盒必须来自**格线**,不是文字外接框 —— 译文排在格子里。
+	const c = cells.find(b => /-r1-c0$/.test(b.id))!;
+	assert.ok(c, 'r1c0 必须存在');
+	assert.ok(Math.abs(c.boundingBox!.x - grid.columns[0]!) < 0.01,
+		`格盒左沿应等于列线 ${grid.columns[0]!.toFixed(1)},实得 ${c.boundingBox!.x.toFixed(1)}`);
+	assert.ok(Math.abs(c.boundingBox!.width - (grid.columns[1]! - grid.columns[0]!)) < 0.01, '格宽应等于列宽');
+
+	// (b) 年份与 N/A 这类短格必须 preserve —— 不能拿去翻译。
+	const year = cells.find(b => b.sourceText.trim() === '2009');
+	assert.ok(year, '年份格必须存在');
+	assert.equal(year!.translationMode, 'preserve', '纯数字年份必须保留原文');
+
+	// (c) 网格之外的块仍要走文字几何 —— 这一页的表标题不在网格里,
+	//     它必须仍以 table 类型的普通块留在输出里,没被吞掉也没被丢掉。
+	const caption = out.find(b => b.sourceText.startsWith('Table 2.'));
+	assert.ok(caption, '表标题必须仍在输出里');
+	assert.equal(caption!.translationMode, undefined, '表标题不是格,应作普通块');
+
+	// (d) 网格里块太少就不算表 —— 一条装饰线框住半句话不能变成表格。
+	const sparse = blocks.filter(b => (b.boundingBox?.y ?? 0) < 100).slice(0, 3);
+	const sparseOut = structureTableCells(sparse, 0, 9, [], grid);
+	assert.ok(!sparseOut.some(b => /-r\d+-c\d+/.test(b.id)),
+		'网格内只有寥寥几个块时不得建表');
+});
+
+test('接线不丢内容,且网格之外的表仍由文字几何接手 (2.12.5)', async () => {
+	const { readFileSync } = await import('node:fs');
+	const { buildBlocksFromSpans } = await import('../../src/reader/spanBlockBuilder');
+	const { orderBlocksForReading } = await import('../../src/reader/readingOrder');
+	const { structureTableCells } = await import('../../src/reader/tableStructure');
+	const { borderGrid } = await import('../../src/reader/tableBorders');
+	const d = JSON.parse(readFileSync('tests/fixtures/layout/powers2019-p4-p1.spans.json', 'utf8'));
+	const e = JSON.parse(readFileSync('tests/fixtures/layout/powers2019-p4-p1.edges.json', 'utf8'));
+	const grid = borderGrid(e.segments, { pageHeight: e.pageHeight })!;
+	const r = buildBlocksFromSpans(d.items, { pageIndex: 0, pageHeight: d.pageHeight, pageWidth: d.pageWidth });
+	const blocks = orderBlocksForReading(r.blocks);
+
+	// 在网格**下方**放一张纯文字几何能认出的数值小表(网格只到 y≈566)。
+	const extra: SourceBlock[] = [];
+	for (let row = 0; row < 4; row++) {
+		extra.push(line(`x-l${row}`, 60, 620 + row * 18, 150, row === 0 ? 'Mortality' : `Clinical outcome ${row}`));
+		extra.push(line(`x-a${row}`, 240, 620 + row * 18, 60, `${40 + row} ± 6`));
+		extra.push(line(`x-b${row}`, 320, 620 + row * 18, 60, `${41 + row} ± 7`));
+	}
+	const all = [...blocks, ...extra];
+	all.forEach((b, i) => { b.order = i; });
+	const out = structureTableCells(all, 0, 9, [], grid);
+
+	// (a) 内容守恒:每一个输入块的文字都必须仍能在输出里找到。
+	const joined = out.map(b => b.sourceText.replace(/\s+/g, ' ')).join(' ⟂ ');
+	for (const b of all) {
+		const t = b.sourceText.replace(/\s+/g, ' ').trim();
+		if (t.length < 4) { continue; }
+		assert.ok(joined.includes(t.slice(0, 40)), `输入块的文字不能丢: "${t.slice(0, 40)}"`);
+	}
+
+	// (b) 网格之外的那张表必须仍被文字几何结构化成格。
+	const outsideCells = out.filter(b => b.translationMode !== undefined && (b.boundingBox?.y ?? 0) > 600);
+	assert.ok(outsideCells.length >= 4,
+		`网格外的表也要成格,实得 ${outsideCells.length} 个 —— 剩余块没有走文字几何那条路`);
+	assert.ok(outsideCells.some(b => b.sourceText.includes('Mortality')), '网格外表的行标签必须在格里');
+});

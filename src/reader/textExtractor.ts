@@ -25,6 +25,7 @@ import * as logger from '../utils/logger';
 import { buildBlocks, buildBlocksFromPlainText, medianFontSize } from './blockBuilder';
 import { buildBlocksFromSpans } from './spanBlockBuilder';
 import { coalesceRegions } from './regionCoalescer';
+import { borderGrid, type BorderGrid } from './tableBorders';
 import { orderBlocksForReading } from './readingOrder';
 import { structureTableCells } from './tableStructure';
 import * as adapter from './zoteroReaderAdapter';
@@ -142,6 +143,8 @@ export class TextExtractor implements PageParser {
 	private bodyFontSize = 0;
 	/** 边框硬屏障: per-page figure rects (operator list), cached; [] = none. */
 	private imageRects = new Map<number, [number, number, number, number][]>();
+	/** 逐页边框网格缓存;undefined = 还没取过,null = 取过但这页没有网格。 */
+	private borderGrids = new Map<number, BorderGrid | null>();
 	/**
 	 * PageData captured by prime() for the page open at startup, reused ONCE by
 	 * the first extractPage() of that page. Without this, opening the reader
@@ -307,6 +310,32 @@ export class TextExtractor implements PageParser {
 	}
 
 	/**
+	 * 这一页的表格边框网格 (2.12.5),best-effort、逐页缓存、绝不抛。
+	 *
+	 * 拿不到就是 null,structureTableCells 照旧走文字几何 —— 绝大多数页面
+	 * 本来就没有表格线,行为与 2.12.4 逐字节一致。超时是硬上限:取证不该
+	 * 拖慢翻译。
+	 */
+	private async gridFor(pageIndex: number, pageHeight: number): Promise<BorderGrid | null> {
+		const cached = this.borderGrids.get(pageIndex);
+		if (cached !== undefined) {
+			return cached;
+		}
+		let grid: BorderGrid | null = null;
+		try {
+			const segs = await withTimeout(adapter.getPageEdgesPdf(this.reader, pageIndex), 3000, 'getPageEdgesPdf');
+			if (segs && segs.length) {
+				grid = borderGrid(segs, { pageHeight });
+			}
+		}
+		catch {
+			// best-effort: 没有边框证据 = 老行为
+		}
+		this.borderGrids.set(pageIndex, grid);
+		return grid;
+	}
+
+	/**
 	 * IR 不变量审计 — log-only(1.1.0 目标架构第 1 步)。违例绝不改变行为,
 	 * 只让"某个隐式不变量被搬丢了"这类回归在日志里立刻可见,而不是等到
 	 * 字段 bug。契约本身由 validatePageIR 的单测保证;这里是运行期烟雾探测。
@@ -386,7 +415,7 @@ export class TextExtractor implements PageParser {
 				// Canonical reading order BEFORE coalescing: row-wise streams
 				// interleave the columns, and the coalescer only merges adjacent
 				// blocks — without this, one-line shreds never rejoin.
-				const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe());
+				const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), await this.gridFor(pageIndex, pageHeight));
 				const tableCells = structured.filter(b => b.translationMode !== undefined);
 				const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
 				result.blocks = orderBlocksForReading([...prose, ...tableCells]);
@@ -540,7 +569,8 @@ export class TextExtractor implements PageParser {
 				phases.textLayerWaitMs = (phases.textLayerWaitMs ?? 0) + (Date.now() - waitStartedAt);
 			}
 			const page = adapter.getTextLayerItems(this.reader, pageIndex);
-			return this.blocksFromSpanPage(pageIndex, page, obstacles, 'the text layer');
+			const grid = page ? await this.gridFor(pageIndex, page.pageHeight) : null;
+			return this.blocksFromSpanPage(pageIndex, page, obstacles, 'the text layer', grid);
 		}
 		catch (e) {
 			logger.warn(MODULE, `Text-layer extraction failed for page ${pageIndex}`, e);
@@ -560,7 +590,8 @@ export class TextExtractor implements PageParser {
 		try {
 			const page = await adapter.getTextContentItems(this.reader, pageIndex,
 				reason => this.noteOutcome(this.textContentOutcome, this.textContentNoted, pageIndex, reason));
-			return this.blocksFromSpanPage(pageIndex, page, obstacles, 'getTextContent');
+			const grid = page ? await this.gridFor(pageIndex, page.pageHeight) : null;
+			return this.blocksFromSpanPage(pageIndex, page, obstacles, 'getTextContent', grid);
 		}
 		catch (e) {
 			logger.warn(MODULE, `getTextContent extraction failed for page ${pageIndex}`, e);
@@ -579,7 +610,8 @@ export class TextExtractor implements PageParser {
 		pageIndex: number,
 		page: adapter.TextLayerPage | null,
 		obstacles: [number, number, number, number][],
-		sourceLabel: string
+		sourceLabel: string,
+		grid: BorderGrid | null = null
 	): SourceBlock[] | null {
 		if (!page || !page.items.length) {
 			return null;
@@ -597,7 +629,7 @@ export class TextExtractor implements PageParser {
 		// Rebuild semantic regions from whatever fragments extraction
 		// produced: whole regions translate as whole sentences.
 		const sourceBlockCount = result.blocks.length;
-		const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe());
+		const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), grid);
 		const tableCells = structured.filter(b => b.translationMode !== undefined);
 		const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
 		result.blocks = orderBlocksForReading([...prose, ...tableCells]);
