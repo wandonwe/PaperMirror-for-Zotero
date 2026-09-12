@@ -105,6 +105,112 @@ export function pickProviderForPage(pool: string[], pageIndex: number): string {
 	return rankProvidersForPage(pool, pageIndex)[0]!;
 }
 
+/* ==========================================================================
+   按实测速度加权分页 (2.12.0)
+   ========================================================================== */
+
+/**
+ * 一家服务商的实测吞吐(字符/秒)。只统计**成功**的请求 —— 快速失败的引擎
+ * 看上去会很"快",不设这道门就会把页越分越多给一个一直在失败的服务。
+ */
+export interface ProviderThroughput {
+	/** 成功请求数。样本太少就不动权重(见 MIN_SAMPLES)。 */
+	samples: number;
+	/** 字符/秒 = 总字符 / 总 sendMs。 */
+	charsPerSecond: number;
+}
+
+/**
+ * 权重可信所需的最少成功样本。低于它一律按 1 —— 冷启动、刚加进池的新引擎、
+ * 以及只跑过一两页的引擎,都不该凭一两个样本就被加权。
+ */
+export const MIN_SAMPLES = 5;
+
+/**
+ * 权重上下限(相对中位数)。
+ *
+ * 真机实测:google-free 约 6000 字符/秒,gemini 约 200 —— **差 30 倍**。
+ * 不设限的加权会让 gemini 几乎分不到页,那等于"悄悄把它踢出池",
+ * 而它是用户自己配进 `parallelProviders` 的。加权是让慢的**少分**,
+ * 不是替用户做去留决定。4 倍的跨度足以显著改善等待,又不至于变相移除谁。
+ */
+const WEIGHT_MIN = 0.25;
+const WEIGHT_MAX = 4;
+
+/**
+ * 从实测吞吐算每家的权重。纯函数。
+ *
+ * 以**中位数**为基准而不是平均数:平均数会被 google-free 那种量级的异常值
+ * 拽着走,导致所有 LLM 都落到下限、彼此之间反而分不出来。
+ *
+ * 权重量化到 0.25 的整数倍 —— 吞吐每次请求都在抖,不量化的话权重每请求都变,
+ * 页面归属跟着变,页缓存会被反复打穿。量化让权重只在**真的变了一档**时才动。
+ */
+export function weightsFromThroughput(stats: Record<string, ProviderThroughput>): Record<string, number> {
+	const usable = Object.entries(stats)
+		.filter(([, s]) => s.samples >= MIN_SAMPLES && s.charsPerSecond > 0);
+	const out: Record<string, number> = {};
+	for (const id of Object.keys(stats)) {
+		out[id] = 1;
+	}
+	// 至少要有两家有数据,否则"相对谁"无从谈起。
+	if (usable.length < 2) {
+		return out;
+	}
+	const rates = usable.map(([, s]) => s.charsPerSecond).sort((a, b) => a - b);
+	const mid = rates.length % 2
+		? rates[(rates.length - 1) / 2]!
+		: (rates[rates.length / 2 - 1]! + rates[rates.length / 2]!) / 2;
+	if (!(mid > 0)) {
+		return out;
+	}
+	for (const [id, s] of usable) {
+		const raw = s.charsPerSecond / mid;
+		const clamped = Math.max(WEIGHT_MIN, Math.min(WEIGHT_MAX, raw));
+		out[id] = Math.max(WEIGHT_MIN, Math.round(clamped / 0.25) * 0.25);
+	}
+	return out;
+}
+
+/**
+ * 加权 rendezvous hashing。
+ *
+ * 标准做法:`score = weight / -ln(u)`,其中 `u` 是把哈希映到 (0,1) 的均匀数。
+ * 每家拿到的页数份额正比于它的权重,而且**保住 HRW 的最小扰动性质** ——
+ * 加一家、删一家、改权重,只有该动的页会动,不是全盘重排。
+ *
+ * 权重全相等时,`-ln(u)` 是 `u` 的单调函数,排序与不加权的 HRW **完全一致** ——
+ * 所以没有实测数据时的行为与 2.11.2 一模一样,不是另起一套。
+ */
+export function pickWeightedProviderForPage(
+	pool: string[],
+	pageIndex: number,
+	weights: Record<string, number>
+): string {
+	if (!pool.length) {
+		throw new Error('provider pool is empty');
+	}
+	if (pool.length === 1) {
+		return pool[0]!;
+	}
+	const page = Number.isFinite(pageIndex) && pageIndex >= 0 ? pageIndex : 0;
+	let best = '';
+	let bestScore = -Infinity;
+	for (const id of pool) {
+		const w = weights[id];
+		const weight = Number.isFinite(w) && (w as number) > 0 ? w as number : 1;
+		// (0,1) 开区间:+0.5 避开 u=0(取 ln 会是 -Infinity)。
+		const u = (hrwScore(id, page) + 0.5) / 4294967296;
+		const score = weight / -Math.log(u);
+		// 同分以 id 字典序打破,与 rankProvidersForPage 同一规则,保证确定。
+		if (score > bestScore || (score === bestScore && id < best)) {
+			best = id;
+			bestScore = score;
+		}
+	}
+	return best;
+}
+
 /**
  * A provider's independent PAGE-concurrency capability — how many page tasks of
  * THIS provider may run at once, before the shared global cap. Keyed off type,

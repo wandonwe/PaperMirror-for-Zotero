@@ -14,7 +14,7 @@ import {
 import { getApiKey } from '../security/credentialStore';
 import { registerUrlCredentials } from '../security/logSanitizer';
 import { getProvider, listProviders } from '../translation/providers/registry';
-import { buildPool, pickProviderForPage, rankProvidersForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
+import { buildPool, pickProviderForPage, pickWeightedProviderForPage, rankProvidersForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
 import { endpointHost, supportsCharBudget } from '../translation/providers/types';
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
 import { TranslationManager, type PageTranslationState, type TranslateHooks } from '../translation/translationManager';
@@ -304,6 +304,16 @@ export class ReaderSession {
 	private providerForPage(pageIndex: number): string {
 		if (this.pool.length > 1) {
 			const offset = this.pageProviderOffset.get(pageIndex) ?? 0;
+			if (offset === 0) {
+				// 2.12.0 按实测速度加权分页。真机实测同一篇文档里
+				// google-free 约 6000 字符/秒、gemini 约 200 —— 等额分页会让
+				// 慢的那家连着吃掉一整段连续阅读。权重来自**本会话自己的测量**
+				// (只计成功请求),样本不足时全是 1,行为与 2.11.2 完全一致。
+				//
+				// 只在 offset === 0 时加权:offset 非零意味着熔断/手动轮换正在
+				// 让这一页退让,那时要的是"下一名"这个确定的序,不是重新按权重挑。
+				return pickWeightedProviderForPage(this.pool, pageIndex, this.manager?.providerWeights() ?? {});
+			}
 			const rank = rankProvidersForPage(this.pool, pageIndex);
 			return rank[offset % rank.length]!;
 		}
@@ -2553,6 +2563,11 @@ export class ReaderSession {
 			summary: () => ({
 				engines,
 				engineRotations: this.pageProviderOffset.size,
+				// 2.12.0: 加权分页必须可审计 —— 权重是从哪些测量算出来的、
+				// 算成了多少,都要能在导出里对上,否则"自调"就是黑箱。
+				providerThroughput: this.manager?.providerThroughput() ?? {},
+				providerWeights: this.manager?.providerWeights() ?? {},
+				poolSize: this.pool.length,
 				...((): Record<string, unknown> => {
 					const diag = manager.exportDiagnostics() as Record<string, unknown>;
 					// 逐页数据单独成行,这里只留会话级汇总 —— 否则整份文档的页数据
@@ -2898,6 +2913,11 @@ export class ReaderSession {
 			summary: () => ({
 				engines,
 				engineRotations: this.pageProviderOffset.size,
+				// 2.12.0: 加权分页必须可审计 —— 权重是从哪些测量算出来的、
+				// 算成了多少,都要能在导出里对上,否则"自调"就是黑箱。
+				providerThroughput: this.manager?.providerThroughput() ?? {},
+				providerWeights: this.manager?.providerWeights() ?? {},
+				poolSize: this.pool.length,
 				...((): Record<string, unknown> => {
 					const diag = manager.exportDiagnostics() as Record<string, unknown>;
 					const { pages: _pages, ...session } = diag;
@@ -3056,6 +3076,11 @@ export class ReaderSession {
 				engines,
 				// 会话内熔断/手动轮换过的页数(>0 说明有引擎不稳被换过)。
 				engineRotations: this.pageProviderOffset.size,
+				// 2.12.0: 加权分页必须可审计 —— 权重是从哪些测量算出来的、
+				// 算成了多少,都要能在导出里对上,否则"自调"就是黑箱。
+				providerThroughput: this.manager?.providerThroughput() ?? {},
+				providerWeights: this.manager?.providerWeights() ?? {},
+				poolSize: this.pool.length,
 				...((): Record<string, unknown> => {
 					const diag = this.manager.exportDiagnostics() as Record<string, unknown>;
 					// 块级口径联表 (2.7.0, 审核 B-1): 排版放弃的块 state → 'unplaced'
