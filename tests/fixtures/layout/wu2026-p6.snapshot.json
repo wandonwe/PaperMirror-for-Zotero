@@ -54,7 +54,7 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 6,
-		"tableRow": 4,
+		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "42.4±5.4"
@@ -63,7 +63,7 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 7,
-		"tableRow": 4,
+		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "31.5±5.6"
@@ -72,7 +72,7 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 8,
-		"tableRow": 5,
+		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "22.8"
@@ -81,7 +81,7 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 9,
-		"tableRow": 5,
+		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "16.9"
@@ -90,25 +90,25 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 10,
-		"tableRow": 6,
+		"tableRow": 5,
 		"tableCol": 1,
 		"mode": "preserve",
-		"text": "<0.001*/24.9"
+		"text": "<0.001*/24.9 (22.727.2)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 11,
-		"tableRow": 6,
+		"tableRow": 5,
 		"tableCol": 2,
 		"mode": "preserve",
-		"text": "<0.001*/18.9"
+		"text": "<0.001*/18.9 (16.621.1)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 12,
-		"tableRow": 6,
+		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "P value/differences (95% CI)"
@@ -120,7 +120,7 @@
 		"tableRow": 7,
 		"tableCol": 1,
 		"mode": "preserve",
-		"text": "(22.727.2)"
+		"text": "35.2±11.7"
 	},
 	{
 		"type": "paragraph",
@@ -129,31 +129,13 @@
 		"tableRow": 7,
 		"tableCol": 2,
 		"mode": "preserve",
-		"text": "(16.621.1)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 15,
-		"tableRow": 9,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "35.2±11.7"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 16,
-		"tableRow": 9,
-		"tableCol": 2,
-		"mode": "preserve",
 		"text": "26.1±9.3"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 17,
-		"tableRow": 10,
+		"readingIndex": 15,
+		"tableRow": 8,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "51.4±14.2"
@@ -161,8 +143,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 18,
-		"tableRow": 10,
+		"readingIndex": 16,
+		"tableRow": 8,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "41.9±11.3"
@@ -170,8 +152,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 19,
-		"tableRow": 11,
+		"readingIndex": 17,
+		"tableRow": 9,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "13.0"
@@ -179,8 +161,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 20,
-		"tableRow": 11,
+		"readingIndex": 18,
+		"tableRow": 9,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "16.5"
@@ -188,8 +170,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 21,
-		"tableRow": 12,
+		"readingIndex": 19,
+		"tableRow": 10,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "<0.001*/16.1"
@@ -197,8 +179,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 22,
-		"tableRow": 12,
+		"readingIndex": 20,
+		"tableRow": 10,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "<0.001*/15.8"
@@ -206,11 +188,29 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 23,
-		"tableRow": 12,
+		"readingIndex": 21,
+		"tableRow": 10,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "P value/differences (95% CI)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 22,
+		"tableRow": 11,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "(13.618.7)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 23,
+		"tableRow": 11,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "(13.817.7)"
 	},
 	{
 		"type": "paragraph",
@@ -219,7 +219,7 @@
 		"tableRow": 13,
 		"tableCol": 1,
 		"mode": "preserve",
-		"text": "(13.618.7)"
+		"text": "44.2±10.4"
 	},
 	{
 		"type": "paragraph",
@@ -228,31 +228,13 @@
 		"tableRow": 13,
 		"tableCol": 2,
 		"mode": "preserve",
-		"text": "(13.817.7)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 26,
-		"tableRow": 15,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "44.2±10.4"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 27,
-		"tableRow": 15,
-		"tableCol": 2,
-		"mode": "preserve",
 		"text": "34.4±9.3"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 28,
-		"tableRow": 16,
+		"readingIndex": 26,
+		"tableRow": 14,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "61.6±11.7"
@@ -260,8 +242,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 29,
-		"tableRow": 16,
+		"readingIndex": 27,
+		"tableRow": 14,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "50.7±9.4"
@@ -269,8 +251,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 30,
-		"tableRow": 17,
+		"readingIndex": 28,
+		"tableRow": 15,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "17.4"
@@ -278,8 +260,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 31,
-		"tableRow": 17,
+		"readingIndex": 29,
+		"tableRow": 15,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "12.6"
@@ -287,8 +269,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 32,
-		"tableRow": 18,
+		"readingIndex": 30,
+		"tableRow": 16,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "<0.001*/17.4"
@@ -296,8 +278,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 33,
-		"tableRow": 18,
+		"readingIndex": 31,
+		"tableRow": 16,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "<0.001*/16.3"
@@ -305,8 +287,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 34,
-		"tableRow": 18,
+		"readingIndex": 32,
+		"tableRow": 16,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "P value/differences (95% CI)"
@@ -314,8 +296,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 35,
-		"tableRow": 19,
+		"readingIndex": 33,
+		"tableRow": 17,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "(15.419.5)"
@@ -323,8 +305,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 36,
-		"tableRow": 19,
+		"readingIndex": 34,
+		"tableRow": 17,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "(13.619.0)"
@@ -332,8 +314,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 37,
-		"tableRow": 20,
+		"readingIndex": 35,
+		"tableRow": 18,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "SNR Signal-to-noise ratio, CNR Contrast-"
@@ -341,8 +323,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 38,
-		"tableRow": 20,
+		"readingIndex": 36,
+		"tableRow": 18,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "ratio, differences"
@@ -350,8 +332,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 39,
-		"tableRow": 21,
+		"readingIndex": 37,
+		"tableRow": 19,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "(95% CI) present paired mean differences"
@@ -359,8 +341,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 40,
-		"tableRow": 21,
+		"readingIndex": 38,
+		"tableRow": 19,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "confidence inter-"
@@ -368,37 +350,37 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 41,
+		"readingIndex": 39,
 		"text": "Data are means±SDs t test statistics of "
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 42,
+		"readingIndex": 40,
 		"text": "difference"
 	},
 	{
 		"type": "table",
 		"column": 0,
-		"readingIndex": 43,
+		"readingIndex": 41,
 		"text": "Table 4 Comparison of polyp detection pe"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 44,
+		"readingIndex": 42,
 		"text": "and PCD-CT stratified by polyp"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 45,
+		"readingIndex": 43,
 		"text": "size"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 46,
+		"readingIndex": 44,
 		"tableRow": 0,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -407,7 +389,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 47,
+		"readingIndex": 45,
 		"tableRow": 0,
 		"tableCol": 1,
 		"mode": "translate",
@@ -416,7 +398,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 48,
+		"readingIndex": 46,
 		"tableRow": 0,
 		"tableCol": 4,
 		"mode": "translate",
@@ -425,7 +407,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 49,
+		"readingIndex": 47,
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "translate",
@@ -434,7 +416,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 50,
+		"readingIndex": 48,
 		"tableRow": 1,
 		"tableCol": 2,
 		"mode": "translate",
@@ -443,7 +425,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 51,
+		"readingIndex": 49,
 		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "translate",
@@ -452,7 +434,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 52,
+		"readingIndex": 50,
 		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "translate",
@@ -461,7 +443,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 53,
+		"readingIndex": 51,
 		"tableRow": 3,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -470,7 +452,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 54,
+		"readingIndex": 52,
 		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -479,7 +461,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 55,
+		"readingIndex": 53,
 		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -488,7 +470,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 56,
+		"readingIndex": 54,
 		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -497,25 +479,25 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 57,
+		"readingIndex": 55,
 		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "preserve",
-		"text": "(6.837.6)"
+		"text": "(6.837.6) 71.4 (20/28) (52.984.7)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 58,
+		"readingIndex": 56,
 		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "preserve",
-		"text": "(52.984.7)"
+		"text": "(52.984.7) 92.9 (26/28) (77.498.0)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 59,
+		"readingIndex": 57,
 		"tableRow": 4,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -524,7 +506,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 60,
+		"readingIndex": 58,
 		"tableRow": 4,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -533,62 +515,26 @@
 	{
 		"type": "paragraph",
 		"column": 0,
+		"readingIndex": 59,
+		"tableRow": 5,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "92.9 (26/28) (77.498.0)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 60,
+		"tableRow": 5,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "96.4 (27/28) (82.399.4)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
 		"readingIndex": 61,
 		"tableRow": 5,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "71.4 (20/28)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 62,
-		"tableRow": 5,
-		"tableCol": 2,
-		"mode": "preserve",
-		"text": "92.9 (26/28)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 63,
-		"tableRow": 6,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "(52.984.7)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 64,
-		"tableRow": 6,
-		"tableCol": 2,
-		"mode": "preserve",
-		"text": "(77.498.0)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 65,
-		"tableRow": 7,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "92.9 (26/28)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 66,
-		"tableRow": 7,
-		"tableCol": 2,
-		"mode": "preserve",
-		"text": "96.4 (27/28)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 67,
-		"tableRow": 7,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "0.352"
@@ -596,8 +542,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 68,
-		"tableRow": 7,
+		"readingIndex": 62,
+		"tableRow": 5,
 		"tableCol": 4,
 		"mode": "preserve",
 		"text": "0.549"
@@ -605,86 +551,68 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 69,
-		"tableRow": 8,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "(77.498.0)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 70,
-		"tableRow": 8,
-		"tableCol": 2,
-		"mode": "preserve",
-		"text": "(82.399.4)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 71,
+		"readingIndex": 63,
 		"text": "EID-CT Energy integrating detector CT, P"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 72,
+		"readingIndex": 64,
 		"text": "Photon counting"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 73,
+		"readingIndex": 65,
 		"text": "2×2 contingency tables for each polyp si"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 74,
+		"readingIndex": 66,
 		"text": "Data are sensitivity (%) with 95% confid"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 75,
+		"readingIndex": 67,
 		"text": "χ McNemars test statistic P value indic"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 76,
+		"readingIndex": 68,
 		"text": "difference"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 77,
+		"readingIndex": 69,
 		"text": "Polyp detection performance and reader d"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 78,
+		"readingIndex": 70,
 		"text": "Systematic evaluation of polyp detection"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 79,
+		"readingIndex": 71,
 		"text": "PCD-CT achieved significantly superior d"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 80,
+		"readingIndex": 72,
 		"text": "edly improved sensitivity [71.4% (95% CI"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 81,
-		"tableRow": 12,
+		"readingIndex": 73,
+		"tableRow": 10,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "Fig. 3 Sensitivity comparison of EID-CT "
@@ -692,8 +620,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 82,
-		"tableRow": 13,
+		"readingIndex": 74,
+		"tableRow": 11,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "colorectal polyps stratified by polyp si"
@@ -701,8 +629,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 83,
-		"tableRow": 15,
+		"readingIndex": 75,
+		"tableRow": 13,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "Table 5 Comparison of reader diagnostic "
@@ -710,11 +638,83 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 84,
-		"tableRow": 16,
+		"readingIndex": 76,
+		"tableRow": 14,
 		"tableCol": 4,
 		"mode": "preserve",
 		"text": "and PCD-CT stratified by polyp size"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 77,
+		"tableRow": 15,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "Polyp size"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 78,
+		"tableRow": 15,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "EID-CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 79,
+		"tableRow": 15,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "PCD-CT"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 80,
+		"tableRow": 15,
+		"tableCol": 6,
+		"mode": "preserve",
+		"text": "Z"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 81,
+		"tableRow": 15,
+		"tableCol": 7,
+		"mode": "preserve",
+		"text": "P value"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 82,
+		"tableRow": 16,
+		"tableCol": 4,
+		"mode": "translate",
+		"text": "Confidence"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 83,
+		"tableRow": 16,
+		"tableCol": 5,
+		"mode": "preserve",
+		"text": "Confidence"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 84,
+		"tableRow": 17,
+		"tableCol": 7,
+		"mode": "preserve",
+		"text": "-3.487 <0.001*"
 	},
 	{
 		"type": "paragraph",
@@ -723,7 +723,7 @@
 		"tableRow": 17,
 		"tableCol": 3,
 		"mode": "preserve",
-		"text": "Polyp size"
+		"text": "≤5 (mm)"
 	},
 	{
 		"type": "paragraph",
@@ -731,8 +731,8 @@
 		"readingIndex": 86,
 		"tableRow": 17,
 		"tableCol": 4,
-		"mode": "translate",
-		"text": "EID-CT"
+		"mode": "preserve",
+		"text": "2 [1,2]"
 	},
 	{
 		"type": "paragraph",
@@ -741,25 +741,25 @@
 		"tableRow": 17,
 		"tableCol": 5,
 		"mode": "preserve",
-		"text": "PCD-CT"
+		"text": "3 [2,3]"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 88,
-		"tableRow": 17,
-		"tableCol": 6,
+		"tableRow": 18,
+		"tableCol": 7,
 		"mode": "preserve",
-		"text": "Z"
+		"text": "-3.824 <0.001*"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 89,
-		"tableRow": 17,
-		"tableCol": 7,
+		"tableRow": 18,
+		"tableCol": 3,
 		"mode": "preserve",
-		"text": "P value"
+		"text": "69 (mm)"
 	},
 	{
 		"type": "paragraph",
@@ -767,8 +767,8 @@
 		"readingIndex": 90,
 		"tableRow": 18,
 		"tableCol": 4,
-		"mode": "translate",
-		"text": "Confidence"
+		"mode": "preserve",
+		"text": "2 [1,2]"
 	},
 	{
 		"type": "paragraph",
@@ -777,85 +777,13 @@
 		"tableRow": 18,
 		"tableCol": 5,
 		"mode": "preserve",
-		"text": "Confidence"
+		"text": "3 [2,3]"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 92,
 		"tableRow": 19,
-		"tableCol": 7,
-		"mode": "preserve",
-		"text": "-3.487 <0.001*"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 93,
-		"tableRow": 19,
-		"tableCol": 3,
-		"mode": "preserve",
-		"text": "≤5 (mm)"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 94,
-		"tableRow": 19,
-		"tableCol": 4,
-		"mode": "preserve",
-		"text": "2 [1,2]"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 95,
-		"tableRow": 19,
-		"tableCol": 5,
-		"mode": "preserve",
-		"text": "3 [2,3]"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 96,
-		"tableRow": 20,
-		"tableCol": 7,
-		"mode": "preserve",
-		"text": "-3.824 <0.001*"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 97,
-		"tableRow": 20,
-		"tableCol": 3,
-		"mode": "preserve",
-		"text": "69 (mm)"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 98,
-		"tableRow": 20,
-		"tableCol": 4,
-		"mode": "preserve",
-		"text": "2 [1,2]"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 99,
-		"tableRow": 20,
-		"tableCol": 5,
-		"mode": "preserve",
-		"text": "3 [2,3]"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 100,
-		"tableRow": 21,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "≥10 (mm)"
@@ -863,8 +791,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 101,
-		"tableRow": 21,
+		"readingIndex": 93,
+		"tableRow": 19,
 		"tableCol": 4,
 		"mode": "preserve",
 		"text": "3 [2,3]"
@@ -872,8 +800,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 102,
-		"tableRow": 21,
+		"readingIndex": 94,
+		"tableRow": 19,
 		"tableCol": 5,
 		"mode": "preserve",
 		"text": "3 [3,3]"
@@ -881,8 +809,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 103,
-		"tableRow": 21,
+		"readingIndex": 95,
+		"tableRow": 19,
 		"tableCol": 7,
 		"mode": "preserve",
 		"text": "-0.922 0.285"
@@ -890,25 +818,25 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 104,
+		"readingIndex": 96,
 		"text": "EID-CT Energy integrating detector CT, P"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 105,
+		"readingIndex": 97,
 		"text": "5/28; χ² = 16.258, P <0.001]. Similarly,"
 	},
 	{
 		"type": "caption",
 		"column": 1,
-		"readingIndex": 106,
+		"readingIndex": 98,
 		"text": "Fig. 3). Inter-reader agreement for poly"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 107,
+		"readingIndex": 99,
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "translate",
@@ -917,26 +845,17 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 108,
+		"readingIndex": 100,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "preserve",
-		"text": "≤5 (mm)"
+		"text": "≤5 (mm) EID-CT"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 109,
+		"readingIndex": 101,
 		"tableRow": 3,
-		"tableCol": 0,
-		"mode": "translate",
-		"text": "EID-CT"
-	},
-	{
-		"type": "paragraph",
-		"column": 2,
-		"readingIndex": 110,
-		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "PCD-CT"
@@ -944,8 +863,8 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 111,
-		"tableRow": 5,
+		"readingIndex": 102,
+		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "t"
@@ -953,8 +872,8 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 112,
-		"tableRow": 8,
+		"readingIndex": 103,
+		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "69 (mm)"
@@ -962,8 +881,8 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 113,
-		"tableRow": 9,
+		"readingIndex": 104,
+		"tableRow": 7,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "EID-CT"
@@ -971,8 +890,8 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 114,
-		"tableRow": 10,
+		"readingIndex": 105,
+		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "PCD-CT"
@@ -980,8 +899,8 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 115,
-		"tableRow": 11,
+		"readingIndex": 106,
+		"tableRow": 9,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "t"
@@ -989,8 +908,8 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 116,
-		"tableRow": 14,
+		"readingIndex": 107,
+		"tableRow": 12,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "≥10 (mm)"
@@ -998,8 +917,8 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 117,
-		"tableRow": 15,
+		"readingIndex": 108,
+		"tableRow": 13,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "EID-CT"
@@ -1007,8 +926,8 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 118,
-		"tableRow": 16,
+		"readingIndex": 109,
+		"tableRow": 14,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "PCD-CT"
@@ -1016,8 +935,8 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 119,
-		"tableRow": 17,
+		"readingIndex": 110,
+		"tableRow": 15,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "t"
@@ -1025,13 +944,13 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 120,
+		"readingIndex": 111,
 		"text": "val"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 121,
+		"readingIndex": 112,
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "translate",
@@ -1040,7 +959,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 122,
+		"readingIndex": 113,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -1049,7 +968,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 123,
+		"readingIndex": 114,
 		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -1058,8 +977,8 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 124,
-		"tableRow": 7,
+		"readingIndex": 115,
+		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "≥10 (mm)"
@@ -1067,25 +986,25 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 125,
+		"readingIndex": 116,
 		"text": "detector CT"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 126,
+		"readingIndex": 117,
 		"text": "2"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 127,
+		"readingIndex": 118,
 		"text": "confidence"
 	},
 	{
 		"type": "title",
 		"column": 2,
-		"readingIndex": 128,
+		"readingIndex": 119,
 		"text": "1 3"
 	}
 ]

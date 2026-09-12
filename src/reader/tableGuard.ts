@@ -556,7 +556,22 @@ export function detectTableRegions(
 						const centre = item.box.top + item.box.height / 2;
 						const inLeftGutter = (item.box.left + item.box.width) <= region.left + em && gapLeft >= -em;
 						const alignsNumericRow = numericRowCentres.some(y => Math.abs(y - centre) <= em * 0.6);
-						rowAligned = nearSide || (inLeftGutter && alignsNumericRow);
+						// (c2) 2.12.3 成列的行对齐短块: nearSide 的 2em 够不到宽栏沟。
+						// 真机证据(用户截图 2 的 Table 2 结构): 三列表的第三列(缩写)
+						// 距数值区右沿 3.3em,整列 6 个块全部落在表外 —— 它们随后被当
+						// 普通段落各自摆放,与自己那一行再无关系。
+						//
+						// 但不是把 2em 调大 —— 那会顺手吞掉邻栏正文。判据换成"**整列**
+						// 都对齐表格行":本块对齐某个数值行中心,且**另有 ≥2 个 x 范围
+						// 与它相同的块**也各自对齐表格行。一列短块条条落在表格行上,
+						// 那就是表格列,与栏沟多宽无关;邻栏正文的行不会条条对齐。
+						const columnMates = alignsNumericRow
+							? items.filter(o => o !== item
+								&& Math.abs(o.box.left - item.box.left) <= em
+								&& Math.abs(o.box.width - item.box.width) <= em * 3
+								&& numericRowCentres.some(y => Math.abs(y - (o.box.top + o.box.height / 2)) <= em * 0.6)).length
+							: 0;
+						rowAligned = nearSide || (inLeftGutter && alignsNumericRow) || columnMates >= 2;
 						if (rowAligned && crossesGutter(region, item.box)) {
 							rowAligned = false; // 2.7.8: 不跨已确认的正文栏间隔
 						}
@@ -582,11 +597,31 @@ export function detectTableRegions(
 						&& centreX >= region.left - em && centreX <= region.left + region.width + em
 						&& !rowMateBlocks;
 				}
+				// (e) 2.12.3 尾行折行: 末行的格若折了行,第二行落在区域底沿【之下】
+				// —— 上面每一条规则要么要求纵向重叠 (rowAligned)、要么在区域上方
+				// (headerAbove),都够不着它,于是它掉到表外单独摆放,与自己那一行
+				// 再无关系。判据收得很紧:紧贴底沿 (≤1em)、横向完全落在区域内、
+				// **窄于区域的一半** (表后的正文首行是整幅宽,进不来)、不是长散文、
+				// 不是脚注/表标题、且同高没有别的块 (那会是新的一行而不是折行)。
+				let tailWrap = false;
+				if (!inside && !rowAligned && !headerAbove && !sweepContinuation && trimmed.length <= 60
+					&& !isTableCaptionAnchor(trimmed, item.type)
+					&& !/^(note|notes)\s*[.:—–-]/i.test(trimmed) && !/^注[.:：]/.test(trimmed)) {
+					const gapBelow = item.box.top - (region.top + region.height);
+					const withinX = item.box.left >= region.left - em * 0.5
+						&& item.box.left + item.box.width <= region.left + region.width + em * 0.5;
+					// 0.7:表后的正文首行是**整幅**宽 (≈1.0),而最宽的那一列
+					// (三列表的标题列) 也就占区域的一半上下 —— 0.5 会把它一起挡掉。
+					const narrow = item.box.width <= region.width * 0.7;
+					const rowMate = items.some(o => o !== item && !excluded.has(o.id)
+						&& Math.abs(o.box.top - item.box.top) <= em * 0.3);
+					tailWrap = gapBelow >= -em * 0.3 && gapBelow <= em && withinX && narrow && !rowMate;
+				}
 				if ((rowAligned || headerAbove) && item.box.top < ceiling) {
 					rowAligned = false;
 					headerAbove = false;
 				}
-				if (inside || rowAligned || headerAbove) {
+				if (inside || rowAligned || headerAbove || tailWrap) {
 					excluded.add(item.id);
 					const next = grow(region, item.box);
 					if (next.width !== region.width || next.height !== region.height) {

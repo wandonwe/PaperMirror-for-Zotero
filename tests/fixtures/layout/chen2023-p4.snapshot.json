@@ -92,8 +92,8 @@
 		"readingIndex": 10,
 		"tableRow": 5,
 		"tableCol": 0,
-		"mode": "preserve",
-		"text": "BMI (kg/m2)*"
+		"mode": "translate",
+		"text": "BMI (kg/m2)* Risk factor"
 	},
 	{
 		"type": "paragraph",
@@ -111,22 +111,13 @@
 		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Risk factor"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 13,
-		"tableRow": 7,
-		"tableCol": 0,
-		"mode": "translate",
 		"text": "Hypertension"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 14,
-		"tableRow": 7,
+		"readingIndex": 13,
+		"tableRow": 6,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "152 (68)"
@@ -134,8 +125,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 15,
-		"tableRow": 8,
+		"readingIndex": 14,
+		"tableRow": 7,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Diabetes mellitus"
@@ -143,8 +134,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 16,
-		"tableRow": 8,
+		"readingIndex": 15,
+		"tableRow": 7,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "58 (26)"
@@ -152,8 +143,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 17,
-		"tableRow": 9,
+		"readingIndex": 16,
+		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Hypercholesterolemia"
@@ -161,8 +152,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 18,
-		"tableRow": 9,
+		"readingIndex": 17,
+		"tableRow": 8,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "155 (69)"
@@ -170,17 +161,17 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 19,
-		"tableRow": 10,
+		"readingIndex": 18,
+		"tableRow": 9,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Current smoker"
+		"text": "Current smoker Clinical presentation"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 20,
-		"tableRow": 10,
+		"readingIndex": 19,
+		"tableRow": 9,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "79 (35)"
@@ -188,17 +179,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 21,
-		"tableRow": 11,
-		"tableCol": 0,
-		"mode": "translate",
-		"text": "Clinical presentation"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 22,
-		"tableRow": 12,
+		"readingIndex": 20,
+		"tableRow": 10,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "No chest pain"
@@ -206,8 +188,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 23,
-		"tableRow": 12,
+		"readingIndex": 21,
+		"tableRow": 10,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "11 (5)"
@@ -215,8 +197,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 24,
-		"tableRow": 13,
+		"readingIndex": 22,
+		"tableRow": 11,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Stable angina"
@@ -224,8 +206,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 25,
-		"tableRow": 13,
+		"readingIndex": 23,
+		"tableRow": 11,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "45 (20)"
@@ -233,8 +215,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 26,
-		"tableRow": 14,
+		"readingIndex": 24,
+		"tableRow": 12,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Unstable angina"
@@ -242,8 +224,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 27,
-		"tableRow": 14,
+		"readingIndex": 25,
+		"tableRow": 12,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "163 (72)"
@@ -251,8 +233,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 28,
-		"tableRow": 15,
+		"readingIndex": 26,
+		"tableRow": 13,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "NSTEMI"
@@ -260,8 +242,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 29,
-		"tableRow": 15,
+		"readingIndex": 27,
+		"tableRow": 13,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "6 (3)"
@@ -269,8 +251,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 30,
-		"tableRow": 16,
+		"readingIndex": 28,
+		"tableRow": 14,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Stain therapy"
@@ -278,8 +260,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 31,
-		"tableRow": 16,
+		"readingIndex": 29,
+		"tableRow": 14,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "60 (27)"
@@ -287,17 +269,17 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 32,
-		"tableRow": 17,
+		"readingIndex": 30,
+		"tableRow": 15,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Aspirin therapy"
+		"text": "Aspirin therapy Scanner type"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 33,
-		"tableRow": 17,
+		"readingIndex": 31,
+		"tableRow": 15,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "127 (56)"
@@ -305,26 +287,17 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 34,
-		"tableRow": 18,
+		"readingIndex": 32,
+		"tableRow": 16,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Scanner type"
+		"text": "SOMATOM Definition or Force (Siemens Hea"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 35,
-		"tableRow": 19,
-		"tableCol": 0,
-		"mode": "translate",
-		"text": "SOMATOM Definition or"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 36,
-		"tableRow": 19,
+		"readingIndex": 33,
+		"tableRow": 16,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "225 (100)"
@@ -332,26 +305,17 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 37,
-		"tableRow": 20,
+		"readingIndex": 34,
+		"tableRow": 17,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Force (Siemens Healthineers)"
+		"text": "IQon Spectral CT (Philips) Tube voltage"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 38,
-		"tableRow": 21,
-		"tableCol": 0,
-		"mode": "translate",
-		"text": "IQon Spectral CT (Philips)"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 39,
-		"tableRow": 21,
+		"readingIndex": 35,
+		"tableRow": 17,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "0"
@@ -359,17 +323,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 40,
-		"tableRow": 22,
-		"tableCol": 0,
-		"mode": "translate",
-		"text": "Tube voltage"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 41,
-		"tableRow": 23,
+		"readingIndex": 36,
+		"tableRow": 18,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "70–80 kVp"
@@ -377,8 +332,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 42,
-		"tableRow": 23,
+		"readingIndex": 37,
+		"tableRow": 18,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "0 (0)"
@@ -386,8 +341,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 43,
-		"tableRow": 24,
+		"readingIndex": 38,
+		"tableRow": 19,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "100–120 kVp"
@@ -395,8 +350,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 44,
-		"tableRow": 24,
+		"readingIndex": 39,
+		"tableRow": 19,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "225 (100)"
@@ -404,7 +359,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 45,
+		"readingIndex": 40,
 		"tableRow": 0,
 		"tableCol": 2,
 		"mode": "translate",
@@ -413,7 +368,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 46,
+		"readingIndex": 41,
 		"tableRow": 0,
 		"tableCol": 3,
 		"mode": "translate",
@@ -422,7 +377,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 47,
+		"readingIndex": 42,
 		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -431,7 +386,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 48,
+		"readingIndex": 43,
 		"tableRow": 2,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -440,7 +395,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 49,
+		"readingIndex": 44,
 		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -449,7 +404,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 50,
+		"readingIndex": 45,
 		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -458,7 +413,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 51,
+		"readingIndex": 46,
 		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -467,7 +422,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 52,
+		"readingIndex": 47,
 		"tableRow": 4,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -476,7 +431,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 53,
+		"readingIndex": 48,
 		"tableRow": 5,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -485,7 +440,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 54,
+		"readingIndex": 49,
 		"tableRow": 5,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -494,8 +449,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 55,
-		"tableRow": 7,
+		"readingIndex": 50,
+		"tableRow": 6,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "33 (77)"
@@ -503,8 +458,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 56,
-		"tableRow": 7,
+		"readingIndex": 51,
+		"tableRow": 6,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "16 (52)"
@@ -512,8 +467,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 57,
-		"tableRow": 8,
+		"readingIndex": 52,
+		"tableRow": 7,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "14 (33)"
@@ -521,8 +476,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 58,
-		"tableRow": 8,
+		"readingIndex": 53,
+		"tableRow": 7,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "7 (23)"
@@ -530,8 +485,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 59,
-		"tableRow": 9,
+		"readingIndex": 54,
+		"tableRow": 8,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "17 (40)"
@@ -539,8 +494,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 60,
-		"tableRow": 9,
+		"readingIndex": 55,
+		"tableRow": 8,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "10 (32)"
@@ -548,8 +503,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 61,
-		"tableRow": 10,
+		"readingIndex": 56,
+		"tableRow": 9,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "18 (42)"
@@ -557,8 +512,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 62,
-		"tableRow": 10,
+		"readingIndex": 57,
+		"tableRow": 9,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "11 (36)"
@@ -566,8 +521,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 63,
-		"tableRow": 12,
+		"readingIndex": 58,
+		"tableRow": 10,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "3 (7)"
@@ -575,8 +530,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 64,
-		"tableRow": 12,
+		"readingIndex": 59,
+		"tableRow": 10,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "14 (45)"
@@ -584,8 +539,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 65,
-		"tableRow": 13,
+		"readingIndex": 60,
+		"tableRow": 11,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "6 (14)"
@@ -593,8 +548,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 66,
-		"tableRow": 13,
+		"readingIndex": 61,
+		"tableRow": 11,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "7 (23)"
@@ -602,8 +557,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 67,
-		"tableRow": 14,
+		"readingIndex": 62,
+		"tableRow": 12,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "31 (72)"
@@ -611,8 +566,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 68,
-		"tableRow": 14,
+		"readingIndex": 63,
+		"tableRow": 12,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "9 (29)"
@@ -620,8 +575,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 69,
-		"tableRow": 15,
+		"readingIndex": 64,
+		"tableRow": 13,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "3 (7)"
@@ -629,8 +584,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 70,
-		"tableRow": 15,
+		"readingIndex": 65,
+		"tableRow": 13,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "1 (3)"
@@ -638,8 +593,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 71,
-		"tableRow": 16,
+		"readingIndex": 66,
+		"tableRow": 14,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "39 (91)"
@@ -647,8 +602,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 72,
-		"tableRow": 16,
+		"readingIndex": 67,
+		"tableRow": 14,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "8 (26)"
@@ -656,8 +611,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 73,
-		"tableRow": 17,
+		"readingIndex": 68,
+		"tableRow": 15,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "41 (95)"
@@ -665,8 +620,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 74,
-		"tableRow": 17,
+		"readingIndex": 69,
+		"tableRow": 15,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "8 (26)"
@@ -674,8 +629,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 75,
-		"tableRow": 19,
+		"readingIndex": 70,
+		"tableRow": 16,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "43 (100)"
@@ -683,8 +638,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 76,
-		"tableRow": 19,
+		"readingIndex": 71,
+		"tableRow": 16,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "29 (94)"
@@ -692,8 +647,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 77,
-		"tableRow": 21,
+		"readingIndex": 72,
+		"tableRow": 17,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "0"
@@ -701,8 +656,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 78,
-		"tableRow": 21,
+		"readingIndex": 73,
+		"tableRow": 17,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "2 (7)"
@@ -710,8 +665,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 79,
-		"tableRow": 23,
+		"readingIndex": 74,
+		"tableRow": 18,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "0 (0)"
@@ -719,8 +674,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 80,
-		"tableRow": 23,
+		"readingIndex": 75,
+		"tableRow": 18,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "17 (55)"
@@ -728,8 +683,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 81,
-		"tableRow": 24,
+		"readingIndex": 76,
+		"tableRow": 19,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "43 (100)"
@@ -737,8 +692,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 82,
-		"tableRow": 24,
+		"readingIndex": 77,
+		"tableRow": 19,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "14 (45)"
@@ -746,43 +701,43 @@
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 83,
+		"readingIndex": 78,
 		"text": "Note.—Unless otherwise specified, data a"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 84,
+		"readingIndex": 79,
 		"text": "NSTEMI = non-ST elevation myocardial inf"
 	},
 	{
 		"type": "list",
 		"column": 0,
-		"readingIndex": 85,
+		"readingIndex": 80,
 		"text": "* Data are means ± SDs. † Data in parent"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 86,
+		"readingIndex": 81,
 		"text": "RS development set included 225 patients"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 87,
+		"readingIndex": 82,
 		"text": "Model Development and Validation (Study "
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 88,
+		"readingIndex": 83,
 		"text": "Lesion characteristics.—Of the 419 lesio"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 89,
+		"readingIndex": 84,
 		"text": "correlation coefficient analysis. Three "
 	}
 ]
