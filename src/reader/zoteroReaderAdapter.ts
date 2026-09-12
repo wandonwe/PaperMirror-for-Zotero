@@ -1081,15 +1081,26 @@ export async function getImageRectsPdf(
 ): Promise<[number, number, number, number][] | null> {
 	const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 	try {
-		const win = reader._internalReader?._primaryView?._iframeWindow;
-		const pdfDocument = win?.PDFViewerApplication?.pdfDocument;
+		// 2.12.8: **每一跳都要穿 Xray**。2.9.9 就学过这一课 —— 模块开头写着
+		// "凡是走 JS 对象方法的路都不通,走 DOM 的路都通";能用的
+		// extractFromTextContent 在 window → PDFViewerApplication → pdfDocument
+		// → getPage() 结果 → 内容 每一跳都套了 waive()。这两处取证是 2.9.9
+		// **之前**写的,从未补上。
+		//
+		// 真机 2.12.7 的遥测把它钉死了:edgeSegments 全 0,而新加的
+		// edgeByCode/edgeByShape/edgeSkipped **一个都没出现** —— 压根没走到解析;
+		// gridMs≈55ms 正好是一次 50ms 轮询,即 getPage 之后就退出了。
+		// 这也意味着图片矩形(同样的未 waive 代码)一直静默失效 ——
+		// 它有亮度网格兜底,坏了没人会发现。
+		const win = pdfWindow(reader);
+		const pdfDocument = waive(waive(win?.PDFViewerApplication)?.pdfDocument);
 		if (!pdfDocument?.getPage) {
 			return null;
 		}
 		const got: { page: any; ops: any; failed: boolean } = { page: null, ops: null, failed: false };
 		try {
 			pdfDocument.getPage(pageIndex + 1).then(
-				(p: unknown) => { got.page = p; },
+				(p: unknown) => { got.page = waive(p); },
 				() => { got.failed = true; }
 			);
 		}
@@ -1104,7 +1115,7 @@ export async function getImageRectsPdf(
 		}
 		try {
 			got.page.getOperatorList().then(
-				(o: unknown) => { got.ops = o; },
+				(o: unknown) => { got.ops = waive(o); },
 				() => { got.failed = true; }
 			);
 		}
@@ -1117,7 +1128,7 @@ export async function getImageRectsPdf(
 		if (!got.ops?.fnArray || !got.ops?.argsArray) {
 			return null;
 		}
-		const winOps = (win as { pdfjsLib?: { OPS?: Record<string, number> } } | undefined)?.pdfjsLib?.OPS;
+		const winOps = waive(waive(win)?.pdfjsLib)?.OPS as Record<string, number> | undefined;
 		return imageRectsFromOperatorList(got.ops.fnArray, got.ops.argsArray, winOps ?? {});
 	}
 	catch (e) {
@@ -1137,15 +1148,26 @@ export async function getPageEdgesPdf(
 ): Promise<[number, number, number, number][] | null> {
 	const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 	try {
-		const win = reader._internalReader?._primaryView?._iframeWindow;
-		const pdfDocument = win?.PDFViewerApplication?.pdfDocument;
+		// 2.12.8: **每一跳都要穿 Xray**。2.9.9 就学过这一课 —— 模块开头写着
+		// "凡是走 JS 对象方法的路都不通,走 DOM 的路都通";能用的
+		// extractFromTextContent 在 window → PDFViewerApplication → pdfDocument
+		// → getPage() 结果 → 内容 每一跳都套了 waive()。这两处取证是 2.9.9
+		// **之前**写的,从未补上。
+		//
+		// 真机 2.12.7 的遥测把它钉死了:edgeSegments 全 0,而新加的
+		// edgeByCode/edgeByShape/edgeSkipped **一个都没出现** —— 压根没走到解析;
+		// gridMs≈55ms 正好是一次 50ms 轮询,即 getPage 之后就退出了。
+		// 这也意味着图片矩形(同样的未 waive 代码)一直静默失效 ——
+		// 它有亮度网格兜底,坏了没人会发现。
+		const win = pdfWindow(reader);
+		const pdfDocument = waive(waive(win?.PDFViewerApplication)?.pdfDocument);
 		if (!pdfDocument?.getPage) {
 			return null;
 		}
 		const got: { page: any; ops: any; failed: boolean } = { page: null, ops: null, failed: false };
 		try {
 			pdfDocument.getPage(pageIndex + 1).then(
-				(p: unknown) => { got.page = p; },
+				(p: unknown) => { got.page = waive(p); },
 				() => { got.failed = true; }
 			);
 		}
@@ -1160,7 +1182,7 @@ export async function getPageEdgesPdf(
 		}
 		try {
 			got.page.getOperatorList().then(
-				(o: unknown) => { got.ops = o; },
+				(o: unknown) => { got.ops = waive(o); },
 				() => { got.failed = true; }
 			);
 		}
@@ -1173,7 +1195,7 @@ export async function getPageEdgesPdf(
 		if (!got.ops?.fnArray || !got.ops?.argsArray) {
 			return null;
 		}
-		const winOps = (win as { pdfjsLib?: { OPS?: Record<string, number> } } | undefined)?.pdfjsLib?.OPS;
+		const winOps = waive(waive(win)?.pdfjsLib)?.OPS as Record<string, number> | undefined;
 		// 2.12.7: 取证计数随线段一起交出去 —— 2.12.6 的遥测只告诉我"一条都没取到",
 		// 却说不出为什么。现在能分清"没有绘图指令"、"码认不出靠形状认出来了"、
 		// "子操作映射不平被跳过"这三种情形。
