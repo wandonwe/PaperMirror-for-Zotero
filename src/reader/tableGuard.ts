@@ -565,13 +565,29 @@ export function detectTableRegions(
 						// 都对齐表格行":本块对齐某个数值行中心,且**另有 ≥2 个 x 范围
 						// 与它相同的块**也各自对齐表格行。一列短块条条落在表格行上,
 						// 那就是表格列,与栏沟多宽无关;邻栏正文的行不会条条对齐。
-						const columnMates = alignsNumericRow
-							? items.filter(o => o !== item
-								&& Math.abs(o.box.left - item.box.left) <= em
-								&& Math.abs(o.box.width - item.box.width) <= em * 3
-								&& numericRowCentres.some(y => Math.abs(y - (o.box.top + o.box.height / 2)) <= em * 0.6)).length
-							: 0;
-						rowAligned = nearSide || (inLeftGutter && alignsNumericRow) || columnMates >= 2;
+						// 计【不同】的表格行,不是计块数 —— 一段正文即使碰巧有几行
+						// 落在表格行上,也难以做到"整列各自对上不同的行"。
+						const mateRows = new Set<number>();
+						if (alignsNumericRow) {
+							for (const o of items) {
+								if (o === item) {
+									continue;
+								}
+								if (Math.abs(o.box.left - item.box.left) > em) {
+									continue;
+								}
+								if (Math.abs(o.box.width - item.box.width) > em * 3) {
+									continue;
+								}
+								const oc = o.box.top + o.box.height / 2;
+								const hit = numericRowCentres.findIndex(y => Math.abs(y - oc) <= em * 0.6);
+								if (hit >= 0) {
+									mateRows.add(hit);
+								}
+							}
+						}
+						const columnMates = mateRows.size >= 2;
+						rowAligned = nearSide || (inLeftGutter && alignsNumericRow) || columnMates;
 						if (rowAligned && crossesGutter(region, item.box)) {
 							rowAligned = false; // 2.7.8: 不跨已确认的正文栏间隔
 						}
@@ -603,6 +619,13 @@ export function detectTableRegions(
 				// 再无关系。判据收得很紧:紧贴底沿 (≤1em)、横向完全落在区域内、
 				// **窄于区域的一半** (表后的正文首行是整幅宽,进不来)、不是长散文、
 				// 不是脚注/表标题、且同高没有别的块 (那会是新的一行而不是折行)。
+				// 2.12.3: 这里**不再**卡 trimmed.length —— 长文标签列的折行同样长
+				// (Powers 2019 p4: "A Scientific Statement for Healthcare
+				// Professionals From…" 远超 60 字)。挡住它的后果不是少一行,是
+				// 区域再也长不下去、**表格尾部整段掉出表外**(该页最后两条记录
+				// 就是这样丢的)。这条规则本身的护栏已经够硬: 紧贴底沿 ≤1em、
+				// 横向完全在区域内、窄于区域 70%(表后的整幅宽正文与脚注进不来)、
+				// 同高没有别的块、且不是脚注/表标题。
 				let tailWrap = false;
 				if (!inside && !rowAligned && !headerAbove && !sweepContinuation && trimmed.length <= 60
 					&& !isTableCaptionAnchor(trimmed, item.type)
@@ -615,6 +638,11 @@ export function detectTableRegions(
 					const narrow = item.box.width <= region.width * 0.7;
 					const rowMate = items.some(o => o !== item && !excluded.has(o.id)
 						&& Math.abs(o.box.top - item.box.top) <= em * 0.3);
+					// 折行(同高无邻块)与**新的一行**(同高有邻块,且邻块也在区域
+					// 横向范围内)都要能让区域继续向下长。只认其一的后果是长表
+					// 的尾部整段掉出表外 —— Powers 2019 p4 最后两条记录正是如此。
+					// 两种情形共用同一套护栏,新行另要求那个邻块自己也在区域内,
+					// 免得被表外的孤立行牵着走。
 					tailWrap = gapBelow >= -em * 0.3 && gapBelow <= em && withinX && narrow && !rowMate;
 				}
 				if ((rowAligned || headerAbove) && item.box.top < ceiling) {

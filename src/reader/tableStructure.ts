@@ -18,6 +18,7 @@
  */
 
 import { detectTableRegions, looksTabular } from './tableGuard';
+import { columnOfX, rowOfTop, type BorderGrid } from './tableBorders';
 import type { SourceBlock } from '../types/models';
 
 export interface Box {
@@ -753,4 +754,74 @@ export function structureTableCells(blocks: SourceBlock[], pageIndex: number, em
 	const out = [...blocks.filter(b => !consumed.has(b.id)), ...cells]
 		.sort((a, b) => a.order - b.order || (a.boundingBox?.x ?? 0) - (b.boundingBox?.x ?? 0));
 	return out.map((b, order) => ({ ...b, order }));
+}
+
+/**
+ * 按**边框硬网格**建格 (2.12.4)。
+ *
+ * 边框在的时候,行列不必再从文字几何去猜:线段直接给出列边界与行边界。
+ * 这条路解决的是文字几何**证明分不开**的那一类 —— Powers 2019 p4 的文献
+ * 标题列(每条 79~242 字符)与 wu2026-p6 的正文栏,在每一个文字指标上都要求
+ * 相反的答案,而边框对它们的回答是绝对的:前者被 63 条水平边与 78 条垂直边
+ * 围着,后者周围一条都没有。
+ *
+ * 抽取期与排版期**共用这一个函数**,格 id 才能逐字节一致(这个仓库为
+ * "两端不一致"付过代价)。网格拿不到就返回 null,调用方退回原有路径。
+ */
+export function buildGridTableModel(
+	pageIndex: number,
+	tableIndex: number,
+	grid: BorderGrid,
+	members: CellMember[],
+	evidence?: CellPreserveEvidence
+): TableModel | null {
+	if (grid.columns.length < 2 || grid.rows.length < 2) {
+		return null;
+	}
+	const slots = new Map<string, CellMember[]>();
+	for (const m of members) {
+		// 归属按**文字框中心**判 —— 用左上角会让贴着边界的字跑到邻格。
+		const cx = m.box.left + m.box.width / 2;
+		const cy = m.box.top + m.box.height / 2;
+		const col = columnOfX(grid, cx);
+		const row = rowOfTop(grid, cy);
+		if (col < 0 || row < 0) {
+			continue; // 落在网格外的不强行塞进来
+		}
+		const key = `${row}:${col}`;
+		const list = slots.get(key) ?? [];
+		list.push(m);
+		slots.set(key, list);
+	}
+	if (!slots.size) {
+		return null;
+	}
+	const cells: TableCell[] = [];
+	for (const [key, list] of slots) {
+		const [row, col] = key.split(':').map(Number) as [number, number];
+		const ordered = [...list].sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left);
+		const text = joinCellText(ordered.map(m => m.text));
+		const hasWord = /[A-Za-z一-鿿]{2,}/.test(text);
+		const tinySymbol = text.length <= 4 && !hasWord;
+		const preserveReason = preserveReasonFor(text, evidence);
+		const kind: TableCell['kind'] =
+			!text || !hasWord || tinySymbol || preserveReason ? 'data'
+				: looksTabular(text) || text.length < 3 ? 'data' : 'text';
+		cells.push({
+			id: `page-${pageIndex}-table-${tableIndex}-r${row}-c${col}`,
+			memberIds: ordered.map(m => m.id),
+			// 盒子用**格线**围出来的那一格,不是文字的外接框 —— 译文就该排在
+			// 格子里,而不是排在"原文恰好占了多大"里。
+			box: {
+				left: grid.columns[col]!,
+				top: grid.rows[row]!,
+				width: grid.columns[col + 1]! - grid.columns[col]!,
+				height: grid.rows[row + 1]! - grid.rows[row]!
+			},
+			text, row, col, kind,
+			...(preserveReason ? { preserveReason } : {})
+		});
+	}
+	cells.sort((a, b) => a.row - b.row || a.col - b.col);
+	return { region: grid.region, rowCount: grid.rows.length - 1, colCount: grid.columns.length - 1, cells };
 }

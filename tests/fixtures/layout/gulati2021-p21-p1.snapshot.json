@@ -1,0 +1,326 @@
+[
+	{
+		"type": "table",
+		"column": 0,
+		"readingIndex": 0,
+		"text": "Table 5. Contraindication by Type of Ima"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 1,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Exercise ECG"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 2,
+		"tableRow": 0,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "Stress CMR6"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"tableRow": 1,
+		"tableCol": 3,
+		"mode": "translate",
+		"text": "Reduced GFR (<30 mL/"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 4,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Abnormal ST changes on"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 5,
+		"tableRow": 2,
+		"tableCol": 3,
+		"mode": "preserve",
+		"text": "min/1.73 m2)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 6,
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "resting ECG, digoxin, left"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 7,
+		"text": "bundle branch block, Wolff-"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 8,
+		"text": "Contraindications to vasodi-"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 9,
+		"text": "Parkinson-White pattern,"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 10,
+		"text": "lator administration"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 11,
+		"text": "AND GUIDELINESventricular paced rhythm(u"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 12,
+		"text": "Implanted devices not safe for CMR or pr"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 13,
+		"text": "CLINICAL STATEMENTSestablish exercise ca"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 14,
+		"text": "interpretation"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 15,
+		"text": "ischemia)"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 16,
+		"text": "Significant claustrophobia"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 17,
+		"text": "Unable to achieve ≥5 METs"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 18,
+		"text": "Caffeine use within past"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 19,
+		"text": "or unsafe to exercise"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 20,
+		"text": "12 h"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 21,
+		"text": "High-risk unstable angina or AMI (<2 d) "
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 22,
+		"text": "Severe systemic arterial hypertension (e"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 23,
+		"text": "Acute illness (eg, acute PE, acute myoca"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 24,
+		"text": "For all the imaging modalities, inabilit"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 25,
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Stress Nuclear1*"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 26,
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "High-risk unstable angina,"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 27,
+		"tableRow": 2,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "complicated ACS or AMI"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 28,
+		"text": "(<2 d) Contraindications to vasodilator "
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 29,
+		"tableRow": 0,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "Stress Echocardiography2-5"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 30,
+		"tableRow": 1,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "Limited acoustic windows"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 31,
+		"tableRow": 2,
+		"tableCol": 2,
+		"mode": "translate",
+		"text": "(eg, in COPD patients)"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 32,
+		"text": "Inability to reach target heart rate"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 33,
+		"text": "Uncontrolled heart failure High-risk uns"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 34,
+		"text": "Narrow-angle glaucoma Myasthenia gravis "
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 35,
+		"text": "Severe systemic arterial hypertension (e"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 36,
+		"text": "Use of Contrast Contraindicated in: Hype"
+	},
+	{
+		"type": "paragraph",
+		"column": 3,
+		"readingIndex": 37,
+		"text": "CCTA7* Allergy to iodinated contrast Ina"
+	},
+	{
+		"type": "paragraph",
+		"column": 3,
+		"readingIndex": 38,
+		"text": "Renal impairment as defined by local pro"
+	},
+	{
+		"type": "paragraph",
+		"column": 3,
+		"readingIndex": 39,
+		"text": "Heart rate variability and arrhythmia"
+	},
+	{
+		"type": "paragraph",
+		"column": 3,
+		"readingIndex": 40,
+		"text": "Contraindication to nitroglycerin (if in"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 41,
+		"text": "ACS indicates acute coronary syndrome; A"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 42,
+		"text": "*Screening for potential pregnancy by hi"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 43,
+		"text": "(Section 4.2.2). Myopericarditis is hete"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 44,
+		"text": "e388 November 30, 2021"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 45,
+		"text": "†Low-dose dobutamine may be useful for a"
+	},
+	{
+		"type": "paragraph",
+		"column": 3,
+		"readingIndex": 46,
+		"text": "musculoskeletal, or gastrointestinal cau"
+	},
+	{
+		"type": "title",
+		"column": 3,
+		"readingIndex": 47,
+		"text": "adverse effects of unnecessary investiga"
+	}
+]

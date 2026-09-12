@@ -291,3 +291,83 @@ test('夹具A 已知缺口:无横线、无数值的五列清单目前不被识�
 	assert.equal(cells.length, 0,
 		'若这条开始失败,说明已经能识别这类表了 —— 那是好事,请连同夹具A的断言一起更新');
 });
+
+// ---- 真机边框路径 ---------------------------------------------------------
+
+test('Powers 2019 p4 真机页:按边框建格,标题/年份/缩写各归其行 (2.12.4)', async () => {
+	const { readFileSync } = await import('node:fs');
+	const { buildBlocksFromSpans } = await import('../../src/reader/spanBlockBuilder');
+	const { orderBlocksForReading } = await import('../../src/reader/readingOrder');
+	const { buildGridTableModel, cellPreserveEvidence } = await import('../../src/reader/tableStructure');
+	const { borderGrid } = await import('../../src/reader/tableBorders');
+	const d = JSON.parse(readFileSync('tests/fixtures/layout/powers2019-p4-p1.spans.json', 'utf8'));
+	const e = JSON.parse(readFileSync('tests/fixtures/layout/powers2019-p4-p1.edges.json', 'utf8'));
+	const grid = borderGrid(e.segments, { pageHeight: e.pageHeight })!;
+	const r = buildBlocksFromSpans(d.items, { pageIndex: 0, pageHeight: d.pageHeight, pageWidth: d.pageWidth });
+	const blocks = orderBlocksForReading(r.blocks).filter(b => b.boundingBox);
+	const members = blocks.map(b => ({
+		id: b.id, text: b.sourceText, fontSize: b.fontSize,
+		box: { left: b.boundingBox!.x, top: b.boundingBox!.y, width: b.boundingBox!.width, height: b.boundingBox!.height }
+	}));
+	const model = buildGridTableModel(0, 0, grid, members, cellPreserveEvidence(blocks.map(b => b.sourceText), []))!;
+	assert.ok(model, '这一页画着完整网格');
+	assert.equal(model.colCount, 3);
+	assert.equal(model.rowCount, 18, '1 表头 + 17 条记录');
+
+	// 逐条核对(真值由 pdfplumber 按边框独立切表得到,抄进来作常量)。
+	const expect: [number, string, string][] = [
+		[1, '2009', 'N/A'], [2, '2011', 'N/A'], [3, '2013', '2013 AIS Guidelines'],
+		[4, '2013', '2013 Stroke Systems of Care'], [5, '2014', 'N/A'], [6, '2014', '2014 Brain Swelling'],
+		[7, '2014', '2014 Palliative Care'], [8, '2014', '2014 Secondary Prevention'], [9, '2014', 'N/A'],
+		[10, '2015', '2015 CPR/ECC'], [11, '2015', '2015 Endovascular'], [12, '2015', '2015 IV Alteplase'],
+		[13, '2016', '2016 Rehab Guidelines'], [14, '2017', 'N/A'], [15, '2017', 'N/A']
+	];
+	const at = (row: number, col: number): string =>
+		(model.cells.find(c => c.row === row && c.col === col)?.text ?? '').replace(/\s+/g, ' ').trim();
+	for (const [row, year, abbr] of expect) {
+		assert.equal(at(row, 1), year, `第 ${row} 行的年份`);
+		assert.equal(at(row, 2), abbr, `第 ${row} 行的缩写`);
+		assert.ok(at(row, 0).length > 20, `第 ${row} 行必须有文献标题(实得 "${at(row, 0).slice(0, 30)}")`);
+	}
+	// 每个格的盒子由**格线**围出,不是文字外接框 —— 译文排在格子里。
+	const c = model.cells.find(x => x.row === 1 && x.col === 0)!;
+	assert.ok(Math.abs(c.box.left - grid.columns[0]!) < 0.01 && Math.abs(c.box.width - (grid.columns[1]! - grid.columns[0]!)) < 0.01,
+		'格盒必须等于格线围出的那一格');
+});
+
+test('已知缺口:最后两行的年份在建块阶段就丢了,网格救不回来 (2.12.4 记录在案)', async () => {
+	// 如实记录能力边界:"2018" 这两个 span 在 PDF 里确实存在(top=499/534,
+	// 正落在第 16、17 行带内),但 buildBlocksFromSpans 没把它们产出成块 ——
+	// 网格只能决定"已有的块归哪一格",救不回压根没进来的文字。
+	// 要补,得用网格反过来约束建块(跨格的块必须拆开),那是下一步。
+	const { readFileSync } = await import('node:fs');
+	const d = JSON.parse(readFileSync('tests/fixtures/layout/powers2019-p4-p1.spans.json', 'utf8'));
+	const years = d.items.filter((it: { text: string }) => String(it.text).trim() === '2018');
+	assert.equal(years.length, 2, '原始 span 里确实有两个 2018');
+});
+
+test('按网格建格:归属看文字框中心,不看左上角 (2.12.4)', async () => {
+	const { buildGridTableModel } = await import('../../src/reader/tableStructure');
+	const grid = { columns: [0, 100, 200], rows: [0, 50, 100], region: { left: 0, top: 0, width: 200, height: 100 } };
+	// 这一块的左上角在第 1 列第 1 行,但它的**主体**在第 2 列第 2 行。
+	// 贴着格线起笔的字很常见,按左上角判会让它整格跑到邻格去。
+	const members = [{ id: 'a', box: { left: 98, top: 48, width: 60, height: 30 }, text: 'Body of the cell' }];
+	const model = buildGridTableModel(0, 0, grid, members)!;
+	assert.equal(model.cells.length, 1);
+	assert.equal(model.cells[0]!.row, 1, '应按中心落在第 2 行');
+	assert.equal(model.cells[0]!.col, 1, '应按中心落在第 2 列');
+});
+
+test('按网格建格:落在网格外的块不得被强行塞进表里 (2.12.4)', async () => {
+	const { buildGridTableModel } = await import('../../src/reader/tableStructure');
+	const grid = { columns: [0, 100, 200], rows: [0, 50, 100], region: { left: 0, top: 0, width: 200, height: 100 } };
+	const members = [
+		{ id: 'in', box: { left: 10, top: 10, width: 60, height: 20 }, text: 'Inside the grid' },
+		// 表外的正文块:x 在网格右边很远。强行塞进来就等于把正文冻进表格。
+		{ id: 'out', box: { left: 400, top: 10, width: 120, height: 20 }, text: 'Body prose outside' }
+	];
+	const model = buildGridTableModel(0, 0, grid, members)!;
+	assert.equal(model.cells.length, 1, '只应产出网格内那一个格');
+	assert.deepEqual(model.cells[0]!.memberIds, ['in']);
+	assert.ok(!model.cells.some(c => c.text.includes('outside')), '表外的正文绝不能进格');
+});
