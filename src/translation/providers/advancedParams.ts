@@ -29,6 +29,52 @@ export type ReasoningLevel = '' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh
  *  handles 深度思考 via thinkingConfig in its own adapter (geminiNative). */
 const REASONING_EFFORT_PROVIDERS = new Set(['openai', 'openrouter']);
 
+/**
+ * DeepSeek 的思考模式 (2.12.1, 真机第十三轮)。
+ *
+ * ## 证据
+ *
+ * 同一篇论文、同一个翻译任务,按服务商拆开算输出 token:
+ *
+ *   | 服务商   | 出 tok / 原文字符 | 出 tok / 入 tok |
+ *   |----------|-------------------|-----------------|
+ *   | deepseek | **6.71**          | **5.92**        |
+ *   | openai   | 0.56              | 0.40            |
+ *   | gemini   | 0.44              | 0.60            |
+ *
+ * 24661 字原文吐了 **165385 个输出 token** —— 中文译文本身大约只值 10000。
+ * 它在生成约 16 倍于译文的内容,而那些内容全部被丢弃(我们只取最终答案)。
+ * 实测吞吐因此只有 65 字符/秒,是 openai 的 1/5、google-free 的 1/100;
+ * 单个请求中位 22 秒、最长 73 秒。**不是网络慢,是在思考。**
+ *
+ * ## 根因
+ *
+ * DeepSeek 官方文档:「Thinking mode is enabled by default, with the default
+ * effort being `high`」。而 `REASONING_EFFORT_PROVIDERS` 只含 openai /
+ * openrouter —— 我们**从来没给 deepseek 发过任何思考相关的参数**,于是一直
+ * 吃着 high 强度的默认思考。
+ *
+ * 同一份文档还说明:thinking 模式下 `temperature` **无效**。也就是我们给
+ * deepseek 发的 `temperature: 0`(翻译要确定性)一直被忽略 —— 关掉思考之后
+ * 它才真的生效。
+ *
+ * ## 取舍
+ *
+ * 翻译不需要思维链:我们只要最终译文,推理过程读都不读。默认关掉。
+ * 用户在高级设置里显式要了思考强度,就按他要的发 —— 那是他的决定。
+ */
+const THINKING_OBJECT_PROVIDERS = new Set(['deepseek']);
+
+/** 我们的强度阶梯 → DeepSeek 的 none/low/high/max。 */
+function deepseekEffort(level: ReasoningLevel): string | null {
+	switch (level) {
+		case 'minimal': case 'low': return 'low';
+		case 'medium': case 'high': return 'high';
+		case 'xhigh': return 'max';
+		default: return null; // '' / disabled / auto → 不开思考
+	}
+}
+
 /** Providers where a DEFAULT temperature 0 is safe (translation-stable).
  *  Excluded: 'openai' (gpt-5.x reasoning models accept only the default
  *  temperature) and 'openrouter' (auto-routing may land on such a model).
@@ -67,13 +113,20 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
 		// 深度思考 vocabulary (disabled/auto) never leaves the native adapter.
 		out.reasoning_effort = eff;
 	}
+	if (THINKING_OBJECT_PROVIDERS.has(providerId)) {
+		// 默认关闭(见 THINKING_OBJECT_PROVIDERS 上方的证据):翻译只要最终译文,
+		// 而它默认按 high 强度思考,输出 token 是译文的十几倍。
+		const level = deepseekEffort(eff);
+		out.thinking = level ? { type: 'enabled', reasoning_effort: level } : { type: 'disabled' };
+	}
 	return out;
 }
 
 /** True when this provider's UI should offer reasoning/thinking control.
  *  (Gemini qualifies via its native thinkingConfig, not reasoning_effort.) */
 export function supportsReasoningControl(providerId: string): boolean {
-	return REASONING_EFFORT_PROVIDERS.has(providerId) || providerId === 'anthropic' || providerId === 'gemini';
+	return REASONING_EFFORT_PROVIDERS.has(providerId) || THINKING_OBJECT_PROVIDERS.has(providerId)
+		|| providerId === 'anthropic' || providerId === 'gemini';
 }
 
 /**

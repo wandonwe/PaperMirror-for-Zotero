@@ -101,9 +101,19 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 	deepseek: {
 		checked: CHECKED,
 		source: 'https://api-docs.deepseek.com/api/list-models',
+		// 2.12.1 核对官方变更日志 (api-docs.deepseek.com/updates, 2026-09-10):
+		// 当前名是 `deepseek-flash`(V4.1 Flash);`deepseek-v4-flash` 暂时路由
+		// 过去,所以老配置不会立刻坏,但它是过渡名。`deepseek-v4-pro` 在
+		// **2026-09-14 之后**也会被路由到 V4.1 Flash —— 选它已经拿不到 Pro,
+		// 因此降为 legacy,不再标 quality 误导用户。
+		//
+		// 注意:这两个型号**默认开启思考、默认强度 high**。翻译用不上思维链,
+		// advancedParams 里默认发 `thinking: {type:'disabled'}` 关掉它;
+		// 用户在高级设置里显式要了强度才开。
 		models: [
-			{ id: 'deepseek-v4-flash', group: 'recommended', recommended: true },
-			{ id: 'deepseek-v4-pro', group: 'quality' }
+			{ id: 'deepseek-flash', group: 'recommended', recommended: true },
+			{ id: 'deepseek-v4-flash', group: 'legacy' },
+			{ id: 'deepseek-v4-pro', group: 'legacy' }
 		]
 	},
 	moonshot: {
