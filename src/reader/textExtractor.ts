@@ -133,6 +133,16 @@ export interface ExtractPhases {
 	 */
 	/** 这一页取到的线段数;0 = 没有绘图证据(或取数失败)。 */
 	edgeSegments?: number;
+	/** 操作符总数 —— 0 说明压根没拿到绘图指令,与"拿到了但认不出"是两回事。 */
+	edgeOps?: number;
+	/** 按操作符码认出的路径数。 */
+	edgeByCode?: number;
+	/** 码认不出、靠参数形状认出来的路径数 —— >0 说明内置码表与运行时不一致。 */
+	edgeByShape?: number;
+	/** 子操作映射不平而被跳过的路径数 —— >0 说明子操作码也对不上。 */
+	edgeSkipped?: number;
+	/** 是否拿到了运行时真实的 OPS 表(false = 用的内置默认码)。 */
+	edgeRealOps?: boolean;
 	/** 推出的列数(边界数 - 1);-1 = 推不出网格。 */
 	gridCols?: number;
 	/** 推出的行数(边界数 - 1);-1 = 推不出网格。 */
@@ -355,6 +365,14 @@ export class TextExtractor implements PageParser {
 		if (phases) {
 			phases.gridMs = (phases.gridMs ?? 0) + (Date.now() - started);
 			phases.edgeSegments = segCount;
+			const scan = adapter.lastEdgeScanStats();
+			if (scan) {
+				phases.edgeOps = scan.ops;
+				phases.edgeByCode = scan.byCode;
+				phases.edgeByShape = scan.byShape;
+				phases.edgeSkipped = scan.skipped;
+				phases.edgeRealOps = scan.realOps;
+			}
 			phases.gridCols = grid ? grid.columns.length - 1 : -1;
 			phases.gridRows = grid ? grid.rows.length - 1 : -1;
 			if (grid) {
