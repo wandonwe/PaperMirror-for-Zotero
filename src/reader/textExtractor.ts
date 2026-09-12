@@ -143,6 +143,12 @@ export interface ExtractPhases {
 	edgeSkipped?: number;
 	/** 是否拿到了运行时真实的 OPS 表(false = 用的内置默认码)。 */
 	edgeRealOps?: boolean;
+	/**
+	 * 2.12.8: 这一页取到的**图片矩形**数。同样是"从未被观测过"的东西 ——
+	 * getImageRectsPdf 与边框取证是同一段未 waive 的代码,极可能一直静默返回
+	 * 空数组,图表屏障一路靠亮度网格兜底。补上 waive 之后这个数应该从 0 变正。
+	 */
+	imageRects?: number;
 	/** 推出的列数(边界数 - 1);-1 = 推不出网格。 */
 	gridCols?: number;
 	/** 推出的行数(边界数 - 1);-1 = 推不出网格。 */
@@ -333,6 +339,10 @@ export class TextExtractor implements PageParser {
 			// best-effort: no obstacles = old behavior
 		}
 		this.imageRects.set(pageIndex, rects);
+		const phases = this.phasesByPage.get(pageIndex);
+		if (phases) {
+			phases.imageRects = rects.length;
+		}
 		return rects;
 	}
 

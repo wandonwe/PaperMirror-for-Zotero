@@ -7,6 +7,66 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.12.8] — 2026-09-12
+
+**根因找到了,而且是我自己抄来的老病:边框取证从来没穿过 Xray。**
+
+### 遥测怎么指出来的
+
+2.12.7 加的计数**一个都没出现**(`edgeByCode`/`edgeByShape`/`edgeSkipped` 全缺),
+只有 `edgeSegments: 0` 和 `gridMs ≈ 55ms` 在:
+
+    压根没走到解析那一步 —— 55ms 正好是**一次 50ms 轮询**,
+    即 `getPage()` 之后、`getOperatorList()` 之前就 return null 了。
+
+### 是什么
+
+Firefox/Zotero 里 chrome 代码看 content 侧的 **JS 对象方法**会被 Xray 挡住,
+`wrappedJSObject`(本仓库的 `waive()`)是唯一的穿越办法。
+
+这个仓库**在 2.9.9 就学过这一课** —— 模块开头写着"凡是走 JS 对象方法的路都不通,
+走 DOM 的路都通",能用的 `extractFromTextContent` 在 window →
+PDFViewerApplication → pdfDocument → `getPage()` 结果 → 内容 **每一跳**都套了
+`waive()`。
+
+而 2.12.4 我新写 `getPageEdgesPdf` 时**从 `getImageRectsPdf` 抄的代码** ——
+后者是 2.9.9 **之前**写的、从未补上 waive。于是 `pdfDocument.getPage` 看得见,
+它**返回的 page 代理**上的 `getOperatorList` 被挡住,连着四个版本
+(2.12.4~2.12.7)一条线段都没取到。
+
+**顺带一个发现**:`getImageRectsPdf` 是同一段未 waive 的代码,所以图片矩形
+**极可能从一开始就静默返回空数组** —— 图表屏障一路靠亮度网格兜底,坏了没人会发现。
+两处都补上了,并加了 `imageRects` 遥测:下一份导出这个数应该从 0 变正。
+
+### 我这几轮错在哪
+
+- 2.12.5:把一个看不见的东西接进主路径(跳过了"先量")。
+- 2.12.6:把 p21 的 3 个格归给网格 —— 而**网格从未运行过**,肇事者根本不在场。
+- 2.12.7:去修操作符码,而真正卡住的是更前面一跳。
+
+三次都是同一个毛病:**手上没有运行时的数就先下结论**。补上遥测之后,
+2.12.7 的数据一眼就把位置指对了。
+
+### 加了一条结构闸
+
+单元测试碰不到真机的 Xray,所以锁**源码形态**:凡是走 operator list 的取证函数,
+window / PDFViewerApplication / pdfDocument / `getPage()` 结果 /
+`getOperatorList()` 结果 / OPS 表 —— 每一跳都必须穿过 `waive()`。
+抄代码的人下次会被这条拦住,而不是等四个版本之后才发现。
+
+5 处变异逐条验证全部转红(其中一条正是"page 代理不 waive" —— 栽了四个版本的
+那一跳)。
+
+### 网格仍然只观测
+
+`useGrid` 仍默认 false。下一份导出先对答案:`edgeSegments` 该非零、
+Powers p4 该是 3 列 18 行、Gulati p21 该是 5 列、区域 x50..535 y52..529。
+对上了再谈接进建格。
+
+### 测试
+
+新增 3 条(两个取证函数的逐跳 waive + waive 本身的退回保证),共 1255 条全绿。
+
 ## [2.12.7] — 2026-09-12
 
 尺子装上了,答案一眼就出来了 —— 而且**又更正我上一轮的判断**。
