@@ -393,7 +393,7 @@ test('接线后的真机页:边框网格接管,Document Title 列回到表里 (2
 	assert.equal(colsWithout.size, 2, `不给网格时应仍是 2 列(实得 ${colsWithout.size})—— 这条锁住"问题确实存在"`);
 
 	// 给网格 = 边框接管。
-	const cells = structureTableCells(blocks, 0, 9, [], grid).filter(b => b.translationMode !== undefined);
+	const cells = structureTableCells(blocks, 0, 9, [], grid, true).filter(b => b.translationMode !== undefined);
 	const rows = new Map<number, Map<number, string>>();
 	for (const b of cells) {
 		const m = /-r(\d+)-c(\d+)/.exec(b.id);
@@ -453,7 +453,7 @@ test('接线的四条约束:阈值、剩余块、格盒来源、data 保留原�
 	const grid = borderGrid(e.segments, { pageHeight: e.pageHeight })!;
 	const r = buildBlocksFromSpans(d.items, { pageIndex: 0, pageHeight: d.pageHeight, pageWidth: d.pageWidth });
 	const blocks = orderBlocksForReading(r.blocks);
-	const out = structureTableCells(blocks, 0, 9, [], grid);
+	const out = structureTableCells(blocks, 0, 9, [], grid, true);
 	const cells = out.filter(b => b.translationMode !== undefined);
 
 	// (a) 格盒必须来自**格线**,不是文字外接框 —— 译文排在格子里。
@@ -476,7 +476,7 @@ test('接线的四条约束:阈值、剩余块、格盒来源、data 保留原�
 
 	// (d) 网格里块太少就不算表 —— 一条装饰线框住半句话不能变成表格。
 	const sparse = blocks.filter(b => (b.boundingBox?.y ?? 0) < 100).slice(0, 3);
-	const sparseOut = structureTableCells(sparse, 0, 9, [], grid);
+	const sparseOut = structureTableCells(sparse, 0, 9, [], grid, true);
 	assert.ok(!sparseOut.some(b => /-r\d+-c\d+/.test(b.id)),
 		'网格内只有寥寥几个块时不得建表');
 });
@@ -502,7 +502,7 @@ test('接线不丢内容,且网格之外的表仍由文字几何接手 (2.12.5)'
 	}
 	const all = [...blocks, ...extra];
 	all.forEach((b, i) => { b.order = i; });
-	const out = structureTableCells(all, 0, 9, [], grid);
+	const out = structureTableCells(all, 0, 9, [], grid, true);
 
 	// (a) 内容守恒:每一个输入块的文字都必须仍能在输出里找到。
 	const joined = out.map(b => b.sourceText.replace(/\s+/g, ' ')).join(' ⟂ ');
@@ -517,4 +517,27 @@ test('接线不丢内容,且网格之外的表仍由文字几何接手 (2.12.5)'
 	assert.ok(outsideCells.length >= 4,
 		`网格外的表也要成格,实得 ${outsideCells.length} 个 —— 剩余块没有走文字几何那条路`);
 	assert.ok(outsideCells.some(b => b.sourceText.includes('Mortality')), '网格外表的行标签必须在格里');
+});
+
+test('网格默认不参与建格 —— 必须显式打开 (2.12.6)', async () => {
+	// 2.12.5 把网格接进了建格却没有任何遥测,真机上一页只剩 3 个格时拿不出
+	// 证据说明运行时算的是什么网格。现在默认只观测:传了网格但不传 useGrid,
+	// 输出必须与压根不传网格**逐字节相同**。
+	const { readFileSync } = await import('node:fs');
+	const { buildBlocksFromSpans } = await import('../../src/reader/spanBlockBuilder');
+	const { orderBlocksForReading } = await import('../../src/reader/readingOrder');
+	const { structureTableCells } = await import('../../src/reader/tableStructure');
+	const { borderGrid } = await import('../../src/reader/tableBorders');
+	const d = JSON.parse(readFileSync('tests/fixtures/layout/powers2019-p4-p1.spans.json', 'utf8'));
+	const e = JSON.parse(readFileSync('tests/fixtures/layout/powers2019-p4-p1.edges.json', 'utf8'));
+	const grid = borderGrid(e.segments, { pageHeight: e.pageHeight })!;
+	const r = buildBlocksFromSpans(d.items, { pageIndex: 0, pageHeight: d.pageHeight, pageWidth: d.pageWidth });
+	const blocks = orderBlocksForReading(r.blocks);
+	const off = structureTableCells(blocks, 0, 9, [], grid);
+	const none = structureTableCells(blocks, 0, 9);
+	assert.deepEqual(off.map(b => b.id), none.map(b => b.id), '默认不开时必须与不传网格完全一致');
+	// 而显式打开时,它确实会接管(3 列)。
+	const on = structureTableCells(blocks, 0, 9, [], grid, true).filter(b => b.translationMode !== undefined);
+	const cols = new Set(on.map(b => /-c(\d+)$/.exec(b.id)?.[1]));
+	assert.equal(cols.size, 3, '显式打开时边框接管,给出 3 列');
 });

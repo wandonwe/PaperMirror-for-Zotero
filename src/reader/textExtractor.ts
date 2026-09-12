@@ -25,7 +25,7 @@ import * as logger from '../utils/logger';
 import { buildBlocks, buildBlocksFromPlainText, medianFontSize } from './blockBuilder';
 import { buildBlocksFromSpans } from './spanBlockBuilder';
 import { coalesceRegions } from './regionCoalescer';
-import { borderGrid, type BorderGrid } from './tableBorders';
+import { borderGrid, columnOfX, rowOfTop, type BorderGrid } from './tableBorders';
 import { orderBlocksForReading } from './readingOrder';
 import { structureTableCells } from './tableStructure';
 import * as adapter from './zoteroReaderAdapter';
@@ -126,6 +126,23 @@ export interface ExtractInputs {
  */
 export interface ExtractPhases {
 	obstaclesMs: number;
+	/**
+	 * 2.12.6 边框取证的可观测性。上一版把网格接进了建格却**没有任何遥测**,
+	 * 真机上一页只剩 3 个格时我拿不出证据说明运行时到底算出了什么网格 ——
+	 * 于是这一版把网格降回"只观测、不参与建格",先把这几个数导出来。
+	 */
+	/** 这一页取到的线段数;0 = 没有绘图证据(或取数失败)。 */
+	edgeSegments?: number;
+	/** 推出的列数(边界数 - 1);-1 = 推不出网格。 */
+	gridCols?: number;
+	/** 推出的行数(边界数 - 1);-1 = 推不出网格。 */
+	gridRows?: number;
+	/** 网格外框,四舍五入到整点: [left, top, right, bottom]。 */
+	gridRegion?: [number, number, number, number];
+	/** 落在网格内的块数 —— 与总块数一起看才知道网格是不是套对了地方。 */
+	gridInside?: number;
+	/** 取网格耗时。 */
+	gridMs?: number;
 	charsPathMs: number;
 	/** 2.9.7: 标准 PDF.js `getTextContent()` 整趟 —— 不依赖渲染的那条路。 */
 	textContentMs?: number;
@@ -321,15 +338,31 @@ export class TextExtractor implements PageParser {
 		if (cached !== undefined) {
 			return cached;
 		}
+		const started = Date.now();
 		let grid: BorderGrid | null = null;
+		let segCount = 0;
 		try {
 			const segs = await withTimeout(adapter.getPageEdgesPdf(this.reader, pageIndex), 3000, 'getPageEdgesPdf');
+			segCount = segs?.length ?? 0;
 			if (segs && segs.length) {
 				grid = borderGrid(segs, { pageHeight });
 			}
 		}
 		catch {
 			// best-effort: 没有边框证据 = 老行为
+		}
+		const phases = this.phasesByPage.get(pageIndex);
+		if (phases) {
+			phases.gridMs = (phases.gridMs ?? 0) + (Date.now() - started);
+			phases.edgeSegments = segCount;
+			phases.gridCols = grid ? grid.columns.length - 1 : -1;
+			phases.gridRows = grid ? grid.rows.length - 1 : -1;
+			if (grid) {
+				phases.gridRegion = [
+					Math.round(grid.region.left), Math.round(grid.region.top),
+					Math.round(grid.region.left + grid.region.width), Math.round(grid.region.top + grid.region.height)
+				];
+			}
 		}
 		this.borderGrids.set(pageIndex, grid);
 		return grid;
@@ -629,6 +662,17 @@ export class TextExtractor implements PageParser {
 		// Rebuild semantic regions from whatever fragments extraction
 		// produced: whole regions translate as whole sentences.
 		const sourceBlockCount = result.blocks.length;
+		if (grid) {
+			const phases2 = this.phasesByPage.get(pageIndex);
+			if (phases2) {
+				phases2.gridInside = result.blocks.filter(b => {
+					if (!b.boundingBox) { return false; }
+					const cx = b.boundingBox.x + b.boundingBox.width / 2;
+					const cy = b.boundingBox.y + b.boundingBox.height / 2;
+					return columnOfX(grid, cx) >= 0 && rowOfTop(grid, cy) >= 0;
+				}).length;
+			}
+		}
 		const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), grid);
 		const tableCells = structured.filter(b => b.translationMode !== undefined);
 		const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);

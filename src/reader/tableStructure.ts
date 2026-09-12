@@ -676,7 +676,19 @@ export function structureTableCells(
 	pageIndex: number,
 	em: number,
 	noTranslate: string[] = [],
-	grid?: BorderGrid | null
+	grid?: BorderGrid | null,
+	/**
+	 * 2.12.6: 网格默认**只观测、不建格**。
+	 *
+	 * 2.12.5 把它接进了建格,但真机上 Gulati p21(五列禁忌症表)只剩 3 个格、
+	 * 全挤在 c0 —— 而同一份 PDF 离线推出的网格是 5 列 4 行。运行时算出了什么,
+	 * 当时**一个字节的遥测都没有**,我只能猜。
+	 *
+	 * 所以先把这条路降回观测:网格照常计算并随诊断导出(ExtractPhases 的
+	 * edgeSegments/gridCols/gridRows/gridRegion/gridInside),等真机数据证明
+	 * 运行时的网格与离线一致,再把 useGrid 打开。**不拿用户的阅读体验去试。**
+	 */
+	useGrid = false
 ): SourceBlock[] {
 	const originalById = new Map(blocks.map(block => [block.id, block]));
 	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox);
@@ -695,7 +707,7 @@ export function structureTableCells(
 	// 逐字节一致 —— 绝大多数页面本来就没有表格线。
 	const gridConsumed = new Set<string>();
 	const gridCells: SourceBlock[] = [];
-	if (grid) {
+	if (grid && useGrid) {
 		const inGrid = geometric.filter(b => {
 			const cx = b.boundingBox.x + b.boundingBox.width / 2;
 			const cy = b.boundingBox.y + b.boundingBox.height / 2;
