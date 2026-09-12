@@ -31,7 +31,18 @@ import type { PageData } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
 import { imageRectsFromOperatorList } from './imageObstacles';
-import { segmentsFromOperatorList } from './tableBorders';
+import { segmentsFromOperatorList, type SegmentScanStats } from './tableBorders';
+
+/**
+ * 最近一次取线段的计数 (2.12.7)。模块级单值 —— 取数是逐页串行的,调用方
+ * 紧接着读走;它只进诊断导出,不参与任何判断。
+ */
+let lastSegmentScan: SegmentScanStats | null = null;
+
+/** 读走最近一次取线段的计数(读后不清,重复读到同一份)。 */
+export function lastEdgeScanStats(): SegmentScanStats | null {
+	return lastSegmentScan;
+}
 
 const MODULE = 'readerAdapter';
 
@@ -1163,7 +1174,13 @@ export async function getPageEdgesPdf(
 			return null;
 		}
 		const winOps = (win as { pdfjsLib?: { OPS?: Record<string, number> } } | undefined)?.pdfjsLib?.OPS;
-		return segmentsFromOperatorList(got.ops.fnArray, got.ops.argsArray, winOps ?? {});
+		// 2.12.7: 取证计数随线段一起交出去 —— 2.12.6 的遥测只告诉我"一条都没取到",
+		// 却说不出为什么。现在能分清"没有绘图指令"、"码认不出靠形状认出来了"、
+		// "子操作映射不平被跳过"这三种情形。
+		const stats: SegmentScanStats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+		const segs = segmentsFromOperatorList(got.ops.fnArray, got.ops.argsArray, winOps ?? {}, 20000, stats);
+		lastSegmentScan = stats;
+		return segs;
 	}
 	catch (e) {
 		logger.debug(MODULE, 'getPageEdgesPdf failed', e);

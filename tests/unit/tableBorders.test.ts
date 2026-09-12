@@ -212,3 +212,80 @@ test('只剩一条合格列边界时不成网格(围合后的计数要独立判)
 	];
 	assert.equal(borderGrid(segs, { pageHeight: 500 }), null);
 });
+
+// ---- 2.12.7 自证式取线段 ---------------------------------------------------
+
+test('码认不出时按参数形状认出 constructPath (2.12.7 真机故障)', () => {
+	// 真机 2.12.6 的遥测:每页 edgeSegments 都是 0 —— 操作符列表拿到了,
+	// 却一条线段都没认出来。Zotero 的阅读器 iframe 里取不到 win.pdfjsLib,
+	// 于是退回内置码表,而内置的 constructPath: 91 与那版 pdf.js 不一致。
+	// 现在:码对不上也要靠形状认出来。
+	const WRONG = 77; // 运行时真实的 constructPath 码,与内置的 91 不同
+	const fn = [WRONG];
+	const args = [[[OP.moveTo, OP.lineTo], [10, 20, 110, 20]]];
+	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+	const segs = segmentsFromOperatorList(fn, args as never, {}, 20000, stats);
+	assert.equal(segs.length, 1, '码认不出也必须取到这条线段');
+	assert.deepEqual(segs[0], [10, 20, 110, 20]);
+	assert.equal(stats.byShape, 1, '应记成"靠形状认出来的"');
+	assert.equal(stats.byCode, 0);
+});
+
+test('子操作映射不平就整条跳过,绝不按错步长继续读 (2.12.7)', () => {
+	// 子操作码也对不上时,老实现会 k += 2 猜着往下读 —— 产出的坐标全是错位的,
+	// 比一条都不取更糟(错位的线会推出一张假网格)。现在:坐标消耗必须刚好
+	// 用完 coords.length,不平就跳过并计数。
+	const fn = [OP.constructPath];
+	// 声称两个 moveTo/lineTo(该吃 4 个坐标),却给了 7 个 —— 映射对不上。
+	const args = [[[OP.moveTo, OP.lineTo], [1, 2, 3, 4, 5, 6, 7]]];
+	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+	const segs = segmentsFromOperatorList(fn, args as never, {}, 20000, stats);
+	assert.equal(segs.length, 0, '账不平必须一条都不产出');
+	assert.equal(stats.skipped, 1, '并且要记下来');
+});
+
+test('未知子操作码同样让整条路径被跳过 (2.12.7)', () => {
+	const fn = [OP.constructPath];
+	const args = [[[OP.moveTo, 250, OP.lineTo], [1, 2, 3, 4]]];
+	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+	const segs = segmentsFromOperatorList(fn, args as never, {}, 20000, stats);
+	assert.equal(segs.length, 0, '出现未知子操作码时不许瞎猜步长');
+	assert.equal(stats.skipped, 1);
+});
+
+test('形状判据不会把别的操作符误认成路径 (2.12.7)', () => {
+	// transform 是 6 个数的平坦数组、setLineDash 是 [数组, 数字]、
+	// paintImageXObject 是 [字符串, 数, 数] —— 一个都不该被当成 constructPath。
+	const fn = [999, 998, 997];
+	const args = [
+		[1, 0, 0, 1, 0, 0],
+		[[3, 3], 0],
+		['img_1', 100, 200]
+	];
+	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+	const segs = segmentsFromOperatorList(fn, args as never, {}, 20000, stats);
+	assert.equal(segs.length, 0);
+	assert.equal(stats.byShape, 0, '这三种形状都不该被认成路径');
+});
+
+test('真机夹具在"取不到 OPS"的情形下也能取到全部线段 (2.12.7)', () => {
+	// 端到端:用真机 PDF 的操作符码构造一条路径,但把 OPS 表留空(模拟
+	// win.pdfjsLib 取不到),仍必须推出同一张网格。
+	const { segments, pageHeight } = edges('powers2019-p4-p1');
+	const grid = borderGrid(segments, { pageHeight })!;
+	assert.equal(grid.columns.length - 1, 3, '夹具本身仍是 3 列 —— 这条只是基准');
+	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+	assert.equal(stats.realOps, false, 'realOps 默认 false,遥测里能看出用的是内置码');
+});
+
+test('未知子操作码即使"猜 2 个坐标"恰好配平,也必须跳过 (2.12.7)', () => {
+	// 这条专门防"猜步长"的诱惑:sub-ops 是 [moveTo, 未知, lineTo],坐标给 6 个。
+	// 若把未知的当成吃 2 个,账正好平(2+2+2=6),于是会产出一条**坐标错位**的
+	// 线段 —— 错位的线会推出一张假网格,比一条都不取更糟。
+	const fn = [OP.constructPath];
+	const args = [[[OP.moveTo, 250, OP.lineTo], [0, 0, 9, 9, 50, 0]]];
+	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+	const segs = segmentsFromOperatorList(fn, args as never, {}, 20000, stats);
+	assert.equal(segs.length, 0, '未知子操作码一出现就必须整条跳过,不许靠"账平了"放行');
+	assert.equal(stats.skipped, 1);
+});

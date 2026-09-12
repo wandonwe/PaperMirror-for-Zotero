@@ -232,14 +232,80 @@ function apply(m: Matrix, x: number, y: number): [number, number] {
  * 两种画法都有(Powers 2019 p4 是 129 条 lineTo + 3 个矩形,Gulati 2021 p21
  * 是 43 条 + 5 个),不能只认一种。曲线跳过(表格线不会是曲的)。
  */
+/** 取线段时顺手记下的取证计数 —— 用来回答"为什么一条都没取到"。 */
+export interface SegmentScanStats {
+	/** 操作符总数。 */
+	ops: number;
+	/** 按**操作符码**认出的 constructPath 数。 */
+	byCode: number;
+	/** 码认不出、靠**参数形状**认出来的 constructPath 数。 */
+	byShape: number;
+	/** 子操作码映射对不上(坐标数消耗不平)而整条路径被跳过的数量。 */
+	skipped: number;
+	/** 调用方是否拿到了真实的 OPS 表(false = 用的是内置默认码)。 */
+	realOps: boolean;
+}
+
+/**
+ * 这一条参数看起来像不像 constructPath (2.12.7)。
+ *
+ * **为什么需要形状判据**: 真机 2.12.6 的遥测显示每一页 `edgeSegments` 都是 0 ——
+ * 操作符列表拿到了(gridMs≈55ms),却一条线段都没认出来。原因是 Zotero 的阅读器
+ * iframe 里 `win.pdfjsLib` 取不到,两处取证都退回了内置的码表;而内置的
+ * `constructPath: 91` 与 Zotero 那版 pdf.js 不一致,于是那一支分支永远进不去。
+ * (顺带说明图片矩形那条路可能也一直静默失效 —— 它有亮度网格兜底,没人会发现。)
+ *
+ * constructPath 的参数形状很独特: `[子操作码数组, 坐标数组, ...]` —— 两个都是
+ * 数字型 ArrayLike。别的操作符没有这个形状(`transform` 是 6 个数的平坦数组,
+ * `setLineDash` 是 `[数组, 数字]`,`paintImageXObject` 是 `[字符串, 数, 数]`)。
+ * 所以码认不出时按形状认,版本再怎么变都不影响。
+ */
+function looksLikeConstructPath(args: unknown): args is [ArrayLike<number>, ArrayLike<number>] {
+	if (!Array.isArray(args) || args.length < 2) {
+		return false;
+	}
+	const [a, b] = args as [unknown, unknown];
+	const arrayish = (v: unknown): boolean =>
+		!!v && typeof v === 'object' && typeof (v as ArrayLike<number>).length === 'number'
+		&& (v as ArrayLike<number>).length > 0
+		&& typeof (v as ArrayLike<number>)[0] === 'number';
+	return arrayish(a) && arrayish(b);
+}
+
+/** 一个子操作吃几个坐标;未知返回 -1。 */
+function coordCost(sub: number, OP: typeof DEFAULT_PATH_OPS): number {
+	if (sub === OP.moveTo || sub === OP.lineTo) { return 2; }
+	if (sub === OP.curveTo) { return 6; }
+	if (sub === OP.rectangle) { return 4; }
+	if (sub === OP.closePath) { return 0; }
+	return -1;
+}
+
+/**
+ * 走一遍操作符列表,交出页面用户空间里的线段。矩形拆成四条边 —— 期刊表格
+ * 两种画法都有(Powers 2019 p4 是 129 条 lineTo + 3 个矩形,Gulati 2021 p21
+ * 是 43 条 + 5 个),不能只认一种。曲线跳过(表格线不会是曲的)。
+ *
+ * 2.12.7: 子操作码映射先**自证**再用 —— 按映射把坐标消耗一遍,必须刚好用完
+ * `coords.length`。不平就整条路径跳过并计数,而不是继续按错的步长读下去
+ * (那样产出的线段坐标全是错位的,比没有更糟)。
+ */
 export function segmentsFromOperatorList(
 	fnArray: ArrayLike<number>,
 	argsArray: ArrayLike<unknown>,
 	ops: Partial<typeof DEFAULT_PATH_OPS> = {},
-	limit = 20000
+	limit = 20000,
+	stats?: SegmentScanStats
 ): Segment[] {
 	const OP = { ...DEFAULT_PATH_OPS, ...ops };
 	const out: Segment[] = [];
+	if (stats) {
+		stats.ops = fnArray.length;
+		stats.byCode = 0;
+		stats.byShape = 0;
+		stats.skipped = 0;
+		stats.realOps = Object.keys(ops).length > 0;
+	}
 	try {
 		let ctm: Matrix = IDENTITY;
 		const stack: Matrix[] = [];
@@ -249,14 +315,30 @@ export function segmentsFromOperatorList(
 			if (fn === OP.restore) { ctm = stack.pop() ?? IDENTITY; continue; }
 			if (fn === OP.transform) {
 				const a = argsArray[i] as number[] | undefined;
-				if (a && a.length >= 6) { ctm = mul(ctm, a as unknown as Matrix); }
+				if (a && a.length >= 6 && typeof a[0] === 'number') { ctm = mul(ctm, a as unknown as Matrix); }
 				continue;
 			}
-			if (fn !== OP.constructPath) { continue; }
-			const args = argsArray[i] as [ArrayLike<number>, ArrayLike<number>] | undefined;
-			if (!args) { continue; }
+			const isPath = fn === OP.constructPath;
+			const args = argsArray[i];
+			if (!isPath && !looksLikeConstructPath(args)) { continue; }
+			if (!looksLikeConstructPath(args)) { continue; }
+			if (stats) {
+				if (isPath) { stats.byCode++; }
+				else { stats.byShape++; }
+			}
 			const [subOps, coords] = args;
-			if (!subOps || !coords) { continue; }
+			// 先自证:按映射消耗坐标,必须刚好用完。
+			let need = 0;
+			let ok = true;
+			for (let s = 0; s < subOps.length; s++) {
+				const cost = coordCost(subOps[s]!, OP);
+				if (cost < 0) { ok = false; break; }
+				need += cost;
+			}
+			if (!ok || need !== coords.length) {
+				if (stats) { stats.skipped++; }
+				continue;
+			}
 			let k = 0;
 			let cur: [number, number] | null = null;
 			for (let s = 0; s < subOps.length; s++) {
@@ -281,7 +363,6 @@ export function segmentsFromOperatorList(
 					}
 					cur = null;
 				}
-				else { k += 2; }
 			}
 		}
 	}
