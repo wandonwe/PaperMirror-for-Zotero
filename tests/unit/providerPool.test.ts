@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { buildPool, pickProviderForPage, rankProvidersForPage, laneBandFor, poolLanePlan, prefetchWindowFor, normalizeGlobalMax, normalizePerfMode, customLaneRange, customBandFor } from '../../src/translation/providerPool';
 
 test('page→provider is deterministic and every provider gets some pages', () => {
@@ -172,4 +174,104 @@ test('poolLanePlan(custom) uses the user values, free stays 1', () => {
 	assert.equal(plan.laneBands.openai!.initial, 5);
 	assert.equal(plan.laneBands['bing-free']!.initial, 1);
 	assert.equal(plan.initialSum, 6);
+});
+
+// ---- 按页分流的分布质量 (2.11.2) ---------------------------------------------
+//
+// 真机第十二轮:`requestTimings[].provider` 把「慢在哪」答死了 —— 同一份文档里
+// google-free 的请求 95–450 ms,openai 1434–9453 ms,gemini 11984–16329 ms。
+// 页与页之间差十几倍,差的是**引擎**,不是代码。
+//
+// 而归属是 HRW 算的,`pickProviderForPage` 对真机 12 页的预测 12/12 吻合 ——
+// 分配确定且可复现。问题出在分布本身:FNV-1a 的最后一步是 (h ^ c) * PRIME,
+// 页号在字符串末尾,之后再无混淆,相邻页的分数只差一个 PRIME(16777619),
+// 而服务商之间差 10^9 —— 排名几乎不动,于是**成片聚集**。
+
+const POOL5 = ['openai', 'bing-free', 'google-free', 'deepseek', 'gemini'];
+
+/** 连续归属同一家的段数。段数越接近页数,相邻页越可能换家。 */
+function runCount(pool: string[], pages: number): number {
+	let runs = 1;
+	for (let i = 1; i < pages; i++) {
+		if (pickProviderForPage(pool, i) !== pickProviderForPage(pool, i - 1)) {
+			runs++;
+		}
+	}
+	return runs;
+}
+
+function tally(pool: string[], pages: number): Map<string, number> {
+	const c = new Map(pool.map(p => [p, 0]));
+	for (let i = 0; i < pages; i++) {
+		const q = pickProviderForPage(pool, i);
+		c.set(q, (c.get(q) ?? 0) + 1);
+	}
+	return c;
+}
+
+/** 卡方统计量(自由度 = 家数-1)。自由度 4 时 5% 临界值 9.49。 */
+function chiSquare(counts: Map<string, number>, pages: number): number {
+	const expected = pages / counts.size;
+	let x = 0;
+	for (const observed of counts.values()) {
+		x += ((observed - expected) ** 2) / expected;
+	}
+	return x;
+}
+
+test('每一家都分得到页 —— 补雪崩前有两家一页都没有 (2.11.2)', () => {
+	const counts = tally(POOL5, 30);
+	for (const [id, n] of counts) {
+		assert.ok(n > 0, `${id} 一页都没分到 —— 用户把它配进 parallelProviders 就是要用它的`);
+	}
+});
+
+test('分布不显著偏离均匀 (2.11.2)', () => {
+	// 补雪崩前:30 页 χ² = 32.0(16/10/4/0/0),远超临界值。补之后约 1.7。
+	for (const pages of [30, 121]) {
+		const x = chiSquare(tally(POOL5, pages), pages);
+		assert.ok(x < 9.49,
+			`${pages} 页的 χ² = ${x.toFixed(1)},超过自由度 4 的 5% 临界值 9.49 —— 分布不均`);
+	}
+});
+
+test('相邻页尽量换家 —— 不许连着十几页压在同一家 (2.11.2)', () => {
+	// 这才是用户感受到的那件事:补雪崩前 30 页只有 5 段,其中一段是
+	// **连续 10 页全归 gemini**,而 gemini 实测 12–16 秒/页。
+	// "读着读着连着十几页每页等十几秒" —— 长文档变慢最初就是这么被报上来的。
+	const pages = 30;
+	assert.ok(runCount(POOL5, pages) >= pages * 0.6,
+		`30 页只有 ${runCount(POOL5, pages)} 段 —— 成片聚集会把最慢的引擎连着压在一段连续阅读上`);
+	// 最长连续段也要有界。
+	let longest = 1, cur = 1;
+	for (let i = 1; i < 60; i++) {
+		if (pickProviderForPage(POOL5, i) === pickProviderForPage(POOL5, i - 1)) {
+			cur++; longest = Math.max(longest, cur);
+		}
+		else {
+			cur = 1;
+		}
+	}
+	assert.ok(longest <= 4, `最长连续 ${longest} 页归同一家 —— 补雪崩前是 10`);
+});
+
+test('哈希仍是纯的、确定的 (2.11.2 守住既有性质)', () => {
+	for (let i = 0; i < 20; i++) {
+		assert.equal(pickProviderForPage(POOL5, i), pickProviderForPage(POOL5, i),
+			'同样输入必须同样输出');
+		// 池内顺序不影响归属 —— 模块开头就写着"改顺序:零变化"。
+		assert.equal(pickProviderForPage(POOL5, i), pickProviderForPage([...POOL5].reverse(), i),
+			'归属只认 id 与页号,与池内位置无关');
+	}
+});
+
+test('末位字符的改动要扩散到全部 32 位 (2.11.2 盯根因)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/translation/providerPool.ts'), 'utf8');
+	const fn = src.slice(src.indexOf('function hrwScore('), src.indexOf('\n}', src.indexOf('function hrwScore(')));
+	// FNV 循环之后必须还有混淆,否则相邻页只差一个 PRIME。
+	const afterLoop = fn.slice(fn.lastIndexOf('}') );
+	assert.ok(/h \^= h >>> \d+/.test(fn) && /Math\.imul\(h, 0x[0-9a-f]+\)/.test(afterLoop || fn),
+		'FNV 循环之后要有 移位-异或-乘法 的雪崩步骤');
+	assert.ok((fn.match(/h \^= h >>> /g) ?? []).length >= 3,
+		'至少三次移位异或 —— 少了扩散不充分');
 });
