@@ -671,11 +671,84 @@ function contained(box: Box, region: Box): number {
  * stable ids and become provider request units; numeric/data cells remain in
  * the page model but are explicitly marked preserve.
  */
-export function structureTableCells(blocks: SourceBlock[], pageIndex: number, em: number, noTranslate: string[] = []): SourceBlock[] {
+export function structureTableCells(
+	blocks: SourceBlock[],
+	pageIndex: number,
+	em: number,
+	noTranslate: string[] = [],
+	grid?: BorderGrid | null
+): SourceBlock[] {
 	const originalById = new Map(blocks.map(block => [block.id, block]));
 	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox);
 	if (geometric.length < 2) {
 		return blocks;
+	}
+	// 2.12.5 边框优先: 这一页画着网格时,行列不必再从文字几何去猜。
+	//
+	// 真机证据 (Powers 2019 p4,用户截图 2 的原表): 文字几何只认出 2 列,
+	// **整个 Document Title 列在表外** —— 那一列的文献标题每条 79~242 字符,
+	// 被"标签不超过 60 字"那道闸挡在外面,随后当普通段落各自摆放,与自己那
+	// 一行的年份、缩写再无关系。而这一页画了 63 条水平边与 78 条垂直边,
+	// 边框给出的是 3 列 x 18 行。
+	//
+	// 边框拿不到就走原路(borderGrid 推不出网格时返回 null),行为与 2.12.4
+	// 逐字节一致 —— 绝大多数页面本来就没有表格线。
+	const gridConsumed = new Set<string>();
+	const gridCells: SourceBlock[] = [];
+	if (grid) {
+		const inGrid = geometric.filter(b => {
+			const cx = b.boundingBox.x + b.boundingBox.width / 2;
+			const cy = b.boundingBox.y + b.boundingBox.height / 2;
+			return columnOfX(grid, cx) >= 0 && rowOfTop(grid, cy) >= 0;
+		});
+		// 网格里没几个块就不算数 —— 一条装饰线框住半句话不是表格。
+		if (inGrid.length >= 6) {
+			const ev = cellPreserveEvidence(blocks.map(b => b.sourceText), noTranslate);
+			const model = buildGridTableModel(pageIndex, 0, grid, inGrid.map(b => ({
+				id: b.id,
+				box: { left: b.boundingBox.x, top: b.boundingBox.y, width: b.boundingBox.width, height: b.boundingBox.height },
+				text: b.sourceText,
+				fontSize: b.fontSize
+			})), ev);
+			if (model) {
+				for (const cell of model.cells) {
+					const originals = cell.memberIds.map(id => originalById.get(id)).filter((b): b is SourceBlock => !!b);
+					if (!originals.length) {
+						continue;
+					}
+					for (const o of originals) {
+						gridConsumed.add(o.id);
+					}
+					const sizes = originals.map(b => b.fontSize ?? 0).filter(Boolean).sort((a, b) => a - b);
+					const memberColumns = originals.map(b => b.column).filter((c): c is number => typeof c === 'number');
+					const pageColumn = memberColumns.length
+						? (memberColumns.every(c => c === memberColumns[0]) ? memberColumns[0]! : -1)
+						: undefined;
+					gridCells.push({
+						id: cell.id,
+						pageIndex,
+						order: originals[0]!.order,
+						type: 'paragraph',
+						sourceText: cell.text,
+						boundingBox: { x: cell.box.left, y: cell.box.top, width: cell.box.width, height: cell.box.height },
+						lineRectsPdf: originals.flatMap(o => o.lineRectsPdf ?? []),
+						...(sizes.length ? { fontSize: sizes[Math.floor(sizes.length / 2)] } : {}),
+						...(pageColumn !== undefined ? { column: pageColumn } : {}),
+						tableRow: cell.row,
+						tableCol: cell.col,
+						memberIds: cell.memberIds,
+						translationMode: cell.kind === 'data' ? 'preserve' : 'translate',
+						...(cell.preserveReason ? { preserveReason: cell.preserveReason } : {})
+					} as SourceBlock);
+				}
+			}
+		}
+	}
+	if (gridCells.length) {
+		// 网格已经把这些块处理掉了;剩下的块照旧走文字几何那条路。
+		const rest = blocks.filter(b => !gridConsumed.has(b.id));
+		const restStructured = rest.length >= 2 ? structureTableCells(rest, pageIndex, em, noTranslate) : rest;
+		return [...restStructured, ...gridCells];
 	}
 	const guard = detectTableRegions(geometric.map(b => ({
 		id: b.id,
