@@ -1199,7 +1199,9 @@ export async function getPageEdgesPdf(
 		// 2.12.7: 取证计数随线段一起交出去 —— 2.12.6 的遥测只告诉我"一条都没取到",
 		// 却说不出为什么。现在能分清"没有绘图指令"、"码认不出靠形状认出来了"、
 		// "子操作映射不平被跳过"这三种情形。
-		const stats: SegmentScanStats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+		const stats: SegmentScanStats = {
+			ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false, shapeUnknown: 0, newShape: 0
+		};
 		const segs = segmentsFromOperatorList(got.ops.fnArray, got.ops.argsArray, winOps ?? {}, 20000, stats);
 		lastSegmentScan = stats;
 		return segs;
