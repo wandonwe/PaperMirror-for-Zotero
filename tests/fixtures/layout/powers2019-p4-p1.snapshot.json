@@ -1,0 +1,362 @@
+[
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 0,
+		"text": "e347"
+	},
+	{
+		"type": "table",
+		"column": 0,
+		"readingIndex": 1,
+		"text": "Table 2. Guidelines, Policies, and State"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 2,
+		"tableRow": 0,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Year"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"tableRow": 0,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Abbreviation Used in This"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 4,
+		"text": "Document Title"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 5,
+		"tableRow": 1,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Published"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 6,
+		"tableRow": 1,
+		"tableCol": 1,
+		"mode": "translate",
+		"text": "Document"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 7,
+		"text": "“Recommendations for the Implementation "
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 8,
+		"tableRow": 2,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2009"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 9,
+		"tableRow": 2,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "N/A"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 10,
+		"tableRow": 3,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2011"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 11,
+		"tableRow": 3,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "N/A"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 12,
+		"tableRow": 4,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2013"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 13,
+		"tableRow": 4,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2013 AIS Guidelines"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 14,
+		"tableRow": 5,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2013"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 15,
+		"tableRow": 5,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2013 Stroke Systems of Care"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 16,
+		"tableRow": 6,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2014"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 17,
+		"tableRow": 6,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "N/A"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 18,
+		"tableRow": 7,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2014"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 19,
+		"tableRow": 7,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2014 Brain Swelling"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 20,
+		"tableRow": 8,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2014"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 21,
+		"tableRow": 8,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2014 Palliative Care"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 22,
+		"tableRow": 9,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2014"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 23,
+		"tableRow": 9,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2014 Secondary Prevention"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 24,
+		"tableRow": 10,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2014"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 25,
+		"tableRow": 10,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "N/A"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 26,
+		"tableRow": 11,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2015"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 27,
+		"tableRow": 11,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2015 CPR/ECC"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 28,
+		"tableRow": 12,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2015"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 29,
+		"tableRow": 12,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2015 Endovascular"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 30,
+		"tableRow": 13,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2015"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 31,
+		"tableRow": 13,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2015 IV Alteplase"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 32,
+		"tableRow": 14,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2016"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 33,
+		"tableRow": 14,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2016 Rehab Guidelines"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 34,
+		"tableRow": 15,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2017"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 35,
+		"tableRow": 15,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "N/A"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 36,
+		"text": "“Treatment and Outcome of Hemorrhagic Tr"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 37,
+		"tableRow": 16,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2017"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 38,
+		"tableRow": 16,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "N/A"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 39,
+		"text": "N/A"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 40,
+		"text": "2018 Cholesterol Guidelines"
+	},
+	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 41,
+		"text": "Practice Guidelines”19"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 42,
+		"text": "AACVPR indicates American Association of"
+	}
+]

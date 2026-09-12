@@ -215,6 +215,18 @@
 		"payloadChars": 4041,
 		"dupBlocks": 0
 	},
+	"gulati2021-p21-p1": {
+		"blocks": 48,
+		"translatable": 46,
+		"tableCells": 12,
+		"modules": 11,
+		"chunks": 3,
+		"fastChunks": 3,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 24,
+		"payloadChars": 4698,
+		"dupBlocks": 1
+	},
 	"hakime2007-p2": {
 		"blocks": 9,
 		"translatable": 8,
@@ -297,6 +309,18 @@
 		"slowChunks": 1,
 		"maxBlocksPerChunk": 21,
 		"payloadChars": 4265,
+		"dupBlocks": 0
+	},
+	"powers2019-p4-p1": {
+		"blocks": 43,
+		"translatable": 12,
+		"tableCells": 34,
+		"modules": 7,
+		"chunks": 3,
+		"fastChunks": 2,
+		"slowChunks": 1,
+		"maxBlocksPerChunk": 7,
+		"payloadChars": 4171,
 		"dupBlocks": 0
 	},
 	"radiology2023-p11": {
