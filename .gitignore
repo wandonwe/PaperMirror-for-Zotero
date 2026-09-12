@@ -31,3 +31,8 @@ pm_sync*.tgz
 docs/corpus/
 # 生成的基线报告 (scripts/baseline-report.mjs 产物)
 baseline-report.md
+
+# 预览取证截图 (scripts 里的 headless Chromium 产物, 可随时重生成, 2.5MB 不进仓库)
+preview/shots/
+# 桌面端把交付文件落在仓库目录里时生成的文件夹
+Claude outputs/

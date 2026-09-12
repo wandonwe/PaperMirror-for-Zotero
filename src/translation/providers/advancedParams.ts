@@ -63,7 +63,30 @@ const REASONING_EFFORT_PROVIDERS = new Set(['openai', 'openrouter']);
  * 翻译不需要思维链:我们只要最终译文,推理过程读都不读。默认关掉。
  * 用户在高级设置里显式要了思考强度,就按他要的发 —— 那是他的决定。
  */
-const THINKING_OBJECT_PROVIDERS = new Set(['deepseek']);
+/* 真机第十三轮之后,照 deepseek 的做法把每一家预置 LLM 都对着官方文档核了一遍。
+ * 结论:**四家默认开思考,而我们一个参数都没发过。** 三种关法,不能混用 ——
+ * 发错词汇就是一个 400。
+ *
+ *   thinking 对象      deepseek (thinking.type=enabled|disabled + reasoning_effort)
+ *                      zhipu    (GLM-5 默认"自适应思考",官方:必须跳过就显式
+ *                                设 thinking.type=disabled)
+ *   enable_thinking    qwen     (官方明写 qwen3.7-plus 系列"thinking enabled
+ *                                by default";我们的默认型号正是它)
+ *                      siliconflow (默认型号就是 DeepSeek-V4-Flash,同一个模型)
+ *   关不掉,只能调低    moonshot (官方原话:「You can't — K3 always thinks」,
+ *                                只能把 reasoning_effort 从默认的 max 降下来)
+ *
+ * 没有中招的:openai(reasoning_effort 本来就走我们这条路)、gemini(原生
+ * thinkingConfig,另一条适配器)、anthropic(扩展思考是 opt-in,不发就不思考)、
+ * groq(llama,无思考)、openrouter(按路由决定,不替它猜)。
+ */
+const THINKING_OBJECT_PROVIDERS = new Set(['deepseek', 'zhipu']);
+
+/** 顶层布尔 `enable_thinking`(阿里 DashScope / SiliconFlow 的词汇)。 */
+const ENABLE_THINKING_PROVIDERS = new Set(['qwen', 'siliconflow']);
+
+/** 思考关不掉,只能调强度 —— 翻译一律取最低档。 */
+const ALWAYS_THINKS_PROVIDERS = new Set(['moonshot']);
 
 /** 我们的强度阶梯 → DeepSeek 的 none/low/high/max。 */
 function deepseekEffort(level: ReasoningLevel): string | null {
@@ -113,11 +136,18 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
 		// 深度思考 vocabulary (disabled/auto) never leaves the native adapter.
 		out.reasoning_effort = eff;
 	}
+	const level = deepseekEffort(eff);
 	if (THINKING_OBJECT_PROVIDERS.has(providerId)) {
-		// 默认关闭(见 THINKING_OBJECT_PROVIDERS 上方的证据):翻译只要最终译文,
-		// 而它默认按 high 强度思考,输出 token 是译文的十几倍。
-		const level = deepseekEffort(eff);
+		// 默认关闭(见上方证据):翻译只要最终译文,而它们默认就思考,
+		// 输出 token 是译文的十几倍 —— 时间和钱都白烧。
 		out.thinking = level ? { type: 'enabled', reasoning_effort: level } : { type: 'disabled' };
+	}
+	else if (ENABLE_THINKING_PROVIDERS.has(providerId)) {
+		out.enable_thinking = level !== null;
+	}
+	else if (ALWAYS_THINKS_PROVIDERS.has(providerId)) {
+		// 关不掉就取最低档。默认是 max —— 对翻译是纯浪费。
+		out.reasoning_effort = level ?? 'low';
 	}
 	return out;
 }
@@ -126,6 +156,7 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
  *  (Gemini qualifies via its native thinkingConfig, not reasoning_effort.) */
 export function supportsReasoningControl(providerId: string): boolean {
 	return REASONING_EFFORT_PROVIDERS.has(providerId) || THINKING_OBJECT_PROVIDERS.has(providerId)
+		|| ENABLE_THINKING_PROVIDERS.has(providerId) || ALWAYS_THINKS_PROVIDERS.has(providerId)
 		|| providerId === 'anthropic' || providerId === 'gemini';
 }
 
@@ -147,6 +178,33 @@ export function isReasoningEffortRejection(e: unknown): boolean {
 	return e instanceof PaperMirrorError
 		&& e.httpStatus === 400
 		&& (e.rejectedParam === 'reasoning_effort' || /reasoning_effort/i.test(e.message ?? ''));
+}
+
+/**
+ * 思考参数被拒的自愈 (2.12.2)。
+ *
+ * `thinking` / `enable_thinking` 都是各家自己的非标准字段。我们按 providerId
+ * 放行,但同一个 id 可能指向用户的代理或网关 —— 那些后端见到不认识的字段会
+ * 直接 400。`reasoning_effort` 早就有这条自愈路径(1.1.11),这两个字段同理:
+ * 认出来 → 剥掉重试一次 → 记下,后续不再发。
+ */
+export function isThinkingParamRejection(e: unknown): boolean {
+	return e instanceof PaperMirrorError
+		&& e.httpStatus === 400
+		// `rejectedParam` 是一个受限联合(temperature / reasoning_effort / model /
+		// other),没有这两个字段的取值 —— 按 message 识别,与 reasoning_effort
+		// 那条自愈的兜底判据同构(错误消息里带着响应体前 200 字符)。
+		&& /\b(thinking|enable_thinking)\b/i.test(e.message ?? '');
+}
+
+const thinkingParamUnsupportedModels = new Set<string>();
+
+export function markThinkingParamUnsupported(providerId: string, endpoint: string, model: string): void {
+	thinkingParamUnsupportedModels.add(modelKey(providerId, endpoint, model));
+}
+
+export function thinkingParamUnsupported(providerId: string, endpoint: string, model: string): boolean {
+	return thinkingParamUnsupportedModels.has(modelKey(providerId, endpoint, model));
 }
 
 const reasoningEffortUnsupportedModels = new Set<string>();

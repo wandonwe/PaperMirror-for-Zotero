@@ -258,3 +258,80 @@ test('不自愈就不回调: 一次成功的请求 onParamHeal 一次都不触�
 	}
 	finally { http.teardown(); }
 });
+
+/**
+ * 2.12.2: 关思考的三种写法(thinking 对象 / enable_thinking / reasoning_effort)
+ * 都是按官方文档发的,但同一家的自建端点、老版本网关、第三方中转未必认。
+ * reasoning_effort 早有自愈,thinking 这一路是这次新接的 —— 这几条锁的是
+ * **整条链路**:drop 表 → bodyNow 删字段 → catch 分支记忆 → 下次不再发。
+ *
+ * 没有这几条的话,一个不认 thinking 的端点会让该模型每次请求都 400,
+ * 用户看到的是"这家怎么全红",而不是"少了个可选参数"。
+ */
+
+const REJECT_THINKING = '{"error":{"message":"Unrecognized request argument supplied: thinking","type":"invalid_request_error"}}';
+const REJECT_ENABLE_THINKING = '{"error":{"message":"Invalid request: enable_thinking is not supported for this model","type":"invalid_request_error"}}';
+
+test('thinking 对象被拒 → 剥掉重试 → 成功 (2.12.2)', async () => {
+	const http = installHTTP((body) => body.thinking !== undefined
+		? { status: 400, text: REJECT_THINKING }
+		: { status: 200, text: OK_TEXT });
+	try {
+		const p = createOpenAICompatibleProvider({ id: 'deepseek', displayName: 'DeepSeek', defaultBaseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-flash' });
+		const healed: string[] = [];
+		const out = await p.complete!('explain', settings({ providerId: 'deepseek', reasoning: undefined, model: 'ds-thinking-heal-test' }), { onParamHeal: x => healed.push(x) });
+		assert.equal(out, '深度解析内容');
+		assert.equal(http.bodies.length, 2, '一次被拒 + 一次重试');
+		assert.deepEqual(http.bodies[0].thinking, { type: 'disabled' }, '首发带了 thinking');
+		assert.equal(http.bodies[1].thinking, undefined, '重试剥掉了 thinking');
+		assert.deepEqual(healed, ['thinking'], '自愈枚举报一次');
+	}
+	finally { http.teardown(); }
+});
+
+test('thinking 记忆生效: 同模型后续请求首发就不带 (2.12.2)', async () => {
+	const http = installHTTP((body) => body.thinking !== undefined
+		? { status: 400, text: REJECT_THINKING }
+		: { status: 200, text: OK_TEXT });
+	try {
+		const p = createOpenAICompatibleProvider({ id: 'deepseek', displayName: 'DeepSeek', defaultBaseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-flash' });
+		const out = await p.complete!('again', settings({ providerId: 'deepseek', reasoning: undefined, model: 'ds-thinking-heal-test' }), {});
+		assert.equal(out, '深度解析内容');
+		assert.equal(http.bodies.length, 1, '记忆命中 → 只发一次, 无 400 重试');
+		assert.equal(http.bodies[0].thinking, undefined);
+	}
+	finally { http.teardown(); }
+});
+
+test('enable_thinking 被拒走同一条自愈路径 (2.12.2)', async () => {
+	const http = installHTTP((body) => body.enable_thinking !== undefined
+		? { status: 400, text: REJECT_ENABLE_THINKING }
+		: { status: 200, text: OK_TEXT });
+	try {
+		const p = createOpenAICompatibleProvider({ id: 'qwen', displayName: 'Qwen', defaultBaseURL: 'https://dashscope.aliyuncs.com', defaultModel: 'qwen-plus' });
+		const healed: string[] = [];
+		const out = await p.complete!('explain', settings({ providerId: 'qwen', reasoning: undefined, model: 'qwen-thinking-heal-test' }), { onParamHeal: x => healed.push(x) });
+		assert.equal(out, '深度解析内容');
+		assert.equal(http.bodies.length, 2);
+		assert.equal(http.bodies[0].enable_thinking, false, '首发带了 enable_thinking');
+		assert.equal(http.bodies[1].enable_thinking, undefined, '重试剥掉了 enable_thinking');
+		assert.deepEqual(healed, ['thinking']);
+	}
+	finally { http.teardown(); }
+});
+
+test('两种自愈互不干扰: 剥 thinking 不连累 reasoning_effort (2.12.2)', async () => {
+	// 只拒 thinking 的端点,不该把用户显式选的 reasoning_effort 也弄丢。
+	const http = installHTTP((body) => body.thinking !== undefined
+		? { status: 400, text: REJECT_THINKING }
+		: { status: 200, text: OK_TEXT });
+	try {
+		const p = createOpenAICompatibleProvider({ id: 'zhipu', displayName: 'Zhipu', defaultBaseURL: 'https://open.bigmodel.cn', defaultModel: 'glm-5' });
+		await p.complete!('explain', settings({ providerId: 'zhipu', reasoning: 'high', model: 'glm-thinking-heal-test' }), {});
+		assert.equal(http.bodies.length, 2);
+		assert.deepEqual(http.bodies[0].thinking, { type: 'enabled', reasoning_effort: 'high' });
+		assert.equal(http.bodies[1].thinking, undefined, 'thinking 被剥');
+		assert.equal(http.bodies[1].temperature, 0, '温度还在 —— 只剥被拒的那一个');
+	}
+	finally { http.teardown(); }
+});
