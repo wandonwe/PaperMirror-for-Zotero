@@ -77,48 +77,42 @@ function classify(segments: Segment[], tol: number, minLen: number): { h: Line[]
  * 隔着老远的两截共线短线不是一条线(那可能是两张表各自的边)。
  */
 function mergeCollinear(lines: Line[], tol: number, joinGap: number): Line[] {
-	const sorted = [...lines].sort((a, b) => a.pos - b.pos || a.from - b.from);
+	// 2.12.10:先按位置分桶,再在桶内按起点排序合并。以前直接按 (pos, from) 排序,
+	// 同一条边界上 408.0 与 408.5 两个位置的段会分成前后两串,后一串的 from 比前一串
+	// 的 to 小,"from <= last.to + joinGap" 一比就把隔着 12pt 的两张表连成了一根线。
+	const byPos = [...lines].sort((a, b) => a.pos - b.pos);
+	const buckets: Line[][] = [];
+	for (const l of byPos) {
+		const b = buckets[buckets.length - 1];
+		if (b && l.pos - b[b.length - 1]!.pos <= tol) { b.push(l); }
+		else { buckets.push([l]); }
+	}
 	const out: Line[] = [];
-	for (const l of sorted) {
-		const last = out[out.length - 1];
-		if (last && Math.abs(last.pos - l.pos) <= tol && l.from <= last.to + joinGap) {
-			last.to = Math.max(last.to, l.to);
-			last.from = Math.min(last.from, l.from);
-			// 位置取两者均值,吸收 0.1pt 级的取整抖动。
-			last.pos = (last.pos + l.pos) / 2;
-		}
-		else {
-			out.push({ ...l });
+	for (const b of buckets) {
+		const pos = b.reduce((acc, l) => acc + l.pos, 0) / b.length;
+		const sorted = [...b].sort((a, c) => a.from - c.from);
+		let cur: Line | null = null;
+		for (const l of sorted) {
+			if (cur && l.from <= cur.to + joinGap) {
+				cur.to = Math.max(cur.to, l.to);
+			}
+			else {
+				cur = { pos, from: l.from, to: l.to };
+				out.push(cur);
+			}
 		}
 	}
 	return out;
 }
 
 /**
- * 位置聚类:把 ±tol 内的**已合并线段**归成一条边界。
- *
- * 关键:跨度取同位置各段里**最长的那一段**,而不是把 from/to 取并集。
- * 取并集会把 mergeCollinear 的"隔太远不算一条线"直接架空 —— 页面顶端一小截
- * 与底端一小截共线短线会被拼成一条"贯穿全页的线",再被围合判据当成列边界。
+ * 2.12.10:原来这里有一个 `cluster()`,把同一位置(±tol)的多段线**只留最长的一段**。
+ * 它的本意是防"页眉一小截 + 页脚一小截拼成贯穿全页的线"(2.12.7 的教训),
+ * 但代价是一页三张表时,同一 x 上三张表各自的竖线只剩一张表的 —— Powers 2019 p43
+ * 因此一张表都推不出来。现在 mergeCollinear 只合并**区间相连**的共线片段,
+ * 隔得远的各自保留为独立的线,交给分组去归属;"两截短线拼成长线"的问题由
+ * 围合判据(每条线按**实际覆盖区间**判)挡住。
  */
-function cluster(lines: Line[], tol: number): { pos: number; from: number; to: number }[] {
-	const sorted = [...lines].sort((a, b) => a.pos - b.pos);
-	const out: { pos: number; from: number; to: number }[] = [];
-	for (const l of sorted) {
-		const last = out[out.length - 1];
-		if (last && l.pos - last.pos <= tol) {
-			// 同一条边界上的多个互不相连的段:留最长的那一段作为它的实际跨度。
-			if (l.to - l.from > last.to - last.from) {
-				last.from = l.from;
-				last.to = l.to;
-			}
-		}
-		else {
-			out.push({ pos: l.pos, from: l.from, to: l.to });
-		}
-	}
-	return out;
-}
 
 export interface BorderGridOptions {
 	/** 页面高度,用于把 PDF 的 y(向上)翻成 top-down。 */
@@ -130,52 +124,109 @@ export interface BorderGridOptions {
 }
 
 /**
- * 从线段推出一张表的硬网格;推不出就返回 null(**绝不猜**)。
+ * 从线段推出一页上的**所有**硬网格 (2.12.10);推不出就返回空数组(**绝不猜**)。
  *
- * 判据("成网格"):至少 2 条列边界与 2 条行边界,且它们**互相围合** ——
+ * 判据("成网格"):至少 3 条列边界与 3 条行边界(= ≥2 列 ≥2 行),且它们**互相围合** ——
  * 每条采用的列边界都要纵向盖住大部分行区间,每条采用的行边界都要横向盖住
  * 大部分列区间。页眉横线只有一条、图表坐标轴只有两条且不互相围合,都进不来。
+ *
+ * **为什么是"所有"而不是"一张"**:Powers 2019 p43 一页叠着三张表(pdfplumber 独立
+ * 切出 y 66..222 / 265..466 / 479..749,列边完全相同)。按"整页一张"算,每张表的
+ * 竖线只盖住合并区间的 40%,围合判据把它们全否了 —— 一张也推不出来。
+ * 先把竖线按 y 区间的连通性分组,每组各自围合,才是一页三张表。
  */
-export function borderGrid(segments: Segment[], options: BorderGridOptions): BorderGrid | null {
+export function borderGrids(segments: Segment[], options: BorderGridOptions): BorderGrid[] {
 	const tol = options.tol ?? 1.5;
 	const minLen = options.minLen ?? 6;
 	const { h, v } = classify(segments, tol, minLen);
-	if (h.length < 2 || v.length < 2) {
-		return null;
+	if (h.length < 3 || v.length < 3) {
+		return [];
 	}
-	const hs = cluster(mergeCollinear(h, tol, tol * 2), tol);
-	const vs = cluster(mergeCollinear(v, tol, tol * 2), tol);
-	if (hs.length < 2 || vs.length < 2) {
-		return null;
+	const hs = mergeCollinear(h, tol, tol * 2);
+	const vs = mergeCollinear(v, tol, tol * 2);
+	if (hs.length < 3 || vs.length < 3) {
+		return [];
 	}
-	// 候选表体:所有线共同覆盖的范围。
-	const xMin = Math.min(...vs.map(l => l.pos), ...hs.map(l => l.from));
-	const xMax = Math.max(...vs.map(l => l.pos), ...hs.map(l => l.to));
-	const yMin = Math.min(...hs.map(l => l.pos), ...vs.map(l => l.from));
-	const yMax = Math.max(...hs.map(l => l.pos), ...vs.map(l => l.to));
-	const spanX = xMax - xMin;
-	const spanY = yMax - yMin;
-	if (spanX <= 0 || spanY <= 0) {
-		return null;
-	}
-	// 围合判据: 列边界要纵向盖住 ≥60% 表高,行边界要横向盖住 ≥60% 表宽。
-	// 用**实际覆盖区间**,不把短线延长。
-	const cols = vs.filter(l => (l.to - l.from) >= spanY * 0.6).map(l => l.pos).sort((a, b) => a - b);
-	const rowsUp = hs.filter(l => (l.to - l.from) >= spanX * 0.6).map(l => l.pos).sort((a, b) => a - b);
-	if (cols.length < 2 || rowsUp.length < 2) {
-		return null;
-	}
-	// PDF 的 y 向上,页面坐标向下 —— 翻过来并重新升序。
-	const rows = rowsUp.map(y => options.pageHeight - y).sort((a, b) => a - b);
-	const left = cols[0]!;
-	const right = cols[cols.length - 1]!;
-	const top = rows[0]!;
-	const bottom = rows[rows.length - 1]!;
-	return {
-		columns: cols,
-		rows,
-		region: { left, top, width: right - left, height: bottom - top }
+	// 同一条边界上互不相连的几段(比如被一行合并单元格截断的列线)归成一个位置,
+	// 覆盖长度**相加**:那几段都真实存在,加起来才是这条线实际盖住的长度。
+	// 这不是"把短线延长"—— 没有线的那一段仍然没有线,只是判"够不够格当边界"时
+	// 不再只看最长的一段。(Powers p43 第三张表的 313/359 两条列线各断成两截,
+	// 单段 45~127pt 都不到表高 270 的 60%,加起来 172pt 才够。)
+	const coverage = (lines: Line[], need: number): number[] => {
+		const sorted = [...lines].sort((a, b) => a.pos - b.pos);
+		const out: number[] = [];
+		let i = 0;
+		while (i < sorted.length) {
+			let j = i, sum = 0, posSum = 0;
+			while (j < sorted.length && sorted[j]!.pos - sorted[i]!.pos <= tol) {
+				sum += sorted[j]!.to - sorted[j]!.from;
+				posSum += sorted[j]!.pos;
+				j++;
+			}
+			if (sum >= need) { out.push(posSum / (j - i)); }
+			i = j;
+		}
+		return out;
 	};
+	// 竖线按 y 区间连通分组:区间重叠(或间隔不超过 joinGap)的竖线属于同一张表。
+	// 不做笛卡尔积、不延长短线 —— 只按每条线**实际覆盖的区间**判连通。
+	const byFrom = [...vs].sort((a, b) => a.from - b.from);
+	const groups: { from: number; to: number; lines: typeof vs }[] = [];
+	for (const l of byFrom) {
+		const g = groups[groups.length - 1];
+		if (g && l.from <= g.to + tol * 2) {
+			g.lines.push(l);
+			g.to = Math.max(g.to, l.to);
+		}
+		else {
+			groups.push({ from: l.from, to: l.to, lines: [l] });
+		}
+	}
+	const out: BorderGrid[] = [];
+	for (const g of groups) {
+		if (g.lines.length < 3) { continue; }
+		// 这一组的横线:位置落在组的 y 区间内。
+		const gh = hs.filter(l => l.pos >= g.from - tol && l.pos <= g.to + tol);
+		if (gh.length < 3) { continue; }
+		const xMin = Math.min(...g.lines.map(l => l.pos), ...gh.map(l => l.from));
+		const xMax = Math.max(...g.lines.map(l => l.pos), ...gh.map(l => l.to));
+		const yMin = Math.min(...gh.map(l => l.pos), ...g.lines.map(l => l.from));
+		const yMax = Math.max(...gh.map(l => l.pos), ...g.lines.map(l => l.to));
+		const spanX = xMax - xMin;
+		const spanY = yMax - yMin;
+		if (spanX <= 0 || spanY <= 0) { continue; }
+		// 围合判据: 列边界要纵向盖住 ≥60% 表高,行边界要横向盖住 ≥60% 表宽。
+		// 用**实际覆盖区间**,不把短线延长。
+		const cols = coverage(g.lines, spanY * 0.6);
+		const rowsUp = coverage(gh, spanX * 0.6);
+		// ≥2 列且 ≥2 行 = 各至少 3 条边界。以前只要 2 条线,于是一个单列的框
+		// (真机 p44 的 1×6)也成了"网格" —— 一个盒子不是需要分格归属的表。
+		if (cols.length < 3 || rowsUp.length < 3) { continue; }
+		// PDF 的 y 向上,页面坐标向下 —— 翻过来并重新升序。
+		const rows = rowsUp.map(y => options.pageHeight - y).sort((a, b) => a - b);
+		const left = cols[0]!;
+		const right = cols[cols.length - 1]!;
+		const top = rows[0]!;
+		const bottom = rows[rows.length - 1]!;
+		out.push({ columns: cols, rows, region: { left, top, width: right - left, height: bottom - top } });
+	}
+	return out.sort((a, b) => a.region.top - b.region.top);
+}
+
+/**
+ * 一页只取**一张**网格的兼容入口:格数最多的那张。推不出就返回 null。
+ *
+ * 结构识别目前每页只接一张网格(观测模式),多表页先拿最大的那张;
+ * 遥测另报 gridCount,让多表页在真机数据里看得见。
+ */
+export function borderGrid(segments: Segment[], options: BorderGridOptions): BorderGrid | null {
+	const all = borderGrids(segments, options);
+	if (all.length === 0) { return null; }
+	let best = all[0]!;
+	for (const g of all) {
+		if ((g.columns.length - 1) * (g.rows.length - 1) > (best.columns.length - 1) * (best.rows.length - 1)) { best = g; }
+	}
+	return best;
 }
 
 /** 某个 x 落在第几列(0 起);不在任何列内返回 -1。 */
@@ -212,8 +263,65 @@ const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
 export const DEFAULT_PATH_OPS = {
 	save: 10, restore: 11, transform: 12,
 	moveTo: 13, lineTo: 14, curveTo: 15, closePath: 18, rectangle: 19,
+	// 收尾绘制码 (2.12.10):路径画不画、闭不闭合,全看它。
+	stroke: 20, closeStroke: 21, fill: 22, eoFill: 23, fillStroke: 24, eoFillStroke: 25,
+	closeFillStroke: 26, closeEOFillStroke: 27, endPath: 28, clip: 29, eoClip: 30,
 	constructPath: 91
 };
+
+/**
+ * 收尾绘制码决定这条路径**画不画、开放子路径闭不闭合** (2.12.10)。
+ *
+ * - `endPath`(`n`):一个像素都不画。裁剪路径 `re W n` 就是它 —— 真机 2.12.9 三个
+ *   插图页的"整页网格" `[0,0,595,794]` 全是整页裁剪矩形当了外框。
+ * - fill 家族(`f f* B B* b b*`)与 `s`:PDF 规范规定绘制前把开放子路径闭合,
+ *   所以色块单元格三条 lineTo 也是四条边。
+ * - `S`:开放子路径就是开放的,不补。
+ */
+function paintKind(paint: number, OP: typeof DEFAULT_PATH_OPS): 'none' | 'open' | 'closed' {
+	if (paint === OP.endPath) { return 'none'; }
+	if (paint === OP.stroke) { return 'open'; }
+	if (paint === OP.closeStroke || paint === OP.fill || paint === OP.eoFill || paint === OP.fillStroke
+		|| paint === OP.eoFillStroke || paint === OP.closeFillStroke || paint === OP.closeEOFillStroke) {
+		return 'closed';
+	}
+	// 不认识的收尾码:按"画、不补闭合边"处理 —— 少认一条边好过多编一条。
+	return 'open';
+}
+
+/** 三次贝塞尔的紧包围盒:端点 + 导数为零处的极值。与 pdf.js 的 minMax 同一个定义。 */
+function cubicExtent(
+	x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number,
+	box: [number, number, number, number]
+): void {
+	const take = (x: number, y: number): void => {
+		if (x < box[0]) { box[0] = x; } if (x > box[2]) { box[2] = x; }
+		if (y < box[1]) { box[1] = y; } if (y > box[3]) { box[3] = y; }
+	};
+	take(x0, y0); take(x3, y3);
+	const at = (t: number): void => {
+		if (t <= 0 || t >= 1) { return; }
+		const mt = 1 - t;
+		const x = mt * mt * mt * x0 + 3 * mt * mt * t * x1 + 3 * mt * t * t * x2 + t * t * t * x3;
+		const y = mt * mt * mt * y0 + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * y3;
+		take(x, y);
+	};
+	// B'(t) = 3[(-p0+3p1-3p2+p3)t² + 2(p0-2p1+p2)t + (p1-p0)],按轴求根。
+	for (const [p0, p1, p2, p3] of [[x0, x1, x2, x3], [y0, y1, y2, y3]] as const) {
+		const a = -p0 + 3 * p1 - 3 * p2 + p3;
+		const b = 2 * (p0 - 2 * p1 + p2);
+		const c = p1 - p0;
+		if (Math.abs(a) < 1e-12) {
+			if (Math.abs(b) >= 1e-12) { at(-c / b); }
+			continue;
+		}
+		const d = b * b - 4 * a * c;
+		if (d < 0) { continue; }
+		const q = Math.sqrt(d);
+		at((-b + q) / (2 * a));
+		at((-b - q) / (2 * a));
+	}
+}
 
 function mul(m: Matrix, n: Matrix): Matrix {
 	return [
@@ -255,6 +363,8 @@ export interface SegmentScanStats {
 	shapeUnknown: number;
 	/** 用新版(扁平指令流)编码解出来的路径条数 (2.12.9)。 */
 	newShape: number;
+	/** 收尾是 endPath、一个像素都不画的路径条数(裁剪路径)(2.12.10)。 */
+	unpainted: number;
 }
 
 /**
@@ -355,68 +465,94 @@ function looksLikeNewConstructPath(args: unknown): args is [number, ArrayLike<Ar
  * 返回 null = 这条路径不可信,调用方计入 skipped。
  */
 function decodeNewPath(
+	paint: number,
 	streams: ArrayLike<ArrayLike<number>>,
 	minMax: ArrayLike<number> | undefined,
 	ctm: Matrix,
+	OP: typeof DEFAULT_PATH_OPS,
 	out: Segment[]
-): boolean {
+): 'ok' | 'bad' | 'unpainted' {
+	const kind = paintKind(paint, OP);
+	if (kind === 'none') { return 'unpainted'; }
 	const pending: Segment[] = [];
-	let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+	const box: [number, number, number, number] = [Infinity, Infinity, -Infinity, -Infinity];
+	const take = (x: number, y: number): void => {
+		if (x < box[0]) { box[0] = x; } if (x > box[2]) { box[2] = x; }
+		if (y < box[1]) { box[1] = y; } if (y > box[3]) { box[3] = y; }
+	};
 	let seen = 0;
 	for (let si = 0; si < streams.length; si++) {
 		const s = streams[si];
-		if (!numericArrayLike(s)) { return false; }
+		if (!numericArrayLike(s)) { return 'bad'; }
 		let k = 0;
 		let cur: [number, number] | null = null;
 		let start: [number, number] | null = null;
+		// 原始坐标(未过 CTM)下的当前点 —— 曲线的紧包围盒要从它起算。
+		let rawX = 0, rawY = 0;
+		const closeSub = (): void => {
+			if (cur && start && (cur[0] !== start[0] || cur[1] !== start[1])) {
+				pending.push([cur[0], cur[1], start[0], start[1]]);
+			}
+		};
 		while (k < s.length) {
 			const sub = s[k]!;
 			const need = drawCost(sub);
-			if (need < 0 || k + 1 + need > s.length) { return false; }
-			// 包围盒按**原始坐标**累计(minMax 也在这个空间),曲线控制点一并计入 ——
-			// 实测 pdf.js 的 minMax 就是这么算的。
-			for (let j = 0; j < need; j += 2) {
-				const x = s[k + 1 + j]!, y = s[k + 2 + j]!;
-				if (x < minx) { minx = x; } if (x > maxx) { maxx = x; }
-				if (y < miny) { miny = y; } if (y > maxy) { maxy = y; }
-				seen++;
-			}
+			if (need < 0 || k + 1 + need > s.length) { return 'bad'; }
 			if (sub === DRAW_OPS.moveTo) {
-				cur = apply(ctm, s[k + 1]!, s[k + 2]!);
+				// 新子路径开始:填充类绘制会把上一条开放子路径闭合。
+				if (kind === 'closed') { closeSub(); }
+				rawX = s[k + 1]!; rawY = s[k + 2]!;
+				take(rawX, rawY); seen++;
+				cur = apply(ctm, rawX, rawY);
 				start = cur;
 			}
 			else if (sub === DRAW_OPS.lineTo) {
-				const p = apply(ctm, s[k + 1]!, s[k + 2]!);
+				rawX = s[k + 1]!; rawY = s[k + 2]!;
+				take(rawX, rawY); seen++;
+				const p = apply(ctm, rawX, rawY);
 				if (cur) { pending.push([cur[0], cur[1], p[0], p[1]]); }
 				cur = p;
 			}
-			else if (sub === DRAW_OPS.curveTo || sub === DRAW_OPS.quadraticCurveTo) {
-				// 表格线不会是曲的;跳过并断开连线,免得把曲线两端连成一条假直线。
-				cur = null;
+			else if (sub === DRAW_OPS.curveTo) {
+				// 包围盒按曲线真实极值算 —— pdf.js 的 minMax 就是这么定义的,
+				// 不是控制点(2.12.9 在这里说错了,插图页 45% 的路径因此被误判)。
+				cubicExtent(rawX, rawY, s[k + 1]!, s[k + 2]!, s[k + 3]!, s[k + 4]!, s[k + 5]!, s[k + 6]!, box);
+				rawX = s[k + 5]!; rawY = s[k + 6]!; seen++;
+				// 弧本身不产出线段(不许把弧的两端连成假直线),但当前点要**跟到弧的终点**:
+				// 圆角矩形的四条直边全在圆弧之后,置空就把圆角表格的边框整个丢了(2.12.9 的错)。
+				cur = apply(ctm, rawX, rawY);
+			}
+			else if (sub === DRAW_OPS.quadraticCurveTo) {
+				// 二次升三次:c1 = p0 + 2/3(q-p0),c2 = p3 + 2/3(q-p3)。
+				const qx = s[k + 1]!, qy = s[k + 2]!, ex = s[k + 3]!, ey = s[k + 4]!;
+				cubicExtent(rawX, rawY,
+					rawX + 2 / 3 * (qx - rawX), rawY + 2 / 3 * (qy - rawY),
+					ex + 2 / 3 * (qx - ex), ey + 2 / 3 * (qy - ey),
+					ex, ey, box);
+				rawX = ex; rawY = ey; seen++;
+				cur = apply(ctm, rawX, rawY);
 			}
 			else if (sub === DRAW_OPS.closePath) {
-				// 闭合边是**真的被画出来的**那一条,不是补出来的:新编码里矩形就是
+				// 闭合边是**真的被画出来的**那一条:新编码里矩形就是
 				// moveTo + 三条 lineTo + closePath,少了它每个矩形都缺一条边。
-				// (旧编码有独立的 rectangle 子操作,四条边齐全,所以以前没暴露。)
-				// 只在当前点与起点确实不同时才出线段;曲线之后 cur 为 null,不补。
-				if (cur && start && (cur[0] !== start[0] || cur[1] !== start[1])) {
-					pending.push([cur[0], cur[1], start[0], start[1]]);
-				}
+				closeSub();
 				cur = start;
+				if (start) { /* 回到起点:原始坐标同步 */ }
 			}
 			k += 1 + need;
 		}
+		if (kind === 'closed') { closeSub(); }
 	}
 	// minMax 交叉验证。Float32 的值在两边完全一致,容差只是防浮点噪声。
 	if (minMax && minMax.length >= 4 && seen > 0) {
 		const tol = 0.01;
-		if (Math.abs(minx - minMax[0]!) > tol || Math.abs(miny - minMax[1]!) > tol
-			|| Math.abs(maxx - minMax[2]!) > tol || Math.abs(maxy - minMax[3]!) > tol) {
-			return false;
+		if (Math.abs(box[0] - minMax[0]!) > tol || Math.abs(box[1] - minMax[1]!) > tol
+			|| Math.abs(box[2] - minMax[2]!) > tol || Math.abs(box[3] - minMax[3]!) > tol) {
+			return 'bad';
 		}
 	}
 	for (const seg of pending) { out.push(seg); }
-	return true;
+	return 'ok';
 }
 
 /**
@@ -452,6 +588,7 @@ export function segmentsFromOperatorList(
 		stats.realOps = Object.keys(ops).length > 0;
 		stats.shapeUnknown = 0;
 		stats.newShape = 0;
+		stats.unpainted = 0;
 	}
 	try {
 		let ctm: Matrix = IDENTITY;
@@ -475,9 +612,11 @@ export function segmentsFromOperatorList(
 					else { stats.byShape++; }
 					stats.newShape++;
 				}
-				const [, streams, minMax] = args;
-				if (!decodeNewPath(streams, minMax, ctm, out)) {
-					if (stats) { stats.skipped++; }
+				const [paint, streams, minMax] = args;
+				const r = decodeNewPath(paint, streams, minMax, ctm, OP, out);
+				if (stats) {
+					if (r === 'bad') { stats.skipped++; }
+					else if (r === 'unpainted') { stats.unpainted++; }
 				}
 				continue;
 			}
@@ -505,31 +644,48 @@ export function segmentsFromOperatorList(
 				if (stats) { stats.skipped++; }
 				continue;
 			}
+			// 旧编码的收尾绘制码是紧跟其后的操作符,中间可能夹着 clip / eoClip (2.12.10)。
+			let j = i + 1;
+			while (j < fnArray.length && (fnArray[j] === OP.clip || fnArray[j] === OP.eoClip)) { j++; }
+			const kind = paintKind(j < fnArray.length ? fnArray[j]! : OP.stroke, OP);
+			if (kind === 'none') {
+				if (stats) { stats.unpainted++; }
+				continue;
+			}
 			let k = 0;
 			let cur: [number, number] | null = null;
+			let start: [number, number] | null = null;
+			const closeSub = (): void => {
+				if (cur && start && (cur[0] !== start[0] || cur[1] !== start[1])) {
+					out.push([cur[0], cur[1], start[0], start[1]]);
+				}
+			};
 			for (let s = 0; s < subOps.length; s++) {
 				const sub = subOps[s]!;
 				if (sub === OP.moveTo) {
+					if (kind === 'closed') { closeSub(); }
 					cur = apply(ctm, coords[k]!, coords[k + 1]!); k += 2;
+					start = cur;
 				}
 				else if (sub === OP.lineTo) {
 					const p = apply(ctm, coords[k]!, coords[k + 1]!); k += 2;
 					if (cur) { out.push([cur[0], cur[1], p[0], p[1]]); }
 					cur = p;
 				}
-				else if (sub === OP.curveTo) { k += 6; cur = null; }
-				else if (sub === OP.closePath) { /* 无坐标 */ }
+				else if (sub === OP.curveTo) { cur = apply(ctm, coords[k + 4]!, coords[k + 5]!); k += 6; }
+				else if (sub === OP.closePath) { closeSub(); cur = start; }
 				else if (sub === OP.rectangle) {
 					const x = coords[k]!, y = coords[k + 1]!, w = coords[k + 2]!, h = coords[k + 3]!;
 					k += 4;
 					const c = [apply(ctm, x, y), apply(ctm, x + w, y), apply(ctm, x + w, y + h), apply(ctm, x, y + h)];
-					for (let j = 0; j < 4; j++) {
-						const a = c[j]!, b = c[(j + 1) % 4]!;
+					for (let q = 0; q < 4; q++) {
+						const a = c[q]!, b = c[(q + 1) % 4]!;
 						out.push([a[0], a[1], b[0], b[1]]);
 					}
 					cur = null;
 				}
 			}
+			if (kind === 'closed') { closeSub(); }
 		}
 	}
 	catch {

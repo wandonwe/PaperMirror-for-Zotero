@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-	borderGrid, segmentsFromOperatorList, DEFAULT_PATH_OPS, type Segment, type SegmentScanStats
+	borderGrid, borderGrids, segmentsFromOperatorList, DEFAULT_PATH_OPS, type Segment, type SegmentScanStats
 } from '../../src/reader/tableBorders';
 
 /**
@@ -49,7 +49,7 @@ function scan(r: RawOps, stats?: SegmentScanStats): Segment[] {
 }
 
 function newStats(): SegmentScanStats {
-	return { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false, shapeUnknown: 0, newShape: 0 };
+	return { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false, shapeUnknown: 0, newShape: 0, unpainted: 0 };
 }
 
 // ---------------------------------------------------------------- 旧编码不许回归
@@ -230,14 +230,15 @@ test('二次贝塞尔 (子操作 3) 吃 4 个坐标而不是 6 (2.12.9)', () => 
 		pdfjs: 'synthetic', page: 1, width: 100, height: 100,
 		ops: { ...DEFAULT_PATH_OPS },
 		fnArray: [DEFAULT_PATH_OPS.constructPath],
-		argsArray: [[20, [[0, 0, 0, 3, 5, 10, 10, 0, 4]], [0, 0, 10, 10]]]
+		// minMax 是**紧**包围盒:二次曲线 (0,0)→控制 (5,10)→(10,0) 的最高点是 5,不是 10。
+		argsArray: [[20, [[0, 0, 0, 3, 5, 10, 10, 0, 4]], [0, 0, 10, 5]]]
 	};
 	const stats = newStats();
 	const segs = segmentsFromOperatorList(r.fnArray, r.argsArray, r.ops, 20000, stats);
 	assert.equal(stats.skipped, 0, '开销写对了就该整条消耗干净');
 	assert.equal(stats.byCode, 1, '这一条要认出来');
-	// 曲线本身不产出线段(表格线不会是曲的)。
-	assert.equal(segs.length, 0, '曲线不当作表格线');
+	// 曲线本身不产出线段;closePath 从曲线终点 (10,0) 画回起点 (0,0) 那条**是**直线,要交。
+	assert.equal(segs.length, 1, '曲线不当作表格线,闭合弦是直线');
 });
 
 test('遥测:码对上、两种形状都不认识,必须计入 shapeUnknown 而不是静默丢弃 (2.12.9)', () => {
@@ -324,15 +325,203 @@ test('闭合路径的那条边要出线段 —— 新编码的矩形就靠它 (2
 	assert.ok(closing, '闭合的那条边必须在');
 });
 
-test('反向锁:曲线之后的 closePath 不许凭空补一条直线 (2.12.9)', () => {
-	// 曲线断开了当前点,这时候若还"闭合回起点",补出来的是一条页面上根本不存在的线。
+test('曲线本身不出线段,但曲线之后的直线和闭合弦要出 —— 圆角表格全靠它 (2.12.10)', () => {
+	// 2.12.9 在曲线之后把当前点置空,连带丢掉了曲线**之后**的 lineTo 与闭合弦。
+	// 那是错的:圆角矩形的四条直边全在圆弧之后,置空等于把圆角表格的边框整个丢掉。
+	// 正确的边界是:曲线**本身**不产出线段(不许把弧的两端连成假直线),
+	// 但从弧的终点出发的 lineTo / closePath 画的是真直线。
 	const r: RawOps = {
 		pdfjs: 'synthetic', page: 1, width: 100, height: 100,
 		ops: { ...DEFAULT_PATH_OPS },
 		fnArray: [DEFAULT_PATH_OPS.constructPath],
-		// moveTo(0,0) → 三次曲线 → closePath;中间没有任何直线段。
-		argsArray: [[20, [[0, 0, 0, 2, 3, 8, 7, 8, 10, 0, 4]], [0, 0, 10, 8]]]
+		// moveTo(0,0) → 三次曲线到 (10,0)(控制点 (3,6)/(7,6),紧包围盒最高 4.5) → closePath
+		argsArray: [[20, [[0, 0, 0, 2, 3, 6, 7, 6, 10, 0, 4]], [0, 0, 10, 4.5]]]
 	};
-	const segs = segmentsFromOperatorList(r.fnArray, r.argsArray, r.ops, 20000);
-	assert.equal(segs.length, 0, `曲线围成的形状不该产出直线段,实得 ${segs.length} 条`);
+	const stats = newStats();
+	const segs = segmentsFromOperatorList(r.fnArray, r.argsArray, r.ops, 20000, stats);
+	assert.equal(stats.skipped, 0);
+	assert.equal(segs.length, 1, `只有闭合弦这一条直线,实得 ${segs.length} 条`);
+	assert.deepEqual(segs[0], [10, 0, 0, 0], '弦从弧的终点画回起点;弧本身没有线段');
+});
+
+// ---------------------------------------------------------------- 2.12.10:裁剪路径不画东西
+
+/**
+ * 真机 2.12.9 的第一份读数里,三页(p25/p44/p80,全是插图页)的网格区域恰好等于
+ * 整页 `[0,0,595,794]`。本地用 Powers p43(整页裁剪矩形)与 Gulati p4(图片裁剪框)
+ * 复现了同一现象,**新旧编码都一样** —— 这不是 2.12.9 引入的,旧路径本来就有。
+ *
+ * 根源:`re W n`(裁剪)也走 constructPath,但收尾是 endPath,**一个像素都不画**。
+ * 把它的四条边当表格线,整页裁剪就成了"整页表格"的外框。收尾绘制码新编码在
+ * `args[0]`,旧编码是紧跟其后的那个操作符(中间可能夹着 clip)。
+ */
+test('裁剪路径 (endPath) 不产出线段 —— Powers p43 不许变成整页一张表 (2.12.10)', () => {
+	for (const n of ['powers2019-p43-old', 'powers2019-p43-new']) {
+		const r = rawops(n);
+		const stats = newStats();
+		const segs = scan(r, stats);
+		assert.ok(stats.unpainted >= 1, `${n}: 整页裁剪那条路径必须计入 unpainted,实得 ${stats.unpainted}`);
+		for (const s of segs) {
+			const onEdge = [s[0], s[2]].some((x) => Math.abs(x) < 0.5 || Math.abs(x - r.width) < 0.5)
+				&& [s[1], s[3]].some((y) => Math.abs(y) < 0.5 || Math.abs(y - r.height) < 0.5);
+			assert.ok(!onEdge, `${n}: 不该有贴着页边的线段 [${s.map((v) => v.toFixed(1)).join(',')}]`);
+		}
+		const gs = borderGrids(segs, { pageHeight: r.height });
+		// 独立真值(pdfplumber 按边框切表):三张表,列边 47.2/313.4/359.2/408.2/538.8,
+		// 行边分别 [66.2,81.6,136.9,221.8] / [265.1,280.4,354.9,409.5,466.4] /
+		// [478.7,494.0,570.9,605.5,660.1,704.7,749.4]。整页裁剪一旦混进来,左右边就成了 0/585。
+		assert.equal(gs.length, 3, `${n}: 应为 3 张表,实得 ${gs.length}`);
+		const truthRows = [
+			[66.2, 81.6, 136.9, 221.8],
+			[265.1, 280.4, 354.9, 409.5, 466.4],
+			[478.7, 494.0, 570.9, 605.5, 660.1, 704.7, 749.4]
+		];
+		gs.forEach((g, ti) => {
+			assert.ok(Math.abs(g.region.left - 47.2) < 1.5, `${n} 表${ti + 1}: 左边界应≈47.2,实得 ${g.region.left.toFixed(1)}`);
+			assert.ok(Math.abs(g.region.left + g.region.width - 538.8) < 1.5, `${n} 表${ti + 1}: 右边界应≈538.8`);
+			assert.equal(g.rows.length, truthRows[ti]!.length, `${n} 表${ti + 1}: 行边数应为 ${truthRows[ti]!.length},实得 ${g.rows.length}`);
+			g.rows.forEach((y, i) => assert.ok(Math.abs(y - truthRows[ti]![i]!) < 1.5, `${n} 表${ti + 1} 行边 ${i}: 应≈${truthRows[ti]![i]},实得 ${y.toFixed(1)}`));
+		});
+		// 表 2、表 3 四列齐全。表 1 只有 2 列:313/359 两条列线在那张表里只盖住 46% 的高度
+		// (有一整行是合并单元格),按"不把短线延长成边界"的规矩不算列边 ——
+		// 均匀网格表达不了合并单元格,这是已知局限,不是把它猜成 4 列来掩盖。
+		for (const ti of [1, 2]) {
+			const cols = gs[ti]!.columns;
+			const truth = [47.2, 313.4, 359.2, 408.2, 538.8];
+			assert.equal(cols.length, 5, `${n} 表${ti + 1}: 应为 4 列,实得 ${cols.length - 1}`);
+			cols.forEach((x, i) => assert.ok(Math.abs(x - truth[i]!) < 1.5, `${n} 表${ti + 1} 列边 ${i}: 应≈${truth[i]},实得 ${x.toFixed(1)}`));
+		}
+		assert.ok(gs[0]!.columns.length >= 3, `${n} 表1: 至少 2 列`);
+	}
+});
+
+test('图片裁剪框不是表格 —— Gulati p4 不该有网格 (2.12.10)', () => {
+	for (const n of ['gulati2021-p4-old', 'gulati2021-p4-new']) {
+		const r = rawops(n);
+		const stats = newStats();
+		const segs = scan(r, stats);
+		assert.ok(stats.unpainted >= 1, `${n}: 图片裁剪框必须计入 unpainted`);
+		const g = borderGrid(segs, { pageHeight: r.height });
+		assert.equal(g, null, `${n}: 插图页不该推出网格,实得 ${g ? `${g.columns.length - 1}×${g.rows.length - 1}` : 'null'}`);
+	}
+});
+
+function synth(paint: number, stream: number[], minMax: number[]): RawOps {
+	return {
+		pdfjs: 'synthetic', page: 1, width: 100, height: 100, ops: { ...DEFAULT_PATH_OPS },
+		fnArray: [DEFAULT_PATH_OPS.constructPath],
+		argsArray: [[paint, [stream], minMax]]
+	};
+}
+const OPEN3 = [0, 0, 0, 1, 10, 0, 1, 10, 5, 1, 0, 5]; // 三条边,没有 closePath
+const MM3 = [0, 0, 10, 5];
+
+test('填充会隐式闭合子路径:三条 lineTo + fill 画出的是四条边 (2.12.10)', () => {
+	// PDF 规范:f / f* / B / b 在填充前把开放子路径闭合。填充出来的色块四边都在,
+	// 期刊表格里最常见的"色块单元格"就是这样画的。
+	for (const paint of [22, 23, 24, 25, 26, 27]) {
+		const r = synth(paint, OPEN3, MM3);
+		const segs = segmentsFromOperatorList(r.fnArray, r.argsArray, r.ops, 20000);
+		assert.equal(segs.length, 4, `paint=${paint}: 填充应为四条边,实得 ${segs.length}`);
+	}
+});
+
+test('描边不闭合:三条 lineTo + stroke 只有三条边;closeStroke 才有四条 (2.12.10)', () => {
+	assert.equal(segmentsFromOperatorList(synth(20, OPEN3, MM3).fnArray, synth(20, OPEN3, MM3).argsArray, DEFAULT_PATH_OPS, 20000).length, 3, 'S 不闭合');
+	assert.equal(segmentsFromOperatorList(synth(21, OPEN3, MM3).fnArray, synth(21, OPEN3, MM3).argsArray, DEFAULT_PATH_OPS, 20000).length, 4, 's 闭合');
+});
+
+test('endPath (n) 一个像素都不画:路径整条跳过并计入 unpainted (2.12.10)', () => {
+	const r = synth(28, [0, 0, 0, 1, 100, 0, 1, 100, 100, 1, 0, 100, 4], [0, 0, 100, 100]);
+	const stats = newStats();
+	const segs = segmentsFromOperatorList(r.fnArray, r.argsArray, r.ops, 20000, stats);
+	assert.equal(segs.length, 0, '裁剪矩形不该产出任何线段');
+	assert.equal(stats.unpainted, 1);
+	assert.equal(stats.skipped, 0, '这不是"解不出来",不许混进 skipped');
+});
+
+test('旧编码同样认收尾绘制码 —— 中间夹着 clip 也要看穿 (2.12.10)', () => {
+	const O = DEFAULT_PATH_OPS;
+	const r: RawOps = {
+		pdfjs: 'synthetic', page: 1, width: 100, height: 100, ops: { ...O },
+		// constructPath, clip, endPath  → 裁剪,不画
+		// constructPath, fill           → 画,且隐式闭合
+		fnArray: [O.constructPath, 29, 28, O.constructPath, 22],
+		argsArray: [
+			[[O.moveTo, O.lineTo, O.lineTo, O.lineTo], [0, 0, 100, 0, 100, 100, 0, 100]], null, null,
+			[[O.moveTo, O.lineTo, O.lineTo, O.lineTo], [0, 0, 10, 0, 10, 5, 0, 5]], null
+		]
+	};
+	const stats = newStats();
+	const segs = segmentsFromOperatorList(r.fnArray, r.argsArray, r.ops, 20000, stats);
+	assert.equal(stats.unpainted, 1, '裁剪那条要计入 unpainted');
+	assert.equal(segs.length, 4, `只剩填充那条的四条边,实得 ${segs.length}`);
+});
+
+// ---------------------------------------------------------------- 2.12.10:曲线包围盒要算紧的
+
+test('曲线的 minMax 是 pdf.js 按曲线真实极值算的,不是控制点 (2.12.10)', () => {
+	// 2.12.9 的注释说"控制点一并计入,实测 pdf.js 就是这么算的" —— **错了**。
+	// 源码里 curveTo 走的是 bezierBoundingBox(求导取极值)。之前 11630 条路径零误差,
+	// 只因为那两篇的曲线全是圆角矩形的四分之一弧,控制点恰好落在紧包围盒的边上。
+	// 真机 2.12.9 插图页 p44 有 36/80 条路径被 skipped,就是这个原因。
+	//
+	// 真值不抄 pdf.js:用 1000 点密采样独立算出极值,再与解码器的判断对照。
+	const x0 = 0, y0 = 0, x1 = 0, y1 = 100, x2 = 100, y2 = 100, x3 = 100, y3 = 0;
+	let maxy = -Infinity;
+	for (let i = 0; i <= 1000; i++) {
+		const t = i / 1000, mt = 1 - t;
+		maxy = Math.max(maxy, mt * mt * mt * y0 + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * y3);
+	}
+	assert.ok(Math.abs(maxy - 75) < 1e-3, `采样极值应为 75,实得 ${maxy}`);
+	const r = synth(20, [0, x0, y0, 2, x1, y1, x2, y2, x3, y3, 1, 200, 0], [0, 0, 200, 75]);
+	const stats = newStats();
+	const segs = segmentsFromOperatorList(r.fnArray, r.argsArray, r.ops, 20000, stats);
+	assert.equal(stats.skipped, 0, '紧包围盒与 minMax 吻合,不该被否决');
+	assert.equal(segs.length, 1, '曲线之后那条 lineTo 要交出来');
+});
+
+// ---------------------------------------------------------------- 2.12.10:至少 2 列 2 行
+
+test('一列 N 行的框不是表格 —— 与文档注释"≥2 列且 ≥2 行"对齐 (2.12.10)', () => {
+	// 真机 p44 报了 1×6 的"网格"。模块注释一直写着"要求成网格:≥2 列且 ≥2 行",
+	// 代码却只要求 2 条线(= 1 列)。单列的框是一个盒子,不是需要分格归属的表。
+	const segs: Segment[] = [];
+	for (const y of [100, 120, 140, 160, 180, 200, 220]) { segs.push([50, y, 300, y]); }
+	segs.push([50, 100, 50, 220], [300, 100, 300, 220]);
+	assert.equal(borderGrid(segs, { pageHeight: 800 }), null, '1 列不成表');
+	segs.push([175, 100, 175, 220]);
+	const g = borderGrid(segs, { pageHeight: 800 });
+	assert.ok(g && g.columns.length - 1 === 2 && g.rows.length - 1 === 6, '加一条中线就是 2 列 6 行');
+});
+
+test('同一位置的几段覆盖长度相加,但绝不把没有线的那一段补出来 (2.12.10)', () => {
+	// 一条列线被合并单元格那一行截成两截:上 45、下 127(表高 270)。
+	// 单段都不到 60%,加起来 172 才够 —— 这条线该算列边。
+	const segs: Segment[] = [
+		[100, 100, 100, 370], [300, 100, 300, 370], [200, 100, 200, 370],
+		[100, 100, 300, 100], [100, 150, 300, 150], [100, 250, 300, 250], [100, 370, 300, 370],
+		[150, 100, 150, 145], [150, 243, 150, 370]
+	];
+	const g = borderGrid(segs, { pageHeight: 500 })!;
+	assert.ok(g && g.columns.some((x) => Math.abs(x - 150) < 1), '两截相加够 60% 的列线要算');
+	// 反向:两截加起来也只有 20%,不算。
+	const weak = segs.filter((s) => s[0] !== 150).concat([[150, 100, 150, 125], [150, 345, 150, 370]]);
+	const g2 = borderGrid(weak, { pageHeight: 500 })!;
+	assert.ok(!g2.columns.some((x) => Math.abs(x - 150) < 1), '两截加起来 20% 的不算列边');
+});
+
+test('多表页:同一 x 上几张表各自的竖线不许连成一根 (2.12.10)', () => {
+	// 两张表上下叠放,列边完全相同,中间隔 40pt 的正文。以前 (pos, from) 排序在
+	// 位置有 0.5pt 漂移时会把两张表的竖线串成一根,再被"整页一张表"吞成一个网格。
+	const segs: Segment[] = [];
+	for (const [y0, y1] of [[100, 200], [240, 340]] as const) {
+		for (const x of [100, 200, 300]) { segs.push([x, y0, x, y1]); }
+		for (const y of [y0, (y0 + y1) / 2, y1]) { segs.push([100, y, 300, y]); }
+	}
+	// 第二张表的竖线位置漂 0.5pt。
+	for (const s of segs) { if (s[1] >= 240 && s[0] === s[2]) { s[0] += 0.5; s[2] += 0.5; } }
+	const gs = borderGrids(segs, { pageHeight: 500 });
+	assert.equal(gs.length, 2, `应为两张表,实得 ${gs.length}`);
+	assert.ok(gs.every((g) => g.rows.length === 3 && g.columns.length === 3), '每张 2×2');
 });
