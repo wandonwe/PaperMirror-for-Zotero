@@ -25,7 +25,7 @@ import * as logger from '../utils/logger';
 import { buildBlocks, buildBlocksFromPlainText, medianFontSize } from './blockBuilder';
 import { buildBlocksFromSpans } from './spanBlockBuilder';
 import { coalesceRegions } from './regionCoalescer';
-import { borderGrid, columnOfX, rowOfTop, type BorderGrid } from './tableBorders';
+import { borderGrid, borderGrids, columnOfX, rowOfTop, type BorderGrid } from './tableBorders';
 import { orderBlocksForReading } from './readingOrder';
 import { structureTableCells } from './tableStructure';
 import * as adapter from './zoteroReaderAdapter';
@@ -152,6 +152,10 @@ export interface ExtractPhases {
 	edgeShapeUnknown?: number;
 	/** 用新版(pdf.js 5.3+ 扁平指令流)编码解出来的路径数 (2.12.9)。 */
 	edgeNewShape?: number;
+	/** 收尾是 endPath、一个像素都不画的路径数 —— 裁剪路径 (2.12.10)。 */
+	edgeUnpainted?: number;
+	/** 这一页推出的网格张数;结构识别目前只接格数最多的那一张 (2.12.10)。 */
+	gridCount?: number;
 	/**
 	 * 2.12.8: 这一页取到的**图片矩形**数。同样是"从未被观测过"的东西 ——
 	 * getImageRectsPdf 与边框取证是同一段未 waive 的代码,极可能一直静默返回
@@ -369,12 +373,14 @@ export class TextExtractor implements PageParser {
 		}
 		const started = Date.now();
 		let grid: BorderGrid | null = null;
+		let gridCount = 0;
 		let segCount = 0;
 		try {
 			const segs = await withTimeout(adapter.getPageEdgesPdf(this.reader, pageIndex), 3000, 'getPageEdgesPdf');
 			segCount = segs?.length ?? 0;
 			if (segs && segs.length) {
 				grid = borderGrid(segs, { pageHeight });
+				gridCount = borderGrids(segs, { pageHeight }).length;
 			}
 		}
 		catch {
@@ -393,7 +399,9 @@ export class TextExtractor implements PageParser {
 				phases.edgeRealOps = scan.realOps;
 				phases.edgeShapeUnknown = scan.shapeUnknown;
 				phases.edgeNewShape = scan.newShape;
+				phases.edgeUnpainted = scan.unpainted;
 			}
+			phases.gridCount = gridCount;
 			phases.gridCols = grid ? grid.columns.length - 1 : -1;
 			phases.gridRows = grid ? grid.rows.length - 1 : -1;
 			if (grid) {
