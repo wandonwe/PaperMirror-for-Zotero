@@ -1295,14 +1295,6 @@ export class ReaderSession {
 		this.applyPaneViewKind('article', { persist: false, pageIndex });
 	}
 
-	/** 工具条「完整文章流」(3.0.3): 面板切成文章流、滚到当前页;不改默认视图偏好。 */
-	showArticleFlow(): void {
-		if (this.viewMode === 'overlay') {
-			this.setViewMode('split');
-		}
-		this.applyPaneViewKind('article', { persist: false });
-	}
-
 	/**
 	 * 切换面板视图 (3.0.2)。`pane.setViewKind` 只换壳:它清空文章流的每一节、
 	 * 清空页槽,然后**等** `renderPage` 再送状态进来。整页对照有 `initPageList`
