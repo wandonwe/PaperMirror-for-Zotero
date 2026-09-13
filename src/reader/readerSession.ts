@@ -2601,6 +2601,16 @@ export class ReaderSession {
 			scope: manager.exportScope(),
 			summary: () => ({
 				engines,
+				// 3.1.5: 排版相关偏好进导出 —— 字号/行距倍率直接改变每个盒的容量,
+				// 没有它们,no-room/height 的读数解释不了(CAD-RADS p13:164 字译文在
+				// 130pt 高的盒里按算放得下却放弃)。全是无隐私的版式数值。
+				layoutPrefs: {
+					fontSizeFactor: getPref('fontSizeFactor', '1'),
+					lineHeightFactor: getPref('lineHeightFactor', '1'),
+					viewMode: this.viewMode,
+					paneView: this.pane?.getViewKind() ?? null,
+					paneWidthPx: this.pane?.paneWidthPx() ?? null
+				},
 				engineRotations: this.pageProviderOffset.size,
 				// 2.12.0: 加权分页必须可审计 —— 权重是从哪些测量算出来的、
 				// 算成了多少,都要能在导出里对上,否则"自调"就是黑箱。

@@ -7,6 +7,28 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.1.5] — 2026-09-13
+
+### 修复:单行小字块全军覆没 —— 高度容差按字号算(CAD-RADS 2022 真机)
+
+3.1.4 导出(23 页)里 `shrink-floor/height` 16 处,几乎全是**单行**块:p1 两条 7pt 脚注、p4 三条 8.5pt、
+p12/15/18/20 的四条表题、"No change" 这样的 3 字表格格。它们的盒高就是原文行高(≈1em),而 CJK 字体的
+内容区比 1em 高得多(PingFang SC ≈1.32em、Noto Sans CJK ≈1.45em)—— line-height 已压到 1.0,`scrollHeight`
+仍比盒高多 0.2–0.45em,固定 1.5px 的容差一概判为放不下。容差改为 max(1.5px, 0.35em):内容区的超出部分
+是空白(墨迹在 em 框内,em 框与行框重合),真多出一行至少多 1em,0.35em 永远吸收不了它,溢出的块照样不放行。
+
+### 诊断导出记录版式偏好
+
+`summary.layoutPrefs`:字号倍率、行距倍率、视图模式、面板视图、面板宽度。没有它们,`no-room/height`
+的读数解释不了(p13 一段 164 字译文在 130pt 高的盒里按算放得下却放弃 —— 若倍率是 1.2 以上就说得通)。
+
+### 读数(记录)
+
+22 页 done、1 页 released;几何审计 0 违例。放弃:too-small 30(多为图内 2–10 字符标签与短格,合理)、
+no-room/height 20(其中 17 处在 p22 参考文献页:8pt 两栏、译文比原文宽 1.3–1.4 倍,正文流不缩字,原位确实
+放不下;文章流里完整)、shrink-floor/height 16(本版修)、shrink-floor/none+ink 4、expand-ink/none 1。
+`unrecovered` 4:p22 三条 300–700 字符的文献条目(回声被拒,重试后仍无译文)与 p1 一条同步发表声明。
+
 ## [3.1.4] — 2026-09-13
 
 ### 面板「更多」菜单:诊断与语料的四个入口只在勾选「调试」后显示(用户决定)
