@@ -546,7 +546,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	//
 	// 表格的几何模型(区域探测、单元格成员)输入**维持原样**,见下面的 `tabular`:
 	// 这一版只放表题进排版,不动表格判定,免得把两个变化搅在一起。
-	const geometric = input.blocks.filter(b => !b.isReference && !!b.lineRectsPdf?.length);
+	const geometric = selectGeometricBlocks(input.blocks);
 	// 表格几何模型的输入 —— 与改动前的 `geometric` 逐字相同(不含表题)。
 	// 表题不当区域种子、不当单元格成员: 它在表框外,进去只会污染区域范围。
 	const tabular = geometric.filter(b => b.type !== 'table');
@@ -728,7 +728,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			continue; // owned by the table cell model (translated cell or kept original)
 		}
 		const text = input.translations.get(block.id);
-		if (isMetadataBlock(block.sourceText)) {
+		// 排版不再独立猜"这段值不值得翻" (2.12.12, 审核第 5 条的第一步):上游已经
+		// 决定翻译并拿到了译文的块,这里只判"能不能安全放置"。没有译文的元数据块
+		// 仍按"有意不译"计,不算漏译。
+		if (text === undefined && isMetadataBlock(block.sourceText)) {
 			continue; // running heads/DOIs — deliberately not translated
 		}
 		if (text === undefined || !text.trim()) {
@@ -1867,8 +1870,25 @@ export function flashKeptIndicator(node: HTMLElement, durationMs = 2000): HTMLEl
  * 排版失败的表题由 `preserved`(进了 geometric 却没成为 item 的块)接住,
  * 遮挡不丢。
  */
-export function selectInkObstacleBlocks<T extends { isReference?: boolean; type?: string; lineRectsPdf?: unknown[] }>(blocks: T[]): T[] {
-	return blocks.filter(b => !!b.isReference && !!b.lineRectsPdf?.length);
+export function selectInkObstacleBlocks<T extends { isReference?: boolean; translationMode?: string; type?: string; lineRectsPdf?: unknown[] }>(blocks: T[]): T[] {
+	return blocks.filter(b => isKeptReference(b) && !!b.lineRectsPdf?.length);
+}
+
+/**
+ * 参考文献是"内容类别",不直接决定能不能显示 (2.12.12, 内容保留规则审核第 3 条)。
+ *
+ * 以前 `geometric` 无条件排除 `isReference`,而提取阶段开了"翻译参考文献"时
+ * 只是不给它打 preserve —— 于是**允许翻译不等于允许显示**:请求花了钱,页面仍是英文。
+ * 现在只有**仍保留原文**的参考文献(translationMode === 'preserve')留作墨迹遮挡物;
+ * 允许翻译的进排版,放不下由 `preserved` 接住,遮挡不丢。
+ */
+function isKeptReference(b: { isReference?: boolean; translationMode?: string }): boolean {
+	return !!b.isReference && b.translationMode === 'preserve';
+}
+
+/** 进入替换流水线的块 —— 与 selectInkObstacleBlocks 严格互补。 */
+export function selectGeometricBlocks<T extends { isReference?: boolean; translationMode?: string; type?: string; lineRectsPdf?: unknown[] }>(blocks: T[]): T[] {
+	return blocks.filter(b => !isKeptReference(b) && !!b.lineRectsPdf?.length);
 }
 
 /**

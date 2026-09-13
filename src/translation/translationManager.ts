@@ -168,6 +168,15 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 	const proseSource = stripProtectable(source);
 	const proseWords = (proseSource.match(/[A-Za-z]{2,}/g) ?? []).length;
 	if (proseWords < PROSE_WORD_GATE) {
+		// 短块没有廉价的比率判据,但**照抄**判得出来 (2.12.12, 内容保留规则审核第 1 条):
+		// 以前这里无条件放行,"No evidence of benefit" / "Document Title" / "Year Published"
+		// 原样返回都被计作成功、写进缓存,短标题和表头就此永远留英文。
+		// "允许原样保留"与"译文合格"是两件事:数字、缩写、人名、单位原样返回是正当的;
+		// 一句自然语言原样返回就是没译。这里只拦**内容相同**的回声,不要求短块必含中文 ——
+		// 否则 CT / MRI / p < 0.05 全会被推进无效重试。
+		if (isEcho(source, t) && !mayStayUntranslated(proseSource)) {
+			return false;
+		}
 		return true; // label / acronym / numeric cell — may legitimately be CJK-free
 	}
 	// 作者名单豁免 (retain-pdf): a byline legitimately stays Latin — rejecting
@@ -327,6 +336,38 @@ const CJK_RE = /[㐀-鿿豈-﫿]/g;
 
 /** A source with at least this many Latin words is prose worth validating. */
 const PROSE_WORD_GATE = 6;
+
+/** 内容相同(忽略大小写、标点、空白)= 回声。 */
+function isEcho(source: string, translated: string): boolean {
+	const norm = (x: string): string => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+	const a = norm(source);
+	return a.length > 0 && a === norm(translated);
+}
+
+/**
+ * 这段短文本**原样保留**是不是正当的 (2.12.12)。
+ *
+ * 正当:没有自然语言词(数字、单位、符号)、全是缩写(CT / MRI / COVID-19 / IIa)、
+ * 人名("Powers WJ" / "J. Smith" / "Zhang W, Li M")。
+ * 不正当:含至少一个普通词(≥3 个字母且至少 2 个小写)—— "Document Title"、
+ * "Not recommended"、"Table 3" 原样返回就是没译。
+ *
+ * 专名(药名、机构名)会被算成普通词而进入重试;重试链有上限,最终失败仍显示原文。
+ * 这是有意的取舍:把没译的标为已译、写进缓存,比多花一两次请求坏得多。
+ */
+function mayStayUntranslated(proseSource: string): boolean {
+	const t = proseSource.trim();
+	if (!t) { return true; }
+	const words = (t.match(/[A-Za-z][A-Za-z'’-]*/g) ?? [])
+		.filter(w => w.replace(/[^A-Za-z]/g, '').length >= 3 && (w.match(/[a-z]/g) ?? []).length >= 2);
+	if (words.length === 0) { return true; }
+	// 作者名单(≥3 段、每段 ≥2 词)至少 6 个词,根本到不了这个分支 —— 它在上面的
+	// PROSE_WORD_GATE 之后另有豁免;这里只需要认短形式的人名。
+	// 姓 + 首字母缩写(可逗号连排),或 首字母. 姓。
+	const surnameInitials = /^(?:[A-Z][a-z'’-]+(?:[\s-][A-Z][a-z'’-]+)?\s+[A-Z]{1,3}\.?\s*(?:,\s*|$))+$/;
+	const initialSurname = /^(?:[A-Z]\.\s*){1,2}[A-Z][a-z'’-]+$/;
+	return surnameInitials.test(t) || initialSurname.test(t);
+}
 /** Below this CJK ratio on a prose source, the response was not really translated. */
 const MIN_TARGET_RATIO = 0.45;
 
