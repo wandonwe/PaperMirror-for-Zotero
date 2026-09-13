@@ -787,7 +787,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// 遮罩盖不到图像部分的原文(英文透出),译文 div 却覆盖整个盒
 		// (中文叠印图上)。准入与遮罩必须服从同一条规则。
 		const area = box.width * box.height;
-		if (overlapsImageInk(box, imageBoxes)) {
+		// 按**行矩形**判压图,不按联合盒 (3.1.7, McCollough 2023 真机): 文字绕图排的段落,
+		// 联合盒与横跨两栏的图框在角上重叠 10%,而没有一行文字碰到图 —— 三段整栏
+		// 正文(809/877/1667 字符)整段被当成"图内文字"丢掉。遮罩本来就按行画、按图
+		// 硬裁,准入也该按行:行面积落进图里的比例 >2% 才是图内文字。
+		const lineBoxesPx = ((block.lineRectsPdf ?? []) as Rect[]).map(r => rectToPixels(r, render, 1));
+		if (lineBoxesPx.length ? imageInkFraction(lineBoxesPx, imageBoxes) > 0.02 : overlapsImageInk(box, imageBoxes)) {
 			imageExcluded++;
 			skipped.push({ id: block.id, reason: 'image' });
 			continue;
@@ -826,7 +831,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// table regions, so they must bypass the region-overlap guard above).
 	for (const cb of cellBlocks) {
 		const box = pixelBox(cb, render, 1);
-		if (box.width < 20 || box.height < 9) {
+		// 门槛按 PDF 点 (3.1.7, 与 3.1.3 正文门槛同理): 20/9px ÷ 1.333 = 15/6.75pt,高度取 6pt。
+		if (box.width < 15 * pxPerPoint || box.height < 6 * pxPerPoint) {
 			tableFailed += 1; // a translatable cell too small to place
 			continue;
 		}
@@ -1968,6 +1974,28 @@ export function selectGeometricBlocks<T extends { isReference?: boolean; transla
 export function overlapsImageInk(box: PixelBox, imageBoxes: PixelBox[]): boolean {
 	const area = box.width * box.height;
 	return area > 0 && imageBoxes.some(img => intersectArea(box, img) > area * 0.02);
+}
+
+/**
+ * 行面积落进图像矩形的比例 (3.1.7) — pure。每行只取与它相交最多的那张图,
+ * 分母是所有行矩形的面积和;0 = 没有一行碰到图。
+ */
+export function imageInkFraction(lineBoxes: PixelBox[], imageBoxes: PixelBox[]): number {
+	let total = 0;
+	let inside = 0;
+	for (const line of lineBoxes) {
+		const area = line.width * line.height;
+		if (area <= 0) {
+			continue;
+		}
+		total += area;
+		let best = 0;
+		for (const img of imageBoxes) {
+			best = Math.max(best, intersectArea(line, img));
+		}
+		inside += best;
+	}
+	return total > 0 ? inside / total : 0;
 }
 
 /**
