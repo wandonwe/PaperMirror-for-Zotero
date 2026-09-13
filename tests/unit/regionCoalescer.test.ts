@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canMerge, canMergeCaption, coalesceRegions, separatorBetween } from '../../src/reader/regionCoalescer';
+import { canMerge, canMergeCaption, coalesceRegions, separatorBetween, mergeTwo } from '../../src/reader/regionCoalescer';
 import type { SourceBlock } from '../../src/types/models';
 
 /** A body block occupying one or more stacked lines in a column. */
@@ -314,4 +314,29 @@ test('caption 聚合有边界: 行距超过一行的量级就不是续行', () =
 	const caption = captionLine('c0', 'Figure 4: Free-breathing photon-counting detector CT scans without and with high-pitch mode', 573, 513, 'caption');
 	const farBelow = captionLine('c1', 'mode in two children, each aged 3 years, with cystic fibrosis. The diaphragms are crisper.', 520);
 	assert.equal(canMergeCaption(caption, farBelow), false, '53pt 的落差是段间距, 不是行距');
+});
+
+
+// ---- 3.1.8: b 带段落组时,组边界不能丢 (CAD-RADS 2022 p12 / p16 真机) ----------
+//
+// 碎片吸收与图注归位都会把一个已经合并过、自带 `\n\n` 组边界的区域当 b 传给 mergeTwo。
+// 旧实现把 b 的全部行塞进 a 的末组:文本里两段、几何里一组,排版按整块放、pre-line 又
+// 多画一个空行,4 行的盒装 5 行 → no-room/height。
+test('3.1.8:mergeTwo 接一个多组的 b —— 首组续进 a 末组,其余组原样追加', () => {
+	const size = 8.5;
+	const opening = block('a', 'I+ will be added to CAD-RADS. If no ischemia is detected then the', { lines: 2, fontSize: size, width: 474 });
+	// 第三行以小写开头、句号结尾;标签紧接在它下一行(同一行距)。
+	const shard = block('s', 'modifier I- will be added. Modifier I indicates borderline ischemia.', { lines: 1, fontSize: size, topY: 700 - 2 * size * 1.3, width: 70 });
+	// 真机几何:标签的行距比正文大一截(行间空 9.65pt),句号 + 空行 → 段落边界。
+	const label = block('l', 'CCTA (Stenosis)', { lines: 1, fontSize: size, topY: 700 - 2 * size * 1.3 - size - 9.65, width: 60 });
+	const tail = mergeTwo(shard, label);
+	assert.equal(tail.regionParagraphs?.length, 2, '碎片 + 标签:句号 + 行距 → 两组');
+	assert.ok(tail.sourceText.includes('\n\n'));
+	const whole = mergeTwo(opening, tail);
+	const paras = whole.sourceText.split(/\n+/).filter(Boolean);
+	assert.equal(paras.length, 2, '文本两段');
+	assert.equal(whole.regionParagraphs?.length, 2, '几何也必须两组 —— 旧实现这里是 1');
+	assert.equal(whole.regionParagraphs![0]!.lineRectsPdf.length, 3, '首组 = a 的两行 + 碎片那一行');
+	assert.equal(whole.regionParagraphs![1]!.lineRectsPdf.length, 1, '末组 = 标签那一行');
+	assert.equal(whole.lineRectsPdf!.length, 4);
 });
