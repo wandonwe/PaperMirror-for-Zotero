@@ -552,14 +552,18 @@ export class TranslationPane {
 				// 2.10.2: 术语回到工具条常驻(与解析并列),不再在这里重复出现 ——
 				// 同一个动作两个入口,菜单会越长越像杂物抽屉。
 				{ label: this.strings.saveNote, checked: false, onPick: () => this.callbacks.onSaveNote() },
-				{ label: '导出译文 PDF(单语 + 对照两份)', checked: false, onPick: () => this.callbacks.onExportPdf() },
-				// 2.8.8 (导出方案 P3): 两个文件导出入口。语料**常驻**,与调试日志解绑。
-				{ label: '导出诊断文件(整篇;不含原文/译文/密钥)', checked: false, onPick: () => this.callbacks.onExportDiagnosticsFile() },
-				{ label: '导出翻译语料(整篇;含原文与译文)', checked: false, onPick: () => this.callbacks.onExportCorpusFile() },
-				{ label: '诊断:复制脱敏指标 + 引擎自检(不含原文/密钥)', checked: false, onPick: () => this.callbacks.onShowDiagnostics() }
+				{ label: '导出译文 PDF(单语 + 对照两份)', checked: false, onPick: () => this.callbacks.onExportPdf() }
 			];
+			// 3.1.4 (用户决定): 诊断 / 语料的四个入口全部只在勾选「调试」后显示 ——
+			// 它们是给排障用的,普通阅读时占着菜单只会让人误点导出一堆文件。
+			// (2.8.8 曾把语料导出设为常驻、与调试日志解绑;现在改回统一门控。)
 			if (getPref<boolean>('debugLogging', false)) {
-				items.push({ label: '语料:复制本页布局语料(含本页原文)', checked: false, onPick: () => this.callbacks.onCopyCorpus() });
+				items.push(
+					{ label: '导出诊断文件(整篇;不含原文/译文/密钥)', checked: false, onPick: () => this.callbacks.onExportDiagnosticsFile() },
+					{ label: '导出翻译语料(整篇;含原文与译文)', checked: false, onPick: () => this.callbacks.onExportCorpusFile() },
+					{ label: '诊断:复制脱敏指标 + 引擎自检(不含原文/密钥)', checked: false, onPick: () => this.callbacks.onShowDiagnostics() },
+					{ label: '语料:复制本页布局语料(含本页原文)', checked: false, onPick: () => this.callbacks.onCopyCorpus() }
+				);
 			}
 			this.openBarMenu(moreChip, [{ items }]);
 		});
