@@ -152,12 +152,19 @@ export const MAX_RENDER_RETRIES = 2;
  * are rejected and routed through retry/salvage instead of stored as "done".
  * Short cells/labels and non-CJK targets have no cheap check and pass.
  */
-export function looksTranslated(source: string, translated: string, targetLang: string): boolean {
+export function looksTranslated(source: string, translated: string, targetLang: string, opts?: { isReference?: boolean }): boolean {
 	const t = translated.trim();
 	if (!t) {
 		return false;
 	}
 	if (!/^zh/i.test(targetLang)) {
+		return true;
+	}
+	// 参考文献块的回声视为合格 (3.2.0, Mets 2013 p8 真机): 文献条目按规则"作者/期刊/年份/DOI
+	// 原样保留、标题翻译",模型对一条被拆成单行的碎片("IEEE Trans Med Imaging 2012;31:"、
+	// "6. Mets OM, Buckens CF, Zanen P, et al.")原样返回时,它的判断比任何正则都可靠;
+	// 拒收只换来同一结果的重试和 unrecovered。原文留在页上就是这条的正确结果。
+	if (opts?.isReference && isEcho(source, t)) {
 		return true;
 	}
 	// PROSE-ONLY scoring (审核项: 统计密集行被误拒): citations, p-values, CIs and
@@ -1522,7 +1529,7 @@ export class TranslationManager {
 					glossary: this.glossaryFor([block.sourceText])
 				}, signal), signal);
 				const hit = resp.translations.find(t =>
-					looksTranslated(block.sourceText, t.translatedText, target)
+					looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference })
 					&& reg.ok(t.translatedText));
 				if (!hit) {
 					return false;
@@ -2446,7 +2453,7 @@ export class TranslationManager {
 					blocks: [{ id: block.id, type: block.type, text }],
 					glossary: this.glossaryFor([block.sourceText])
 				}, signal);
-				const hit = resp.translations.find(t => looksTranslated(block.sourceText, t.translatedText, target)
+				const hit = resp.translations.find(t => looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference })
 					&& reg.ok(t.translatedText));
 				if (!hit) {
 					continue;
@@ -2606,9 +2613,10 @@ export class TranslationManager {
 		const { source, target } = this.deps.getLanguages(sampleText);
 		const glossary = this.glossaryFor(activeBlocks.map(b => b.sourceText));
 		const sourceById = new Map(activeBlocks.map(b => [b.id, b.sourceText]));
+		const refById = new Set(activeBlocks.filter(b => b.isReference).map(b => b.id));
 		// Accept a response only if it is actually translated (not echoed English).
 		const accept = (id: string, text: string): boolean =>
-			text.trim().length > 0 && looksTranslated(sourceById.get(id) ?? '', text, target);
+			text.trim().length > 0 && looksTranslated(sourceById.get(id) ?? '', text, target, { isReference: refById.has(id) });
 
 		// 2. Cache — a hit is only COMPLETE when every active block has a usable
 		// translation (审核 P1): the file being valid never meant it covered the
@@ -3043,7 +3051,7 @@ export class TranslationManager {
 						// actually translated, not the English echoed back, and no
 						// protected token was lost or invented.
 						const first = single.translations.find(t =>
-							looksTranslated(block.sourceText, t.translatedText, target)
+							looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference })
 							&& pb.reg.ok(t.translatedText));
 						if (first) {
 							received.set(block.id, first.translatedText);
@@ -3190,7 +3198,7 @@ export class TranslationManager {
 						plain: true
 					}, signal);
 					const translatedHit = resp.translations.find(t =>
-						looksTranslated(block.sourceText, t.translatedText, target));
+						looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference }));
 					const hit = translatedHit && pb.reg.ok(translatedHit.translatedText) ? translatedHit : undefined;
 					if (hit) {
 						const restored = pb.reg.restore(hit.translatedText);
@@ -3217,7 +3225,7 @@ export class TranslationManager {
 							plain: true
 						}, signal);
 						const bareHit = bare.translations.find(t =>
-							looksTranslated(block.sourceText, t.translatedText, target));
+							looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference }));
 						if (bareHit) {
 							state.translations.set(block.id, bareHit.translatedText);
 							results.push({ id: block.id, translatedText: bareHit.translatedText });

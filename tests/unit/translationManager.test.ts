@@ -2697,3 +2697,12 @@ test('3.1.3:参考文献期刊尾段原样返回视为合格', () => {
 	assert.equal(looksTranslated('Reducing image noise in CT 2013;48(1):32–40.', 'Reducing image noise in CT 2013;48(1):32–40.', 'zh-CN'), false,
 		'尾段前面带自然语言就不是尾段');
 });
+
+// ---- 3.2.0: 参考文献块的回声视为合格 (Mets 2013 p8) -------------------------------
+test('3.2.0:isReference 的块原样返回 → 合格;同样文本非文献块仍按没译处理', () => {
+	const frag = 'the Rotterdam study. J Am Coll';
+	assert.equal(looksTranslated(frag, frag, 'zh-CN', { isReference: true }), true, '文献碎片原样保留是模型的判断,不再重试');
+	assert.equal(looksTranslated(frag, frag, 'zh-CN'), false, '正文里同样的短语原样返回还是没译');
+	assert.equal(looksTranslated(frag, '', 'zh-CN', { isReference: true }), false, '空响应不算');
+	assert.equal(looksTranslated('6. Mets OM, Buckens CF, Zanen P, et al.', '6. Mets OM, Buckens CF, Zanen P, et al.', 'zh-CN', { isReference: true }), true);
+});
