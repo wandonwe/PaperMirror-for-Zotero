@@ -75,6 +75,13 @@ const LINE_HEIGHT_FLOOR = 1.0;
  * never has its lines crushed below 1.3. This is "match the original leading",
  * not "force everything to a fixed 1.14".
  */
+/** 内容相同(忽略大小写、标点、空白)= 回声;与 translationManager 的判据一致。 */
+export function isEcho(source: string, translated: string): boolean {
+	const norm = (x: string): string => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+	const a = norm(source);
+	return a.length > 0 && a === norm(translated);
+}
+
 export function ladderFor(minLineHeight: number): { lineHeight: number; letterSpacingEm: number }[] {
 	const floor = Math.max(LINE_HEIGHT_FLOOR, Math.min(1.42, minLineHeight));
 	const steps = STRICT_LADDER
@@ -740,6 +747,14 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		}
 		if (text === undefined || !text.trim()) {
 			untranslated++; // service never returned this block
+			continue;
+		}
+		// 回声 = 原文即译文 (3.1.6, CAD-RADS p20/p21 "P1/P2/P3/P4" 实证): 验收允许标识
+		// 原样返回,但拿它去替换原文毫无意义 —— CJK 字体里的拉丁字比原文宽,一个
+		// 9pt 的标签在自己的盒里放不下,于是以 shrink-floor 放弃、计入未放回。原文
+		// 已经在页上,它就是译文;不遮、不放、不算失败,诊断里记为 preserved/echo。
+		if (isEcho(block.sourceText, text)) {
+			skipped.push({ id: block.id, reason: 'echo' });
 			continue;
 		}
 		if (guard.excluded.has(block.id)) {

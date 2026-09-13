@@ -47,9 +47,14 @@ export function joinPlacementOutcome(
 			...page,
 			blocks: page.blocks.map((b) => {
 				const reason = reasonOf.get(b.id);
-				return reason !== undefined && b.state === 'translated'
-					? { ...b, state: 'unplaced', abandonReason: reason }
-					: b;
+				if (reason === undefined || b.state !== 'translated') {
+					return b;
+				}
+				// 回声 (3.1.6): 原文即译文,原文留在页上就是正确结果 —— 不是未放回。
+				if (reason === 'echo') {
+					return { ...b, state: 'preserved', preserveReason: 'echo' };
+				}
+				return { ...b, state: 'unplaced', abandonReason: reason };
 			})
 		};
 	});
