@@ -23,6 +23,7 @@ import {
 	poolLanePlan,
 	customLaneRange,
 	customBandFor,
+	isFreeMt,
 	type ProviderCapability
 } from '../translation/providerPool';
 import {
@@ -331,9 +332,15 @@ interface PaperMirrorPublicAPI {
 				const checked = readChecked();
 				const providers = api()?.listProviders() ?? [];
 				const primary = String(byId<HTMLElement & { value: string }>('papermirror-provider')?.value || getPref('provider') || 'bing-free');
+				// 3.1.9 (用户决定): 主引擎是免费通道 → 整个并行区块不显示;
+				// 主引擎是 LLM → 免费通道不出现在可勾列表里。理由见 providerPool.buildPool。
+				const section = byId<HTMLElement>('papermirror-pool-section');
+				if (section) {
+					section.hidden = isFreeMt(primary);
+				}
 				const rows: HTMLElement[] = [];
 				for (const provider of providers) {
-					if (provider.id === primary || provider.id === 'custom') {
+					if (provider.id === primary || provider.id === 'custom' || isFreeMt(provider.id)) {
 						continue;
 					}
 					let usable = !provider.requiresApiKey;

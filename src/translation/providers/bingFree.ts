@@ -180,6 +180,22 @@ export function combineChannelError(scrapeErr: PaperMirrorError | null, message:
 	return new PaperMirrorError('BAD_RESPONSE', message, { retryable: true });
 }
 
+/** 没有 Retry-After 时 Bing 限流的默认退避 —— 有界,不是无限重试。 */
+export const BING_RATE_LIMIT_BACKOFF_MS = 2000;
+
+/**
+ * Bing 的限流信号做成 RATE_LIMITED (3.1.9, 修「限流盲区」): 抓取通道被限流时**不是**
+ * HTTP 429,而是 200 里带 `{statusCode: 429}`,或者一个静默的空 200。此前两者都被包成
+ * BAD_RESPONSE{retryable:true},laneFeedback 收不到 'rate',车道限流失明,按 400ms
+ * 快速重试继续锤;只有把它们标成 RATE_LIMITED + retryAfterMs,调度器才会给这条
+ * 车道降并发、按退避等待。
+ */
+export function bingRateLimited(message: string, retryAfterMs = BING_RATE_LIMIT_BACKOFF_MS): PaperMirrorError {
+	const err = new PaperMirrorError('RATE_LIMITED', message, { httpStatus: 429, retryable: true });
+	(err as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs = retryAfterMs;
+	return err;
+}
+
 export function raceSignal<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
 	if (!signal) {
 		return promise;
@@ -470,11 +486,20 @@ async function translateViaScrape(
 			await getSession(settings.timeoutMs, signal, true);
 			return translateViaScrape(text, sl, tl, settings, signal, false);
 		}
+		// 换过主机再来一次仍是空 200 → 这是限流,不是坏响应 (3.1.9)。
+		if (e instanceof PaperMirrorError && e.code === 'BAD_RESPONSE' && /empty body/i.test(e.message)) {
+			throw bingRateLimited(`Bing 静默返回空响应(限流/风控):${e.message}`);
+		}
 		throw e;
 	}
 	// A token failure returns { statusCode: 400 } instead of an array
 	const statusCode = (json as { statusCode?: number })?.statusCode;
 	if (typeof statusCode === 'number' && statusCode >= 400) {
+		// 200 里带 {statusCode: 429} 就是 Bing 的限流 (3.1.9):不刷会话、不快速重试,
+		// 直接以 RATE_LIMITED 交给调度器退避。
+		if (statusCode === 429) {
+			throw bingRateLimited('Bing returned statusCode 429 (rate limited).');
+		}
 		if (allowRetry) {
 			await getSession(settings.timeoutMs, signal, true);
 			return translateViaScrape(text, sl, tl, settings, signal, false);

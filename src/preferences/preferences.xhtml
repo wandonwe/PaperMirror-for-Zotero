@@ -316,11 +316,13 @@
 			<html:div id="papermirror-perf-chips" class="pm-perf-chips"></html:div>
 			<html:div id="papermirror-perf-why" class="pm-desc" style="margin-top: 2px;"></html:div>
 		</html:div>
-		<hbox class="pm-line" style="margin-top: 8px;">
-			<label value="并行翻译服务商(与主服务商轮流分担页面)"/>
-		</hbox>
-		<html:div id="papermirror-pool" class="pm-field" style="flex-direction: column; align-items: stretch; gap: 2px;"></html:div>
-		<html:div class="pm-desc">勾选后,文档的页面会在主服务商和勾选的服务商之间轮流分配,各自使用自己的密钥——吞吐量按家数相乘,且不触碰任何单家的限速。注意:论文文本会被发送给每一家勾选的服务商;不同服务商的译文风格可能略有差异(术语表对所有家生效)。未配置密钥的服务商会被自动跳过。</html:div>
+		<vbox id="papermirror-pool-section">
+			<hbox class="pm-line" style="margin-top: 8px;">
+				<label value="并行翻译服务商(与主服务商轮流分担页面,仅限 LLM 引擎)"/>
+			</hbox>
+			<html:div id="papermirror-pool" class="pm-field" style="flex-direction: column; align-items: stretch; gap: 2px;"></html:div>
+			<html:div class="pm-desc">勾选后,文档的页面会在主服务商和勾选的服务商之间轮流分配,各自使用自己的密钥——吞吐量按家数相乘,且不触碰任何单家的限速。只有 LLM 类引擎可以并行:免费通道(微软 / Google)不吃提示词和字符预算,分到它的页面会被它的限流拖住,所以只能单独使用。注意:论文文本会被发送给每一家勾选的服务商;不同服务商的译文风格可能略有差异(术语表对所有家生效)。未配置密钥的服务商会被自动跳过。</html:div>
+		</vbox>
 	</vbox>
 
 	<!-- ======================= 阅读 ======================= -->
