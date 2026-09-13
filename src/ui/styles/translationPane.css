@@ -1250,6 +1250,7 @@
 /* 文字动作按钮的图标与标签 —— 与 .pm-icon-button 的描边风格保持一套。
    2.10.2: 从「解析」专属推广到所有带图标的动作按钮(现在还有「术语」),
    各写一份迟早会在描边粗细或尺寸上悄悄分叉。 */
+.pm-bar-action-view,
 .pm-bar-action-explain,
 .pm-bar-action-terms {
 	display: inline-flex;
@@ -1433,10 +1434,12 @@
 	.pm-bar .pm-switch-label span:last-child {
 		display: none;
 	}
+	.pm-bar-action-view span,
 	.pm-bar-action-explain span,
 	.pm-bar-action-terms span {
 		display: none;
 	}
+	.pm-bar-action-view,
 	.pm-bar-action-explain,
 	.pm-bar-action-terms {
 		padding: 0 6px;

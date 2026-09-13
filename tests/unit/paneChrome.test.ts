@@ -187,24 +187,25 @@ test('同步滚动归入左组,排在全文重译之后 (2.10.2)', () => {
 	assert.ok(at('termsButton') < at('this.buildMoreButton()'), '「更多」在动作之后收尾');
 });
 
-test('两个文字动作按钮同一套图标与收纳规则 (2.10.2)', () => {
+test('文字动作按钮同一套图标与收纳规则 (2.10.2, 3.0.2 三个)', () => {
 	const src = PANE();
 	assert.ok(/terms: 'M4 19\.5V5/.test(src), '「术语」要有自己的线条图标');
 	// 各写一份构造迟早会在 aria-label、图标尺寸或标签包裹上分叉。
 	// 只数构造函数出现几次是不够的 —— 旁边再写一个别的名字,计数照样是 1。
 	// 要钉的是**两个按钮都从它出来**。
 	const body = code(src);
-	for (const name of ['explainButton', 'termsButton']) {
+	// 3.0.2: 视图切换按钮也从这里出来 —— 三个,不多不少。
+	for (const name of ['viewKindButton', 'explainButton', 'termsButton']) {
 		assert.ok(new RegExp(`const ${name} = actionButton\\(`).test(body),
 			`${name} 必须由共用构造产出`);
 	}
-	assert.equal((body.match(/= actionButton\(/g) ?? []).length, 2,
-		'共用构造正好产出这两个按钮');
+	assert.equal((body.match(/= actionButton\(/g) ?? []).length, 3,
+		'共用构造正好产出这三个按钮');
 	const css = CSS();
 	assert.ok(/\.pm-bar-action svg \{/.test(css), '图标样式对所有动作按钮生效,不是某一个专属');
 	const narrow = css.slice(css.indexOf('@media (max-width: 640px)'));
-	assert.ok(/\.pm-bar-action-explain span,\s*\n\s*\.pm-bar-action-terms span/.test(narrow),
-		'窄档两个按钮一起收成纯图标 —— 只收一个,另一个照样把控件挤出去');
+	assert.ok(/\.pm-bar-action-view span,\s*\n\s*\.pm-bar-action-explain span,\s*\n\s*\.pm-bar-action-terms span/.test(narrow),
+		'窄档三个按钮一起收成纯图标 —— 只收一个,另一个照样把控件挤出去');
 });
 
 test('表头不换行 —— 页面起点不跳靠的就是它 (2.10.0 守住既有性质)', () => {
@@ -328,4 +329,40 @@ test('主题变化有订阅,且会被拆除 (2.10.0)', () => {
 	assert.ok(/this\.disposeTheme = adapter\.watchTheme\(/.test(session),
 		'此前主题只在建窗格时读一次 —— 开着窗格切主题,窗格是唯一不变的那块');
 	assert.ok(/this\.disposeTheme\?\.\(\);/.test(session), '订阅必须在关闭时解掉,否则是泄漏');
+});
+
+// ---- 9. 文章流视图必须有入口、有出口、有内容 (3.0.2) -------------------------
+//
+// 真机截图(Goenka 2016,3.0.1):点胶囊「查看译文」→ 右侧整片空白,且回不去。
+// 两个原因叠在一起:`viewKindButton` 自 1b62d31 起只声明从未创建(没有出口);
+// `pane.setViewKind('article')` 清空一切后**等** renderPage,而没人再送(没有内容)。
+
+test('视图切换按钮真的被创建,并接到 onToggleViewKind (3.0.2)', () => {
+	const pane = code(PANE());
+	assert.ok(/this\.viewKindButton = /.test(pane),
+		'viewKindButton 只声明不创建 —— 文章流视图在界面上就没有出口');
+	assert.ok(/onToggleViewKind\(this\.viewKind === 'page' \? 'article' : 'page'\)/.test(pane),
+		'按钮必须切到**另一个**视图');
+	// 「更多」菜单里也要有两项带勾选 —— 窄窗会把工具条按钮裁掉。
+	assert.ok(/checked: this\.viewKind === 'page'/.test(pane) && /checked: this\.viewKind === 'article'/.test(pane));
+	// 窄档收标签的规则要覆盖这个按钮,否则它一个就把工具条撑爆。
+	const css = CSS();
+	assert.ok(/\.pm-bar-action-view span,[\s\S]{0,80}display: none;/.test(css));
+});
+
+test('切到文章流要把已有页面状态重新喂给面板,而不是留一片空白 (3.0.2)', () => {
+	const session = code(read('src/reader/readerSession.ts'));
+	// 偏好回调不能只写偏好 —— 3.0.1 之前 onToggleViewKind 只 setPref,视图本身不动。
+	assert.ok(/onToggleViewKind: kind => this\.applyPaneViewKind\(kind, \{ persist: true \}\)/.test(session));
+	const at = session.indexOf('private applyPaneViewKind(');
+	assert.ok(at > 0);
+	const body = session.slice(at, session.indexOf('\n\t}\n', at));
+	assert.ok(/this\.pane\.setViewKind\(kind\)/.test(body));
+	assert.ok(/getPageState\(p\)/.test(body) && /this\.pane\.renderPage\(state\)/.test(body),
+		'必须把每页已有状态 renderPage 回去 —— setViewKind 清空文章流后没人再送');
+	assert.ok(/this\.pane\.scrollToPage\(target\)/.test(body));
+	// 「查看译文」走同一条路,且不改用户的默认视图偏好。
+	const kept = session.slice(session.indexOf('private viewKeptOriginal('), session.indexOf('private applyPaneViewKind('));
+	assert.ok(/this\.applyPaneViewKind\('article', \{ persist: false, pageIndex \}\)/.test(kept));
+	assert.ok(!/this\.pane\.setViewKind\('article'\)/.test(kept), 'viewKeptOriginal 不许绕过重喂直接 setViewKind');
 });
