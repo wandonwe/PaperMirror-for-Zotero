@@ -90,7 +90,10 @@ const ICON_PATHS = {
 	// 与旁边的线条图标不是一套视觉语言。
 	explain: 'M12 3.5 13.9 9l5.6 1.9-5.6 1.9L12 18.5l-1.9-5.7L4.5 10.9 10.1 9 12 3.5Z M18.5 16.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z',
 	// 三点「更多」(2.4.2): h.01 + stroke-linecap:round = 三个圆点。
-	more: 'M5 12h.01 M12 12h.01 M19 12h.01'
+	more: 'M5 12h.01 M12 12h.01 M19 12h.01',
+	// 视图切换 (3.0.2): 三行文字 = 文章流;带框的三行 = 整页对照。同一 1.8 描边。
+	viewArticle: 'M4 6h16 M4 12h16 M4 18h10',
+	viewPage: 'M5 3.5h14a1.5 1.5 0 0 1 1.5 1.5v14a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5Z M7.5 8h9 M7.5 12h9 M7.5 16h5'
 } as const;
 
 export interface PaneStrings {
@@ -538,6 +541,9 @@ export class TranslationPane {
 		let moreChip: HTMLElement;
 		moreChip = this.iconButton(ICON_PATHS.more, this.strings.more, () => {
 			const items: { label: string; checked: boolean; onPick(): void }[] = [
+				// 3.0.2: 两种视图带勾选 —— 工具条按钮在窄窗会被裁掉,这里是永远够得到的出口。
+				{ label: this.strings.viewPage, checked: this.viewKind === 'page', onPick: () => this.callbacks.onToggleViewKind('page') },
+				{ label: this.strings.viewArticle, checked: this.viewKind === 'article', onPick: () => this.callbacks.onToggleViewKind('article') },
 				// 2.10.0: 保存到笔记从常驻按钮下沉到这里。
 				// 2.10.2: 术语回到工具条常驻(与解析并列),不再在这里重复出现 ——
 				// 同一个动作两个入口,菜单会越长越像杂物抽屉。
@@ -987,6 +993,18 @@ export class TranslationPane {
 			this.strings.terms, this.strings.termsTip,
 			() => this.callbacks.onSaveTerms()
 		);
+		// 视图切换 (3.0.2)。`viewKindButton` 从 1b62d31 起只声明、从未创建 ——
+		// 文章流视图在界面上一直没有入口,也没有出口。3.0.0 的「查看译文」把面板
+		// 切进文章流之后,用户就困在里面了(截图:右侧空白、回不去整页对照)。
+		// 按钮始终显示**另一个**视图的名字(refreshViewKindButton),点一下就切过去;
+		// 「更多」菜单里同时列出两项带勾选,窄窗把标签收起时仍有一条不裁的路。
+		const viewKindButton = actionButton(
+			'pm-bar-action-view', ICON_PATHS.viewArticle,
+			this.strings.viewArticle, this.strings.viewArticle,
+			() => this.callbacks.onToggleViewKind(this.viewKind === 'page' ? 'article' : 'page')
+		);
+		this.viewKindButton = viewKindButton;
+		this.refreshViewKindButton();
 
 		bar.append(
 			this.languagePill,
@@ -994,6 +1012,7 @@ export class TranslationPane {
 			refreshChip,
 			this.syncSwitch,
 			this.el('span', 'pm-bar-spacer'),
+			viewKindButton,
 			explainButton,
 			termsButton,
 			this.buildMoreButton(),
@@ -1317,8 +1336,12 @@ export class TranslationPane {
 			return;
 		}
 		const label = this.viewKind === 'page' ? this.strings.viewArticle : this.strings.viewPage;
-		this.viewKindButton.textContent = label;
+		const icon = this.viewKind === 'page' ? ICON_PATHS.viewArticle : ICON_PATHS.viewPage;
+		// 按钮 = 图标 + <span> 标签(标签在窄档由 CSS 藏起来,裸文本藏不掉)。
+		this.viewKindButton.replaceChildren(this.svgIcon(icon), this.el('span', undefined, label));
 		this.viewKindButton.setAttribute('title', label);
+		this.viewKindButton.setAttribute('aria-label', label);
+		this.viewKindButton.setAttribute('data-pm-view', this.viewKind);
 	}
 
 	getViewKind(): 'page' | 'article' {

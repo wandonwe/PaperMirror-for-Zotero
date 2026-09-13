@@ -418,7 +418,7 @@ export class ReaderSession {
 			onSaveTerms: () => this.previewSaveLearnedTerms(), // 2.3.1 item3: 预览并保存到词汇表(不再只复制 TSV)
 			onExportPdf: () => void this.exportTranslatedPdf(), // 菜单栏「导出」(2.3.8 从「更多」搬回工具条)
 			onOpenSettings: () => this.openSettings(),
-			onToggleViewKind: kind => setPref('paneView', kind),
+			onToggleViewKind: kind => this.applyPaneViewKind(kind, { persist: true }),
 			onPickLanguages: (source, target) => this.applyLanguagePick(source, target),
 			onPickProvider: providerId => this.applyProviderPick(providerId),
 			onClose: () => this.close(),
@@ -1288,10 +1288,41 @@ export class ReaderSession {
 		if (this.viewMode === 'overlay') {
 			this.setViewMode('split');
 		}
-		if (this.pane) {
-			this.pane.setViewKind('article');
-			this.pane.scrollToPage(pageIndex);
+		// 3.0.2: 不写偏好 —— 这是一次"去看译文",不是用户改了默认视图;
+		// 工具条上的视图按钮 / 「更多」菜单随时能切回整页对照。
+		this.applyPaneViewKind('article', { persist: false, pageIndex });
+	}
+
+	/**
+	 * 切换面板视图 (3.0.2)。`pane.setViewKind` 只换壳:它清空文章流的每一节、
+	 * 清空页槽,然后**等** `renderPage` 再送状态进来。整页对照有 `initPageList`
+	 * 自己把槽建回来;文章流没有 —— 3.0.0 的「查看译文」切过去之后什么都不送,
+	 * 右侧就一直空白(用户截图)。这里把已有的每页状态重新喂一遍,和
+	 * applyOverlay 对覆盖层做的一样;然后滚到要看的页。
+	 */
+	private applyPaneViewKind(
+		kind: 'page' | 'article',
+		opts: { persist: boolean; pageIndex?: number }
+	): void {
+		if (opts.persist) {
+			setPref('paneView', kind);
 		}
+		if (!this.pane) {
+			return;
+		}
+		const changed = this.pane.getViewKind() !== kind;
+		this.pane.setViewKind(kind);
+		if (kind === 'article' && changed) {
+			const count = adapter.getPageCount(this.reader);
+			for (let p = 0; p < Math.max(count, 1); p++) {
+				const state = this.manager?.getPageState(p);
+				if (state && state.blocks.length) {
+					this.pane.renderPage(state);
+				}
+			}
+		}
+		const target = opts.pageIndex ?? adapter.getCurrentPageIndex(this.reader);
+		this.pane.scrollToPage(target);
 	}
 
 	/** 主窗口不可见(最小化/被遮挡切走)—— 不可见即停 (2.2.9, item1)。 */
