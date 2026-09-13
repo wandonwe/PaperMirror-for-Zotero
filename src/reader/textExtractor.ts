@@ -720,7 +720,8 @@ export class TextExtractor implements PageParser {
 			pageWidth: page.pageWidth,
 			includeReferences: this.includeReferences,
 			referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
-			imageRectsPdf: obstacles
+			imageRectsPdf: obstacles,
+			grid
 		});
 		// Rebuild semantic regions from whatever fragments extraction
 		// produced: whole regions translate as whole sentences.

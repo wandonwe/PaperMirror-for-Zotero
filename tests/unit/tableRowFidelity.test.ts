@@ -574,3 +574,67 @@ test('ESC p16 Table 4:文字几何认不出表,网格给 6×12;跨列的标题�
 	assert.ok(rest.some(b => /Section 4/.test(b.sourceText)), '小节标题带退回段落路径');
 });
 
+
+test('建块阶段认网格:标题带不再吞掉下一格的第一行 —— ESC p16 (2.12.15)', async () => {
+	// 真机 2.12.14 的 dual PDF:表格本体各归其位,但第一条灰色标题带的译文后面接着
+	// 下一格的第一句 —— 建块时标题带与紧贴其下的行(间距 3.7pt、同一 x 起点)合成了一个
+	// 段落;这个块横跨六列,退回段落路径后溢出,那一格只剩下半截。
+	// 网格的行线是硬屏障:两行之间隔着一条行线,不许合并。
+	const { readFileSync } = await import('node:fs');
+	const { buildBlocksFromSpans } = await import('../../src/reader/spanBlockBuilder');
+	const { orderBlocksForReading } = await import('../../src/reader/readingOrder');
+	const { structureTableCells } = await import('../../src/reader/tableStructure');
+	const { borderGrid, segmentsFromOperatorList } = await import('../../src/reader/tableBorders');
+	const d = JSON.parse(readFileSync('tests/fixtures/layout/esc2024-p16.spans.json', 'utf8'));
+	const raw = JSON.parse(readFileSync('tests/fixtures/layout/esc2024-p16-new.rawops.json', 'utf8'));
+	const grid = borderGrid(segmentsFromOperatorList(raw.fnArray, raw.argsArray, raw.ops, 20000), { pageHeight: raw.height })!;
+	const opts = { pageIndex: 0, pageHeight: d.pageHeight, pageWidth: d.pageWidth };
+	// 对照:不传网格,标题带确实吞了下一行(锁住"问题确实存在")。
+	const without = buildBlocksFromSpans(d.items, opts).blocks;
+	const bandWithout = without.find(b => /antianginal drugs/i.test(b.sourceText))!;
+	assert.ok(bandWithout && /Nicorandil/.test(bandWithout.sourceText), '不传网格时标题带块里含有下一格的第一行');
+	// 传网格:标题带独立成块,下一格从 "Nicorandil" 开始。
+	const withGrid = buildBlocksFromSpans(d.items, { ...opts, grid }).blocks;
+	const band = withGrid.find(b => /antianginal drugs/i.test(b.sourceText))!;
+	assert.ok(band, '标题带块存在');
+	assert.ok(!/Nicorandil/.test(band.sourceText), `标题带不许吞下一格:"${band.sourceText.slice(0, 80)}…"`);
+	const cells = structureTableCells(orderBlocksForReading(withGrid), 0, 9, [], grid).filter(b => /-table-/.test(b.id));
+	const first = cells.find(b => /-r2-c0$/.test(b.id));
+	assert.ok(first && /^Nicorandil/.test(first.sourceText.trim()), `r2c0 应从 Nicorandil 开始,实得 "${first?.sourceText.slice(0, 40)}"`);
+	// 网格外的段落合并行为不变:网格区域之外的块与不传网格时逐字节相同。
+	const outside = (xs: typeof without) => xs.filter(b => b.boundingBox && (b.boundingBox.y + b.boundingBox.height < grid.region.top || b.boundingBox.y > grid.region.top + grid.region.height)).map(b => b.sourceText);
+	assert.deepEqual(outside(withGrid), outside(without), '网格外的块不受影响');
+});
+
+test('同一格里折行的标题带合成一块 —— ESC p16 第三条标题带 (2.12.15)', async () => {
+	const { readFileSync } = await import('node:fs');
+	const { buildBlocksFromSpans } = await import('../../src/reader/spanBlockBuilder');
+	const { borderGrid, segmentsFromOperatorList } = await import('../../src/reader/tableBorders');
+	const d = JSON.parse(readFileSync('tests/fixtures/layout/esc2024-p16.spans.json', 'utf8'));
+	const raw = JSON.parse(readFileSync('tests/fixtures/layout/esc2024-p16-new.rawops.json', 'utf8'));
+	const grid = borderGrid(segmentsFromOperatorList(raw.fnArray, raw.argsArray, raw.ops, 20000), { pageHeight: raw.height })!;
+	const opts = { pageIndex: 0, pageHeight: d.pageHeight, pageWidth: d.pageWidth };
+	// 对照:不传网格,第二行单独成块(真机 2.12.14 上它留着英文)。
+	const without = buildBlocksFromSpans(d.items, opts).blocks;
+	assert.ok(without.some(b => /^oral anticoagulation—Section 4/.test(b.sourceText.trim())), '不传网格时第二行是孤块');
+	const withGrid = buildBlocksFromSpans(d.items, { ...opts, grid }).blocks;
+	const band = withGrid.find(b => /post-percutaneous/.test(b.sourceText));
+	assert.ok(band && /oral anticoagulation—Section 4/.test(band.sourceText), '两行合成一块');
+	assert.equal(band!.lineRectsPdf?.length, 2);
+	assert.ok(!withGrid.some(b => /^oral anticoagulation—Section 4/.test(b.sourceText.trim())), '孤块不再存在');
+});
+
+test('反向锁:同一格里隔得远的两段不合并;隔着行线的不合并 (2.12.15)', async () => {
+	const { mergeGridCellStacks } = await import('../../src/reader/spanBlockBuilder');
+	const rows = { ys: [700, 600, 500], left: 40, right: 560 };   // PDF y-up 行线
+	const line = (y0: number, y1: number, x1 = 300): { items: never[]; rect: [number, number, number, number]; fontSize: number } =>
+		({ items: [], rect: [50, y0, x1, y1], fontSize: 8 });
+	// 同一格(600..700)里,两段间距 4pt:合并。
+	assert.equal(mergeGridCellStacks([[line(660, 668)], [line(648, 656)]], rows).length, 1, '紧邻的合并');
+	// 同一格里,间距 30pt(> 一个字号):不合并 —— 不是同一段。
+	assert.equal(mergeGridCellStacks([[line(680, 688)], [line(642, 650)]], rows).length, 2, '隔得远的不合并');
+	// 隔着行线 600:不合并。
+	assert.equal(mergeGridCellStacks([[line(602, 610)], [line(590, 598)]], rows).length, 2, '隔着行线的不合并');
+	// 网格外:不碰。
+	assert.equal(mergeGridCellStacks([[line(660, 668, 700)], [line(648, 656, 700)]], rows).length, 2, '网格外的不合并');
+});
