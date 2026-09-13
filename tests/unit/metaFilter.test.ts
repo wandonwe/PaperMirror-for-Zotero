@@ -10,13 +10,14 @@ test('the author list that garbled the abstract is filtered', () => {
 	), true);
 });
 
+// 2.12.13 原则:译文侧默认全文翻译,元素类别只决定排版,不决定是否翻译。作者单位翻译机构名称。
 test('affiliation lines are filtered', () => {
 	assert.equal(isMetadataBlock(
 		'1st Department of Cardiology, Hippokration Hospital, National and Kapodistrian University of Athens, 114 Vas. Sofias Avenue, 11527, Athens, Greece'
-	), true);
+	), false);
 	assert.equal(isMetadataBlock(
 		'2RDM Division of Cardiovascular Medicine, Oxford Academic CT Programme, University of Oxford, John Radcliffe Hospital, Headley Way, OX3 9DU Oxford, UK'
-	), true);
+	), false);
 });
 
 test('received/accepted dates are filtered', () => {
@@ -25,19 +26,21 @@ test('received/accepted dates are filtered', () => {
 	), true);
 });
 
+// 2.12.13 原则:译文侧默认全文翻译,元素类别只决定排版,不决定是否翻译。
 test('correspondence and email lines are filtered', () => {
 	assert.equal(isMetadataBlock(
 		'* Corresponding author. Tel: +30 6947607442, Email: alexios.antonopoulos@cardiov.ox.ac.uk; antonopoulosal@yahoo.gr'
 	), true);
 });
 
+// 2.12.13 原则:译文侧默认全文翻译,元素类别只决定排版,不决定是否翻译。整句版权/许可声明是自然语言,翻译;短版权行仍保留(见 contentRetention.test)。
 test('copyright and licence boilerplate is filtered', () => {
 	assert.equal(isMetadataBlock(
 		'© The Author(s) 2021. Published by Oxford University Press on behalf of the European Society of Cardiology.'
-	), true);
+	), false);
 	assert.equal(isMetadataBlock(
 		'This is an Open Access article distributed under the terms of the Creative Commons Attribution License (https://creativecommons.org/licenses/by/4.0/), which permits unrestricted reuse, distribution, and reproduction in any medium, provided the original work is properly cited.'
-	), true);
+	), false);
 });
 
 test('the download watermark is filtered by text and by shape', () => {
@@ -90,8 +93,9 @@ test('semicolon-style rosters with inline superscripts and degrees are filtered'
 test('orphan affiliation numbers and author notes are filtered', () => {
 	assert.equal(isMetadataBlock('18'), true);
 	assert.equal(isMetadataBlock('20, 21'), true);
-	assert.equal(isMetadataBlock('P.W. Serruys and N. Kotoku contributed equally to this work.'), true);
-	assert.equal(isMetadataBlock("The authors' affiliations can be found in the Appendix paragraph."), true);
+	// 2.12.13:作者注是脚注,脚注全部翻译。
+	assert.equal(isMetadataBlock('P.W. Serruys and N. Kotoku contributed equally to this work.'), false);
+	assert.equal(isMetadataBlock("The authors' affiliations can be found in the Appendix paragraph."), false);
 });
 
 test('a year inside body prose does not make it metadata', () => {
@@ -126,22 +130,24 @@ test('article-type banners are filtered', () => {
 	assert.equal(isMetadataBlock('Review'), true);
 });
 
+// 2.12.13 原则:译文侧默认全文翻译,元素类别只决定排版,不决定是否翻译。
 test('licence and funding tails split off the © head block are filtered', () => {
 	assert.equal(isMetadataBlock(
 		'unrestricted use, distribution, and reproduction in any medium, provided the original author and source are credited.'
-	), true);
+	), false);
 	assert.equal(isMetadataBlock(
 		'The funders had no role in study design, data collection and analysis, decision to publish, or preparation of the manuscript.'
-	), true);
+	), false);
 	assert.equal(isMetadataBlock(
 		'a grant from Shanghai Jinshan Municipality Health Bureau Youth Foundation (Grant No. JWKJ-KTYQ-201202, JWKJ-RCYQ-201202).'
-	), true);
+	), false);
 });
 
 test('narrow outer-margin sidebar blocks are filtered by geometry', () => {
 	// PLOS left strip: x ≈ 43–175 on a 612pt page — whatever it says.
 	const sidebar: Rect = [43, 380, 172, 520]; // 129×140pt stack
-	assert.equal(isMetadataBlock('Anything the sidebar says, in any novel format.', sidebar, 612), true);
+	// 2.12.13:几何位置不再决定翻不翻 —— 页边栏里的说明照样翻译(PLOS 的 Funding / Data Availability 曾整段丢在这里)。
+	assert.equal(isMetadataBlock('Anything the sidebar says, in any novel format.', sidebar, 612), false);
 	// A real two-column reading column (~0.44 page width) is never caught.
 	const column: Rect = [43, 380, 300, 520]; // 257pt wide: a reading column
 	assert.equal(isMetadataBlock('Anything the sidebar says, in any novel format.', column, 612), false);
@@ -260,6 +266,7 @@ test('虚词收尾规则不放过真正的页眉页脚', () => {
 
 // ---- 作者单位: 密度判据取代长度上限 (2.5.6) ---------------------------------
 
+// 2.12.13 原则:译文侧默认全文翻译,元素类别只决定排版,不决定是否翻译。
 test('20 位作者的长单位块必须被丢弃 —— 长度上限原先恰好在这里失效', () => {
 	// jacc-ccta2020-p1 实证: 这块 1647 字符、26 个机构词、49 个逗号,却因为
 	// 「> 600 字符即放弃」被原样翻译,连同利益声明共约 2700 字符前置信息。
@@ -276,7 +283,7 @@ test('20 位作者的长单位块必须被丢弃 —— 长度上限原先恰好
 		'kDivision of Cardiovascular Medicine, Radcliffe Department of Medicine, University of Oxford, Oxford, United Kingdom.'
 	].join(' ');
 	assert.ok(affiliation.length > 600, '这就是原上限拦不住的长度区间');
-	assert.equal(isMetadataBlock(affiliation), true);
+	assert.equal(isMetadataBlock(affiliation), false);
 });
 
 test('正文段落偶尔提到两所机构,不能被当作者单位丢掉', () => {
@@ -294,9 +301,10 @@ test('正文段落偶尔提到两所机构,不能被当作者单位丢掉', () =
 	assert.equal(isMetadataBlock(body), false, '机构词密度远低于单位块');
 });
 
+// 2.12.13 原则:译文侧默认全文翻译,元素类别只决定排版,不决定是否翻译。
 test('短单位块照旧丢弃 —— 密度判据不放松近距离的防守', () => {
 	const short = 'Department of Diagnostic Radiology, Jinling Hospital, Medical School of Nanjing University, Nanjing, China';
-	assert.equal(isMetadataBlock(short), true);
+	assert.equal(isMetadataBlock(short), false);
 });
 
 // ---- 2.5.13: Springer 间隔号署名行 (wu2026-p1 实证) --------------------------

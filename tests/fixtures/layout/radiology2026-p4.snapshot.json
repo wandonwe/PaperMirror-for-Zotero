@@ -1,50 +1,64 @@
 [
 	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "Toward Broader Clinical Adoption of Phot"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 1,
+		"mode": "preserve",
+		"text": "Sahbaee et al"
+	},
+	{
 		"type": "caption",
 		"column": -1,
-		"readingIndex": 0,
+		"readingIndex": 2,
 		"text": "Figure 2: Myocardial extracellular volum"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 3,
 		"text": "Stent and Vascular Device Imaging"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 4,
 		"text": "Coronary stent imaging has benefited fro"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 3,
+		"readingIndex": 5,
 		"text": "Thoracic Imaging"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 4,
+		"readingIndex": 6,
 		"text": "In thoracic imaging, PCCT offers detaile"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 5,
+		"readingIndex": 7,
 		"text": "196 patients with post–COVID-19 conditio"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 6,
+		"readingIndex": 8,
 		"text": "Diffuse Lung Diseases"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 7,
+		"readingIndex": 9,
 		"text": "In patients with post–COVID-19 condition"
 	}
 ]

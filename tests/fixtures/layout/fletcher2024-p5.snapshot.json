@@ -24,15 +24,29 @@
 		"text": "High-spatial-resolution CT is essential "
 	},
 	{
-		"type": "caption",
-		"column": 1,
+		"type": "paragraph",
+		"column": 0,
 		"readingIndex": 4,
-		"text": "Figure 3: Energy-integrating detector (E"
+		"mode": "preserve",
+		"text": "Radiology: Volume 310: Number 3�March 20"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 5,
+		"mode": "preserve",
+		"text": "Fletcher et al"
+	},
+	{
+		"type": "caption",
+		"column": 1,
+		"readingIndex": 6,
+		"text": "Figure 3: Energy-integrating detector (E"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 7,
 		"text": "lung abnormalities detected with PCCT we"
 	}
 ]

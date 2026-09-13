@@ -67,7 +67,40 @@ test('a fragment stitched across columns is kept original, never translated', ()
 	const model = buildTableModel(0, 0, region(40, 10, 360, 110), members);
 	const spanning = model.cells.find(c => c.memberIds.includes('span'))!;
 	assert.equal(spanning.kind, 'data', 'a cross-column fragment is never translated in place');
+	// 2.12.13 (审核第 4 条):跨列是**结构**问题,不是"内容无需翻译"。原因必须是
+	// structure-ambiguous,不许混进 data —— 摘要里读到 data 会以为它是数字格。
+	assert.equal(spanning.preserveReason, 'structure-ambiguous', '跨列格的原因是结构不明,不是数据');
 });
+
+test('页面附属的 preserve 块(页眉/日期行)不进表,但仍原样留在输出里 (2.12.13)', () => {
+	// 提取阶段不再丢块之后,页眉、页码、日期行带着几何进了 structureTableCells。
+	// 一条恰好与表格格位对齐的日期行,不排除就会成为表的下一行。
+	// 表格本体沿用上一条用例的形状(4 行 × 3 列的数字表,已知能被识别)。
+	const raw: SourceBlock[] = [];
+	for (let row = 0; row < 4; row++) {
+		raw.push({ id: `label-${row}`, pageIndex: 2, order: raw.length, type: 'paragraph', sourceText: row === 0 ? 'Mortality' : `Clinical outcome ${row}`, boundingBox: { x: 40, y: 200 + row * 18, width: 150, height: 12 } });
+		raw.push({ id: `value-${row}-a`, pageIndex: 2, order: raw.length, type: 'paragraph', sourceText: `${40 + row} ± 6`, boundingBox: { x: 200, y: 200 + row * 18, width: 60, height: 12 } });
+		raw.push({ id: `value-${row}-b`, pageIndex: 2, order: raw.length, type: 'paragraph', sourceText: `${41 + row} ± 7`, boundingBox: { x: 270, y: 200 + row * 18, width: 60, height: 12 } });
+	}
+	const baseline = structureTableCells(raw, 2, 10).filter(b => b.id.startsWith('page-2-table-'));
+	const baseRows = new Set(baseline.map(b => /-r(\d+)-/.exec(b.id)?.[1])).size;
+	assert.ok(baseRows >= 4, `对照组:表本体至少 4 行,实得 ${baseRows}`);
+	// 第 5 行位置摆三块 preserve 的日期/页眉块,与三列逐一对齐。
+	const furniture: SourceBlock[] = [
+		{ id: 'date-a', pageIndex: 2, order: 90, type: 'paragraph', sourceText: 'Received 3 March 2021', boundingBox: { x: 40, y: 272, width: 150, height: 12 }, translationMode: 'preserve', preserveReason: 'dates' },
+		{ id: 'date-b', pageIndex: 2, order: 91, type: 'paragraph', sourceText: 'Accepted 5 May 2021', boundingBox: { x: 200, y: 272, width: 60, height: 12 }, translationMode: 'preserve', preserveReason: 'dates' },
+		{ id: 'head', pageIndex: 2, order: 92, type: 'paragraph', sourceText: 'Journal of Examples', boundingBox: { x: 270, y: 272, width: 60, height: 12 }, translationMode: 'preserve', preserveReason: 'running-head' }
+	];
+	const out = structureTableCells([...raw, ...furniture], 2, 10);
+	const cells = out.filter(b => b.id.startsWith('page-2-table-'));
+	const members = new Set(cells.flatMap(b => b.memberIds ?? []));
+	for (const f of furniture) {
+		assert.ok(!members.has(f.id), `${f.id} 不进表,哪怕它恰好排在表的格位上`);
+		assert.ok(out.some(b => b.id === f.id && b.translationMode === 'preserve' && b.preserveReason === f.preserveReason), `${f.id} 原样留在输出里(遮挡物还要它)`);
+	}
+	assert.equal(new Set(cells.map(b => /-r(\d+)-/.exec(b.id)?.[1])).size, baseRows, '表的行数与对照组一致 —— 附属块没有成为新的一行');
+});
+
 
 test('empty region yields an empty model', () => {
 	const model = buildTableModel(0, 0, region(0, 0, 100, 100), []);

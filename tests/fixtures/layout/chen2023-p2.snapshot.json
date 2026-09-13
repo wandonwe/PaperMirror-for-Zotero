@@ -1,92 +1,106 @@
 [
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "Radiomics Model to Identify Vulnerable P"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 1,
 		"text": "Abbreviations"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 2,
 		"text": "AUC = area under the curve, CAD = corona"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 3,
 		"text": "Summary"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 3,
+		"readingIndex": 4,
 		"text": "A radiomic signature based on coronary C"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 4,
+		"readingIndex": 5,
 		"text": "Key Results"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 5,
+		"readingIndex": 6,
 		"text": "■ In a retrospective analysis of 299 pat"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 6,
+		"readingIndex": 7,
 		"text": "intravascular US–derived features (9,10)"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 7,
+		"readingIndex": 8,
 		"text": "Materials and Methods"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 8,
+		"readingIndex": 9,
 		"text": "Study Design and Sample"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 9,
+		"readingIndex": 10,
 		"text": "The flowchart of this two-stage study is"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 10,
+		"readingIndex": 11,
 		"text": "Study 2.—To validate the prognostic valu"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 11,
+		"readingIndex": 12,
 		"text": "CCTA Analysis"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 12,
+		"readingIndex": 13,
 		"text": "Details of CCTA protocols, anatomic plaq"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 13,
+		"readingIndex": 14,
 		"text": "Intravascular US Analysis"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 14,
+		"readingIndex": 15,
 		"text": "All intravascular US data were assessed "
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 16,
+		"mode": "preserve",
+		"text": "radiology.rsna.org ■ Radiology: Volume 3"
 	}
 ]

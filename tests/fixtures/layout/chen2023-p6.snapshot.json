@@ -1,32 +1,46 @@
 [
 	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "Radiomics Model to Identify Vulnerable P"
+	},
+	{
 		"type": "caption",
 		"column": -1,
-		"readingIndex": 0,
+		"readingIndex": 1,
 		"text": "Figure 2: Bar charts show diagnostic per"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 2,
 		"text": "quantitative plaque parameters (AUC, 0.8"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 3,
 		"text": "Model Prognosis Assessment (Study 2)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 3,
+		"readingIndex": 4,
 		"text": "Lesion characteristics.—Of the 1020 lesi"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 4,
+		"readingIndex": 5,
 		"text": "parameters, including segment stenosis s"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 6,
+		"mode": "preserve",
+		"text": "radiology.rsna.org ■ Radiology: Volume 3"
 	}
 ]

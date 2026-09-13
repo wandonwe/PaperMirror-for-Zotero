@@ -30,6 +30,8 @@ export interface BlockDigestRow {
 	type: SourceBlock['type'];
 	chars: number;
 	outcome: BlockOutcome;
+	/** 为什么保留不译 (2.12.13):names / dates / identifier / reference / data / structure-ambiguous … */
+	preserveReason?: string;
 	/** keep-origin 原因枚举('unrecovered' | 'repeated-failure' 等)。 */
 	keepOrigin?: string;
 	/** 最后一次验收拒绝的原因枚举(validator / placeholder / plain-* 等)。 */
@@ -65,6 +67,7 @@ export function digestRows(state: DigestSource): BlockDigestRow[] {
 			type: block.type,
 			chars: block.sourceText.length,
 			outcome,
+			...(outcome === 'preserved' && block.preserveReason ? { preserveReason: block.preserveReason } : {}),
 			...(keepOrigin ? { keepOrigin } : {}),
 			...(lastReject ? { lastReject } : {})
 		};

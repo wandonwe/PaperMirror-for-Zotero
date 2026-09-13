@@ -8,7 +8,7 @@ import type { BlockType, BoundingBox, PdfChar, SourceBlock } from '../types/mode
 import { insideObstacle, obstacleBetween } from './figureBarriers';
 import { detectGlyphFormulaRuns } from './glyphFormula';
 import { detectStyleRuns } from './styleRuns';
-import { isMetadataBlock, isPublisherBoilerplateLine } from './metaFilter';
+import { classifyContent, isPublisherBoilerplateLine } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -508,9 +508,12 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 	for (const p of paragraphs) {
 		const type = classifyBlock(p, bodySize, pageWidth, chars);
 		const text = p.text.trim();
-		// Author lists, affiliations, copyright, DOI lines, watermarks: keep
-		// them on the original page, keep them OUT of the translation.
-		if (type !== 'title' && type !== 'heading' && isMetadataBlock(text, p.rect, pageWidth, { fontSize: p.fontSize, bodySize })) {
+		// 内容决策 (2.12.13):不再整块丢弃。标识(人名、日期、DOI、页码…)保留并带原因,
+		// 自然语言一律翻译。标题/小标题永远翻译。
+		const content = (type === 'title' || type === 'heading')
+			? { decision: 'translate' as const }
+			: classifyContent(text, p.rect, pageWidth, { fontSize: p.fontSize, bodySize });
+		if (content.decision === 'skip') {
 			continue;
 		}
 		if ((type === 'heading' || type === 'title') && REFERENCES_HEADINGS.test(text)) {
@@ -549,7 +552,11 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 			fontSize: p.fontSize,
 			column: columnOf(p.rect as Rect, columnBands, pageWidth),
 			isReference,
-			...(preserveReference ? { translationMode: 'preserve' as const } : {}),
+			...(preserveReference
+				? { translationMode: 'preserve' as const, preserveReason: 'reference' }
+				: content.decision === 'preserve'
+					? { translationMode: 'preserve' as const, preserveReason: content.reason }
+					: {}),
 			...(formulaRuns.length ? { formulaRuns } : {}),
 			...(styleRuns.length ? { styleRuns } : {})
 		});

@@ -61,7 +61,7 @@ export interface TableCell {
 //   citation-label       "Kim et al,19 2022"、"Nacif et al. (2012)"
 // 尾部脚注符 (*†‡§¶) 与上标引用数字不影响匹配。
 
-export type PreserveReason = 'glossary' | 'defined-abbreviation' | 'citation-label';
+export type PreserveReason = 'glossary' | 'defined-abbreviation' | 'citation-label' | 'data' | 'symbol' | 'name' | 'identifier' | 'structure-ambiguous' | 'empty' | 'column-data';
 
 export interface CellPreserveEvidence {
 	noTranslate: Set<string>;
@@ -315,14 +315,30 @@ export function buildTableModel(
 		// 存在 email 格】+ 该格全部 token 是 TitleCase 名形态 —— 数据表没有
 		// email,不受影响。
 		const hasEmail = /\b[\w.+-]+@[\w-]+\.[A-Za-z]{2,}\b/.test(text);
-		const nameOnly = tableHasEmail && text.length <= 40
-			&& text.split(/\s+/).filter(Boolean).length >= 2
-			&& text.split(/\s+/).filter(Boolean).every(w => /^[A-Z][a-zA-Z'’.-]*$/.test(w));
-		const preserveReason = preserveReasonFor(text, evidence);
-		const kind: TableCell['kind'] =
-			slot.straddles || !text || hasEmail || nameOnly || preserveReason ? 'data'
-				: row < headerDepth && hasWord && !isPureNumeric ? 'text'
-					: looksTabular(text) || text.length < 3 || tinySymbol ? 'data' : 'text';
+		// 2.12.13:先把邮箱/网址/DOI 抠掉再看剩下的是什么 —— "Weifeng Han hanweifeng1981@163.com"
+		// 剩 "Weifeng Han" 是人名(保留,不强行汉化);"xin_13.40@126.com" 剩空,是纯标识。
+		const withoutIds = text.replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}|https?:\/\/\S+|\b10\.\d{4,9}\/\S+/g, ' ').trim();
+		const identifierOnly = hasEmail && !withoutIds;
+		const nameTokens = withoutIds.split(/\s+/).filter(Boolean);
+		const nameOnly = tableHasEmail && withoutIds.length <= 40
+			&& nameTokens.length >= 2
+			&& nameTokens.every(w => /^[A-Z][a-zA-Z'’.-]*$/.test(w));
+		// 2.12.13 (内容保留规则审核第 4 条):
+		//  - 含邮箱的格**翻译**,邮箱由片段保护掩蔽 —— 以前整格保留,连说明句一起丢;
+		//  - straddles 是结构问题,不是"内容无需翻译":单独记为 structure-ambiguous,
+		//    不再混进 data;
+		//  - 每个不翻译的格都带原因,摘要里看得见。
+		let preserveReason: PreserveReason | undefined = preserveReasonFor(text, evidence);
+		if (!preserveReason) {
+			if (!text) { preserveReason = 'empty'; }
+			else if (slot.straddles) { preserveReason = 'structure-ambiguous'; }
+			else if (identifierOnly) { preserveReason = 'identifier'; }
+			else if (nameOnly) { preserveReason = 'name'; }
+			else if (row < headerDepth && hasWord && !isPureNumeric) { preserveReason = undefined; }
+			else if (tinySymbol) { preserveReason = 'symbol'; }
+			else if (looksTabular(text) || text.length < 3) { preserveReason = 'data'; }
+		}
+		const kind: TableCell['kind'] = preserveReason ? 'data' : 'text';
 		cells.push({
 			id: `page-${pageIndex}-table-${tableIndex}-r${row}-c${col}`,
 			memberIds: ordered.map(m => m.id),
@@ -523,10 +539,13 @@ export function buildTextTableModel(
 		const text = joinCellText(ordered.map(m => m.text));
 		const hasWord = /[A-Za-z一-鿿]{2,}/.test(text);
 		const tinySymbol = text.length <= 4 && !hasWord;
-		const preserveReason = preserveReasonFor(text, evidence);
-		const kind: TableCell['kind'] =
-			!text || !hasWord || tinySymbol || preserveReason ? 'data'
-				: !d.straddles && (looksTabular(text) || text.length < 3) ? 'data' : 'text';
+		let preserveReason = preserveReasonFor(text, evidence);
+		if (!preserveReason) {
+			if (!text) { preserveReason = 'empty'; }
+			else if (!hasWord || tinySymbol) { preserveReason = 'symbol'; }
+			else if (!d.straddles && (looksTabular(text) || text.length < 3)) { preserveReason = 'data'; }
+		}
+		const kind: TableCell['kind'] = preserveReason ? 'data' : 'text';
 		cells.push({
 			id: `page-${pageIndex}-table-${tableIndex}-r${d.row}-c${d.col}`,
 			memberIds: ordered.map(m => m.id),
@@ -654,6 +673,9 @@ function coerceNumericColumns(cells: TableCell[], colCount: number, headerDepth 
 		if (data / body.length >= 0.7) {
 			for (const cell of body) {
 				cell.kind = 'data';
+				// 2.12.13:被"整列多数是数据"带成 data 的格,原因记 column-data —— 摘要里能看出
+				// 这一格是被同列邻居定性的,不是自身内容判的。
+				if (!cell.preserveReason) { cell.preserveReason = 'column-data'; }
 			}
 		}
 	}
@@ -691,7 +713,16 @@ export function structureTableCells(
 	useGrid = false
 ): SourceBlock[] {
 	const originalById = new Map(blocks.map(block => [block.id, block]));
-	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox);
+	// 页面附属内容不进表 (2.12.13):提取阶段不再丢块之后,页码、水印、页眉、日期行、
+	// DOI 行这些 preserve 块也带着几何进来了 —— 它们从来不是表格成员,一个页脚的页码
+	// 就能给真机 Powers p4 多凑出一列。以纯几何身份留在输出里(遮挡物仍要它们),
+	// 不参与区域探测与建格。参考文献 preserve 块照旧参与(2.0.8 起就是这样)。
+	// 'marks'(孤立数字)例外:表里的年份格 "2018" 在提取阶段看就是一串孤立数字,
+	// 它得进表当数据格 —— Powers p4 那两个丢了几版的年份就是它们。
+	const FURNITURE = new Set(['running-head', 'watermark', 'sliver', 'banner', 'boilerplate', 'names', 'dates', 'bibliographic', 'identifier']);
+	const isFurniture = (b: SourceBlock): boolean =>
+		b.translationMode === 'preserve' && !!b.preserveReason && FURNITURE.has(b.preserveReason);
+	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox && !isFurniture(b));
 	if (geometric.length < 2) {
 		return blocks;
 	}
@@ -832,7 +863,8 @@ export function structureTableCells(
 				})(),
 				memberIds: cell.memberIds,
 				isReference: originals.some(b => b.isReference),
-				translationMode: cell.kind === 'data' ? 'preserve' : 'translate'
+				translationMode: cell.kind === 'data' ? 'preserve' : 'translate',
+				...(cell.kind === 'data' && cell.preserveReason ? { preserveReason: cell.preserveReason } : {})
 			});
 		}
 	});
@@ -888,10 +920,13 @@ export function buildGridTableModel(
 		const text = joinCellText(ordered.map(m => m.text));
 		const hasWord = /[A-Za-z一-鿿]{2,}/.test(text);
 		const tinySymbol = text.length <= 4 && !hasWord;
-		const preserveReason = preserveReasonFor(text, evidence);
-		const kind: TableCell['kind'] =
-			!text || !hasWord || tinySymbol || preserveReason ? 'data'
-				: looksTabular(text) || text.length < 3 ? 'data' : 'text';
+		let preserveReason = preserveReasonFor(text, evidence);
+		if (!preserveReason) {
+			if (!text) { preserveReason = 'empty'; }
+			else if (!hasWord || tinySymbol) { preserveReason = 'symbol'; }
+			else if (looksTabular(text) || text.length < 3) { preserveReason = 'data'; }
+		}
+		const kind: TableCell['kind'] = preserveReason ? 'data' : 'text';
 		cells.push({
 			id: `page-${pageIndex}-table-${tableIndex}-r${row}-c${col}`,
 			memberIds: ordered.map(m => m.id),

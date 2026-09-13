@@ -1,14 +1,21 @@
 [
 	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "Radiomics Model to Identify Vulnerable P"
+	},
+	{
 		"type": "table",
 		"column": -1,
-		"readingIndex": 0,
+		"readingIndex": 1,
 		"text": "Table 5: Results of Univariate and Multi"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 2,
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "translate",
@@ -17,7 +24,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 3,
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "translate",
@@ -26,7 +33,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 3,
+		"readingIndex": 4,
 		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -35,7 +42,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 4,
+		"readingIndex": 5,
 		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "translate",
@@ -44,7 +51,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 5,
+		"readingIndex": 6,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
@@ -53,7 +60,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 6,
+		"readingIndex": 7,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
@@ -62,7 +69,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 7,
+		"readingIndex": 8,
 		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -71,7 +78,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 8,
+		"readingIndex": 9,
 		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -80,7 +87,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 9,
+		"readingIndex": 10,
 		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "translate",
@@ -89,7 +96,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 10,
+		"readingIndex": 11,
 		"tableRow": 5,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -98,7 +105,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 11,
+		"readingIndex": 12,
 		"tableRow": 5,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -107,7 +114,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 12,
+		"readingIndex": 13,
 		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "translate",
@@ -116,7 +123,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 13,
+		"readingIndex": 14,
 		"tableRow": 6,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -125,7 +132,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 14,
+		"readingIndex": 15,
 		"tableRow": 7,
 		"tableCol": 0,
 		"mode": "translate",
@@ -134,7 +141,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 15,
+		"readingIndex": 16,
 		"tableRow": 7,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -143,7 +150,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 16,
+		"readingIndex": 17,
 		"tableRow": 7,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -152,7 +159,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 17,
+		"readingIndex": 18,
 		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "translate",
@@ -161,7 +168,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 18,
+		"readingIndex": 19,
 		"tableRow": 8,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -170,7 +177,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 19,
+		"readingIndex": 20,
 		"tableRow": 9,
 		"tableCol": 0,
 		"mode": "translate",
@@ -179,7 +186,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 20,
+		"readingIndex": 21,
 		"tableRow": 9,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -188,7 +195,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 21,
+		"readingIndex": 22,
 		"tableRow": 9,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -197,7 +204,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 22,
+		"readingIndex": 23,
 		"tableRow": 10,
 		"tableCol": 0,
 		"mode": "translate",
@@ -206,7 +213,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 23,
+		"readingIndex": 24,
 		"tableRow": 10,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -215,7 +222,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 24,
+		"readingIndex": 25,
 		"tableRow": 11,
 		"tableCol": 0,
 		"mode": "translate",
@@ -224,7 +231,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 25,
+		"readingIndex": 26,
 		"tableRow": 11,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -233,7 +240,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 26,
+		"readingIndex": 27,
 		"tableRow": 11,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -242,7 +249,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 27,
+		"readingIndex": 28,
 		"tableRow": 12,
 		"tableCol": 0,
 		"mode": "translate",
@@ -251,7 +258,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 28,
+		"readingIndex": 29,
 		"tableRow": 12,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -260,7 +267,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 29,
+		"readingIndex": 30,
 		"tableRow": 12,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -269,7 +276,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 30,
+		"readingIndex": 31,
 		"tableRow": 1,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -278,7 +285,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 31,
+		"readingIndex": 32,
 		"tableRow": 2,
 		"tableCol": 4,
 		"mode": "translate",
@@ -287,7 +294,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 32,
+		"readingIndex": 33,
 		"tableRow": 2,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -296,7 +303,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 33,
+		"readingIndex": 34,
 		"tableRow": 2,
 		"tableCol": 6,
 		"mode": "translate",
@@ -305,7 +312,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 34,
+		"readingIndex": 35,
 		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -314,7 +321,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 35,
+		"readingIndex": 36,
 		"tableRow": 3,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -323,7 +330,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 36,
+		"readingIndex": 37,
 		"tableRow": 3,
 		"tableCol": 6,
 		"mode": "preserve",
@@ -332,7 +339,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 37,
+		"readingIndex": 38,
 		"tableRow": 4,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -341,7 +348,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 38,
+		"readingIndex": 39,
 		"tableRow": 4,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -350,7 +357,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 39,
+		"readingIndex": 40,
 		"tableRow": 4,
 		"tableCol": 6,
 		"mode": "preserve",
@@ -359,7 +366,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 40,
+		"readingIndex": 41,
 		"tableRow": 5,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -368,7 +375,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 41,
+		"readingIndex": 42,
 		"tableRow": 5,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -377,7 +384,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 42,
+		"readingIndex": 43,
 		"tableRow": 5,
 		"tableCol": 6,
 		"mode": "preserve",
@@ -386,7 +393,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 43,
+		"readingIndex": 44,
 		"tableRow": 6,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -395,7 +402,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 44,
+		"readingIndex": 45,
 		"tableRow": 6,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -404,7 +411,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 45,
+		"readingIndex": 46,
 		"tableRow": 6,
 		"tableCol": 6,
 		"mode": "preserve",
@@ -413,7 +420,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 46,
+		"readingIndex": 47,
 		"tableRow": 7,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -422,7 +429,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 47,
+		"readingIndex": 48,
 		"tableRow": 7,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -431,7 +438,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 48,
+		"readingIndex": 49,
 		"tableRow": 7,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -440,7 +447,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 49,
+		"readingIndex": 50,
 		"tableRow": 7,
 		"tableCol": 6,
 		"mode": "preserve",
@@ -449,7 +456,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 50,
+		"readingIndex": 51,
 		"tableRow": 8,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -458,7 +465,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 51,
+		"readingIndex": 52,
 		"tableRow": 8,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -467,7 +474,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 52,
+		"readingIndex": 53,
 		"tableRow": 8,
 		"tableCol": 6,
 		"mode": "preserve",
@@ -476,7 +483,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 53,
+		"readingIndex": 54,
 		"tableRow": 9,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -485,7 +492,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 54,
+		"readingIndex": 55,
 		"tableRow": 9,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -494,7 +501,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 55,
+		"readingIndex": 56,
 		"tableRow": 9,
 		"tableCol": 6,
 		"mode": "preserve",
@@ -503,7 +510,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 56,
+		"readingIndex": 57,
 		"tableRow": 10,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -512,7 +519,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 57,
+		"readingIndex": 58,
 		"tableRow": 10,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -521,7 +528,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 58,
+		"readingIndex": 59,
 		"tableRow": 11,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -530,7 +537,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 59,
+		"readingIndex": 60,
 		"tableRow": 11,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -539,7 +546,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 60,
+		"readingIndex": 61,
 		"tableRow": 11,
 		"tableCol": 6,
 		"mode": "preserve",
@@ -548,7 +555,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 61,
+		"readingIndex": 62,
 		"tableRow": 12,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -557,7 +564,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 62,
+		"readingIndex": 63,
 		"tableRow": 12,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -566,7 +573,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 63,
+		"readingIndex": 64,
 		"tableRow": 12,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -575,7 +582,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 64,
+		"readingIndex": 65,
 		"tableRow": 12,
 		"tableCol": 6,
 		"mode": "preserve",
@@ -584,25 +591,25 @@
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 65,
+		"readingIndex": 66,
 		"text": "Note.—Data in parentheses are the 95% CI"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 66,
+		"readingIndex": 67,
 		"text": "† HR was adjusted for RS and conventiona"
 	},
 	{
 		"type": "table",
 		"column": 0,
-		"readingIndex": 67,
+		"readingIndex": 68,
 		"text": "Table 6: Incremental Prognostic Value of"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 68,
+		"readingIndex": 69,
 		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "translate",
@@ -611,7 +618,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 69,
+		"readingIndex": 70,
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "translate",
@@ -620,7 +627,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 70,
+		"readingIndex": 71,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
@@ -629,7 +636,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 71,
+		"readingIndex": 72,
 		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -638,7 +645,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 72,
+		"readingIndex": 73,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
@@ -647,7 +654,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 73,
+		"readingIndex": 74,
 		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -656,7 +663,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 74,
+		"readingIndex": 75,
 		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "translate",
@@ -665,7 +672,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 75,
+		"readingIndex": 76,
 		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -674,7 +681,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 76,
+		"readingIndex": 77,
 		"tableRow": 0,
 		"tableCol": 4,
 		"mode": "translate",
@@ -683,7 +690,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 77,
+		"readingIndex": 78,
 		"tableRow": 1,
 		"tableCol": 2,
 		"mode": "translate",
@@ -692,7 +699,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 78,
+		"readingIndex": 79,
 		"tableRow": 1,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -701,7 +708,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 79,
+		"readingIndex": 80,
 		"tableRow": 1,
 		"tableCol": 5,
 		"mode": "translate",
@@ -710,7 +717,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 80,
+		"readingIndex": 81,
 		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -719,7 +726,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 81,
+		"readingIndex": 82,
 		"tableRow": 2,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -728,18 +735,9 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 82,
+		"readingIndex": 83,
 		"tableRow": 2,
 		"tableCol": 5,
-		"mode": "preserve",
-		"text": "<.001"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 83,
-		"tableRow": 3,
-		"tableCol": 2,
 		"mode": "preserve",
 		"text": "<.001"
 	},
@@ -748,6 +746,15 @@
 		"column": 1,
 		"readingIndex": 84,
 		"tableRow": 3,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "<.001"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 85,
+		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
 		"text": "…"
@@ -755,7 +762,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 85,
+		"readingIndex": 86,
 		"tableRow": 3,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -764,7 +771,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 86,
+		"readingIndex": 87,
 		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -773,7 +780,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 87,
+		"readingIndex": 88,
 		"tableRow": 4,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -782,7 +789,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 88,
+		"readingIndex": 89,
 		"tableRow": 4,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -791,25 +798,39 @@
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 89,
+		"readingIndex": 90,
 		"text": "Note.—Data in parentheses are 95% CIs. T"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 90,
+		"readingIndex": 91,
 		"text": "For example, the lesions of the entire c"
 	},
 	{
 		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 92,
+		"mode": "preserve",
+		"text": "10"
+	},
+	{
+		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 91,
+		"readingIndex": 93,
 		"text": "In conclusion, this study presents a rad"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 92,
+		"readingIndex": 94,
 		"text": "Author contributions: Guarantors of inte"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 95,
+		"mode": "preserve",
+		"text": "radiology.rsna.org ■ Radiology: Volume 3"
 	}
 ]

@@ -1,62 +1,104 @@
 [
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 0,
 		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "EXPERIMENTAL STUDIES:CT Perfusion in Ani"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 1,
 		"text": "Conventionally, therapeutic response has"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 2,
 		"text": "Advances in Knowledge"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 3,
 		"text": "■ Multisection CT tumor perfusion assess"
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 3,
-		"text": "strated to be reliable (8–12) and reprod"
-	},
-	{
-		"type": "heading",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 4,
-		"text": "Materials and Methods"
+		"mode": "preserve",
+		"text": "(SD, 0.10; P = .01)."
 	},
 	{
-		"type": "heading",
-		"column": 1,
+		"type": "paragraph",
+		"column": 0,
 		"readingIndex": 5,
-		"text": "Animal Model"
+		"mode": "preserve",
+		"text": "Radiology: Volume 243: Number 3—June 200"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 6,
+		"text": "strated to be reliable (8–12) and reprod"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 7,
+		"text": "Materials and Methods"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 8,
+		"text": "Animal Model"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 9,
 		"text": "All animal protocols and experiments wer"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 7,
+		"readingIndex": 10,
+		"mode": "preserve",
+		"text": "Hakime´ et al"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 11,
 		"text": "which enabled controlled modulation of b"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 8,
+		"readingIndex": 12,
 		"text": "Published online 10.1148/radiol.24330520"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 9,
+		"readingIndex": 13,
 		"text": "Author contributions: Guarantor of integ"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 14,
+		"mode": "preserve",
+		"text": "Authors stated no financial relationship"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 15,
+		"mode": "preserve",
+		"text": "713"
 	}
 ]

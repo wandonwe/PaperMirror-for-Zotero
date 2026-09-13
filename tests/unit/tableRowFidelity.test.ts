@@ -251,7 +251,7 @@ test('夹具A 五列独立清单:条目不丢、不跨列串格 (2.12.3)', () =>
 	const { blocks, columns } = modalityTable();
 	const structured = structureTableCells(blocks, 0, FONT);
 	const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), []);
-	const out = [...prose, ...structured.filter(b => b.translationMode !== undefined)];
+	const out = [...prose, ...structured.filter(b => b.translationMode !== undefined && /-c\d+$/.test(b.id))];
 	const texts = out.map(b => b.sourceText.replace(/\s+/g, ' '));
 
 	for (const [c, items] of columns.entries()) {
@@ -287,7 +287,7 @@ test('夹具A 已知缺口:无横线、无数值的五列清单目前不被识�
 	// 纯文字几何,不读 PDF 绘图指令),或者一条"标题锚定 + 多列短条目纵向
 	// 清单"的新识别路径。两者都不在本次范围内。
 	const { blocks } = modalityTable();
-	const cells = structureTableCells(blocks, 0, FONT).filter(b => b.translationMode !== undefined);
+	const cells = structureTableCells(blocks, 0, FONT).filter(b => b.translationMode !== undefined && /-c\d+$/.test(b.id));
 	assert.equal(cells.length, 0,
 		'若这条开始失败,说明已经能识别这类表了 —— 那是好事,请连同夹具A的断言一起更新');
 });
@@ -388,12 +388,12 @@ test('接线后的真机页:边框网格接管,Document Title 列回到表里 (2
 	const blocks = orderBlocksForReading(r.blocks);
 
 	// 不给网格 = 2.12.4 的行为:第一列整列不在表里。
-	const without = structureTableCells(blocks, 0, 9).filter(b => b.translationMode !== undefined);
+	const without = structureTableCells(blocks, 0, 9).filter(b => b.translationMode !== undefined && /-c\d+$/.test(b.id));
 	const colsWithout = new Set(without.map(b => /-c(\d+)$/.exec(b.id)?.[1]));
 	assert.equal(colsWithout.size, 2, `不给网格时应仍是 2 列(实得 ${colsWithout.size})—— 这条锁住"问题确实存在"`);
 
 	// 给网格 = 边框接管。
-	const cells = structureTableCells(blocks, 0, 9, [], grid, true).filter(b => b.translationMode !== undefined);
+	const cells = structureTableCells(blocks, 0, 9, [], grid, true).filter(b => b.translationMode !== undefined && /-c\d+$/.test(b.id));
 	const rows = new Map<number, Map<number, string>>();
 	for (const b of cells) {
 		const m = /-r(\d+)-c(\d+)/.exec(b.id);
@@ -454,7 +454,7 @@ test('接线的四条约束:阈值、剩余块、格盒来源、data 保留原�
 	const r = buildBlocksFromSpans(d.items, { pageIndex: 0, pageHeight: d.pageHeight, pageWidth: d.pageWidth });
 	const blocks = orderBlocksForReading(r.blocks);
 	const out = structureTableCells(blocks, 0, 9, [], grid, true);
-	const cells = out.filter(b => b.translationMode !== undefined);
+	const cells = out.filter(b => b.translationMode !== undefined && /-c\d+$/.test(b.id));
 
 	// (a) 格盒必须来自**格线**,不是文字外接框 —— 译文排在格子里。
 	const c = cells.find(b => /-r1-c0$/.test(b.id))!;
@@ -537,7 +537,7 @@ test('网格默认不参与建格 —— 必须显式打开 (2.12.6)', async () 
 	const none = structureTableCells(blocks, 0, 9);
 	assert.deepEqual(off.map(b => b.id), none.map(b => b.id), '默认不开时必须与不传网格完全一致');
 	// 而显式打开时,它确实会接管(3 列)。
-	const on = structureTableCells(blocks, 0, 9, [], grid, true).filter(b => b.translationMode !== undefined);
+	const on = structureTableCells(blocks, 0, 9, [], grid, true).filter(b => b.translationMode !== undefined && /-c\d+$/.test(b.id));
 	const cols = new Set(on.map(b => /-c(\d+)$/.exec(b.id)?.[1]));
 	assert.equal(cols.size, 3, '显式打开时边框接管,给出 3 列');
 });

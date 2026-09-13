@@ -1,44 +1,92 @@
 [
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 0,
-		"text": "THE PRESENT AND FUTURE"
+		"mode": "preserve",
+		"text": "J O U R N A L O F T H E A M E R I C A N "
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 1,
-		"text": "JACC STATE-OF-THE-ART REVIEW"
+		"mode": "preserve",
+		"text": "V O L . 7 6 , N O . 1 0 , 2 0 2 0"
 	},
 	{
-		"type": "title",
+		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 2,
-		"text": "Coronary Computed Tomography Angiography"
+		"mode": "preserve",
+		"text": "P U B L I S H E D B Y E L S E V I E R O "
 	},
 	{
-		"type": "title",
+		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 3,
-		"text": "JACC State-of-the-Art Review"
+		"mode": "preserve",
+		"text": "C O L L E G E O F C A R D I O L O G Y F "
 	},
 	{
 		"type": "heading",
 		"column": 0,
 		"readingIndex": 4,
+		"text": "THE PRESENT AND FUTURE"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 5,
+		"text": "JACC STATE-OF-THE-ART REVIEW"
+	},
+	{
+		"type": "title",
+		"column": 0,
+		"readingIndex": 6,
+		"text": "Coronary Computed Tomography Angiography"
+	},
+	{
+		"type": "title",
+		"column": 0,
+		"readingIndex": 7,
+		"text": "JACC State-of-the-Art Review"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 8,
+		"mode": "preserve",
+		"text": "Khaled M. Abdelrahman, BS,a Marcus Y. Ch"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 9,
 		"text": "ABSTRACT"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 5,
+		"readingIndex": 10,
 		"text": "Evaluation of coronary artery disease (C"
 	},
 	{
 		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 11,
+		"text": "From the aNational Heart, Lung, and Bloo"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 12,
+		"mode": "preserve",
+		"text": "https://doi.org/10.1016/j.jacc.2020.06.0"
+	},
+	{
+		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 6,
+		"readingIndex": 13,
 		"text": "Listen to this manuscript’s audio summar"
 	}
 ]

@@ -1,38 +1,52 @@
 [
 	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "Chen and Pan et al"
+	},
+	{
 		"type": "caption",
 		"column": -1,
-		"readingIndex": 0,
+		"readingIndex": 1,
 		"text": "Figure 1: Study flowchart. Huaian set = "
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 2,
 		"text": "In study 1, the area under the curve (AU"
 	},
 	{
 		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"mode": "preserve",
+		"text": "Radiology: Volume 307: Number 2—April 20"
+	},
+	{
+		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 2,
+		"readingIndex": 4,
 		"text": "Cox regression to determine prognostic v"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 3,
+		"readingIndex": 5,
 		"text": "Results"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 4,
+		"readingIndex": 6,
 		"text": "Study Sample Characteristics"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 5,
+		"readingIndex": 7,
 		"text": "Details of the patient selection procedu"
 	}
 ]

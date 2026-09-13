@@ -6,33 +6,54 @@
 		"text": "low 70- and 90-kV mode provides basic sp"
 	},
 	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 1,
+		"mode": "preserve",
+		"text": "(15,21–24)."
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 2,
+		"mode": "preserve",
+		"text": "Horst et al"
+	},
+	{
 		"type": "caption",
 		"column": -1,
-		"readingIndex": 1,
+		"readingIndex": 3,
 		"text": "Figure 6: Images in a 7-year-old male ch"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 4,
 		"text": "Multienergy Scanning Mode: 120 kV versus"
 	},
 	{
 		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 5,
+		"mode": "preserve",
+		"text": "Radiology: Volume 311: Number 2—May 2024"
+	},
+	{
+		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 3,
+		"readingIndex": 6,
 		"text": "Spectral Beam Shaping: Added Tin Filter "
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 4,
+		"readingIndex": 7,
 		"text": "Automatic Exposure Control"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 5,
+		"readingIndex": 8,
 		"text": "Similar to EID scanners from the same ma"
 	}
 ]

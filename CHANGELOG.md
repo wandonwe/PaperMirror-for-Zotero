@@ -7,6 +7,56 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.12.13] — 2026-09-13
+
+**原则改了:原文侧负责忠实保留;译文侧负责完整理解。元素类别决定排版方式,不决定是否翻译。**
+(用户 2026-09-13)产品目标:译文侧默认全文翻译,允许标识原样保留,不允许自然语言内容
+因为元素分类而无提示缺失。
+
+### 改了什么
+
+1. **内容决策换成 `classifyContent()`**:`translate / preserve(带原因) / skip`。自然语言一律翻译;
+   只有标识保留 —— 人名(`names`)、日期(`dates`)、DOI/网址/纯资助号(`identifier`)、
+   书目标签(`bibliographic`)、下载水印(`watermark`)、孤立数字(`marks`)、栏目条(`banner`)、
+   短版权行(`boilerplate`)、竖排细条(`sliver`)、逐页页眉页脚(`running-head`)。
+   **几何位置(页边栏)不再决定翻不翻。** 与以前相比翻转为翻译的:作者单位(机构名称)、
+   作者注/脚注、整句版权与许可声明、资助句、"funders had no role" 尾句、通讯说明整句。
+   标签行("* Corresponding author. Tel: … Email: …"、期刊卷页 DOI 行)仍保留。
+2. **提取阶段不再整块丢弃。** 两条建块路径(span / blockBuilder)里不译的块全部以
+   `translationMode: 'preserve'` + `preserveReason` 保留 —— 墨迹几何进遮挡物,摘要里看得见。
+   `SourceBlock.preserveReason` 正式进模型;逐块摘要与诊断导出带上它。
+3. **片段保护补齐标识**:邮箱、网址、DOI、NCT/ISRCTN/ChiCTR 注册号被掩蔽后原样还原。
+   "Contact the corresponding author at name@example.com." 现在翻译整句、邮箱不动。
+4. **表格格(审核第 4 条)**:含邮箱的格翻译(邮箱被保护);剩下只有人名的格保留(`name`);
+   纯邮箱格保留(`identifier`);跨列格记 `structure-ambiguous`,不再混进 `data`;
+   被"整列多数是数据"带成 data 的格记 `column-data`。每个 data 格都有原因。
+5. 页面附属的 preserve 块(页眉/水印/日期行/DOI 行)不参与表格区域探测(孤立数字例外 ——
+   表里的年份格在提取阶段看就是一串数字,得进表)。
+
+### 证据
+
+39 个布局夹具全文对照(2.12.12 → 2.12.13):**总词数 0 丢失**;译文侧 +1179 词、
+可译块 664 → 667(chen2023-p1 的 9→8 是合并);块总数 1318 → 1442,新增的全是带原因的 preserve;
+**preserve 块无原因的:0**。原因分布:data 371 / symbol 140 / reference 96 / running-head 77 /
+structure-ambiguous 22 / column-data 14 / names 13 / marks 11 / identifier 9 / name 9 /
+defined-abbreviation 7 / boilerplate 5 / bibliographic 1。请求计划基线相应更新(可译块只增不减)。
+
+十条旧测试按新原则改写(单位/通讯/版权/资助尾句/页边栏几何/作者注),每条注明原因。
+tableRowFidelity 里两条用例把没有 `-cN` 的 preserve 块也数成了一列,改为只数真格。
+
+### 老实说
+
+- 第 5 条(附属块不进表)造不出能变红的用例 —— 表格判据本来就挡住它们。**这条没有锁。**
+- 参考文献仍按 `includeReferences` 选项走(默认保留);"翻译文献标题、保留作者/期刊/年份/DOI"
+  需要一个文献条目解析器,还没有。
+- 图片里的文字不在这一版范围。
+- "放不下时查看完整译文"、真正的单块覆盖翻译(审核第 6、7 条)仍未做。
+- 旧缓存:块 id 按序号生成,新增的 preserve 块会让同页后续块的 id 变化 → 整页缓存对那页失效,
+  段落缓存(按文本哈希)仍命中;被旧规则跳过的内容第一次打开就会补译。
+- **未做真实 Zotero 页面复现。**
+
+测试 1301 通过;12 条变异 11 条变红。
+
 ## [2.12.12] — 2026-09-13
 
 **内容保留规则审核(用户 2026-09-13):七条发现全部在当前代码复现,这一版修前三条 + 第五条的第一步。**
