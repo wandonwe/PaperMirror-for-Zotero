@@ -2672,3 +2672,28 @@ test('long prose pages publish a completed batch while another request is pendin
 		assert.equal(manager.getPageState(0)!.translations.size, blocks.length);
 	} finally { release(); manager.dispose(); }
 });
+
+// ---- 3.1.3: 署名行与文献尾段原样返回是正当的 (Goenka 2016 p1 / p8) --------------
+//
+// 4/7 个作者行、参考文献的作者串与期刊尾段被回声规则判成"没译",反复重试后 unrecovered。
+// "人名原样保留"正是提示词要求的;回声规则只该拦自然语言。
+test('3.1.3:署名行原样返回视为合格 —— 人名 + 学位', () => {
+	for (const line of ['Nancy A. Obuchowski, PhD', 'Wadih Karim, RT', 'Mark E. Baker, MD', 'Andrew N. Primak, PhD',
+		'Morsbach F, Bickelhaupt S, Rätzer S,', 'José Ramirez-Giraldo, Jean-Pierre O\'Neil', 'Ludwig van der Berg, MD, PhD']) {
+		assert.equal(looksTranslated(line, line, 'zh-CN'), true, line);
+	}
+});
+
+test('3.1.3:含普通词的短句原样返回仍然是没译', () => {
+	for (const line of ['Nancy and the team', 'Document Title', 'Not recommended', 'Image Noise, CNR, and Detectability', 'Table 3']) {
+		assert.equal(looksTranslated(line, line, 'zh-CN'), false, line);
+	}
+});
+
+test('3.1.3:参考文献期刊尾段原样返回视为合格', () => {
+	for (const line of ['Radiol 2013;48(1):32–40.', '2013;201(4):W626–W632.', 'Invest Radiol 2013;48(1):32-40', 'Radiology 2015;275(2):E14–E15.']) {
+		assert.equal(looksTranslated(line, line, 'zh-CN'), true, line);
+	}
+	assert.equal(looksTranslated('Reducing image noise in CT 2013;48(1):32–40.', 'Reducing image noise in CT 2013;48(1):32–40.', 'zh-CN'), false,
+		'尾段前面带自然语言就不是尾段');
+});

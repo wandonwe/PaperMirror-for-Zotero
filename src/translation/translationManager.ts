@@ -181,7 +181,7 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 	}
 	// 作者名单豁免 (retain-pdf): a byline legitimately stays Latin — rejecting
 	// it buys a doomed retry on every page-1.
-	if (looksLikeAuthorNameList(proseSource)) {
+	if (looksLikeAuthorNameList(proseSource) || looksLikePersonNames(proseSource)) {
 		return true;
 	}
 	const proseT = stripProtectable(t);
@@ -366,7 +366,76 @@ function mayStayUntranslated(proseSource: string): boolean {
 	// 姓 + 首字母缩写(可逗号连排),或 首字母. 姓。
 	const surnameInitials = /^(?:[A-Z][a-z'’-]+(?:[\s-][A-Z][a-z'’-]+)?\s+[A-Z]{1,3}\.?\s*(?:,\s*|$))+$/;
 	const initialSurname = /^(?:[A-Z]\.\s*){1,2}[A-Z][a-z'’-]+$/;
-	return surnameInitials.test(t) || initialSurname.test(t);
+	return surnameInitials.test(t) || initialSurname.test(t) || looksLikePersonNames(t) || looksLikeCitationTail(t);
+}
+
+/** 学位/职称缩写 —— 署名行里跟在人名后面、原样保留是正当的。 */
+const DEGREE_TOKENS = new Set(['MD', 'PhD', 'DPhil', 'RT', 'RN', 'MS', 'MSc', 'MA', 'BA', 'BS', 'BSc', 'MPH', 'MHS', 'MBA', 'DO', 'DDS', 'DVM', 'PharmD', 'ScD', 'DrPH', 'MBBS', 'MBChB', 'FRCR', 'FRCP', 'FACR', 'FACC', 'FAHA', 'FESC', 'FSIR', 'FRCPC', 'MRCP', 'DMD', 'OD', 'PA', 'NP', 'Dr', 'Prof', 'Jr', 'Sr', 'II', 'III']);
+
+/**
+ * 署名行 / 作者串 (3.1.3, Goenka 2016 p1、p8 实证): "Nancy A. Obuchowski, PhD"、
+ * "Wadih Karim, RT"、"Morsbach F, Bickelhaupt S, Rätzer S," 原样返回被 2.12.12 的回声
+ * 规则判成没译 → 反复重试、最后 unrecovered —— 而"人名原样保留"正是提示词要求的。
+ * 判据全是形态的:按逗号/分号/and 切段,每段只许由 首字母大写的名字词(含变音符号、
+ * 连字符、撇号)、首字母缩写(A. / AB)、学位缩写 组成,且至少含一个名字词;不许出现
+ * 任何普通小写词 —— "Nancy and the team" 不算。
+ */
+export function looksLikePersonNames(text: string): boolean {
+	const t = text.trim().replace(/[.,;]\s*$/, '');
+	if (!t) {
+		return false;
+	}
+	const segments = t.split(/\s*(?:,|;|\band\b|&)\s*/).filter(Boolean);
+	if (!segments.length || segments.length > 12) {
+		return false;
+	}
+	const nameWord = /^\p{Lu}[\p{Ll}\p{Lu}'’-]*\p{Ll}[\p{Ll}'’-]*$/u;   // Nancy / Obuchowski / Ramirez-Giraldo / O'Neil / Rätzer / McDonald
+	// 首字母缩写:A. / A.B. / AB / F —— 至多两个字母。三个大写字母(CNR / MRI)是缩写词,不是人名。
+	const initials = /^(?:\p{Lu}\.){1,2}$|^\p{Lu}{1,2}$/u;
+	const particle = /^(?:van|von|de|der|den|del|da|di|la|le|du|dos|das|bin|ibn|ter|ten|af|el)$/;
+	// 首字母大写的词串本身证明不了什么 —— "Document Title" / "No Evidence" 形态上与
+	// "Nancy Obuchowski" 无法区分。必须有**人名专属**的证据:首字母缩写或学位缩写。
+	let evidence = false;
+	let named = 0;
+	for (const seg of segments) {
+		const tokens = seg.split(/\s+/).filter(Boolean);
+		if (!tokens.length || tokens.length > 6) {
+			return false;
+		}
+		let segNames = 0;
+		let segDegrees = 0;
+		for (const tok of tokens) {
+			const bare = tok.replace(/[.,]+$/, '');
+			if (DEGREE_TOKENS.has(bare)) {
+				segDegrees++;
+				evidence = true;
+			}
+			else if (nameWord.test(bare)) {
+				segNames++;
+			}
+			else if (initials.test(bare)) {
+				evidence = true;
+			}
+			else if (!particle.test(bare)) {
+				return false;
+			}
+		}
+		// 每一段要么是人名(≥1 个名字词),要么只是跟在人名后的学位("…, MD, PhD")。
+		if (segNames === 0 && !(segDegrees > 0 && segDegrees === tokens.length)) {
+			return false;
+		}
+		named += segNames;
+	}
+	return named > 0 && evidence;
+}
+
+/**
+ * 参考文献的期刊尾段 (3.1.3, Goenka 2016 p8): "Radiol 2013;48(1):32–40." /
+ * "2013;201(4):W626–W632." —— 刊名缩写 + 年;卷(期):页。原样返回是正当的。
+ */
+export function looksLikeCitationTail(text: string): boolean {
+	const t = text.trim();
+	return /^(?:[\p{Lu}][\p{L}.]*\s+){0,5}(?:19|20)\d{2}\s*;\s*\d+\s*(?:\(\d+(?:[–-]\d+)?\))?\s*:\s*[\p{Lu}]?\d+(?:[–-][\p{Lu}]?\d+)?\.?$/u.test(t);
 }
 /** Below this CJK ratio on a prose source, the response was not really translated. */
 const MIN_TARGET_RATIO = 0.45;

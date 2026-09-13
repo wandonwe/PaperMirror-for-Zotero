@@ -82,8 +82,11 @@ test('表格几何模型的输入维持原样(不含表题) (结构性回归闸,
 test('表题按图注的最小宽度门槛,而不是正文的 (结构性回归闸, 2.8.14)', () => {
 	const src = read('src/ui/strictPageReplacement.ts');
 	// 3.0.3: 短标题标签("Purpose:")同样窄,与表题、图注同档(Goenka 2016 p1 实证)。
-	assert.ok(/const minWidth = \(block\.type === 'caption' \|\| block\.type === 'table' \|\| block\.type === 'heading'\) \? 28 : 50;/.test(src),
+	// 3.1.3: 门槛改按 PDF 点(28/50px ÷ 1.333),不随面板缩放变。
+	assert.ok(/const minWidthPt = \(block\.type === 'caption' \|\| block\.type === 'table' \|\| block\.type === 'heading'\) \? 21 : 37\.5;/.test(src),
 		'"Table 3." 这类短标题盒子天然窄,套 50px 正文门槛会当噪声丢掉 —— 而它是整张表唯一能替换的散文');
+	assert.ok(/box\.width < minWidthPt \* pxPerPoint \|\| box\.height < 6 \* pxPerPoint/.test(src),
+		'宽高门槛都必须乘 pxPerPoint —— 否则窄面板里 7pt 的参考文献行整条被当噪声丢掉 (Goenka 2016 p8)');
 });
 
 // ---- 3. 表题的排版待遇与图注一致 ----------------------------------------------
