@@ -136,7 +136,7 @@ export function separatorBetween(a: SourceBlock, b: SourceBlock): string {
 	return gap > em * 0.55 ? '\n\n' : ' ';
 }
 
-function mergeTwo(a: SourceBlock, b: SourceBlock): SourceBlock {
+export function mergeTwo(a: SourceBlock, b: SourceBlock): SourceBlock {
 	const sep = separatorBetween(a, b);
 	const joined = sep === '' && endsHyphenated(a.sourceText)
 		? a.sourceText.trim().replace(/-$/, '') + b.sourceText.trim()
@@ -148,16 +148,27 @@ function mergeTwo(a: SourceBlock, b: SourceBlock): SourceBlock {
 	// b 续到上一组。b 恒为单块(coalesce 逐块累积),故 b 的行盒即其自身行盒。
 	const aGroups: NonNullable<SourceBlock['regionParagraphs']> = a.regionParagraphs
 		?? [{ lineRectsPdf: [...((a.lineRectsPdf ?? []) as Rect[])], fontSize: a.fontSize }];
-	const bLines = [...((b.lineRectsPdf ?? []) as Rect[])];
+	// b 不一定是单块 (3.1.8, CAD-RADS p12/p16 实证): 碎片吸收 `mergeTwo(shard, next)` 与
+	// 图注归位都可能把一个**已经带段落组**的区域当 b 传进来。旧代码把 b 的所有行
+	// 塞进 a 的最后一组,b 自己的 `\n\n` 边界就丢了 —— 文本里有两段,几何里只有一组,
+	// 排版按整块放、pre-line 又多画一个空行,4 行的盒装 5 行,no-room/height。
+	// 现在按组接:sep 是段落边界 → b 的各组整体追加;否则 b 的第一组续进 a 的末组,
+	// b 余下的组原样追加。
+	const bGroups: NonNullable<SourceBlock['regionParagraphs']> = b.regionParagraphs
+		?? [{ lineRectsPdf: [...((b.lineRectsPdf ?? []) as Rect[])], fontSize: b.fontSize }];
 	let regionParagraphs: NonNullable<SourceBlock['regionParagraphs']>;
 	if (sep === '\n\n') {
-		regionParagraphs = [...aGroups, { lineRectsPdf: bLines, fontSize: b.fontSize }];
+		regionParagraphs = [...aGroups, ...bGroups.map(g => ({ lineRectsPdf: [...g.lineRectsPdf], fontSize: g.fontSize }))];
 	}
 	else {
 		const lastIdx = aGroups.length - 1;
-		regionParagraphs = aGroups.map((g, i) => i === lastIdx
-			? { lineRectsPdf: [...g.lineRectsPdf, ...bLines], fontSize: g.fontSize }
-			: g);
+		const [bFirst, ...bRest] = bGroups;
+		regionParagraphs = [
+			...aGroups.map((g, i) => i === lastIdx
+				? { lineRectsPdf: [...g.lineRectsPdf, ...(bFirst?.lineRectsPdf ?? [])], fontSize: g.fontSize }
+				: g),
+			...bRest.map(g => ({ lineRectsPdf: [...g.lineRectsPdf], fontSize: g.fontSize }))
+		];
 	}
 	return {
 		...a,
