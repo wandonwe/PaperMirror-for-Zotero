@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { layoutBlock, tokenize, wrapAt, applyKinsoku, type Measure } from '../../src/pdfgen/textWrap';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /** Fake metrics: CJK glyph = 1em, Latin/digit = 0.5em, space = 0.3em. */
 const measure: Measure = (text, size) => {
@@ -122,4 +124,19 @@ test('exportExpansionAllowance: 下方邻块截断下扩,已重叠者截为 0', 
 
 test('unionOfRects 取多行矩形的包围盒', () => {
 	assert.deepEqual(unionOfRects([[10, 20, 100, 30], [12, 8, 90, 18]]), [10, 8, 100, 30]);
+});
+
+// ---- 3.0.3: 导出时换行不能被换成「〓」 -----------------------------------------
+//
+// Goenka 2016 p1 导出实证:合并区域的段落边界是 `\n\n`,字体没有换行符的字形,
+// sanitize 把每个换行都换成了「〓」—— 摘要每个分节前多出两个方块。
+test('导出 sanitize 对空白不查字形,换行交给 layoutBlock 折叠 (3.0.3)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/pdfgen/translatedPdfBuilder.ts'), 'utf8')
+		.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+	assert.ok(/\/\\s\/\.test\(ch\) \|\| glyphCheck\.hasGlyphForCodePoint/.test(src),
+		'空白字符必须原样保留 —— 否则 "\\n\\n" 变成 "〓〓" 印在导出页上');
+	// layoutBlock 侧:任何空白串折叠成一个空格,不会留下换行。
+	const measure: Measure = (t, s) => t.length * s * 0.5;
+	const out = layoutBlock('目的:甲。\n\n方法:乙。', 1000, 100, 10, measure);
+	assert.deepEqual(out.lines, ['目的:甲。 方法:乙。']);
 });

@@ -197,7 +197,10 @@ export async function buildTranslatedPdf(
 	const sanitize = (text: string): string => {
 		let out = '';
 		for (const ch of text) {
-			out += glyphCheck.hasGlyphForCodePoint(ch.codePointAt(0)!) ? ch : '〓';
+			// 空白不查字形 (3.0.3, Goenka 2016 p1 导出实证): 区域合并把段落边界记成
+			// `\n\n`,而字体里没有换行符的字形 —— 每个换行都被换成了「〓」,导出页上
+			// 摘要的每个分节前都多出两个方块。空白原样保留,交给 layoutBlock 折叠。
+			out += /\s/.test(ch) || glyphCheck.hasGlyphForCodePoint(ch.codePointAt(0)!) ? ch : '〓';
 		}
 		return out;
 	};

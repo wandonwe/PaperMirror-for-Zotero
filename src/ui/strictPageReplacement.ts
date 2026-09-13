@@ -751,7 +751,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// 表题按图注的门槛 (2.8.14): 它就是图注的一种,"Table 3." 这类短标题
 		// 的盒子天然窄,套 50px 的正文门槛会被当成噪声丢掉 —— 而它是整张表
 		// 唯一能替换的散文。
-		const minWidth = (block.type === 'caption' || block.type === 'table') ? 28 : 50;
+		// 标题标签同样窄 (3.0.3, Goenka 2016 p1 实证): "Purpose:" / "Results:" 是 9pt、
+		// 33pt 宽的独立标题块,有译文、8 个字符,却因 50px 门槛被当噪声丢掉 —— 而宽
+		// 1.5pt 的 "Methods:" 在同一缩放下刚好过线被译出。短标题与表题、图注同类。
+		const minWidth = (block.type === 'caption' || block.type === 'table' || block.type === 'heading') ? 28 : 50;
 		if (box.width < minWidth || box.height < 9 || block.sourceText.trim().length < 6) {
 			tooSmall++;
 			skipped.push({ id: block.id, reason: 'too-small' });
@@ -1436,6 +1439,28 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			}
 			item.node.style.visibility = 'hidden';
 			item.node.setAttribute('data-pm-unfit', 'true');
+		}
+	};
+
+	/**
+	 * 悬停看原文 (3.1.0, 覆盖模式): 已提交块的遮罩临时清掉、译文隐去,原文在原位
+	 * 露出;off 时遮罩重画、译文复现。只对已提交且未放弃的块生效 —— 未提交块本来
+	 * 就显示着原文,没有可"看"的。不改 committed 状态,统计与审计不受影响。
+	 */
+	(page as HTMLElement & { pmPeek?: (ids: string[], on: boolean) => void }).pmPeek = (ids: string[], on: boolean): void => {
+		for (const id of ids) {
+			const item = byId.get(id);
+			if (!item || !item.committed || item.abandoned) {
+				continue;
+			}
+			if (on) {
+				clearMask(id);
+				item.node.style.visibility = 'hidden';
+			}
+			else {
+				paintMask(id);
+				item.node.style.visibility = '';
+			}
 		}
 	};
 

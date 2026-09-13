@@ -448,6 +448,8 @@ export class ReaderSession {
 			onCollapsedChange: (c) => this.setCapsuleCollapsed(c), // 折叠状态由会话统一管理
 			onRefreshRing: () => void this.retranslateCurrent() // ring → 刷新本页
 		});
+		// 覆盖层与面板共用同一个页面渲染器 (3.1.0):同一页在两种模式下同一套排版。
+		this.overlay.setPageRenderer((pageIndex, host, width, signal) => this.renderDocPage(pageIndex, host, width, signal));
 		this.overlay.setDisplayMode(getPref<OverlayDisplayMode>('overlayDisplayMode', 'dim-original'));
 		this.overlay.setPeekOnHover(getPref<boolean>('overlayPeekHover', true));
 		this.overlay.setFitMode(getPref<'strict' | 'expand'>('overlayFitMode', 'expand'));
@@ -1293,6 +1295,14 @@ export class ReaderSession {
 		this.applyPaneViewKind('article', { persist: false, pageIndex });
 	}
 
+	/** 工具条「完整文章流」(3.0.3): 面板切成文章流、滚到当前页;不改默认视图偏好。 */
+	showArticleFlow(): void {
+		if (this.viewMode === 'overlay') {
+			this.setViewMode('split');
+		}
+		this.applyPaneViewKind('article', { persist: false });
+	}
+
 	/**
 	 * 切换面板视图 (3.0.2)。`pane.setViewKind` 只换壳:它清空文章流的每一节、
 	 * 清空页槽,然后**等** `renderPage` 再送状态进来。整页对照有 `initPageList`
@@ -1965,14 +1975,18 @@ export class ReaderSession {
 		switch (this.viewMode) {
 			case 'original':
 				this.split?.setPaneVisible(false);
+				this.pane?.setSurfaceActive(false);
 				this.applyOverlay(false, false);
 				break;
 			case 'overlay':
 				this.split?.setPaneVisible(false);
+				// 先停面板的泵,再开覆盖层 (3.1.0):两者共用渲染世代,不能同时泵同一页。
+				this.pane?.setSurfaceActive(false);
 				this.applyOverlay(true, false);
 				break;
 			case 'split':
 				this.split?.setPaneVisible(true);
+				this.pane?.setSurfaceActive(true);
 				// 对照模式: the translation lives on the RIGHT page only. The
 				// on-PDF overlay must never paint over the original on the left,
 				// whatever the stored overlay preference says.

@@ -343,8 +343,9 @@ test('视图切换按钮真的被创建,并接到 onToggleViewKind (3.0.2)', () 
 		'viewKindButton 只声明不创建 —— 文章流视图在界面上就没有出口');
 	assert.ok(/onToggleViewKind\(this\.viewKind === 'page' \? 'article' : 'page'\)/.test(pane),
 		'按钮必须切到**另一个**视图');
-	// 「更多」菜单里也要有两项带勾选 —— 窄窗会把工具条按钮裁掉。
-	assert.ok(/checked: this\.viewKind === 'page'/.test(pane) && /checked: this\.viewKind === 'article'/.test(pane));
+	// 3.0.3(用户决定):只留工具条按钮,「更多」菜单里不再重复列出两种视图。
+	assert.ok(!/onToggleViewKind\('page'\)/.test(pane) && !/onToggleViewKind\('article'\)/.test(pane),
+		'视图切换只有工具条按钮这一个入口');
 	// 窄档收标签的规则要覆盖这个按钮,否则它一个就把工具条撑爆。
 	const css = CSS();
 	assert.ok(/\.pm-bar-action-view span,[\s\S]{0,80}display: none;/.test(css));
