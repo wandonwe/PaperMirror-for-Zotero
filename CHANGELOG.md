@@ -7,6 +7,27 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.1.3] — 2026-09-13
+
+### 3.1.2 真机导出(Goenka 2016,对照模式)证明的两处
+
+- **署名行与文献作者串被回声规则判成"没译"**:p1 的 7 个作者行里 4 个(如 "Nancy A. Obuchowski, PhD"、
+  "Wadih Karim, RT")、p8 的作者串("Morsbach F, Bickelhaupt S, Rätzer S,")与期刊尾段
+  ("Radiol 2013;48(1):32–40.")模型按提示词原样返回,2.12.12 的回声规则只认 "Powers WJ" / "J. Smith"
+  两种人名形态,于是反复重试、最后 `unrecovered`(p1 salvage 2 次、p8 3 次)。新增 `looksLikePersonNames`
+  (按逗号/分号/and 分段;每段只许名字词、首字母缩写、学位缩写、姓氏小品词;**必须**含首字母缩写或学位缩写
+  这类人名专属证据 —— "Document Title" / "No Evidence" 形态上与人名无法区分,没有证据就仍按没译处理)
+  与 `looksLikeCitationTail`(刊名缩写 + 年;卷(期):页)。变异验证:去掉证据要求 → 2.12.12 的两条锁变红。
+- **`too-small` 门槛按屏幕像素算**:p8 的参考文献 7pt 行在这个面板宽度下矮于 9px,44–46 字符的条目整条被当
+  噪声丢掉(4 块),同一页在宽面板里全部放回。门槛改按 PDF 点(28/50px ÷ 1.333 = 21/37.5pt;高度 6pt),
+  "这一块值不值得放"是页面几何的性质,不随缩放变。
+
+### 读数(记录)
+
+8 页全部 done;`preserveReason` 分布 data 29、running-head 25、symbol 14、identifier 1、marks 1;
+几何审计 0 违例。放弃原因:expand-ink/none 5、shrink-floor/none+ink 4、too-small 4(本版修)、
+shrink-floor/height 3(p3/p5 表格首列格)、no-room/height 2(p8 文献续行)。
+
 ## [3.1.2] — 2026-09-13
 
 ### 工具条模式菜单:去掉「完整文章流」(用户决定)

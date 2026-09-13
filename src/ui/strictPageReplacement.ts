@@ -754,8 +754,13 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// 标题标签同样窄 (3.0.3, Goenka 2016 p1 实证): "Purpose:" / "Results:" 是 9pt、
 		// 33pt 宽的独立标题块,有译文、8 个字符,却因 50px 门槛被当噪声丢掉 —— 而宽
 		// 1.5pt 的 "Methods:" 在同一缩放下刚好过线被译出。短标题与表题、图注同类。
-		const minWidth = (block.type === 'caption' || block.type === 'table' || block.type === 'heading') ? 28 : 50;
-		if (box.width < minWidth || box.height < 9 || block.sourceText.trim().length < 6) {
+		// 门槛按 PDF 点算,不按屏幕像素 (3.1.3, Goenka 2016 p8 实证): 面板窄一点、
+		// 页面缩小一点,7pt 的参考文献行就矮于 9px,44–46 字符的条目整条被当噪声丢掉 ——
+		// 同一页在宽面板里全部放回。"这一块值不值得放"是页面几何的性质,不能随缩放变。
+		// 28/50 px 是按 100% 缩放(1.333 px/pt)定的,折成 21/37.5pt;高度 9px → 6.75pt
+		// 会把 7pt 小字行(行盒常 7–8pt)卡在边上,取 6pt。
+		const minWidthPt = (block.type === 'caption' || block.type === 'table' || block.type === 'heading') ? 21 : 37.5;
+		if (box.width < minWidthPt * pxPerPoint || box.height < 6 * pxPerPoint || block.sourceText.trim().length < 6) {
 			tooSmall++;
 			skipped.push({ id: block.id, reason: 'too-small' });
 			continue;
