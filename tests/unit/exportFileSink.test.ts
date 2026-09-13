@@ -327,11 +327,18 @@ test('导出流程的四条规矩都在代码里 (结构性回归闸, 2.8.8)', (
 	assert.ok(noPath > 0 && noPath < askFallback, 'no-path 要在询问备用目录之前处理掉');
 	assert.ok(/没有拿到保存位置,已取消/.test(save), '如实说没拿到位置,不谎称是用户取消或没有对话框');
 
-	// 语料入口常驻菜单,不受调试日志影响。
+	// 3.1.4 (用户决定,推翻 2.8.8): 诊断 / 语料的四个入口全部在「调试」闸之后 ——
+	// 普通阅读时不显示。
 	const pane = readFileSync(join(process.cwd(), 'src/ui/translationPane.ts'), 'utf8');
 	const menu = pane.slice(pane.indexOf('private buildMoreButton()'), pane.indexOf('/** demo .switch-label'));
-	const corpusFile = menu.indexOf('onExportCorpusFile');
 	const debugGate = menu.indexOf("getPref<boolean>('debugLogging'");
-	assert.ok(corpusFile > 0 && (debugGate < 0 || corpusFile < debugGate),
-		'导出翻译语料必须在调试日志闸之前 —— 调试日志只决定探针是否采样,不该拦住语料导出');
+	assert.ok(debugGate > 0, '调试闸还在');
+	for (const cb of ['onExportDiagnosticsFile', 'onExportCorpusFile', 'onShowDiagnostics', 'onCopyCorpus']) {
+		const at = menu.indexOf(cb);
+		assert.ok(at > debugGate, `${cb} 必须在调试闸之后 —— 只在勾选「调试」后显示`);
+	}
+	for (const cb of ['onSaveNote', 'onExportPdf']) {
+		const at = menu.indexOf(cb);
+		assert.ok(at > 0 && at < debugGate, `${cb} 常驻,不受调试闸影响`);
+	}
 });
