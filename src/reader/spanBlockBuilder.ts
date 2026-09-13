@@ -25,7 +25,7 @@
 import type { BlockType, SourceBlock } from '../types/models';
 import { detectTableRegions } from './tableGuard';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
-import { endsMidSentence, isMetadataBlock, isPublisherBoilerplateLine, isRunningHeadOrFoot } from './metaFilter';
+import { classifyContent, endsMidSentence, isPublisherBoilerplateLine, isRunningHeadOrFoot, type PreserveReason } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -934,6 +934,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	const blocks: SourceBlock[] = [];
 	let order = 0;
 	for (const p of [...merged, ...tableParas]) {
+		let keepReason: PreserveReason | undefined;
 		// Table-line blocks bypass the prose furniture filters: a detected table
 		// cell is content, never a running head / metadata, and the numeric cells
 		// that look furniture-ish must survive to be gridded. The REFERENCES
@@ -958,16 +959,23 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			// caption/table 这两个类型只由「Figure N/Table N」开头产生 —— 那是
 			// 内容的自证,作者单位块永远不会这样起头,所以按 title/heading 一样豁免。
 			const isFigureOrTableCaption = p.type === 'caption' || p.type === 'table';
-			if (p.type !== 'title' && p.type !== 'heading' && !isFigureOrTableCaption
-				&& isMetadataBlock(p.text, p.rect, pageWidth, { fontSize: p.fontSize, bodySize })) {
-				continue;
+			// 内容决策 (2.12.13):不再整块丢弃。标识保留并带原因,自然语言一律翻译。
+			if (p.type !== 'title' && p.type !== 'heading' && !isFigureOrTableCaption) {
+				const content = classifyContent(p.text, p.rect, pageWidth, { fontSize: p.fontSize, bodySize });
+				if (content.decision === 'skip') {
+					continue;
+				}
+				if (content.decision === 'preserve') {
+					keepReason = content.reason;
+				}
 			}
 			// Running heads and page-foot lines repeat the journal's furniture on
 			// every page. Translating them is pure noise. `title` is exempt: on a
 			// cover page with no masthead the paper's own title can sit inside the
 			// band, and losing it is far worse than translating one running head.
+			// 2.12.13:保留为 preserve('running-head') 而不是丢弃 —— 墨迹几何进遮挡物,摘要里看得见。
 			if (p.type !== 'title' && isRunningHeadOrFoot(p.rect, options.pageHeight, p.group.length, p.text)) {
-				continue;
+				keepReason = keepReason ?? 'running-head';
 			}
 			// 字距拉开的标题 (2.7.2, 审核 C-2, jacc2020-p15 实证): "R E F E R E N C E S"
 			// 由单字母 span 拼成,字号与正文同,分类落成 paragraph —— 只认
@@ -1004,7 +1012,11 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			fontSize: p.fontSize,
 			column: stampColumn(p.rect, !!p.isTableLine),
 			isReference: isRef,
-			...(preserveReference ? { translationMode: 'preserve' as const } : {})
+			...(preserveReference
+				? { translationMode: 'preserve' as const, preserveReason: 'reference' }
+				: keepReason
+					? { translationMode: 'preserve' as const, preserveReason: keepReason }
+					: {})
 		});
 		order++;
 	}

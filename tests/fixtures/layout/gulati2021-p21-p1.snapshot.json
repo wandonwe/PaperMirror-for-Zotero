@@ -1,14 +1,21 @@
 [
 	{
-		"type": "table",
+		"type": "heading",
 		"column": 0,
 		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "Gulati et al"
+	},
+	{
+		"type": "table",
+		"column": 0,
+		"readingIndex": 1,
 		"text": "Table 5. Contraindication by Type of Ima"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 2,
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "translate",
@@ -17,7 +24,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 3,
 		"tableRow": 0,
 		"tableCol": 3,
 		"mode": "translate",
@@ -26,7 +33,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 3,
+		"readingIndex": 4,
 		"tableRow": 1,
 		"tableCol": 3,
 		"mode": "translate",
@@ -35,7 +42,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 4,
+		"readingIndex": 5,
 		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "translate",
@@ -44,7 +51,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 5,
+		"readingIndex": 6,
 		"tableRow": 2,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -53,7 +60,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 6,
+		"readingIndex": 7,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
@@ -62,115 +69,115 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 7,
+		"readingIndex": 8,
 		"text": "bundle branch block, Wolff-"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 8,
+		"readingIndex": 9,
 		"text": "Contraindications to vasodi-"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 9,
+		"readingIndex": 10,
 		"text": "Parkinson-White pattern,"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 10,
+		"readingIndex": 11,
 		"text": "lator administration"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 11,
+		"readingIndex": 12,
 		"text": "AND GUIDELINESventricular paced rhythm(u"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 12,
+		"readingIndex": 13,
 		"text": "Implanted devices not safe for CMR or pr"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 13,
+		"readingIndex": 14,
 		"text": "CLINICAL STATEMENTSestablish exercise ca"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 14,
+		"readingIndex": 15,
 		"text": "interpretation"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 15,
+		"readingIndex": 16,
 		"text": "ischemia)"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 16,
+		"readingIndex": 17,
 		"text": "Significant claustrophobia"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 17,
+		"readingIndex": 18,
 		"text": "Unable to achieve ≥5 METs"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 18,
+		"readingIndex": 19,
 		"text": "Caffeine use within past"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 19,
+		"readingIndex": 20,
 		"text": "or unsafe to exercise"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 20,
+		"readingIndex": 21,
 		"text": "12 h"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 21,
+		"readingIndex": 22,
 		"text": "High-risk unstable angina or AMI (<2 d) "
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 22,
+		"readingIndex": 23,
 		"text": "Severe systemic arterial hypertension (e"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 23,
+		"readingIndex": 24,
 		"text": "Acute illness (eg, acute PE, acute myoca"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 24,
+		"readingIndex": 25,
 		"text": "For all the imaging modalities, inabilit"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 25,
+		"readingIndex": 26,
 		"tableRow": 0,
 		"tableCol": 1,
 		"mode": "translate",
@@ -179,7 +186,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 26,
+		"readingIndex": 27,
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "translate",
@@ -188,7 +195,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 27,
+		"readingIndex": 28,
 		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "translate",
@@ -197,13 +204,13 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 28,
+		"readingIndex": 29,
 		"text": "(<2 d) Contraindications to vasodilator "
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 29,
+		"readingIndex": 30,
 		"tableRow": 0,
 		"tableCol": 2,
 		"mode": "translate",
@@ -212,7 +219,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 30,
+		"readingIndex": 31,
 		"tableRow": 1,
 		"tableCol": 2,
 		"mode": "translate",
@@ -221,7 +228,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 31,
+		"readingIndex": 32,
 		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "translate",
@@ -230,97 +237,111 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 32,
+		"readingIndex": 33,
 		"text": "Inability to reach target heart rate"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 33,
+		"readingIndex": 34,
 		"text": "Uncontrolled heart failure High-risk uns"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 34,
+		"readingIndex": 35,
 		"text": "Narrow-angle glaucoma Myasthenia gravis "
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 35,
+		"readingIndex": 36,
 		"text": "Severe systemic arterial hypertension (e"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 36,
+		"readingIndex": 37,
 		"text": "Use of Contrast Contraindicated in: Hype"
 	},
 	{
-		"type": "paragraph",
-		"column": 3,
-		"readingIndex": 37,
-		"text": "CCTA7* Allergy to iodinated contrast Ina"
-	},
-	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 3,
 		"readingIndex": 38,
-		"text": "Renal impairment as defined by local pro"
+		"mode": "preserve",
+		"text": "2021 Chest Pain Guideline"
 	},
 	{
 		"type": "paragraph",
 		"column": 3,
 		"readingIndex": 39,
-		"text": "Heart rate variability and arrhythmia"
+		"text": "CCTA7* Allergy to iodinated contrast Ina"
 	},
 	{
 		"type": "paragraph",
 		"column": 3,
 		"readingIndex": 40,
+		"text": "Renal impairment as defined by local pro"
+	},
+	{
+		"type": "paragraph",
+		"column": 3,
+		"readingIndex": 41,
+		"text": "Heart rate variability and arrhythmia"
+	},
+	{
+		"type": "paragraph",
+		"column": 3,
+		"readingIndex": 42,
 		"text": "Contraindication to nitroglycerin (if in"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 41,
+		"readingIndex": 43,
 		"text": "ACS indicates acute coronary syndrome; A"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 42,
+		"readingIndex": 44,
 		"text": "*Screening for potential pregnancy by hi"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 43,
+		"readingIndex": 45,
 		"text": "(Section 4.2.2). Myopericarditis is hete"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 44,
+		"readingIndex": 46,
 		"text": "e388 November 30, 2021"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 45,
+		"readingIndex": 47,
 		"text": "†Low-dose dobutamine may be useful for a"
 	},
 	{
 		"type": "paragraph",
 		"column": 3,
-		"readingIndex": 46,
+		"readingIndex": 48,
 		"text": "musculoskeletal, or gastrointestinal cau"
 	},
 	{
 		"type": "title",
 		"column": 3,
-		"readingIndex": 47,
+		"readingIndex": 49,
 		"text": "adverse effects of unnecessary investiga"
+	},
+	{
+		"type": "heading",
+		"column": 3,
+		"readingIndex": 50,
+		"mode": "preserve",
+		"text": "Circulation. 2021;144:e368–e454. DOI: 10"
 	}
 ]

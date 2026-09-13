@@ -10,5 +10,19 @@
 		"column": 0,
 		"readingIndex": 1,
 		"text": "Figure 4: Incremental performance in the"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 2,
+		"mode": "preserve",
+		"text": "Chen and Pan et al"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"mode": "preserve",
+		"text": "Radiology: Volume 307: Number 2—April 20"
 	}
 ]

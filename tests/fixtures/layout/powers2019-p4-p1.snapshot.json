@@ -6,15 +6,29 @@
 		"text": "e347"
 	},
 	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 1,
+		"mode": "preserve",
+		"text": "Powers et al"
+	},
+	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 2,
+		"mode": "preserve",
+		"text": "2019 Guidelines for Management of AIS"
+	},
+	{
 		"type": "table",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 3,
 		"text": "Table 2. Guidelines, Policies, and State"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 4,
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "translate",
@@ -23,7 +37,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 3,
+		"readingIndex": 5,
 		"tableRow": 0,
 		"tableCol": 1,
 		"mode": "translate",
@@ -32,13 +46,13 @@
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 4,
+		"readingIndex": 6,
 		"text": "Document Title"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 5,
+		"readingIndex": 7,
 		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "translate",
@@ -47,7 +61,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 6,
+		"readingIndex": 8,
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "translate",
@@ -56,13 +70,13 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 7,
+		"readingIndex": 9,
 		"text": "“Recommendations for the Implementation "
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 8,
+		"readingIndex": 10,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -71,7 +85,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 9,
+		"readingIndex": 11,
 		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -80,7 +94,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 10,
+		"readingIndex": 12,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -89,7 +103,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 11,
+		"readingIndex": 13,
 		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -98,26 +112,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 12,
-		"tableRow": 4,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "2013"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 13,
-		"tableRow": 4,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "2013 AIS Guidelines"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
 		"readingIndex": 14,
-		"tableRow": 5,
+		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "2013"
@@ -126,6 +122,24 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 15,
+		"tableRow": 4,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2013 AIS Guidelines"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 16,
+		"tableRow": 5,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2013"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 17,
 		"tableRow": 5,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -134,26 +148,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 16,
-		"tableRow": 6,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "2014"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 17,
-		"tableRow": 6,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "N/A"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
 		"readingIndex": 18,
-		"tableRow": 7,
+		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "2014"
@@ -162,16 +158,16 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 19,
-		"tableRow": 7,
+		"tableRow": 6,
 		"tableCol": 1,
 		"mode": "preserve",
-		"text": "2014 Brain Swelling"
+		"text": "N/A"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 20,
-		"tableRow": 8,
+		"tableRow": 7,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "2014"
@@ -180,16 +176,16 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 21,
-		"tableRow": 8,
+		"tableRow": 7,
 		"tableCol": 1,
 		"mode": "preserve",
-		"text": "2014 Palliative Care"
+		"text": "2014 Brain Swelling"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 22,
-		"tableRow": 9,
+		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "2014"
@@ -198,16 +194,16 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 23,
-		"tableRow": 9,
+		"tableRow": 8,
 		"tableCol": 1,
 		"mode": "preserve",
-		"text": "2014 Secondary Prevention"
+		"text": "2014 Palliative Care"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 24,
-		"tableRow": 10,
+		"tableRow": 9,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "2014"
@@ -216,6 +212,24 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 25,
+		"tableRow": 9,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2014 Secondary Prevention"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 26,
+		"tableRow": 10,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2014"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 27,
 		"tableRow": 10,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -224,26 +238,8 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 26,
-		"tableRow": 11,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "2015"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 27,
-		"tableRow": 11,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "2015 CPR/ECC"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
 		"readingIndex": 28,
-		"tableRow": 12,
+		"tableRow": 11,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "2015"
@@ -252,16 +248,16 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 29,
-		"tableRow": 12,
+		"tableRow": 11,
 		"tableCol": 1,
 		"mode": "preserve",
-		"text": "2015 Endovascular"
+		"text": "2015 CPR/ECC"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 30,
-		"tableRow": 13,
+		"tableRow": 12,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "2015"
@@ -270,6 +266,24 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 31,
+		"tableRow": 12,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "2015 Endovascular"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 32,
+		"tableRow": 13,
+		"tableCol": 0,
+		"mode": "preserve",
+		"text": "2015"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 33,
 		"tableRow": 13,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -278,7 +292,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 32,
+		"readingIndex": 34,
 		"tableRow": 14,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -287,7 +301,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 33,
+		"readingIndex": 35,
 		"tableRow": 14,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -296,31 +310,31 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 34,
+		"readingIndex": 36,
 		"tableRow": 15,
 		"tableCol": 0,
 		"mode": "preserve",
 		"text": "2017"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 35,
-		"tableRow": 15,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "N/A"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 36,
-		"text": "“Treatment and Outcome of Hemorrhagic Tr"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 37,
+		"tableRow": 15,
+		"tableCol": 1,
+		"mode": "preserve",
+		"text": "N/A"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 38,
+		"text": "“Treatment and Outcome of Hemorrhagic Tr"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 39,
 		"tableRow": 16,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -329,7 +343,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 38,
+		"readingIndex": 40,
 		"tableRow": 16,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -337,26 +351,40 @@
 	},
 	{
 		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 41,
+		"mode": "preserve",
+		"text": "2018"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 42,
+		"mode": "preserve",
+		"text": "2018"
+	},
+	{
+		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 39,
+		"readingIndex": 43,
 		"text": "N/A"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 40,
+		"readingIndex": 44,
 		"text": "2018 Cholesterol Guidelines"
 	},
 	{
 		"type": "heading",
 		"column": -1,
-		"readingIndex": 41,
+		"readingIndex": 45,
 		"text": "Practice Guidelines”19"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 42,
+		"readingIndex": 46,
 		"text": "AACVPR indicates American Association of"
 	}
 ]

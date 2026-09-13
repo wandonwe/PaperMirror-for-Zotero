@@ -1,26 +1,60 @@
 [
 	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "REVIEWS AND COMMENTARY • REVIEW"
+	},
+	{
 		"type": "title",
 		"column": -1,
-		"readingIndex": 0,
+		"readingIndex": 1,
 		"text": "Multi-institutional Protocol Guidance fo"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 1,
+		"readingIndex": 2,
+		"mode": "preserve",
+		"text": "Kelly K. Horst, MD • Joseph Y. Cao, MD •"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 3,
+		"text": "From the Department of Radiology, Divisi"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 4,
+		"mode": "preserve",
+		"text": "Radiology 2024; 311(2):e231741 • https:/"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 5,
 		"text": "Performing CT in children comes with uni"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 6,
+		"mode": "preserve",
+		"text": "© RSNA, 2024"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 7,
 		"text": "The operational efficiency of CT, combin"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 3,
+		"readingIndex": 8,
 		"text": "In contrast, PCD CT uses semiconductors "
 	}
 ]

@@ -24,6 +24,13 @@ export interface SourceBlock {
 	order: number;
 	type: BlockType;
 	sourceText: string;
+	/**
+	 * 为什么这个块不翻译 (2.12.13)。translationMode === 'preserve' 的块必须带一个 ——
+	 * "无提示缺失"是被禁止的:进逐块摘要与诊断导出,用户能看到每一处未译内容的原因。
+	 * 表格格的原因('glossary' / 'defined-abbreviation' / 'citation-label' / 'data' /
+	 * 'structure-ambiguous' / 'name' / 'symbol')与页面块的原因(见 metaFilter.PreserveReason)共用这一格。
+	 */
+	preserveReason?: string;
 	boundingBox?: BoundingBox;
 	/**
 	 * Per-line rects in RAW PDF coordinates [x1, y1, x2, y2] (origin

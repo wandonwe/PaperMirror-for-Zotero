@@ -72,6 +72,22 @@ const CITATION_STAT_PATTERNS: RegExp[] = [
 	/\b[nN]\s*=\s*\d[\d,]*/g
 ];
 
+/**
+ * 标识保护 (2.12.13):邮箱、网址、DOI、临床试验注册号。这些必须逐字节到达输出 ——
+ * 以前含邮箱的整格/整句被"保留",现在句子照常翻译,只有标识本身被掩蔽。
+ * 顺序排在引用/统计量之后、启发式公式之前;网址里的 "=" 若先被公式启发式吃掉,
+ * 网址就会被切成两半,所以标识必须先于启发式。
+ */
+const IDENTIFIER_PATTERNS: RegExp[] = [
+	/[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}/g,
+	/https?:\/\/[^\s<>"')\]]+/gi,
+	/\b(?:doi|DOI)\s*[::]?\s*10\.\d{4,9}\/[^\s;,)]+/g,
+	/\b10\.\d{4,9}\/[^\s;,)]+/g,
+	/\bNCT\d{8}\b/g,
+	/\bISRCTN\d{8}\b/g,
+	/\bChiCTR[-\w]+\b/g
+];
+
 /** Heuristic spans: symbol-dense inline runs, protected only if isFormulaRun. */
 const HEURISTIC_PATTERNS: RegExp[] = [
 	// e.g. "y = βx + ε" or "P(A|B) = P(B|A)P(A)/P(B)"
@@ -122,6 +138,10 @@ export function protectFormulas(text: string, extraLiterals: string[] = []): Pro
 		out = maskLiteral(out, literal);
 	}
 	for (const pattern of DELIMITED_PATTERNS) {
+		out = out.replace(pattern, mask);
+	}
+	// 标识 (2.12.13):邮箱/网址/DOI/注册号先于不译词与启发式公式掩蔽。
+	for (const pattern of IDENTIFIER_PATTERNS) {
 		out = out.replace(pattern, mask);
 	}
 	// 不译词列表 (user "do not translate" literals): masked like formulas, which

@@ -1,14 +1,21 @@
 [
 	{
-		"type": "table",
+		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "Chen and Pan et al"
+	},
+	{
+		"type": "table",
+		"column": 0,
+		"readingIndex": 1,
 		"text": "Table 2: Baseline Clinical Characteristi"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 2,
 		"tableRow": 0,
 		"tableCol": 1,
 		"mode": "translate",
@@ -17,7 +24,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 3,
 		"tableRow": 0,
 		"tableCol": 2,
 		"mode": "translate",
@@ -26,7 +33,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 3,
+		"readingIndex": 4,
 		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "translate",
@@ -35,7 +42,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 4,
+		"readingIndex": 5,
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "translate",
@@ -44,7 +51,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 5,
+		"readingIndex": 6,
 		"tableRow": 1,
 		"tableCol": 2,
 		"mode": "translate",
@@ -53,7 +60,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 6,
+		"readingIndex": 7,
 		"tableRow": 1,
 		"tableCol": 4,
 		"mode": "translate",
@@ -62,7 +69,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 7,
+		"readingIndex": 8,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
@@ -71,7 +78,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 8,
+		"readingIndex": 9,
 		"tableRow": 2,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -80,7 +87,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 9,
+		"readingIndex": 10,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
@@ -89,7 +96,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 10,
+		"readingIndex": 11,
 		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -98,7 +105,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 11,
+		"readingIndex": 12,
 		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -107,7 +114,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 12,
+		"readingIndex": 13,
 		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "translate",
@@ -116,7 +123,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 13,
+		"readingIndex": 14,
 		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -125,7 +132,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 14,
+		"readingIndex": 15,
 		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -134,7 +141,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 15,
+		"readingIndex": 16,
 		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "translate",
@@ -143,7 +150,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 16,
+		"readingIndex": 17,
 		"tableRow": 5,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -152,7 +159,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 17,
+		"readingIndex": 18,
 		"tableRow": 5,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -161,7 +168,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 18,
+		"readingIndex": 19,
 		"tableRow": 5,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -170,7 +177,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 19,
+		"readingIndex": 20,
 		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "translate",
@@ -179,7 +186,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 20,
+		"readingIndex": 21,
 		"tableRow": 6,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -188,7 +195,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 21,
+		"readingIndex": 22,
 		"tableRow": 6,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -197,7 +204,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 22,
+		"readingIndex": 23,
 		"tableRow": 6,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -206,7 +213,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 23,
+		"readingIndex": 24,
 		"tableRow": 7,
 		"tableCol": 0,
 		"mode": "translate",
@@ -215,7 +222,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 24,
+		"readingIndex": 25,
 		"tableRow": 7,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -224,7 +231,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 25,
+		"readingIndex": 26,
 		"tableRow": 7,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -233,7 +240,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 26,
+		"readingIndex": 27,
 		"tableRow": 7,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -242,7 +249,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 27,
+		"readingIndex": 28,
 		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "translate",
@@ -251,7 +258,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 28,
+		"readingIndex": 29,
 		"tableRow": 8,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -260,7 +267,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 29,
+		"readingIndex": 30,
 		"tableRow": 8,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -269,7 +276,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 30,
+		"readingIndex": 31,
 		"tableRow": 8,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -278,7 +285,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 31,
+		"readingIndex": 32,
 		"tableRow": 9,
 		"tableCol": 0,
 		"mode": "translate",
@@ -287,7 +294,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 32,
+		"readingIndex": 33,
 		"tableRow": 9,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -296,7 +303,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 33,
+		"readingIndex": 34,
 		"tableRow": 9,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -305,7 +312,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 34,
+		"readingIndex": 35,
 		"tableRow": 9,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -314,7 +321,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 35,
+		"readingIndex": 36,
 		"tableRow": 10,
 		"tableCol": 0,
 		"mode": "translate",
@@ -323,7 +330,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 36,
+		"readingIndex": 37,
 		"tableRow": 10,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -332,7 +339,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 37,
+		"readingIndex": 38,
 		"tableRow": 10,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -341,7 +348,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 38,
+		"readingIndex": 39,
 		"tableRow": 10,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -350,7 +357,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 39,
+		"readingIndex": 40,
 		"tableRow": 11,
 		"tableCol": 0,
 		"mode": "translate",
@@ -359,7 +366,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 40,
+		"readingIndex": 41,
 		"tableRow": 11,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -368,7 +375,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 41,
+		"readingIndex": 42,
 		"tableRow": 11,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -377,7 +384,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 42,
+		"readingIndex": 43,
 		"tableRow": 11,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -386,7 +393,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 43,
+		"readingIndex": 44,
 		"tableRow": 12,
 		"tableCol": 0,
 		"mode": "translate",
@@ -395,7 +402,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 44,
+		"readingIndex": 45,
 		"tableRow": 12,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -404,7 +411,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 45,
+		"readingIndex": 46,
 		"tableRow": 12,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -413,7 +420,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 46,
+		"readingIndex": 47,
 		"tableRow": 12,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -422,7 +429,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 47,
+		"readingIndex": 48,
 		"tableRow": 13,
 		"tableCol": 0,
 		"mode": "translate",
@@ -431,7 +438,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 48,
+		"readingIndex": 49,
 		"tableRow": 13,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -440,7 +447,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 49,
+		"readingIndex": 50,
 		"tableRow": 13,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -449,7 +456,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 50,
+		"readingIndex": 51,
 		"tableRow": 13,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -458,7 +465,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 51,
+		"readingIndex": 52,
 		"tableRow": 14,
 		"tableCol": 0,
 		"mode": "translate",
@@ -467,7 +474,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 52,
+		"readingIndex": 53,
 		"tableRow": 14,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -476,7 +483,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 53,
+		"readingIndex": 54,
 		"tableRow": 14,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -485,7 +492,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 54,
+		"readingIndex": 55,
 		"tableRow": 14,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -494,7 +501,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 55,
+		"readingIndex": 56,
 		"tableRow": 15,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -503,7 +510,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 56,
+		"readingIndex": 57,
 		"tableRow": 15,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -512,7 +519,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 57,
+		"readingIndex": 58,
 		"tableRow": 15,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -521,7 +528,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 58,
+		"readingIndex": 59,
 		"tableRow": 15,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -530,7 +537,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 59,
+		"readingIndex": 60,
 		"tableRow": 16,
 		"tableCol": 0,
 		"mode": "translate",
@@ -539,7 +546,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 60,
+		"readingIndex": 61,
 		"tableRow": 16,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -548,7 +555,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 61,
+		"readingIndex": 62,
 		"tableRow": 16,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -557,7 +564,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 62,
+		"readingIndex": 63,
 		"tableRow": 16,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -566,7 +573,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 63,
+		"readingIndex": 64,
 		"tableRow": 17,
 		"tableCol": 0,
 		"mode": "translate",
@@ -575,7 +582,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 64,
+		"readingIndex": 65,
 		"tableRow": 17,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -584,7 +591,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 65,
+		"readingIndex": 66,
 		"tableRow": 17,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -593,7 +600,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 66,
+		"readingIndex": 67,
 		"tableRow": 17,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -602,7 +609,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 67,
+		"readingIndex": 68,
 		"tableRow": 0,
 		"tableCol": 3,
 		"mode": "translate",
@@ -611,7 +618,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 68,
+		"readingIndex": 69,
 		"tableRow": 1,
 		"tableCol": 3,
 		"mode": "translate",
@@ -620,7 +627,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 69,
+		"readingIndex": 70,
 		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -629,7 +636,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 70,
+		"readingIndex": 71,
 		"tableRow": 4,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -638,7 +645,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 71,
+		"readingIndex": 72,
 		"tableRow": 5,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -647,7 +654,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 72,
+		"readingIndex": 73,
 		"tableRow": 6,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -656,7 +663,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 73,
+		"readingIndex": 74,
 		"tableRow": 7,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -665,7 +672,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 74,
+		"readingIndex": 75,
 		"tableRow": 8,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -674,7 +681,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 75,
+		"readingIndex": 76,
 		"tableRow": 9,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -683,7 +690,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 76,
+		"readingIndex": 77,
 		"tableRow": 10,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -692,7 +699,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 77,
+		"readingIndex": 78,
 		"tableRow": 11,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -701,7 +708,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 78,
+		"readingIndex": 79,
 		"tableRow": 12,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -710,7 +717,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 79,
+		"readingIndex": 80,
 		"tableRow": 13,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -719,7 +726,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 80,
+		"readingIndex": 81,
 		"tableRow": 14,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -728,7 +735,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 81,
+		"readingIndex": 82,
 		"tableRow": 15,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -737,7 +744,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 82,
+		"readingIndex": 83,
 		"tableRow": 16,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -746,7 +753,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 83,
+		"readingIndex": 84,
 		"tableRow": 17,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -755,19 +762,19 @@
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 84,
+		"readingIndex": 85,
 		"text": "Note.—Unless otherwise specified, data a"
 	},
 	{
 		"type": "table",
 		"column": 0,
-		"readingIndex": 85,
+		"readingIndex": 86,
 		"text": "Table 3: Baseline Lesion Characteristics"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 86,
+		"readingIndex": 87,
 		"tableRow": 0,
 		"tableCol": 1,
 		"mode": "translate",
@@ -776,7 +783,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 87,
+		"readingIndex": 88,
 		"tableRow": 0,
 		"tableCol": 2,
 		"mode": "translate",
@@ -785,7 +792,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 88,
+		"readingIndex": 89,
 		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "translate",
@@ -794,7 +801,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 89,
+		"readingIndex": 90,
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "translate",
@@ -803,7 +810,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 90,
+		"readingIndex": 91,
 		"tableRow": 1,
 		"tableCol": 2,
 		"mode": "translate",
@@ -812,7 +819,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 91,
+		"readingIndex": 92,
 		"tableRow": 1,
 		"tableCol": 4,
 		"mode": "translate",
@@ -821,7 +828,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 92,
+		"readingIndex": 93,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
@@ -830,7 +837,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 93,
+		"readingIndex": 94,
 		"tableRow": 2,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -839,7 +846,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 94,
+		"readingIndex": 95,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
@@ -848,7 +855,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 95,
+		"readingIndex": 96,
 		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -857,7 +864,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 96,
+		"readingIndex": 97,
 		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -866,7 +873,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 97,
+		"readingIndex": 98,
 		"tableRow": 3,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -875,7 +882,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 98,
+		"readingIndex": 99,
 		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "translate",
@@ -884,7 +891,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 99,
+		"readingIndex": 100,
 		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -893,7 +900,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 100,
+		"readingIndex": 101,
 		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -902,7 +909,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 101,
+		"readingIndex": 102,
 		"tableRow": 4,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -911,7 +918,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 102,
+		"readingIndex": 103,
 		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "translate",
@@ -920,7 +927,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 103,
+		"readingIndex": 104,
 		"tableRow": 5,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -929,7 +936,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 104,
+		"readingIndex": 105,
 		"tableRow": 5,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -938,7 +945,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 105,
+		"readingIndex": 106,
 		"tableRow": 5,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -947,7 +954,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 106,
+		"readingIndex": 107,
 		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -956,7 +963,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 107,
+		"readingIndex": 108,
 		"tableRow": 6,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -965,7 +972,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 108,
+		"readingIndex": 109,
 		"tableRow": 6,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -974,7 +981,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 109,
+		"readingIndex": 110,
 		"tableRow": 6,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -983,7 +990,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 110,
+		"readingIndex": 111,
 		"tableRow": 7,
 		"tableCol": 0,
 		"mode": "translate",
@@ -992,7 +999,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 111,
+		"readingIndex": 112,
 		"tableRow": 7,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -1001,7 +1008,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 112,
+		"readingIndex": 113,
 		"tableRow": 7,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -1010,7 +1017,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 113,
+		"readingIndex": 114,
 		"tableRow": 7,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -1019,7 +1026,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 114,
+		"readingIndex": 115,
 		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -1028,7 +1035,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 115,
+		"readingIndex": 116,
 		"tableRow": 8,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -1037,7 +1044,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 116,
+		"readingIndex": 117,
 		"tableRow": 8,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -1046,7 +1053,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 117,
+		"readingIndex": 118,
 		"tableRow": 8,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -1055,7 +1062,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 118,
+		"readingIndex": 119,
 		"tableRow": 9,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -1064,7 +1071,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 119,
+		"readingIndex": 120,
 		"tableRow": 9,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -1073,7 +1080,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 120,
+		"readingIndex": 121,
 		"tableRow": 9,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -1082,7 +1089,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 121,
+		"readingIndex": 122,
 		"tableRow": 9,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -1091,7 +1098,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 122,
+		"readingIndex": 123,
 		"tableRow": 10,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -1100,7 +1107,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 123,
+		"readingIndex": 124,
 		"tableRow": 10,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -1109,7 +1116,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 124,
+		"readingIndex": 125,
 		"tableRow": 10,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -1118,7 +1125,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 125,
+		"readingIndex": 126,
 		"tableRow": 10,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -1127,7 +1134,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 126,
+		"readingIndex": 127,
 		"tableRow": 11,
 		"tableCol": 0,
 		"mode": "translate",
@@ -1136,7 +1143,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 127,
+		"readingIndex": 128,
 		"tableRow": 11,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -1145,7 +1152,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 128,
+		"readingIndex": 129,
 		"tableRow": 11,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -1154,7 +1161,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 129,
+		"readingIndex": 130,
 		"tableRow": 11,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -1163,7 +1170,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 130,
+		"readingIndex": 131,
 		"tableRow": 12,
 		"tableCol": 0,
 		"mode": "translate",
@@ -1172,7 +1179,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 131,
+		"readingIndex": 132,
 		"tableRow": 12,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -1181,7 +1188,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 132,
+		"readingIndex": 133,
 		"tableRow": 12,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -1190,7 +1197,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 133,
+		"readingIndex": 134,
 		"tableRow": 12,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -1199,7 +1206,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 134,
+		"readingIndex": 135,
 		"tableRow": 13,
 		"tableCol": 0,
 		"mode": "translate",
@@ -1208,7 +1215,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 135,
+		"readingIndex": 136,
 		"tableRow": 13,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -1217,7 +1224,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 136,
+		"readingIndex": 137,
 		"tableRow": 13,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -1226,7 +1233,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 137,
+		"readingIndex": 138,
 		"tableRow": 13,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -1235,7 +1242,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 138,
+		"readingIndex": 139,
 		"tableRow": 14,
 		"tableCol": 0,
 		"mode": "translate",
@@ -1244,7 +1251,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 139,
+		"readingIndex": 140,
 		"tableRow": 14,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -1253,7 +1260,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 140,
+		"readingIndex": 141,
 		"tableRow": 14,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -1262,7 +1269,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 141,
+		"readingIndex": 142,
 		"tableRow": 14,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -1271,7 +1278,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 142,
+		"readingIndex": 143,
 		"tableRow": 15,
 		"tableCol": 0,
 		"mode": "translate",
@@ -1280,7 +1287,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 143,
+		"readingIndex": 144,
 		"tableRow": 15,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -1289,7 +1296,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 144,
+		"readingIndex": 145,
 		"tableRow": 15,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -1298,7 +1305,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 145,
+		"readingIndex": 146,
 		"tableRow": 15,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -1307,7 +1314,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 146,
+		"readingIndex": 147,
 		"tableRow": 16,
 		"tableCol": 0,
 		"mode": "translate",
@@ -1316,7 +1323,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 147,
+		"readingIndex": 148,
 		"tableRow": 16,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -1325,7 +1332,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 148,
+		"readingIndex": 149,
 		"tableRow": 16,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -1334,7 +1341,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 149,
+		"readingIndex": 150,
 		"tableRow": 16,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -1343,7 +1350,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 150,
+		"readingIndex": 151,
 		"tableRow": 17,
 		"tableCol": 0,
 		"mode": "translate",
@@ -1352,7 +1359,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 151,
+		"readingIndex": 152,
 		"tableRow": 17,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -1361,7 +1368,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 152,
+		"readingIndex": 153,
 		"tableRow": 17,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -1370,7 +1377,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 153,
+		"readingIndex": 154,
 		"tableRow": 17,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -1379,7 +1386,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 154,
+		"readingIndex": 155,
 		"tableRow": 18,
 		"tableCol": 0,
 		"mode": "translate",
@@ -1388,7 +1395,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 155,
+		"readingIndex": 156,
 		"tableRow": 18,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -1397,7 +1404,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 156,
+		"readingIndex": 157,
 		"tableRow": 18,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -1406,7 +1413,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 157,
+		"readingIndex": 158,
 		"tableRow": 18,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -1415,7 +1422,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 158,
+		"readingIndex": 159,
 		"tableRow": 19,
 		"tableCol": 0,
 		"mode": "translate",
@@ -1424,7 +1431,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 159,
+		"readingIndex": 160,
 		"tableRow": 19,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -1433,7 +1440,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 160,
+		"readingIndex": 161,
 		"tableRow": 19,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -1442,7 +1449,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 161,
+		"readingIndex": 162,
 		"tableRow": 19,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -1451,7 +1458,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 162,
+		"readingIndex": 163,
 		"tableRow": 0,
 		"tableCol": 3,
 		"mode": "translate",
@@ -1460,7 +1467,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 163,
+		"readingIndex": 164,
 		"tableRow": 1,
 		"tableCol": 3,
 		"mode": "translate",
@@ -1469,7 +1476,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 164,
+		"readingIndex": 165,
 		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1478,7 +1485,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 165,
+		"readingIndex": 166,
 		"tableRow": 4,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1487,7 +1494,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 166,
+		"readingIndex": 167,
 		"tableRow": 5,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1496,7 +1503,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 167,
+		"readingIndex": 168,
 		"tableRow": 6,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1505,7 +1512,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 168,
+		"readingIndex": 169,
 		"tableRow": 7,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1514,7 +1521,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 169,
+		"readingIndex": 170,
 		"tableRow": 8,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1523,7 +1530,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 170,
+		"readingIndex": 171,
 		"tableRow": 9,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1532,7 +1539,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 171,
+		"readingIndex": 172,
 		"tableRow": 10,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1541,7 +1548,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 172,
+		"readingIndex": 173,
 		"tableRow": 11,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1550,7 +1557,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 173,
+		"readingIndex": 174,
 		"tableRow": 12,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1559,7 +1566,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 174,
+		"readingIndex": 175,
 		"tableRow": 13,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1568,7 +1575,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 175,
+		"readingIndex": 176,
 		"tableRow": 14,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1577,7 +1584,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 176,
+		"readingIndex": 177,
 		"tableRow": 15,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1586,7 +1593,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 177,
+		"readingIndex": 178,
 		"tableRow": 16,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1595,7 +1602,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 178,
+		"readingIndex": 179,
 		"tableRow": 17,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1604,7 +1611,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 179,
+		"readingIndex": 180,
 		"tableRow": 18,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1613,7 +1620,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 180,
+		"readingIndex": 181,
 		"tableRow": 19,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -1622,13 +1629,20 @@
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 181,
+		"readingIndex": 182,
 		"text": "Note.—Unless otherwise specified, data a"
 	},
 	{
 		"type": "list",
 		"column": 0,
-		"readingIndex": 182,
+		"readingIndex": 183,
 		"text": "* Numbers are medians, with IQRs in pare"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 184,
+		"mode": "preserve",
+		"text": "Radiology: Volume 307: Number 2—April 20"
 	}
 ]

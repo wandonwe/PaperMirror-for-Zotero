@@ -1,14 +1,21 @@
 [
 	{
-		"type": "table",
+		"type": "heading",
 		"column": 0,
 		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "T h e n e w e ng l a n d j o u r na l o "
+	},
+	{
+		"type": "table",
+		"column": 0,
+		"readingIndex": 1,
 		"text": "Table 2. Clinical and Imaging Outcomes."
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 2,
 		"tableRow": 0,
 		"tableCol": 1,
 		"mode": "translate",
@@ -17,7 +24,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 3,
 		"tableRow": 0,
 		"tableCol": 2,
 		"mode": "translate",
@@ -26,7 +33,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 3,
+		"readingIndex": 4,
 		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "translate",
@@ -35,7 +42,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 4,
+		"readingIndex": 5,
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "translate",
@@ -44,7 +51,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 5,
+		"readingIndex": 6,
 		"tableRow": 1,
 		"tableCol": 2,
 		"mode": "translate",
@@ -53,7 +60,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 6,
+		"readingIndex": 7,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
@@ -62,7 +69,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 7,
+		"readingIndex": 8,
 		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -71,7 +78,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 8,
+		"readingIndex": 9,
 		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -80,7 +87,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 9,
+		"readingIndex": 10,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
@@ -89,7 +96,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 10,
+		"readingIndex": 11,
 		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -98,7 +105,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 11,
+		"readingIndex": 12,
 		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -107,7 +114,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 12,
+		"readingIndex": 13,
 		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "translate",
@@ -116,7 +123,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 13,
+		"readingIndex": 14,
 		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "translate",
@@ -125,7 +132,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 14,
+		"readingIndex": 15,
 		"tableRow": 5,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -134,7 +141,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 15,
+		"readingIndex": 16,
 		"tableRow": 5,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -143,7 +150,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 16,
+		"readingIndex": 17,
 		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "translate",
@@ -152,7 +159,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 17,
+		"readingIndex": 18,
 		"tableRow": 6,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -161,7 +168,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 18,
+		"readingIndex": 19,
 		"tableRow": 6,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -170,7 +177,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 19,
+		"readingIndex": 20,
 		"tableRow": 7,
 		"tableCol": 0,
 		"mode": "translate",
@@ -179,7 +186,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 20,
+		"readingIndex": 21,
 		"tableRow": 7,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -188,7 +195,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 21,
+		"readingIndex": 22,
 		"tableRow": 7,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -197,7 +204,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 22,
+		"readingIndex": 23,
 		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "translate",
@@ -206,7 +213,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 23,
+		"readingIndex": 24,
 		"tableRow": 8,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -215,7 +222,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 24,
+		"readingIndex": 25,
 		"tableRow": 8,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -224,7 +231,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 25,
+		"readingIndex": 26,
 		"tableRow": 9,
 		"tableCol": 0,
 		"mode": "translate",
@@ -233,7 +240,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 26,
+		"readingIndex": 27,
 		"tableRow": 10,
 		"tableCol": 0,
 		"mode": "translate",
@@ -242,7 +249,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 27,
+		"readingIndex": 28,
 		"tableRow": 10,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -251,7 +258,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 28,
+		"readingIndex": 29,
 		"tableRow": 10,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -260,7 +267,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 29,
+		"readingIndex": 30,
 		"tableRow": 11,
 		"tableCol": 0,
 		"mode": "translate",
@@ -269,7 +276,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 30,
+		"readingIndex": 31,
 		"tableRow": 11,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -278,7 +285,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 31,
+		"readingIndex": 32,
 		"tableRow": 11,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -287,7 +294,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 32,
+		"readingIndex": 33,
 		"tableRow": 12,
 		"tableCol": 0,
 		"mode": "translate",
@@ -296,7 +303,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 33,
+		"readingIndex": 34,
 		"tableRow": 12,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -305,7 +312,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 34,
+		"readingIndex": 35,
 		"tableRow": 12,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -314,7 +321,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 35,
+		"readingIndex": 36,
 		"tableRow": 13,
 		"tableCol": 0,
 		"mode": "translate",
@@ -323,7 +330,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 36,
+		"readingIndex": 37,
 		"tableRow": 13,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -332,7 +339,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 37,
+		"readingIndex": 38,
 		"tableRow": 13,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -341,7 +348,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 38,
+		"readingIndex": 39,
 		"tableRow": 14,
 		"tableCol": 0,
 		"mode": "translate",
@@ -350,7 +357,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 39,
+		"readingIndex": 40,
 		"tableRow": 14,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -359,7 +366,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 40,
+		"readingIndex": 41,
 		"tableRow": 14,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -368,7 +375,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 41,
+		"readingIndex": 42,
 		"tableRow": 0,
 		"tableCol": 3,
 		"mode": "translate",
@@ -377,7 +384,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 42,
+		"readingIndex": 43,
 		"tableRow": 1,
 		"tableCol": 3,
 		"mode": "translate",
@@ -386,7 +393,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 43,
+		"readingIndex": 44,
 		"tableRow": 1,
 		"tableCol": 4,
 		"mode": "translate",
@@ -395,7 +402,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 44,
+		"readingIndex": 45,
 		"tableRow": 2,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -404,7 +411,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 45,
+		"readingIndex": 46,
 		"tableRow": 2,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -413,7 +420,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 46,
+		"readingIndex": 47,
 		"tableRow": 3,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -422,7 +429,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 47,
+		"readingIndex": 48,
 		"tableRow": 3,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -431,7 +438,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 48,
+		"readingIndex": 49,
 		"tableRow": 5,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -440,7 +447,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 49,
+		"readingIndex": 50,
 		"tableRow": 5,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -449,7 +456,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 50,
+		"readingIndex": 51,
 		"tableRow": 6,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -458,7 +465,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 51,
+		"readingIndex": 52,
 		"tableRow": 6,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -467,7 +474,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 52,
+		"readingIndex": 53,
 		"tableRow": 7,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -476,7 +483,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 53,
+		"readingIndex": 54,
 		"tableRow": 7,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -485,7 +492,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 54,
+		"readingIndex": 55,
 		"tableRow": 8,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -494,7 +501,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 55,
+		"readingIndex": 56,
 		"tableRow": 8,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -503,7 +510,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 56,
+		"readingIndex": 57,
 		"tableRow": 10,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -512,7 +519,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 57,
+		"readingIndex": 58,
 		"tableRow": 10,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -521,7 +528,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 58,
+		"readingIndex": 59,
 		"tableRow": 11,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -530,7 +537,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 59,
+		"readingIndex": 60,
 		"tableRow": 11,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -539,7 +546,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 60,
+		"readingIndex": 61,
 		"tableRow": 12,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -548,7 +555,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 61,
+		"readingIndex": 62,
 		"tableRow": 12,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -557,7 +564,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 62,
+		"readingIndex": 63,
 		"tableRow": 13,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -566,7 +573,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 63,
+		"readingIndex": 64,
 		"tableRow": 13,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -575,7 +582,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 64,
+		"readingIndex": 65,
 		"tableRow": 14,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -584,19 +591,40 @@
 	{
 		"type": "list",
 		"column": -1,
-		"readingIndex": 65,
+		"readingIndex": 66,
 		"text": "* An intervention was attempted in 90 pa"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 66,
+		"readingIndex": 67,
 		"text": "Imaging Outcomes"
 	},
 	{
 		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 68,
+		"mode": "preserve",
+		"text": "n engl j med 378;8 nejm.org February 22,"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 69,
+		"mode": "preserve",
+		"text": "The New England Journal of Medicine"
+	},
+	{
+		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 67,
+		"readingIndex": 70,
 		"text": "tion of the primary arterial occlusive l"
+	},
+	{
+		"type": "heading",
+		"column": 2,
+		"readingIndex": 71,
+		"mode": "preserve",
+		"text": "714"
 	}
 ]

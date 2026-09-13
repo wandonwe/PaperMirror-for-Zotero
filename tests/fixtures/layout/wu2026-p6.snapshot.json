@@ -612,6 +612,13 @@
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 73,
+		"mode": "preserve",
+		"text": "Abdominal Radiology"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 74,
 		"tableRow": 10,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -620,7 +627,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 74,
+		"readingIndex": 75,
 		"tableRow": 11,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -629,7 +636,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 75,
+		"readingIndex": 76,
 		"tableRow": 13,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -638,7 +645,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 76,
+		"readingIndex": 77,
 		"tableRow": 14,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -647,7 +654,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 77,
+		"readingIndex": 78,
 		"tableRow": 15,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -656,7 +663,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 78,
+		"readingIndex": 79,
 		"tableRow": 15,
 		"tableCol": 4,
 		"mode": "translate",
@@ -665,7 +672,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 79,
+		"readingIndex": 80,
 		"tableRow": 15,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -674,7 +681,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 80,
+		"readingIndex": 81,
 		"tableRow": 15,
 		"tableCol": 6,
 		"mode": "preserve",
@@ -683,7 +690,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 81,
+		"readingIndex": 82,
 		"tableRow": 15,
 		"tableCol": 7,
 		"mode": "preserve",
@@ -692,7 +699,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 82,
+		"readingIndex": 83,
 		"tableRow": 16,
 		"tableCol": 4,
 		"mode": "translate",
@@ -701,7 +708,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 83,
+		"readingIndex": 84,
 		"tableRow": 16,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -710,7 +717,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 84,
+		"readingIndex": 85,
 		"tableRow": 17,
 		"tableCol": 7,
 		"mode": "preserve",
@@ -719,7 +726,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 85,
+		"readingIndex": 86,
 		"tableRow": 17,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -728,7 +735,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 86,
+		"readingIndex": 87,
 		"tableRow": 17,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -737,7 +744,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 87,
+		"readingIndex": 88,
 		"tableRow": 17,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -746,7 +753,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 88,
+		"readingIndex": 89,
 		"tableRow": 18,
 		"tableCol": 7,
 		"mode": "preserve",
@@ -755,7 +762,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 89,
+		"readingIndex": 90,
 		"tableRow": 18,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -764,7 +771,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 90,
+		"readingIndex": 91,
 		"tableRow": 18,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -773,7 +780,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 91,
+		"readingIndex": 92,
 		"tableRow": 18,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -782,7 +789,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 92,
+		"readingIndex": 93,
 		"tableRow": 19,
 		"tableCol": 3,
 		"mode": "preserve",
@@ -791,7 +798,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 93,
+		"readingIndex": 94,
 		"tableRow": 19,
 		"tableCol": 4,
 		"mode": "preserve",
@@ -800,7 +807,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 94,
+		"readingIndex": 95,
 		"tableRow": 19,
 		"tableCol": 5,
 		"mode": "preserve",
@@ -809,7 +816,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 95,
+		"readingIndex": 96,
 		"tableRow": 19,
 		"tableCol": 7,
 		"mode": "preserve",
@@ -818,25 +825,25 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 96,
+		"readingIndex": 97,
 		"text": "EID-CT Energy integrating detector CT, P"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 97,
+		"readingIndex": 98,
 		"text": "5/28; χ² = 16.258, P <0.001]. Similarly,"
 	},
 	{
 		"type": "caption",
 		"column": 1,
-		"readingIndex": 98,
+		"readingIndex": 99,
 		"text": "Fig. 3). Inter-reader agreement for poly"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 99,
+		"readingIndex": 100,
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "translate",
@@ -845,7 +852,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 100,
+		"readingIndex": 101,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -854,7 +861,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 101,
+		"readingIndex": 102,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
@@ -863,7 +870,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 102,
+		"readingIndex": 103,
 		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -872,7 +879,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 103,
+		"readingIndex": 104,
 		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -881,7 +888,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 104,
+		"readingIndex": 105,
 		"tableRow": 7,
 		"tableCol": 0,
 		"mode": "translate",
@@ -890,7 +897,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 105,
+		"readingIndex": 106,
 		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "translate",
@@ -899,7 +906,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 106,
+		"readingIndex": 107,
 		"tableRow": 9,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -908,7 +915,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 107,
+		"readingIndex": 108,
 		"tableRow": 12,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -917,7 +924,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 108,
+		"readingIndex": 109,
 		"tableRow": 13,
 		"tableCol": 0,
 		"mode": "translate",
@@ -926,7 +933,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 109,
+		"readingIndex": 110,
 		"tableRow": 14,
 		"tableCol": 0,
 		"mode": "translate",
@@ -935,7 +942,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 110,
+		"readingIndex": 111,
 		"tableRow": 15,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -944,13 +951,13 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 111,
+		"readingIndex": 112,
 		"text": "val"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 112,
+		"readingIndex": 113,
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "translate",
@@ -959,7 +966,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 113,
+		"readingIndex": 114,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -968,7 +975,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 114,
+		"readingIndex": 115,
 		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -977,7 +984,7 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 115,
+		"readingIndex": 116,
 		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -986,25 +993,25 @@
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 116,
+		"readingIndex": 117,
 		"text": "detector CT"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 117,
+		"readingIndex": 118,
 		"text": "2"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 118,
+		"readingIndex": 119,
 		"text": "confidence"
 	},
 	{
 		"type": "title",
 		"column": 2,
-		"readingIndex": 119,
+		"readingIndex": 120,
 		"text": "1 3"
 	}
 ]

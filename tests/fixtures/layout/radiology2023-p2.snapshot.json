@@ -1,98 +1,105 @@
 [
 	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "Clinical Applications of Photon-counting"
+	},
+	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 0,
+		"readingIndex": 1,
 		"text": "Abbreviations"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 2,
 		"text": "CNR = contrast-to-noise ratio, DECT = du"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 3,
 		"text": "Summary"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 3,
+		"readingIndex": 4,
 		"text": "Photon-counting CT offers improved spati"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 4,
+		"readingIndex": 5,
 		"text": "Essentials"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 5,
+		"readingIndex": 6,
 		"text": "■ CT systems equipped with photon-counti"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 6,
+		"readingIndex": 7,
 		"text": "binding energy of the K shell. Availabil"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 7,
+		"readingIndex": 8,
 		"text": "spectral images is provided together wit"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 8,
+		"readingIndex": 9,
 		"text": "Cardiac Applications"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 9,
+		"readingIndex": 10,
 		"text": "Calcifications and Coronary Artery Calci"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 10,
+		"readingIndex": 11,
 		"text": "Coronary Stents"
 	},
 	{
 		"type": "heading",
 		"column": 100,
-		"readingIndex": 11,
+		"readingIndex": 12,
 		"text": "Terminology and Technical Summary"
 	},
 	{
 		"type": "paragraph",
 		"column": 101,
-		"readingIndex": 12,
+		"readingIndex": 13,
 		"text": "Coronary stents have been imaged with PC"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 13,
+		"readingIndex": 14,
 		"text": "Important general terms used in this art"
 	},
 	{
 		"type": "table",
 		"column": -1,
-		"readingIndex": 14,
+		"readingIndex": 15,
 		"text": "Table 1: Definition of General Terms Use"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 15,
+		"readingIndex": 16,
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "translate",
@@ -101,7 +108,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 16,
+		"readingIndex": 17,
 		"tableRow": 0,
 		"tableCol": 1,
 		"mode": "translate",
@@ -110,7 +117,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 17,
+		"readingIndex": 18,
 		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "translate",
@@ -119,7 +126,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 18,
+		"readingIndex": 19,
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -128,7 +135,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 19,
+		"readingIndex": 20,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "translate",
@@ -137,7 +144,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 20,
+		"readingIndex": 21,
 		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "translate",
@@ -146,7 +153,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 21,
+		"readingIndex": 22,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "translate",
@@ -155,7 +162,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 22,
+		"readingIndex": 23,
 		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -164,7 +171,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 23,
+		"readingIndex": 24,
 		"tableRow": 0,
 		"tableCol": 2,
 		"mode": "translate",
@@ -173,7 +180,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 24,
+		"readingIndex": 25,
 		"tableRow": 1,
 		"tableCol": 2,
 		"mode": "translate",
@@ -182,7 +189,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 25,
+		"readingIndex": 26,
 		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "translate",
@@ -191,7 +198,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 26,
+		"readingIndex": 27,
 		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "translate",
@@ -200,7 +207,14 @@
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 27,
+		"readingIndex": 28,
 		"text": "Note.DECT = dual-energy CT, EID = energ"
+	},
+	{
+		"type": "paragraph",
+		"column": 101,
+		"readingIndex": 29,
+		"mode": "preserve",
+		"text": "radiology.rsna.org ■ Radiology: Volume 3"
 	}
 ]

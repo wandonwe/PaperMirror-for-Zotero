@@ -1,92 +1,106 @@
 [
 	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "Myocardial Characterization with Extrace"
+	},
+	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 0,
+		"readingIndex": 1,
 		"text": "Abbreviations"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 2,
 		"text": "ECV = extracellular volume, LGE = late g"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 2,
+		"readingIndex": 3,
 		"text": "Summary"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 3,
+		"readingIndex": 4,
 		"text": "Extracellular volume quantification for "
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 4,
+		"readingIndex": 5,
 		"text": "Key Results"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 5,
+		"readingIndex": 6,
 		"text": "■ In a prospective study of 29 adults un"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 6,
+		"readingIndex": 7,
 		"text": "0.91, P < .001)."
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 7,
+		"readingIndex": 8,
 		"text": "■ Compared with cardiac MRI, dual- and s"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 8,
+		"readingIndex": 9,
 		"text": "Materials and Methods"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 9,
+		"readingIndex": 10,
 		"text": "Study Participants"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 10,
+		"readingIndex": 11,
 		"text": "The protocol of this prospective, single"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 11,
+		"readingIndex": 12,
 		"text": "Exclusion criteria were (a) refusal to c"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 12,
+		"readingIndex": 13,
 		"text": "Cardiac MRI Acquisition"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 13,
+		"readingIndex": 14,
 		"text": "Study participants were scanned on a 1.5"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 14,
+		"readingIndex": 15,
 		"text": "Flowchart shows inclusion of patients sc"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 16,
+		"mode": "preserve",
+		"text": "radiology.rsna.org ■ Radiology: Volume 3"
 	}
 ]

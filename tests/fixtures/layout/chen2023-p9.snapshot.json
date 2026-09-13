@@ -1,20 +1,34 @@
 [
 	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "Chen and Pan et al"
+	},
+	{
 		"type": "caption",
 		"column": -1,
-		"readingIndex": 0,
+		"readingIndex": 1,
 		"text": "Figure 5: Kaplan-Meier curves show progn"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 2,
 		"text": "RS offered incremental discriminative ca"
 	},
 	{
 		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 3,
+		"mode": "preserve",
+		"text": "Radiology: Volume 307: Number 2—April 20"
+	},
+	{
+		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 2,
+		"readingIndex": 4,
 		"text": "Vulnerable plaques have been shown to be"
 	}
 ]

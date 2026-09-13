@@ -3,30 +3,51 @@
 		"type": "paragraph",
 		"column": -1,
 		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "Abdominal Radiology https://doi.org/10.1"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 1,
 		"text": "RESEARCH"
 	},
 	{
 		"type": "title",
 		"column": -1,
-		"readingIndex": 1,
-		"text": "Diagnostic performance of photon-countin"
-	},
-	{
-		"type": "heading",
-		"column": -1,
 		"readingIndex": 2,
-		"text": "Abstract"
+		"text": "Diagnostic performance of photon-countin"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
 		"readingIndex": 3,
+		"mode": "preserve",
+		"text": "Xiaofei Wu1· Huiqing Gao2· Yuanyuan Gao1"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 4,
+		"mode": "preserve",
+		"text": "Received: 3 December 2025 / Revised: 30 "
+	},
+	{
+		"type": "heading",
+		"column": -1,
+		"readingIndex": 5,
+		"text": "Abstract"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 6,
 		"text": "Purpose To compare the diagnostic perfor"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 4,
+		"readingIndex": 7,
 		"tableRow": 0,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -35,7 +56,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 5,
+		"readingIndex": 8,
 		"tableRow": 1,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -44,7 +65,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 6,
+		"readingIndex": 9,
 		"tableRow": 2,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -53,7 +74,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 7,
+		"readingIndex": 10,
 		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -62,7 +83,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 8,
+		"readingIndex": 11,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -71,7 +92,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 9,
+		"readingIndex": 12,
 		"tableRow": 3,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -80,7 +101,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 10,
+		"readingIndex": 13,
 		"tableRow": 3,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -89,7 +110,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 11,
+		"readingIndex": 14,
 		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -98,7 +119,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 12,
+		"readingIndex": 15,
 		"tableRow": 4,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -107,7 +128,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 13,
+		"readingIndex": 16,
 		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -116,7 +137,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 14,
+		"readingIndex": 17,
 		"tableRow": 7,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -125,7 +146,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 15,
+		"readingIndex": 18,
 		"tableRow": 5,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -134,7 +155,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 16,
+		"readingIndex": 19,
 		"tableRow": 5,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -143,7 +164,7 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 17,
+		"readingIndex": 20,
 		"tableRow": 9,
 		"tableCol": 0,
 		"mode": "preserve",
@@ -152,13 +173,13 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 18,
+		"readingIndex": 21,
 		"text": "for ≤5 mm (p<0.001) and 69 mm (p<0.001)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 19,
+		"readingIndex": 22,
 		"tableRow": 0,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -167,7 +188,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 20,
+		"readingIndex": 23,
 		"tableRow": 0,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -176,7 +197,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 21,
+		"readingIndex": 24,
 		"tableRow": 1,
 		"tableCol": 2,
 		"mode": "preserve",
@@ -185,7 +206,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 22,
+		"readingIndex": 25,
 		"tableRow": 1,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -194,7 +215,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 23,
+		"readingIndex": 26,
 		"tableRow": 2,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -203,7 +224,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 24,
+		"readingIndex": 27,
 		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "translate",
@@ -212,7 +233,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 25,
+		"readingIndex": 28,
 		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "translate",
@@ -221,7 +242,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 26,
+		"readingIndex": 29,
 		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "translate",
@@ -230,7 +251,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 27,
+		"readingIndex": 30,
 		"tableRow": 6,
 		"tableCol": 1,
 		"mode": "translate",
@@ -239,7 +260,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 28,
+		"readingIndex": 31,
 		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "translate",
@@ -248,7 +269,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 29,
+		"readingIndex": 32,
 		"tableRow": 8,
 		"tableCol": 1,
 		"mode": "translate",
@@ -257,7 +278,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 30,
+		"readingIndex": 33,
 		"tableRow": 5,
 		"tableCol": 2,
 		"mode": "translate",
@@ -266,13 +287,13 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 31,
+		"readingIndex": 34,
 		"text": "Jiangnan University, wuxi, China"
 	},
 	{
 		"type": "title",
 		"column": -1,
-		"readingIndex": 32,
+		"readingIndex": 35,
 		"text": "1 3"
 	}
 ]

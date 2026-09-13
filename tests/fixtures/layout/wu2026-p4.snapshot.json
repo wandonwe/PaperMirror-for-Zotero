@@ -48,39 +48,46 @@
 		"text": "1 3"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 8,
-		"text": "Polyp detection rate and reader confiden"
+		"mode": "preserve",
+		"text": "Abdominal Radiology"
 	},
 	{
-		"type": "paragraph",
+		"type": "heading",
 		"column": 1,
 		"readingIndex": 9,
 		"text": "Polyp detection rate and reader confiden"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 10,
+		"text": "Polyp detection rate and reader confiden"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 11,
 		"text": "Sensitivity analysis on reconstruction p"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 11,
+		"readingIndex": 12,
 		"text": "To further validate the robustness of ou"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 12,
+		"readingIndex": 13,
 		"text": "Statistical analysis"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 13,
+		"readingIndex": 14,
 		"text": "All analyses were performed using SPSS v"
 	}
 ]

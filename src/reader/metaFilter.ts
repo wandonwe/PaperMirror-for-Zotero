@@ -69,9 +69,9 @@ const RE_RECEIVED = /\b(received|revised|accepted|published online|available onl
 const RE_META_LABEL = /^(citation|(?:academic|handling|section|associate|guest)\s+editor|editor|received|accepted|published|posted|copyright|provenance|peer review(?:er)?s?(?: information)?)\s*[::]/i;
 const RE_EXPLANATORY_LABEL = /^(funding|competing interests?|conflicts? of interest|data availability(?: statement)?|abbreviations|author contributions?|ethics(?: statement)?|patient consent|trial registration)\s*[::]\s*(.*)$/is;
 /** 标签后面有没有自然语言:至少 3 个普通词(≥3 字母、含小写)。 */
-function hasNaturalLanguage(body: string): boolean {
+function hasNaturalLanguage(body: string, min = 3): boolean {
 	const words = (body.match(/[A-Za-z][A-Za-z'’-]*/g) ?? []).filter(w => w.length >= 3 && /[a-z]{2}/.test(w));
-	return words.length >= 3;
+	return words.length >= min;
 }
 // Standalone article-type banners and badges.
 const RE_ARTICLE_BANNER = /^(research article|review(?: article)?|original (?:article|research|investigation)|open access|case report|short communication|brief report|editorial|systematic review|meta-analysis|clinical trial|letter to the editor|perspective|commentary|rapid communication|technical note|crossmark|check for updates)$/i;
@@ -265,74 +265,139 @@ export function isMarginSidebar(rect: Rect, pageWidth: number, type?: { fontSize
 	return narrow && tall && (outerLeft || outerRight);
 }
 
+export type ContentDecision = 'translate' | 'preserve' | 'skip';
 /**
- * Should this block be excluded from translation and from the pane?
- * The original page keeps showing it either way.
+ * 保留原因 —— 每一个不翻译的块都必须带一个,"无提示缺失"是被禁止的 (2.12.13)。
+ *   names         人名/作者名单/学位名单
+ *   dates         收稿/接受/发表日期
+ *   identifier    DOI、网址、纯资助号/注册号、纯标识行
+ *   bibliographic Citation / Editor / Published 这类书目标签
+ *   watermark     "Downloaded from …" 下载水印
+ *   marks         孤立的数字/角标/页码
+ *   banner        RESEARCH ARTICLE / OPEN ACCESS 这类栏目条
+ *   boilerplate   短版权行(整句的开放获取声明会翻译)
+ *   sliver        竖排细条(装订线文字)
+ *   running-head  逐页重复的页眉/页脚(由 spanBlockBuilder 判定)
  */
-export function isMetadataBlock(text: string, rect?: Rect, pageWidth?: number, type?: { fontSize?: number; bodySize?: number }): boolean {
+export type PreserveReason = 'names' | 'dates' | 'identifier' | 'bibliographic' | 'watermark' | 'marks' | 'banner' | 'boilerplate' | 'sliver' | 'running-head';
+export interface ContentClassification { decision: ContentDecision; reason?: PreserveReason }
+
+const RE_WATERMARK = /^downloaded from\b/i;
+
+/**
+ * 内容决策 (2.12.13):这个块**要不要翻译**。
+ *
+ * 原则(用户 2026-09-13):原文侧负责忠实保留;译文侧负责完整理解。元素类别决定排版方式,
+ * 不决定是否翻译。自然语言一律翻译;只有标识(人名、日期、DOI、网址、页码、水印)保留,
+ * 而且保留必须带原因。**几何位置(页边栏)不再决定翻不翻** —— 以前页边栏里 <700 字符
+ * 一票否决,PLOS 的 Funding / Data Availability 整段就这么没了。
+ *
+ * 与 2.12.12 之前的 isMetadataBlock 相比,翻转为"翻译"的有:作者单位、通讯句、
+ * 整句版权/许可声明、资助句、作者贡献、"funders had no role" 尾句。
+ */
+export function classifyContent(text: string, rect?: Rect, pageWidth?: number, type?: { fontSize?: number; bodySize?: number }): ContentClassification {
+	void pageWidth; void type;
 	const t = text.trim();
 	if (!t) {
-		return true;
+		return { decision: 'skip' };
 	}
 	if (rect && isVerticalSliver(rect)) {
-		return true;
+		return { decision: 'preserve', reason: 'sliver' };
 	}
-	// Anything living in the narrow outer sidebar is front matter, whatever it
-	// says — that strip is where journals put the citation/editor/funding
-	// stack, and its entries keep leaking past the text rules one novel
-	// format at a time.
-	if (rect && pageWidth && isMarginSidebar(rect, pageWidth, type) && t.length < 700) {
-		return true;
+	if (RE_WATERMARK.test(t)) {
+		return { decision: 'preserve', reason: 'watermark' };
+	}
+	// 日期行先于书目标签:"Received: … Accepted: …" 报 dates 比报 bibliographic 更有信息量。
+	// 把日期词汇(received/revised/accepted/月份…)抠掉,剩下没有自然语言才算日期行。
+	if (RE_RECEIVED.test(t) && !hasNaturalLanguage(stripDateVocabulary(t))) {
+		return { decision: 'preserve', reason: 'dates' };
 	}
 	if (RE_META_LABEL.test(t) && t.length < 700) {
-		return true;
+		return { decision: 'preserve', reason: 'bibliographic' };
 	}
 	const explanatory = RE_EXPLANATORY_LABEL.exec(t);
 	if (explanatory) {
-		// 说明类标签:有自然语言就翻译;只有编号/标识才跳过。
-		// 这一条要在 RE_GRANT / RE_CORRESPONDENCE 之前判 —— "Funding: This work was
-		// supported by grant no. 12345" 含资助号,却是一整句要翻的话。
-		return !hasNaturalLanguage(explanatory[2] ?? '') && t.length < 700;
+		return hasNaturalLanguage(explanatory[2] ?? '') ? { decision: 'translate' } : { decision: 'preserve', reason: 'identifier' };
 	}
 	if (t.length < 40 && RE_ARTICLE_BANNER.test(t)) {
-		return true;
+		return { decision: 'preserve', reason: 'banner' };
 	}
-	if (RE_GRANT.test(t) && t.length < 700) {
-		return true;
-	}
-	if (RE_LICENSE_TAIL.test(t) && t.length < 700) {
-		return true;
-	}
-	// Orphan digits/marks: stray superscript affiliation numbers or page
-	// numbers extracted as their own blocks. Nothing to translate.
+	// Orphan digits/marks: stray superscript affiliation numbers or page numbers.
 	if (t.length < 40 && /^[\d\s.,;:*†‡§()\-–—]+$/.test(t)) {
-		return true;
-	}
-	if (RE_AUTHOR_NOTES.test(t) && t.length < 300) {
-		return true;
+		return { decision: 'preserve', reason: 'marks' };
 	}
 	if (hasDegreeRoster(t) && t.length < 900) {
-		return true;
+		return { decision: 'preserve', reason: 'names' };
 	}
-	if (RE_RECEIVED.test(t)) {
-		return true;
-	}
-	if (RE_COPYRIGHT.test(t)) {
-		return true;
-	}
-	if (RE_CORRESPONDENCE.test(t)) {
-		return true;
-	}
-	// URL/DOI lines are short; a body paragraph that merely CITES a URL is
-	// long and must be kept.
-	if (RE_DOI_URL.test(t) && t.length < 220) {
-		return true;
-	}
-	if (looksLikeAuthorList(t)) {
-		return true;
-	}
+	// 作者单位先于作者名单判:单位行里的机构专名 + 角标数字,形状上与署名行几乎一样
+	// ("1st Department of Cardiology, Hippokration Hospital, …" 会被 looksLikeAuthorList 当名单)。
+	// 单位翻译机构名称;署名保留。
 	if (looksLikeAffiliation(t)) {
-		return true;
+		return { decision: 'translate' };
 	}
-	return false;
+	if (looksLikeAuthorList(t) || plainNameRoster(t)) {
+		return { decision: 'preserve', reason: 'names' };
+	}
+	// 标识行:DOI / 网址 / 邮箱 / 通讯作者标签。句子(有 ≥3 个小写起头的普通词:
+	// "The CONFIRM registry data are publicly documented at https://…")翻译;
+	// 标签行("European Journal of Preventive Cardiology (2022) 29, 608–624 doi:…"、
+	// "* Corresponding author. Tel: …, Email: …")只有专名和标识,保留。
+	if ((RE_DOI_URL.test(t) || RE_CORRESPONDENCE.test(t)) && !hasSentenceWords(stripIdentifiers(t))) {
+		return { decision: 'preserve', reason: 'identifier' };
+	}
+	// 短版权行是样板;整句的开放获取声明是自然语言。
+	if (RE_COPYRIGHT.test(t) && !hasNaturalLanguage(t, 6)) {
+		return { decision: 'preserve', reason: 'boilerplate' };
+	}
+	if (RE_GRANT.test(t) && !hasNaturalLanguage(t.replace(RE_GRANT, ''))) {
+		return { decision: 'preserve', reason: 'identifier' };
+	}
+	return { decision: 'translate' };
+}
+
+/**
+ * 没有角标的纯人名名单:"John A Smith, Mary Jones, Wei Zhang, and Li Wang"。
+ * looksLikeAuthorList 要求有角标/数字;residueRules.looksLikeAuthorNameList 太松
+ * (把 "Note.—CNR = contrast-to-noise ratio, FDA = U.S. Food and Drug Administration" 也当名单)。
+ * 这里从严:≥3 段,每段 2~4 个词,**每个词**都是首字母大写或首字母缩写,不含 = : 数字。
+ */
+function plainNameRoster(t: string): boolean {
+	if (t.length > 300 || /[=:\d@]/.test(t)) { return false; }
+	const segments = t.replace(/\band\b/g, ',').split(/[,;·]/).map(x => x.trim()).filter(Boolean);
+	if (segments.length < 3) { return false; }
+	return segments.every(seg => {
+		const words = seg.split(/\s+/);
+		return words.length >= 2 && words.length <= 4 && words.every(w => /^[A-Z](?:[a-z'’-]+|\.?)$/.test(w));
+	});
+}
+
+/** 小写起头的普通词(≥3 字母)至少 3 个 —— 专名与标签不算,句子才算。 */
+function hasSentenceWords(body: string): boolean {
+	return (body.match(/\b[a-z][a-z'’-]{2,}/g) ?? []).length >= 3;
+}
+
+const RE_DATE_VOCAB = /\b(received|revised|revision|requested|accepted|published|posted|online|available|final|publish-ahead-of-print|ahead|print|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/gi;
+function stripDateVocabulary(t: string): string {
+	return t.replace(RE_DATE_VOCAB, ' ');
+}
+
+/** 把邮箱/网址/DOI 从文本里抠掉,剩下的才拿去数自然语言词。 */
+function stripIdentifiers(t: string): string {
+	return t
+		.replace(/[\w.+-]+@[\w-]+\.[A-Za-z]{2,}/g, ' ')
+		.replace(/https?:\/\/\S+/gi, ' ')
+		.replace(/\b(?:doi|DOI)\s*[::]?\s*10\.\d{4,9}\/\S+/g, ' ')
+		.replace(/\b10\.\d{4,9}\/\S+/g, ' ')
+		.replace(/\b(?:doi|https?|www|academic|oup|com|org|downloaded|from|by|guest|on)\b/gi, ' ');
+}
+
+/**
+ * Should this block be excluded from translation and from the pane?
+ * The original page keeps showing it either way.
+ *
+ * 2.12.13 起只是 classifyContent 的影子:decision !== 'translate'。提取阶段已改用
+ * classifyContent(不译的块保留并带原因);这里留给排版侧"没有译文时按元数据计"的判定和旧测试。
+ */
+export function isMetadataBlock(text: string, rect?: Rect, pageWidth?: number, type?: { fontSize?: number; bodySize?: number }): boolean {
+	return classifyContent(text, rect, pageWidth, type).decision !== 'translate';
 }

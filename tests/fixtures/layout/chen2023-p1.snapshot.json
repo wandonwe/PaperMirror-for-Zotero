@@ -1,56 +1,92 @@
 [
 	{
-		"type": "title",
-		"column": -1,
+		"type": "paragraph",
+		"column": 1,
 		"readingIndex": 0,
-		"text": "A Coronary CT Angiography Radiomics Mode"
+		"mode": "preserve",
+		"text": "ORIGINAL RESEARCH • CARDIAC IMAGING"
 	},
 	{
-		"type": "paragraph",
+		"type": "title",
 		"column": -1,
 		"readingIndex": 1,
-		"text": "L.J.Z. supported by the Jiangsu Province"
+		"text": "A Coronary CT Angiography Radiomics Mode"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 2,
-		"text": "** J. Zhang and L.J.Zhang are co-senior "
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 3,
-		"text": "See also the editorial by De Cecco and v"
+		"mode": "preserve",
+		"text": "Qian Chen, MD* • Tao Pan, MBBS* • Yi Nin"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
+		"readingIndex": 3,
+		"mode": "preserve",
+		"text": "Samuel L. Bidwell, BS • Hongyan Qiao, MD"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
 		"readingIndex": 4,
-		"text": "Background: A noninvasive coronary CT an"
+		"mode": "preserve",
+		"text": "Jian Zhong, MBBS • Yongyue Wei, PhD • Xi"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
 		"readingIndex": 5,
-		"text": "Purpose: To assess whether a CCTA-based "
+		"text": "From the Departments of Radiology (Q.C.,"
 	},
 	{
-		"type": "paragraph",
+		"type": "list",
 		"column": 0,
 		"readingIndex": 6,
-		"text": "Supplemental material is available for t"
+		"text": "* Q.C. and T.P. contributed equally to t"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 7,
+		"mode": "preserve",
+		"text": "Radiology 2023; 307(2):e221693 • https:/"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 8,
+		"text": "Background: A noninvasive coronary CT an"
+	},
+	{
+		"type": "paragraph",
+		"column": -1,
+		"readingIndex": 9,
+		"text": "Purpose: To assess whether a CCTA-based "
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 10,
+		"mode": "preserve",
+		"text": "© RSNA, 2023"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 11,
+		"text": "Supplemental material is available for t"
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 12,
 		"text": "Acute coronary syndrome remains one of t"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 8,
+		"readingIndex": 13,
 		"text": "worse clinical outcomes (4,5). However, "
 	}
 ]

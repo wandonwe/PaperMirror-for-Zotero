@@ -107,3 +107,108 @@ test('排版只在**没有译文**时才按元数据规则跳过 —— 上游�
 		'排版侧的元数据判定必须以"没有译文"为前提');
 	assert.ok(!/if \(isMetadataBlock\(block\.sourceText\)\) \{/.test(loop), '不许退回无条件重判');
 });
+
+// ================================================================ 2.12.13:译文侧默认全文翻译
+
+/**
+ * 原则(用户 2026-09-13):**原文侧负责忠实保留;译文侧负责完整理解。元素类别决定排版方式,
+ * 不决定是否翻译。** 产品目标:译文侧默认全文翻译,允许标识原样保留,
+ * 不允许自然语言内容因为元素分类而无提示缺失。
+ */
+
+import { classifyContent } from '../../src/reader/metaFilter';
+import { protectFormulas, restoreFormulas } from '../../src/reader/formulaGuard';
+import { buildBlocks } from '../../src/reader/blockBuilder';
+import type { PdfChar } from '../../src/types/models';
+import { digestRows } from '../../src/translation/pageBlockDigest';
+
+test('classifyContent:自然语言一律翻译,标识保留并带原因,几何位置不决定翻不翻 (2.12.13)', () => {
+	const T = (s: string, rect?: [number, number, number, number]) => classifyContent(s, rect, 600, { fontSize: 7, bodySize: 10 });
+	// 翻译:说明、单位、通讯句、版权整句、资助句、作者贡献
+	for (const s of [
+		'Patient consent: Written informed consent was obtained.',
+		'Department of Cardiology, University Hospital Zurich, Zurich, Switzerland',
+		'Contact the corresponding author at name@example.com.',
+		'This is an Open Access article distributed under the terms of the Creative Commons Attribution License.',
+		'The funders had no role in study design, data collection and analysis, decision to publish, or preparation of the manuscript.',
+		'Author contributions: Guarantors of integrity of entire study, all authors.'
+	]) {
+		assert.equal(T(s).decision, 'translate', `应翻译: "${s.slice(0, 50)}"`);
+	}
+	// 页边栏几何以前一票否决(<700 字符全跳过):现在几何不决定翻不翻。
+	assert.equal(T('Funding: This work was supported by the Swiss National Science Foundation.', [10, 300, 120, 400]).decision, 'translate');
+	// 保留(带原因):人名、日期、DOI/网址、水印、页码、书目标签、短版权行
+	const P = (s: string, reason: string) => {
+		const c = T(s);
+		assert.equal(c.decision, 'preserve', `应保留: "${s.slice(0, 40)}"`);
+		assert.equal(c.reason, reason, `"${s.slice(0, 40)}" 的原因应为 ${reason}`);
+	};
+	P('John A Smith, Mary Jones, Wei Zhang, and Li Wang', 'names');
+	P('Received: 3 March 2024; Accepted: 5 May 2024', 'dates');
+	P('doi:10.1093/eurheartj/ehae177', 'identifier');
+	P('https://doi.org/10.1093/eurheartj/ehae177', 'identifier');
+	P('Downloaded from https://academic.oup.com/eurheartj by guest on 20 September 2024', 'watermark');
+	P('1234', 'marks');
+	P('Citation: Lu N, Di Y (2015) CT Perfusion in C6 Gliomas. PLoS ONE 10(3): e0121631.', 'bibliographic');
+	P('Copyright © 2024 The Authors.', 'boilerplate');
+	P('Funding: Grant No. 30970805, 81400428.', 'identifier');
+	P('RESEARCH ARTICLE', 'banner');
+	// 每个 preserve 都必须带原因 —— "无提示缺失"是被禁止的。
+	for (const s of ['1234', 'RESEARCH ARTICLE', 'doi:10.1093/x']) { assert.ok(T(s).reason, '保留必须带原因'); }
+});
+
+test('片段保护:邮箱、网址、DOI、注册号被掩蔽后原样还原 (2.12.13)', () => {
+	const src = 'Contact name@example.com or see https://example.org/x?y=1 (doi:10.1093/eurheartj/ehae177; NCT01234567).';
+	const { text, placeholders } = protectFormulas(src);
+	assert.ok(!/name@example\.com/.test(text), '邮箱必须被掩蔽');
+	assert.ok(!/https:\/\/example\.org/.test(text), '网址必须被掩蔽');
+	assert.ok(!/10\.1093\/eurheartj/.test(text), 'DOI 必须被掩蔽');
+	assert.ok(!/NCT01234567/.test(text), '注册号必须被掩蔽');
+	assert.equal(restoreFormulas(text, placeholders), src, '还原后逐字节相同');
+});
+
+test('提取阶段不再整块丢弃:不译的块以 preserve + preserveReason 保留 (2.12.13)', () => {
+	const cs = charsFor([
+		{ text: 'Body paragraph text that is long enough to be a paragraph here.', y: 700 },
+		{ text: 'Department of Radiology, University Hospital, Zurich, Switzerland', y: 660 },
+		{ text: 'Received: 3 March 2024; Accepted: 5 May 2024', y: 620 },
+		{ text: 'doi:10.1093/eurheartj/ehae177', y: 580 }
+	]);
+	const result = buildBlocks(cs, { pageIndex: 0, pageWidth: 600, pageHeight: 800, includeReferences: false });
+	const by = (frag: string) => result.blocks.find(b => b.sourceText.includes(frag));
+	assert.ok(by('Department of Radiology'), '作者单位必须在 blocks 里');
+	assert.notEqual(by('Department of Radiology')!.translationMode, 'preserve', '作者单位要翻译');
+	const dates = by('Received');
+	assert.ok(dates, '日期行不再丢弃');
+	assert.equal(dates!.translationMode, 'preserve');
+	assert.equal(dates!.preserveReason, 'dates');
+	const doi = by('doi:10.1093');
+	assert.ok(doi && doi.translationMode === 'preserve' && doi.preserveReason === 'identifier', 'DOI 行保留并带原因');
+});
+
+test('逐块摘要带 preserveReason (2.12.13)', () => {
+	const rows = digestRows({
+		blocks: [
+			{ id: 'a', pageIndex: 0, order: 0, type: 'paragraph', sourceText: 'x', translationMode: 'preserve', preserveReason: 'dates' } as never,
+			{ id: 'b', pageIndex: 0, order: 1, type: 'paragraph', sourceText: 'y' } as never
+		],
+		translations: new Map([['b', '译']])
+	});
+	assert.equal(rows[0]!.outcome, 'preserved');
+	assert.equal((rows[0] as { preserveReason?: string }).preserveReason, 'dates');
+	assert.equal(rows[1]!.outcome, 'translated');
+});
+
+function charsFor(lines: { text: string; y: number }[]) {
+	const out: PdfChar[] = [];
+	for (const l of lines) {
+		const glyphs = [...l.text];
+		glyphs.forEach((g, i) => {
+			out.push({
+				c: g, rect: [10 + i * 5, l.y, 15 + i * 5, l.y + 10], fontSize: 10, fontName: 'Body',
+				spaceAfter: false, lineBreakAfter: false, paragraphBreakAfter: i === glyphs.length - 1
+			} as PdfChar);
+		});
+	}
+	return out;
+}

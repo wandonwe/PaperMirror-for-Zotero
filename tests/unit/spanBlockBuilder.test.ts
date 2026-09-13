@@ -462,11 +462,12 @@ test('真正的作者单位块照旧丢弃', () => {
 	const { blocks } = buildBlocksFromSpans([...affiliation, ...body], {
 		pageIndex: 2, pageHeight: PAGE_HEIGHT, pageWidth: 594
 	});
-	assert.equal(
-		blocks.some(b => b.sourceText.includes('Departments of Radiology')),
-		false,
-		'豁免只给 caption/table,不能顺手把作者单位也放进来'
-	);
+	// 2.12.13 原则:作者单位翻译机构名称,不再丢弃。这条用例的对照意义变成:
+	// 单位块与正文块**都在**,且单位块不是 caption/table 类型(豁免没有被顺手扩大)。
+	const aff = blocks.find(b => b.sourceText.includes('Departments of Radiology'));
+	assert.ok(aff, '作者单位块保留');
+	assert.notEqual(aff!.translationMode, 'preserve', '作者单位要翻译');
+	assert.ok(aff!.type !== 'caption' && aff!.type !== 'table', '不是靠 caption/table 豁免混进来的');
 });
 
 // ---- 字号跳变的边界 (2.5.4) -------------------------------------------------

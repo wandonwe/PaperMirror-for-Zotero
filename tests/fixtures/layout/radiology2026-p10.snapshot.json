@@ -1,32 +1,53 @@
 [
 	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 0,
+		"mode": "preserve",
+		"text": "Toward Broader Clinical Adoption of Phot"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 1,
+		"mode": "preserve",
+		"text": "Sahbaee et al"
+	},
+	{
 		"type": "caption",
 		"column": -1,
-		"readingIndex": 0,
+		"readingIndex": 2,
 		"text": "Figure 8: Photon-counting CT (PCCT) enab"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 1,
+		"readingIndex": 3,
 		"text": "Bone Microarchitecture and Trabecular Im"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 2,
+		"readingIndex": 4,
 		"text": "centimeter for PCCT with a sharp kernel "
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 3,
+		"readingIndex": 5,
 		"text": "Bone Marrow Edema Evaluation"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 4,
+		"readingIndex": 6,
 		"text": "Accurate detection of bone marrow edema,"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 7,
+		"mode": "preserve",
+		"text": "10"
 	}
 ]
