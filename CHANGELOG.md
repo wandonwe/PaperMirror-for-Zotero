@@ -7,6 +7,28 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.0.1] — 2026-09-13
+
+### 修复:小型大写字的标题被当成"碎片"吸进摘要(Goenka 2016 p1)
+
+3.0.0 真机导出(Goenka 2016,8 页)显示 p1 的摘要格全部空白、`abandonReason = no-room/height`,
+而摘要区块长达 2246 字符。原因:标题用的是小型大写字(small caps),文本层里全是小写,
+`regionCoalescer.isShard` 只看"首字母小写"就把这条 26pt、204 字符的标题当成上一段的续句碎片,
+`canAbsorb` 又不查字号,于是标题整条被 8pt 的摘要区吸收,摘要因此放不下。
+用同一份运行时 span 在 2.12.15 上复现,**不是 3.0 的回归**,是一直存在的缺陷。
+
+- `canAbsorb`:超过 12 个字符的碎片,字号比宿主大 30% 以上、或两者相差超过 40%,不吸收。
+  ≤12 字符的角标/引用号不受影响;8pt 续句进 10pt 段落照旧(既有测试保持绿)。
+- 新夹具 `goenka2016-p1.spans.json`(3.0.0 语料的运行时 span)+ 两条锁;其余 40 个布局快照逐字节不变。
+- 变异验证:去掉字号闸 → Goenka 锁与快照变红;把阈值收紧到 16% → 既有的两条"跨字号吸收续句"测试变红。
+
+### 3.0.0 真机导出的读数(记录)
+
+`preserveReason` 只剩 4 种(running-head 22、identifier 1、data 30、symbol 14),
+10 个未放回块全部带 `abandonReason`(too-small、no-room/height、expand-ink/none、shrink-floor/*)——
+3.0.0 承诺的"每个不译/没显示的块都有原因"在真机上成立。
+p1 的 "Purpose:/Methods:/Results:/Conclusion:" 标签仍为 `too-small`(8 字符、盒高不足),待小块准入按角色放宽时处理。
+
 ## [3.0.0] — 2026-09-13
 
 **原则定版:有对照的双栏阅读里,故意留一块不译没有收益,只有误判的风险。**
