@@ -7,6 +7,17 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.1.1] — 2026-09-13
+
+### 修复:CI / Release 在 `npm test` 的测试类型检查上失败
+
+首次推送 2.12.x–3.1.0 这批提交后,GitHub Actions 的 CI #49 与 Release #41 都红了:`npm test` 先跑
+`tsc -p tsconfig.tests.json`,而 `tests/unit/tableBorders.test.ts` 里 6 处 `SegmentScanStats` 字面量
+还是 2.12.8 的形状,缺 2.12.9 加的 `shapeUnknown / newShape / unpainted`。本地一直只跑
+`node scripts/test.mjs`(不做测试类型检查),所以没发现。补齐字段;发布前的本地流程改为在干净副本里
+完整重放 CI 链(`npm ci → tsc --noEmit → npm test → npm run package → gen-updates → release-notes`)。
+无代码改动。
+
 ## [3.1.0] — 2026-09-13
 
 ### 覆盖翻译模式改走严格原位替换引擎(用户要求「覆盖翻译模式也要按对照翻译的能力优化」)
