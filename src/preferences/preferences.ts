@@ -24,6 +24,7 @@ import {
 	customLaneRange,
 	customBandFor,
 	isFreeMt,
+	buildPool,
 	type ProviderCapability
 } from '../translation/providerPool';
 import {
@@ -194,9 +195,11 @@ interface PaperMirrorPublicAPI {
 				const local = id === 'ollama' || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(p?.defaultBaseURL || '');
 				return { id, requiresApiKey: p?.requiresApiKey ?? false, local };
 			};
+			// 预览与真实的池必须同一口径 (3.2.0):此前这里直接拿"主引擎 + 勾选",
+			// 于是主引擎是 LLM 时偏好里残留的微软通道仍出现在预览芯片里;走 buildPool。
 			const enabledIds = (): string[] => {
 				const primary = String(byId<HTMLElement & { value: string }>('papermirror-provider')?.value || getPref('provider') || 'bing-free');
-				return [primary, ...readChecked().filter(id => id !== primary)];
+				return buildPool(primary, readChecked());
 			};
 			const nameOf = (id: string): string => (api()?.listProviders() ?? []).find(pv => pv.id === id)?.displayName ?? id;
 
