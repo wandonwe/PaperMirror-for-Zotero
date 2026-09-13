@@ -252,6 +252,17 @@ export function canAbsorb(host: SourceBlock, shard: SourceBlock, obstacles: Rect
 		return false;
 	}
 	const em = Math.max(host.fontSize ?? 10, 6);
+	// 字号放宽只给**微小**碎片(角标、孤立引用号)(3.0.1, Goenka 2016 p1 实证):
+	// 这篇的标题在文本层里是小型大写字 —— 全小写 —— isShard 把它当成"撕下来的续句",
+	// 26pt、7 行、204 字符的标题就被 8pt 的摘要整个吸收,译文页上摘要四格全空。
+	// 超过 12 字符的碎片:字号不许**比宿主大**(续句从不比它的段落排得大),
+	// 也不许差到 40% 以上。8pt 碎片进 10pt 段落(角标拉低了主字号,差 20%)照旧放行。
+	const fh = host.fontSize ?? 0;
+	const fs = shard.fontSize ?? 0;
+	if (fh > 0 && fs > 0 && shard.sourceText.trim().length > 12
+		&& (fs > fh * 1.3 || Math.abs(fh - fs) > Math.max(fh, fs) * 0.4)) {
+		return false;
+	}
 	// Vertically adjacent or overlapping, up to 3em apart either way.
 	const gap = Math.max(rh[1] - rs[3], rs[1] - rh[3]);
 	// Length must not be a hard rejection for absorption: refusing strands the

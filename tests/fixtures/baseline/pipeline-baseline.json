@@ -227,6 +227,18 @@
 		"payloadChars": 4041,
 		"dupBlocks": 0
 	},
+	"goenka2016-p1": {
+		"blocks": 18,
+		"translatable": 16,
+		"tableCells": 0,
+		"modules": 13,
+		"chunks": 1,
+		"fastChunks": 1,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 16,
+		"payloadChars": 3074,
+		"dupBlocks": 0
+	},
 	"gulati2021-p21-p1": {
 		"blocks": 51,
 		"translatable": 46,

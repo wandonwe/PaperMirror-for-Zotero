@@ -243,3 +243,31 @@ test('3.0.0:整列多数是数据,不再把有词的格一并保留', async () =
 	assert.ok(notReported, '格存在');
 	assert.equal(notReported!.kind, 'text', '"Not reported" 有词就翻译 —— 同列邻居是数字证明不了它不用翻');
 });
+
+test('3.0.1:小型大写字的标题(文本层全小写)不许被当成碎片吸进摘要 —— Goenka 2016 p1', async () => {
+	// 真机 3.0.0:右页标题框里放的是"标题 + 整段摘要"合成的 2246 字符,摘要四格全空。
+	// 2.12.15 同样如此,不是 3.0 的回归:isShard 把小写开头的块一律当续句碎片,canAbsorb 不查字号。
+	const { buildBlocksFromSpans } = await import('../../src/reader/spanBlockBuilder');
+	const { orderBlocksForReading } = await import('../../src/reader/readingOrder');
+	const { structureTableCells } = await import('../../src/reader/tableStructure');
+	const { coalesceRegions } = await import('../../src/reader/regionCoalescer');
+	const d = JSON.parse(readFileSync('tests/fixtures/layout/goenka2016-p1.spans.json', 'utf8'));
+	const r = buildBlocksFromSpans(d.items, { pageIndex: 0, pageWidth: d.pageWidth, pageHeight: d.pageHeight, includeReferences: true, referencesAlreadyStarted: false, imageRectsPdf: [] });
+	const prose = coalesceRegions(structureTableCells(orderBlocksForReading(r.blocks), 0, 10).filter(b => b.translationMode === undefined), []);
+	const title = prose.find(b => /^image noise, cnr/i.test(b.sourceText.trim()));
+	assert.ok(title, '标题块存在');
+	assert.ok(title!.sourceText.length < 300, `标题不该吞掉摘要:${title!.sourceText.length} 字符`);
+	const abstract = prose.find(b => /^To assess image noise/.test(b.sourceText.trim()));
+	assert.ok(abstract && abstract.sourceText.length > 1500, '摘要四段仍合成一个区域');
+});
+
+test('3.0.1:微小碎片(≤12 字符,角标/引用号)仍可跨字号被吸收', async () => {
+	const { canAbsorb } = await import('../../src/reader/regionCoalescer');
+	const host = { id: 'h', pageIndex: 0, order: 0, type: 'paragraph', sourceText: 'Body text of a paragraph that ends here', fontSize: 10, column: 0, lineRectsPdf: [[50, 700, 300, 710]] } as never;
+	const tiny = { id: 't', pageIndex: 0, order: 1, type: 'paragraph', sourceText: '12', fontSize: 6, column: 0, lineRectsPdf: [[60, 690, 68, 698]] } as never;
+	const big = { id: 'b', pageIndex: 0, order: 2, type: 'paragraph', sourceText: 'image noise, cnr, and detectability of lesions', fontSize: 26, column: 0, lineRectsPdf: [[50, 660, 300, 690]] } as never;
+	const drifted = { id: 'd', pageIndex: 0, order: 3, type: 'paragraph', sourceText: 'ated light is isolated in the detector.', fontSize: 8, column: 0, lineRectsPdf: [[50, 686, 300, 696]] } as never;
+	assert.equal(canAbsorb(host, drifted), true, '8pt 续句进 10pt 段落照旧');
+	assert.equal(canAbsorb(host, tiny), true, '角标照旧吸收');
+	assert.equal(canAbsorb(host, big), false, '26pt 的长块不是 10pt 段落的碎片');
+});
