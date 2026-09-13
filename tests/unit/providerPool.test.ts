@@ -402,3 +402,15 @@ test('加权仍是纯的、确定的,且保住最小扰动 (2.12.0)', () => {
 	assert.equal(moved, ontoNew,
 		'加一家服务商时,变动的页只能是迁到新来的那家 —— 其余一页都不该动');
 });
+
+// ---- 3.1.9: 并行池只收 LLM 引擎 ------------------------------------------------
+//
+// 免费通道分到的页面被它的限流拖住,LLM 车道空着也接不过去(混用时"卡住"的根源)。
+test('3.1.9:主引擎是免费通道 → 池只有它一家,勾选全部无效', () => {
+	assert.deepEqual(buildPool('bing-free', ['openai', 'deepseek']), ['bing-free']);
+	assert.deepEqual(buildPool('google-free', ['openai']), ['google-free']);
+});
+
+test('3.1.9:主引擎是 LLM → 勾选里的免费通道剔除,LLM 照常进池', () => {
+	assert.deepEqual(buildPool('openai', ['bing-free', 'deepseek', 'google-free', 'gemini']), ['openai', 'deepseek', 'gemini']);
+});

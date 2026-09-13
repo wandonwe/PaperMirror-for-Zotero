@@ -40,3 +40,30 @@ test('判据与 resolveBingApiBase 严格一致(防两处漂移)', () => {
 			`"${c}": hasCustomBingBase 与 resolveBingApiBase 的判定必须一致`);
 	}
 });
+
+// ---- 3.1.9: Bing 的限流信号做成 RATE_LIMITED ------------------------------------
+//
+// Bing 抓取通道被限流时不是 HTTP 429,而是 200 里带 {statusCode: 429},或一个静默的空 200;
+// 此前两者都是 BAD_RESPONSE,车道限流失明,按 400ms 快速重试继续锤。
+test('3.1.9:bingRateLimited 是 RATE_LIMITED + 429 + 有界 retryAfterMs', async () => {
+	const { bingRateLimited, BING_RATE_LIMIT_BACKOFF_MS } = await import('../../src/translation/providers/bingFree');
+	const err = bingRateLimited('x');
+	assert.equal(err.code, 'RATE_LIMITED');
+	assert.equal(err.httpStatus, 429);
+	assert.equal(err.retryable, true);
+	assert.equal((err as { retryAfterMs?: number }).retryAfterMs, BING_RATE_LIMIT_BACKOFF_MS);
+	assert.ok(BING_RATE_LIMIT_BACKOFF_MS >= 1000 && BING_RATE_LIMIT_BACKOFF_MS <= 10000, '退避有界:不是无限重试,也不是无限等待');
+});
+
+test('3.1.9:抓取通道里 statusCode 429 与二次空 200 都走 RATE_LIMITED,不再刷会话快速重试', async () => {
+	const { readFileSync } = await import('node:fs');
+	const { join } = await import('node:path');
+	// 不剥注释:源码里 Accept: '*\/*' 会让块注释剥离器把后面整段吃掉;下面的锚点全是代码,不是注释。
+	const src = readFileSync(join(process.cwd(), 'src/translation/providers/bingFree.ts'), 'utf8');
+	const scrape = src.slice(src.indexOf('async function translateViaScrape('));
+	const s429 = scrape.indexOf("if (statusCode === 429) {");
+	const refresh = scrape.indexOf('if (allowRetry) {\n\t\t\tawait getSession(settings.timeoutMs, signal, true);');
+	assert.ok(s429 > 0 && refresh > s429, '429 判定必须排在"刷会话重试"之前');
+	assert.match(scrape, /e\.code === 'BAD_RESPONSE' && \/empty body\/i\.test\(e\.message\)\) \{\s*throw bingRateLimited\(/,
+		'换过主机再来一次仍是空 200 → 限流');
+});

@@ -392,10 +392,26 @@ export function normalizeGlobalMax(value: unknown): number {
 }
 
 /** Primary first, extras after, duplicates removed, order stable. */
+/** 免费机器翻译通道(bing-free / google-free)—— 只能单引擎使用,不进并行池。 */
+export function isFreeMt(id: string): boolean {
+	return FREE_MT.has(id);
+}
+
+/**
+ * 并行池只收 LLM 类引擎 (3.1.9, 用户决定)。
+ *
+ * 免费通道不吃提示词、不吃字符预算、限流与超时反馈粗糙:分到它的那一页所有请求、
+ * 重试、打捞都绑在它身上,它被限流时 LLM 车道空着也接不过去 —— 混用时"卡住"的
+ * 根源。所以:主引擎是免费通道 → 池就是它一家,勾了什么都不算;主引擎是 LLM →
+ * 勾选里的免费通道剔除。免费通道保留为单引擎模式,行为自洽。
+ */
 export function buildPool(primary: string, extras: string[]): string[] {
 	const out = [primary];
+	if (isFreeMt(primary)) {
+		return out;
+	}
 	for (const id of extras) {
-		if (id && !out.includes(id)) {
+		if (id && !out.includes(id) && !isFreeMt(id)) {
 			out.push(id);
 		}
 	}
