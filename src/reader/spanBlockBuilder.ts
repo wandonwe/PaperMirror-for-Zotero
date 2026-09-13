@@ -445,7 +445,7 @@ export function lineText(line: SpanLine): string {
  * refuses to end a paragraph after a line that ran to its column's right
  * margin — that line wrapped, so the sentence continues on the next one.
  */
-export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeight = 0, obstacles: Rect[] = []): SpanLine[][] {
+export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeight = 0, obstacles: Rect[] = [], gridRows: GridRowBarriers | null = null): SpanLine[][] {
 	if (!lines.length) {
 		return [];
 	}
@@ -490,6 +490,12 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 			flush();
 			continue;
 		}
+		// 网格行线硬屏障 (2.12.15):两行之间隔着一条表格行线,就是两个格。
+		if (gridRows && gridRowBetween(line.rect, next.rect, gridRows)) {
+			flush();
+			continue;
+		}
+
 		const size = line.fontSize > 0 ? line.fontSize : 10;
 		const margins = marginOf(i);
 		const brk = shouldBreak({
@@ -646,6 +652,72 @@ function looksLikeTitleCaseHeading(text: string): boolean {
 	return significant >= 2 && capitalised === significant;
 }
 
+/** 网格行线(PDF y-up)与它们的横向范围。 */
+export interface GridRowBarriers { ys: number[]; left: number; right: number }
+
+export function gridRowBarriers(grid: BorderGrid, pageHeight: number): GridRowBarriers {
+	return {
+		ys: grid.rows.map(y => pageHeight - y),
+		left: grid.region.left,
+		right: grid.region.left + grid.region.width
+	};
+}
+
+/** 两行(PDF y-up 矩形 [x1, 底, x2, 顶])之间是否隔着一条网格行线,且两行都在网格横向范围内。 */
+function gridRowBetween(a: Rect, b: Rect, rows: GridRowBarriers): boolean {
+	// 竖向间隙 = [下面那行的顶边, 上面那行的底边]。
+	const lo = Math.min(a[3], b[3]);
+	const hi = Math.max(a[1], b[1]);
+	if (hi <= lo) { return false; }
+	const inGrid = (r: Rect): boolean => r[2] > rows.left && r[0] < rows.right;
+	if (!inGrid(a) || !inGrid(b)) { return false; }
+	return rows.ys.some(y => y >= lo - 0.5 && y <= hi + 0.5);
+}
+
+/**
+ * 同一格里上下紧邻的两个段落合成一个 (2.12.15)。
+ *
+ * 判据:都在网格里、中间没有行线、x 重叠、间距不到一个字号、字号相同。段落启发式
+ * 再怎么想断也不断 —— ESC p16 第三条标题带折成两行,第二行 "oral anticoagulation—Section 4"
+ * 被单独切成一块,译文页上留着英文。在段落层做而不是行层:那一行在行序里排在第 0 位
+ * (行序是老问题),行层的相邻判断根本碰不到它。
+ */
+export function mergeGridCellStacks(paragraphs: SpanLine[][], rows: GridRowBarriers | null): SpanLine[][] {
+	if (!rows || paragraphs.length < 2) { return paragraphs; }
+	const out = paragraphs.map(p => [...p]);
+	const bottomLine = (p: SpanLine[]): SpanLine => p.reduce((m, l) => (l.rect[1] < m.rect[1] ? l : m), p[0]!);
+	const topLine = (p: SpanLine[]): SpanLine => p.reduce((m, l) => (l.rect[3] > m.rect[3] ? l : m), p[0]!);
+	let merged = true;
+	while (merged) {
+		merged = false;
+		for (let i = 0; i < out.length && !merged; i++) {
+			const b = bottomLine(out[i]!);
+			for (let j = 0; j < out.length; j++) {
+				if (i === j) { continue; }
+				if (sameGridCellStack(b, topLine(out[j]!), rows)) {
+					out[i] = [...out[i]!, ...out[j]!];
+					out.splice(j, 1);
+					merged = true;
+					break;
+				}
+			}
+		}
+	}
+	return out;
+}
+
+function sameGridCellStack(a: SpanLine, b: SpanLine, rows: GridRowBarriers): boolean {
+	const inGrid = (r: Rect): boolean => r[0] >= rows.left - 1 && r[2] <= rows.right + 1;
+	if (!inGrid(a.rect) || !inGrid(b.rect)) { return false; }
+	if (gridRowBetween(a.rect, b.rect, rows)) { return false; }
+	const overlapX = Math.min(a.rect[2], b.rect[2]) - Math.max(a.rect[0], b.rect[0]);
+	if (overlapX <= 0) { return false; }
+	const size = a.fontSize > 0 ? a.fontSize : 10;
+	if (b.fontSize > 0 && Math.abs(b.fontSize - size) > 0.5) { return false; }
+	const gap = a.rect[1] - b.rect[3];
+	return gap >= -0.5 && gap < size;
+}
+
 export interface SpanBuildOptions {
 	pageIndex: number;
 	pageHeight: number;
@@ -654,6 +726,12 @@ export interface SpanBuildOptions {
 	pageWidth?: number;
 	includeReferences?: boolean;
 	referencesAlreadyStarted?: boolean;
+	/**
+	 * 边框网格 (2.12.15):行线是硬屏障 —— 两行之间隔着一条网格行线,不许合成一个段落。
+	 * ESC p16 实证:灰色小节标题带与紧贴其下的格首行(间距 3.7pt、同一 x)被焊成一块,
+	 * 横跨六列退回段落路径后溢出,那一格只剩下半截。行坐标是 top-down,这里换算成 PDF y。
+	 */
+	grid?: BorderGrid | null;
 }
 
 export interface SpanBuildResult {
@@ -669,7 +747,7 @@ export interface SpanBuildResult {
  * numeric-dense cells (or a Table caption), so a prose page yields an empty set
  * and the whole reorder is inert.
  */
-function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em: number, obstaclesPdf: Rect[] = []): Set<number> {
+export function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em: number, obstaclesPdf: Rect[] = []): Set<number> {
 	const out = new Set<number>();
 	if (lines.length < 6) {
 		return out;
@@ -723,7 +801,8 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// 一致,不影响任何非表格版面。
 	const tableLineIdx = detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10), obstacles);
 	const proseLines = tableLineIdx.size ? lines.filter((_, i) => !tableLineIdx.has(i)) : lines;
-	const paragraphs = groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, obstacles);
+	const gridRows = options.grid ? gridRowBarriers(options.grid, options.pageHeight) : null;
+	const paragraphs = mergeGridCellStacks(groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, obstacles, gridRows), gridRows);
 
 	// Materialise, then repair anything still split mid-sentence.
 	const bands = detectColumns(lines.map(l => l.rect), pageWidth, options.pageHeight);
