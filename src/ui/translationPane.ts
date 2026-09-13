@@ -1373,6 +1373,11 @@ export class TranslationPane {
 		return this.viewKind;
 	}
 
+	/** 诊断用 (3.1.5): 面板当前给页面的宽度(CSS px),0 = 面板不可见。 */
+	paneWidthPx(): number {
+		return this.scroll?.clientWidth ?? 0;
+	}
+
 	/** Width a page gets, in CSS px — nearly edge to edge of the pane. */
 	private pageWidthAvailable(): number {
 		const scrollW = this.scroll.clientWidth || this.host.clientWidth;

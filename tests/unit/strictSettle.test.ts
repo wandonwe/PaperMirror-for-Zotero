@@ -12,6 +12,8 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { settleStrictPage, shrinkStrictBlocks, applyCompressedStrict, planStrictRetry, allowsFontShrink, type UnfitBlock } from '../../src/ui/strictPageReplacement';
 import { supportsCharBudget } from '../../src/translation/providers/types';
 import { getProvider } from '../../src/translation/providers/registry';
@@ -432,4 +434,20 @@ test('墨迹阈值: minPoints 挡住单点噪声, 不让反锯齿把扩边判死
 test('墨迹阈值: 空区域安全返回 false, 不抛', async () => {
 	const { bitmapHasInk } = await import('../../src/ui/strictPageReplacement');
 	assert.equal(bitmapHasInk(new Uint8ClampedArray(0), 0, 0, WHITE, { minShare: 0.005, minPoints: 3 }), false);
+});
+
+// ---- 3.1.5: 单行小字块的高度容差按字号算 (CAD-RADS 2022 真机) ----------------
+//
+// CJK 字体的内容区比 1em 高(PingFang ≈1.32em、Noto Sans CJK ≈1.45em),line-height
+// 压到 1.0 之后 scrollHeight 仍比 1em 高的盒多出 0.2–0.45em;固定 1.5px 容差让每个
+// 单行小字块都以 shrink-floor/height 放弃。0.35em 的容差吸收内容区超出,吸收不了
+// 真正多出的一行(≥1em)。
+test('3.1.5:ladderFits 的高度容差按字号算,不是固定 1.5px', () => {
+	const src = readFileSync(join(process.cwd(), 'src/ui/strictPageReplacement.ts'), 'utf8')
+		.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+	assert.match(src, /const heightSlack = \(item: StrictItem\): number => Math\.max\(1\.5, item\.fontPx \* 0\.35\);/,
+		'容差 = max(1.5px, 0.35em)');
+	assert.match(src, /item\.node\.scrollHeight <= item\.box\.height \+ heightSlack\(item\)/,
+		'梯子的高度判据必须用字号容差 —— 固定 1.5px 让每个单行 7–9pt 块都放弃');
+	assert.ok(!/item\.node\.scrollHeight <= item\.box\.height \+ 1\.5\b/.test(src), '固定 1.5px 的旧判据不许留在梯子里');
 });

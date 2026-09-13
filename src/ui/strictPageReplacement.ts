@@ -1024,6 +1024,18 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		byId.set(block.id, item);
 	}
 
+	/**
+	 * 高度容差按字号算 (3.1.5, CAD-RADS 2022 真机实证): 单行块的盒高就是原文行高
+	 * (≈1em),而 CJK 字体的内容区(ascent+descent)比 1em 高得多 —— PingFang SC
+	 * ≈1.32em、Noto Sans CJK ≈1.45em —— line-height 已经压到 1.0,scrollHeight 仍比
+	 * 盒高多出 0.2–0.45em。固定 1.5px 的容差让**每一个**单行小字块(7pt 脚注、
+	 * 8.5pt 表题、"No change" 这样的 3 字格)都以 shrink-floor/height 放弃:p1 两条、
+	 * p4 三条、p12/15/18/20 的四条表题、多个表格格,全是同一个原因。
+	 * 内容区的超出部分是空白(墨迹在 em 框内,em 框与行框重合),不是多出来的一行:
+	 * 真多一行至少多 1em,0.35em 的容差永远吸收不了它,所以不会把溢出的块放行。
+	 */
+	const heightSlack = (item: StrictItem): number => Math.max(1.5, item.fontPx * 0.35);
+
 	/** Ladder-fit a hidden node; true when it fits its fixed rectangle. */
 	const ladderFits = (item: StrictItem): boolean => {
 		const t0 = now();
@@ -1031,7 +1043,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			for (const step of ladderFor(item.minLineHeight)) {
 				item.node.style.lineHeight = String(step.lineHeight);
 				item.node.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
-				if (item.node.scrollHeight <= item.box.height + 1.5
+				if (item.node.scrollHeight <= item.box.height + heightSlack(item)
 					&& item.node.scrollWidth <= item.box.width + 1.5) {
 					item.lastOverflow = 'none';
 					return true;
