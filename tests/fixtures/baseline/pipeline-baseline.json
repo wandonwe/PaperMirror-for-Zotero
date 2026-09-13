@@ -191,6 +191,18 @@
 		"payloadChars": 3594,
 		"dupBlocks": 0
 	},
+	"esc2024-p16": {
+		"blocks": 32,
+		"translatable": 29,
+		"tableCells": 0,
+		"modules": 3,
+		"chunks": 1,
+		"fastChunks": 1,
+		"slowChunks": 0,
+		"maxBlocksPerChunk": 21,
+		"payloadChars": 3701,
+		"dupBlocks": 8
+	},
 	"fletcher2024-p5": {
 		"blocks": 8,
 		"translatable": 6,

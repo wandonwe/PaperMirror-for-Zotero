@@ -81,6 +81,8 @@ export function buildPageDigest(state: DigestSource, runId: number, revision: nu
 /** 诊断导出里的一行(保持 2.3.7 起的既有形状,下游报表不受影响)。 */
 export interface DiagnosticBlockRow {
 	id: string;
+	/** 为什么保留不译(枚举,2.12.14 起导出)。 */
+	preserveReason?: string;
 	type: SourceBlock['type'];
 	chars: number;
 	state: string;
@@ -101,6 +103,8 @@ export function diagnosticRows(rows: BlockDigestRow[]): DiagnosticBlockRow[] {
 		type: row.type,
 		chars: row.chars,
 		state: row.outcome === 'untranslated' ? (row.keepOrigin ?? 'untranslated') : row.outcome,
+		// 2.12.13 加进摘要、2.12.14 才接到导出 —— 真机 2.12.13 的导出里 preserveReason 是空的。
+		...(row.preserveReason ? { preserveReason: row.preserveReason } : {}),
 		...(row.keepOrigin ? { keepOrigin: row.keepOrigin } : {}),
 		...(row.lastReject ? { lastReject: row.lastReject } : {})
 	}));
