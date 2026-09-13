@@ -191,6 +191,9 @@ export class TextExtractor implements PageParser {
 	private imageRects = new Map<number, [number, number, number, number][]>();
 	/** 逐页边框网格缓存;undefined = 还没取过,null = 取过但这页没有网格。 */
 	private borderGrids = new Map<number, BorderGrid | null>();
+	/** 网格取证的计数,随网格一起缓存 (2.12.14):重抽取时从缓存拿网格,遥测也得跟着回填 ——
+	 *  真机 2.12.13 的 p12–18 就是这样:gridInside 有值,edgeSegments/gridCols 全空。 */
+	private gridPhases = new Map<number, Partial<ExtractPhases>>();
 	/**
 	 * PageData captured by prime() for the page open at startup, reused ONCE by
 	 * the first extractPage() of that page. Without this, opening the reader
@@ -369,6 +372,9 @@ export class TextExtractor implements PageParser {
 	private async gridFor(pageIndex: number, pageHeight: number): Promise<BorderGrid | null> {
 		const cached = this.borderGrids.get(pageIndex);
 		if (cached !== undefined) {
+			const phases = this.phasesByPage.get(pageIndex);
+			const saved = this.gridPhases.get(pageIndex);
+			if (phases && saved) { Object.assign(phases, saved); }
 			return cached;
 		}
 		const started = Date.now();
@@ -412,6 +418,16 @@ export class TextExtractor implements PageParser {
 			}
 		}
 		this.borderGrids.set(pageIndex, grid);
+		{
+			const phases = this.phasesByPage.get(pageIndex);
+			if (phases) {
+				const keys = ['gridMs', 'edgeSegments', 'edgeOps', 'edgeByCode', 'edgeByShape', 'edgeSkipped', 'edgeRealOps',
+					'edgeShapeUnknown', 'edgeNewShape', 'edgeUnpainted', 'gridCount', 'gridCols', 'gridRows', 'gridRegion'] as const;
+				const saved: Partial<ExtractPhases> = {};
+				for (const k of keys) { if (phases[k] !== undefined) { (saved as Record<string, unknown>)[k] = phases[k]; } }
+				this.gridPhases.set(pageIndex, saved);
+			}
+		}
 		return grid;
 	}
 

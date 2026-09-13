@@ -21,6 +21,9 @@ import { detectTableRegions, looksTabular } from './tableGuard';
 import { columnOfX, rowOfTop, type BorderGrid } from './tableBorders';
 import type { SourceBlock } from '../types/models';
 
+/** 指南推荐表的等级格:Class I / IIa / IIb / III,Level A / B / C。翻译即原样,别浪费请求 (2.12.14)。 */
+const CLASS_LEVEL = /^(?:[IVX]{1,4}[ab]?|[A-C])$/;
+
 export interface Box {
 	left: number;
 	top: number;
@@ -335,7 +338,7 @@ export function buildTableModel(
 			else if (identifierOnly) { preserveReason = 'identifier'; }
 			else if (nameOnly) { preserveReason = 'name'; }
 			else if (row < headerDepth && hasWord && !isPureNumeric) { preserveReason = undefined; }
-			else if (tinySymbol) { preserveReason = 'symbol'; }
+			else if (tinySymbol || CLASS_LEVEL.test(text)) { preserveReason = 'symbol'; }
 			else if (looksTabular(text) || text.length < 3) { preserveReason = 'data'; }
 		}
 		const kind: TableCell['kind'] = preserveReason ? 'data' : 'text';
@@ -542,7 +545,7 @@ export function buildTextTableModel(
 		let preserveReason = preserveReasonFor(text, evidence);
 		if (!preserveReason) {
 			if (!text) { preserveReason = 'empty'; }
-			else if (!hasWord || tinySymbol) { preserveReason = 'symbol'; }
+			else if (!hasWord || tinySymbol || CLASS_LEVEL.test(text)) { preserveReason = 'symbol'; }
 			else if (!d.straddles && (looksTabular(text) || text.length < 3)) { preserveReason = 'data'; }
 		}
 		const kind: TableCell['kind'] = preserveReason ? 'data' : 'text';
@@ -710,7 +713,15 @@ export function structureTableCells(
 	 * edgeSegments/gridCols/gridRows/gridRegion/gridInside),等真机数据证明
 	 * 运行时的网格与离线一致,再把 useGrid 打开。**不拿用户的阅读体验去试。**
 	 */
-	useGrid = false
+	/**
+	 * 2.12.14:默认**打开**。证据链:
+	 *  - 真机 2.12.13 的网格与本地逐页精确一致(p22 [304,321,553,704] ↔ 离线 303.8..552.8 × 321.1..704.1;
+	 *    p45 两张 3×8 精确一致);
+	 *  - ESC p16(Table 4,6 列 × 12 行)文字几何**一个格都没认出来**,32 个块当段落自由摆放,
+	 *    用户导出的 dual PDF 上左栏译文跨格叠字 —— 网格路径给出 33 个格,推荐文字落 c0/c3;
+	 *  - 跨列的合并单元格块退回段落路径(spansColumns),不再掉进窄列。
+	 */
+	useGrid = true
 ): SourceBlock[] {
 	const originalById = new Map(blocks.map(block => [block.id, block]));
 	// 页面附属内容不进表 (2.12.13):提取阶段不再丢块之后,页码、水印、页眉、日期行、
@@ -885,6 +896,14 @@ export function structureTableCells(
  * 抽取期与排版期**共用这一个函数**,格 id 才能逐字节一致(这个仓库为
  * "两端不一致"付过代价)。网格拿不到就返回 null,调用方退回原有路径。
  */
+/** 文字框是否明显宽过它所在的列(伸进邻列超过列宽的 40%)—— 合并单元格的标志 (2.12.14)。 */
+function spansColumns(grid: BorderGrid, box: Box, col: number): boolean {
+	const left = grid.columns[col]!, right = grid.columns[col + 1]!;
+	const cw = right - left;
+	const over = Math.max(0, left - box.left) + Math.max(0, (box.left + box.width) - right);
+	return over > cw * 0.4;
+}
+
 export function buildGridTableModel(
 	pageIndex: number,
 	tableIndex: number,
@@ -905,6 +924,12 @@ export function buildGridTableModel(
 		if (col < 0 || row < 0) {
 			continue; // 落在网格外的不强行塞进来
 		}
+		// 跨列的块不按中心点分格 (2.12.14, ESC p16 实证):横跨六列的小节标题带,中心点
+		// 掉进 35pt 宽的 Level 列,127 个字符塞不进去。均匀网格表达不了合并单元格 ——
+		// 这样的块退回段落路径,按自己的框摆放。判据:框比所在列宽出一格以上。
+		if (spansColumns(grid, m.box, col)) {
+			continue;
+		}
 		const key = `${row}:${col}`;
 		const list = slots.get(key) ?? [];
 		list.push(m);
@@ -923,7 +948,7 @@ export function buildGridTableModel(
 		let preserveReason = preserveReasonFor(text, evidence);
 		if (!preserveReason) {
 			if (!text) { preserveReason = 'empty'; }
-			else if (!hasWord || tinySymbol) { preserveReason = 'symbol'; }
+			else if (!hasWord || tinySymbol || CLASS_LEVEL.test(text)) { preserveReason = 'symbol'; }
 			else if (looksTabular(text) || text.length < 3) { preserveReason = 'data'; }
 		}
 		const kind: TableCell['kind'] = preserveReason ? 'data' : 'text';

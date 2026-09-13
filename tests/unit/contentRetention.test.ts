@@ -120,7 +120,7 @@ import { classifyContent } from '../../src/reader/metaFilter';
 import { protectFormulas, restoreFormulas } from '../../src/reader/formulaGuard';
 import { buildBlocks } from '../../src/reader/blockBuilder';
 import type { PdfChar } from '../../src/types/models';
-import { digestRows } from '../../src/translation/pageBlockDigest';
+import { digestRows, diagnosticRows } from '../../src/translation/pageBlockDigest';
 
 test('classifyContent:自然语言一律翻译,标识保留并带原因,几何位置不决定翻不翻 (2.12.13)', () => {
 	const T = (s: string, rect?: [number, number, number, number]) => classifyContent(s, rect, 600, { fontSize: 7, bodySize: 10 });
@@ -197,6 +197,10 @@ test('逐块摘要带 preserveReason (2.12.13)', () => {
 	assert.equal(rows[0]!.outcome, 'preserved');
 	assert.equal((rows[0] as { preserveReason?: string }).preserveReason, 'dates');
 	assert.equal(rows[1]!.outcome, 'translated');
+	// 真机 2.12.13 的导出里 preserveReason 全空 —— 摘要有、导出行没接。
+	const diag = diagnosticRows(rows);
+	assert.equal(diag[0]!.preserveReason, 'dates', '诊断导出行必须带原因');
+	assert.equal(diag[1]!.preserveReason, undefined);
 });
 
 function charsFor(lines: { text: string; y: number }[]) {

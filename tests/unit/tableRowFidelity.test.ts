@@ -519,10 +519,10 @@ test('接线不丢内容,且网格之外的表仍由文字几何接手 (2.12.5)'
 	assert.ok(outsideCells.some(b => b.sourceText.includes('Mortality')), '网格外表的行标签必须在格里');
 });
 
-test('网格默认不参与建格 —— 必须显式打开 (2.12.6)', async () => {
-	// 2.12.5 把网格接进了建格却没有任何遥测,真机上一页只剩 3 个格时拿不出
-	// 证据说明运行时算的是什么网格。现在默认只观测:传了网格但不传 useGrid,
-	// 输出必须与压根不传网格**逐字节相同**。
+test('网格默认参与建格;显式关掉时与不传网格逐字节相同 (2.12.14)', async () => {
+	// 2.12.6 把默认降回"只观测",等真机数据证明运行时的网格与离线一致。证据到了
+	// (2.12.13 真机:p22 [304,321,553,704] ↔ 离线 303.8..552.8 × 321.1..704.1 精确一致;
+	// ESC p16 文字几何 0 格、网格 6×12),默认打开。显式传 false 仍是纯观测。
 	const { readFileSync } = await import('node:fs');
 	const { buildBlocksFromSpans } = await import('../../src/reader/spanBlockBuilder');
 	const { orderBlocksForReading } = await import('../../src/reader/readingOrder');
@@ -533,11 +533,44 @@ test('网格默认不参与建格 —— 必须显式打开 (2.12.6)', async () 
 	const grid = borderGrid(e.segments, { pageHeight: e.pageHeight })!;
 	const r = buildBlocksFromSpans(d.items, { pageIndex: 0, pageHeight: d.pageHeight, pageWidth: d.pageWidth });
 	const blocks = orderBlocksForReading(r.blocks);
-	const off = structureTableCells(blocks, 0, 9, [], grid);
+	const off = structureTableCells(blocks, 0, 9, [], grid, false);
 	const none = structureTableCells(blocks, 0, 9);
-	assert.deepEqual(off.map(b => b.id), none.map(b => b.id), '默认不开时必须与不传网格完全一致');
-	// 而显式打开时,它确实会接管(3 列)。
-	const on = structureTableCells(blocks, 0, 9, [], grid, true).filter(b => b.translationMode !== undefined && /-c\d+$/.test(b.id));
-	const cols = new Set(on.map(b => /-c(\d+)$/.exec(b.id)?.[1]));
-	assert.equal(cols.size, 3, '显式打开时边框接管,给出 3 列');
+	assert.deepEqual(off.map(b => b.id), none.map(b => b.id), '显式关掉时必须与不传网格完全一致');
+	const cellsOf = (xs: typeof off) => xs.filter(b => b.translationMode !== undefined && /-c\d+$/.test(b.id));
+	const byDefault = cellsOf(structureTableCells(blocks, 0, 9, [], grid));
+	const cols = new Set(byDefault.map(b => /-c(\d+)$/.exec(b.id)?.[1]));
+	assert.equal(cols.size, 3, '默认打开:边框接管,给出 3 列');
+	assert.deepEqual(byDefault.map(b => b.id), cellsOf(structureTableCells(blocks, 0, 9, [], grid, true)).map(b => b.id), '默认 = 显式打开');
 });
+
+test('ESC p16 Table 4:文字几何认不出表,网格给 6×12;跨列的标题带不进格 (2.12.14)', async () => {
+	// 用户导出的 dual PDF 上,这一页左栏译文跨格叠字。原因:文字几何路径 0 个格,
+	// 32 个块被当段落自由摆放。网格路径把推荐文字放回 c0/c3。
+	const { readFileSync } = await import('node:fs');
+	const { buildBlocksFromSpans } = await import('../../src/reader/spanBlockBuilder');
+	const { orderBlocksForReading } = await import('../../src/reader/readingOrder');
+	const { structureTableCells } = await import('../../src/reader/tableStructure');
+	const { borderGrid, segmentsFromOperatorList } = await import('../../src/reader/tableBorders');
+	const d = JSON.parse(readFileSync('tests/fixtures/layout/esc2024-p16.spans.json', 'utf8'));
+	const raw = JSON.parse(readFileSync('tests/fixtures/layout/esc2024-p16-new.rawops.json', 'utf8'));
+	const grid = borderGrid(segmentsFromOperatorList(raw.fnArray, raw.argsArray, raw.ops, 20000), { pageHeight: raw.height });
+	assert.ok(grid && grid.columns.length - 1 === 6 && grid.rows.length - 1 === 12, `网格应为 6×12,实得 ${grid ? `${grid.columns.length - 1}×${grid.rows.length - 1}` : 'null'}`);
+	const blocks = orderBlocksForReading(buildBlocksFromSpans(d.items, { pageIndex: 0, pageHeight: d.pageHeight, pageWidth: d.pageWidth }).blocks);
+	const textOnly = structureTableCells(blocks, 0, 9, [], null, false).filter(b => /-table-/.test(b.id));
+	assert.equal(textOnly.length, 0, '文字几何路径在这一页认不出任何格 —— 这条锁住"问题确实存在"');
+	const cells = structureTableCells(blocks, 0, 9, [], grid).filter(b => /-table-/.test(b.id));
+	assert.ok(cells.length >= 30, `网格路径应给出 ≥30 个格,实得 ${cells.length}`);
+	// 推荐文字(≥80 字符)只许落在两个文字列 c0 / c3。
+	for (const c of cells) {
+		const col = Number(/-c(\d+)$/.exec(c.id)?.[1]);
+		if (c.sourceText.length >= 80) { assert.ok(col === 0 || col === 3, `${c.sourceText.length} 字符的块不该落在 c${col}`); }
+	}
+	// Class / Level 格保留为 symbol,不送翻译。
+	const classLevel = cells.filter(c => /^(?:I|IIa|IIb|III|[A-C])$/.test(c.sourceText.trim()));
+	assert.ok(classLevel.length >= 8, `应有 ≥8 个等级格,实得 ${classLevel.length}`);
+	assert.ok(classLevel.every(c => c.translationMode === 'preserve' && c.preserveReason === 'symbol'), '等级格 = symbol');
+	// 横跨六列的小节标题带不在任何格里(退回段落路径)。
+	const rest = structureTableCells(blocks, 0, 9, [], grid).filter(b => !/-table-/.test(b.id));
+	assert.ok(rest.some(b => /Section 4/.test(b.sourceText)), '小节标题带退回段落路径');
+});
+
