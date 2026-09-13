@@ -393,6 +393,22 @@ export class ReaderToolbarController {
 			menu.appendChild(item);
 		}
 
+		// 完整文章流 (3.0.3, 用户要求): 覆盖模式下译文只能原位放回,放不下的段落
+		// 保留原文;文章流是完整、从不裁剪的那份译文。这里给它一个与三种阅读状态
+		// 并列的入口 —— 点了就切到左右对照并把面板切成文章流、滚到当前页。
+		const article = doc.createElement('button');
+		article.textContent = getString('papermirror-view-article');
+		article.setAttribute('role', 'menuitem');
+		article.addEventListener('click', (event) => {
+			event.stopPropagation();
+			closeMenu();
+			this.lastTranslatedMode.set(this.sessionKey(reader), 'split');
+			void this.setMode(reader, 'split').then(() => {
+				this.sessions.get(this.sessionKey(reader))?.showArticleFlow();
+			});
+		});
+		menu.appendChild(article);
+
 		// 覆盖模式下如何看原文 — without this the reader has no obvious way back
 		// to the source text, which is the first thing they ask for.
 		const rule = doc.createElement('div');

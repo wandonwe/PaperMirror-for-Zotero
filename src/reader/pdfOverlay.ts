@@ -1,11 +1,12 @@
 /**
  * On-page translation overlay ("覆盖式").
  *
- * The translation is painted directly onto the rendered PDF page: for every
- * source paragraph an overlay box is placed over the exact line rects it
- * occupied and the translation is typeset inside. Figures, equations, tables
- * and the column grid are never touched, so the paper's structure survives
- * pixel-for-pixel.
+ * The translation is painted directly onto the rendered PDF page. Since 3.1.0
+ * the layer IS a strict page (ui/strictPageReplacement, the same engine the
+ * 对照 page view uses — same renderDocPage, same table model, ink detection,
+ * expansion ladder, compress retries and abandon reasons); only its base
+ * bitmap copy is hidden so masks and text sit on the live PDF.js canvas.
+ * Figures, equations, tables and the column grid are never touched.
  *
  * Display modes
  *   translation-only 仅译文 — the paragraph is masked in the page's own paper
@@ -16,10 +17,7 @@
  *   hover            悬停显示 — the page is untouched; a card appears only for
  *                    the paragraph under the pointer.
  *
- * Fit modes
- *   expand 智能扩展 — the box may grow downward into free space in the same
- *                    column, capped so it can never reach a figure (default).
- *   strict 严格覆盖 — the box keeps the original rect exactly.
+ * Fit modes (pre-3.1.0) are gone: expansion is the strict engine's own ladder.
  *
  * TWO THINGS THIS GETS RIGHT THAT ARE EASY TO GET WRONG:
  *
@@ -36,29 +34,18 @@
  */
 
 import type { SourceBlock } from '../types/models';
-import { stripStyleMarkers } from './styleRuns';
 import * as logger from '../utils/logger';
 import {
-	distributeText,
 	groupLineRects,
-	isOverlayableType,
 	rectToCssBox,
 	type PdfRect
 } from './overlayLayout';
-import {
-	availableHeight,
-	fontSizeBounds,
-	shrinkRatio,
-	MIN_READABLE_PX,
-	TYPE_LADDER,
-	type CssBox,
-	type FitMode
-} from './textFitter';
+import type { FitMode } from './textFitter';
 import * as adapter from './zoteroReaderAdapter';
 import type { ReaderLike } from './zoteroReaderAdapter';
 import { StatusCapsule, CAPSULE_CSS, capsuleStateFor, type OverlayProgress, type OverlayPhase } from '../ui/statusCapsule';
-import { parseFactor } from '../ui/pageLayout';
-import { getPref } from '../utils/prefs';
+import type { PageRenderResult } from '../ui/translationPane';
+import paneCSS from '../ui/styles/translationPane.css';
 
 // Re-exported so existing importers (readerSession, tests) keep their paths.
 export { capsuleStateFor };
@@ -66,132 +53,57 @@ export type { OverlayProgress, OverlayPhase };
 
 const MODULE = 'pdfOverlay';
 const STYLE_ID = 'pm-overlay-style';
+const REPAGE_STYLE_ID = 'pm-repage-style';
 const LAYER_CLASS = 'pm-overlay-layer';
-const BOX_CLASS = 'pm-overlay-box';
-const MASK_CLASS = 'pm-overlay-mask';
-
-/** Attribute-selector escaping for block ids (they contain '#'). */
-function CSS_ESCAPE(value: string): string {
-	return value.replace(/["\\]/g, '\\$&');
-}
 
 export type OverlayDisplayMode = 'dim-original' | 'translation-only' | 'hover';
 
+/** 会话装进来的页面渲染器 —— 与 translationPane 的 setPageRenderer 同一签名、同一实现。 */
+export type OverlayPageRenderer = (pageIndex: number, host: HTMLElement, width: number, signal: AbortSignal) => Promise<PageRenderResult>;
+
 const OVERLAY_CSS = `
+/* 覆盖层 = 一张严格页 (3.1.0)。层本身不接指针事件,只有译文块接(悬停看原文、
+   双击讲解、右键重译),页面其余部分照常可选可批注。 */
 .${LAYER_CLASS} {
 	position: absolute;
 	inset: 0;
 	z-index: 4;
 	pointer-events: none;
-	/* No overflow:hidden — an expanded box must be able to show its tail. */
 	--pm-paper: #fff;
 	--pm-ink: #15171a;
 }
-/* One mask per SOURCE LINE — never one rectangle over the paragraph. The
-   union rect would swallow the last line's ragged tail, the first line's
-   indent and anything the text wraps around. */
-.${MASK_CLASS} {
-	position: absolute;
-	background: var(--pm-paper);
+.${LAYER_CLASS} .pm-repage {
+	margin: 0;
+	box-shadow: none;
+	overflow: visible;
 	pointer-events: none;
-	transition: opacity .12s ease;
+	/* 严格页把纸色写在行内样式上;覆盖时必须透明,否则整页盖白。 */
+	background: transparent !important;
 }
-.${BOX_CLASS} {
-	position: absolute;
-	box-sizing: border-box;
-	display: block;
-	padding: 0 1px;
-	color: var(--pm-ink);
-	/* Transparent: the masks underneath supply the paper. */
-	background: transparent;
-	/* A UI sans face stays legible at 9px where a serif turns to mush. */
-	font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
-		"Noto Sans CJK SC", "Source Han Sans SC", "Segoe UI", system-ui, sans-serif;
-	line-height: 1.42;
-	/* Justify makes short CJK lines gappy; ragged-right reads better here. */
-	text-align: left;
-	text-justify: none;
-	word-break: normal;
-	overflow-wrap: break-word;
-	overflow: hidden;
+/* 底图副本不显示 —— 实时画布就在下面;位图仍在内存里供墨迹检测与纸色采样。 */
+.${LAYER_CLASS} .pm-repage-canvas {
+	visibility: hidden;
+}
+.${LAYER_CLASS} .pm-repage-text {
+	pointer-events: none;
+}
+.${LAYER_CLASS} .pm-repage-block {
 	pointer-events: auto;
-	user-select: text;
-	transition: opacity .12s ease;
-	cursor: default;
 }
-.${BOX_CLASS} > span { display: block; width: 100%; }
-.${BOX_CLASS}[data-pm-heading="true"] { font-weight: 600; }
-.${BOX_CLASS}[data-pm-pending="true"] {
-	color: color-mix(in srgb, var(--pm-ink) 38%, transparent);
-	font-style: italic;
-}
-
-/* --- 仅译文 (default): opaque paper-coloured masks --- */
-.pm-overlay-solid .${MASK_CLASS} { opacity: 1; }
 
 /* --- 原文淡化: translucent masks, original faintly readable underneath.
        Only the MASKS are translucent — the page canvas is never touched, so
        figures, tables and equations stay perfectly crisp. --- */
-.pm-overlay-dim .${MASK_CLASS} { opacity: .88; }
-
-/* 悬停看原文 — the answer to 「原文没对照了」.
-   Covering the page is the whole point of 覆盖模式, but the reader still has
-   to be able to check a sentence against the original. Hovering a translated
-   paragraph fades ITS mask and ITS text (nothing else on the page moves), so
-   the English underneath is readable for as long as the pointer stays. This
-   is per-paragraph and instant — no mode switch, no round trip. */
-.${LAYER_CLASS}[data-pm-peekhover="true"] .${BOX_CLASS}:hover {
-	opacity: .06;
-}
-.${LAYER_CLASS}[data-pm-peekhover="true"] .${BOX_CLASS}:hover ~ .${BOX_CLASS} {
-	/* siblings unaffected — declared so the rule above cannot cascade */
-	opacity: inherit;
-}
-.${MASK_CLASS}[data-pm-lifted="true"] {
-	opacity: 0 !important;
-}
+.${LAYER_CLASS}[data-pm-mode="dim-original"] .pm-repage-mask { opacity: .88; }
 
 /* --- 悬停显示: nothing is painted until the pointer arrives --- */
-.pm-overlay-hover .${MASK_CLASS} { opacity: 0; }
-.pm-overlay-hover .${BOX_CLASS} { opacity: 0; }
-.pm-overlay-hover .${BOX_CLASS}:hover {
+.${LAYER_CLASS}[data-pm-mode="hover"] .pm-repage-mask { opacity: 0; }
+.${LAYER_CLASS}[data-pm-mode="hover"] .pm-repage-block { opacity: 0; }
+.${LAYER_CLASS}[data-pm-mode="hover"] .pm-repage-block:hover {
 	opacity: 1;
-	background: var(--pm-paper);
+	background: var(--pm-block-paper, var(--pm-paper));
 	box-shadow: 0 1px 8px rgba(0, 0, 0, .18);
 }
-
-/* Text that did not fit even at the minimum size, after the whole type ladder
-   was spent: an ellipsis marker in the corner. CLICK pins the box open with
-   the full translation — hover-only was too easy to lose by accident while
-   reading, and impossible on a trackpad mid-scroll. */
-.${BOX_CLASS}[data-pm-overflow="true"] {
-	cursor: zoom-in;
-}
-.${BOX_CLASS}[data-pm-overflow="true"]::after {
-	content: "…";
-	position: absolute;
-	right: 1px;
-	bottom: -1px;
-	padding: 0 2px;
-	font-size: 11px;
-	line-height: 1;
-	color: color-mix(in srgb, var(--pm-ink) 55%, transparent);
-	background: var(--pm-paper);
-	border-radius: 3px;
-	box-shadow: -4px 0 6px var(--pm-paper);
-	pointer-events: none;
-}
-.${BOX_CLASS}[data-pm-expanded="true"] {
-	height: auto !important;
-	min-height: 0;
-	overflow: visible;
-	z-index: 9;
-	background: var(--pm-paper);
-	box-shadow: 0 2px 14px rgba(0, 0, 0, .24);
-	border-radius: 3px;
-	cursor: zoom-out;
-}
-.${BOX_CLASS}[data-pm-expanded="true"]::after { content: none; }
 
 /* Alt held: hide the whole layer so the page can be selected/annotated */
 .${LAYER_CLASS}[data-pm-peek="true"] { opacity: 0; pointer-events: none; }
@@ -209,12 +121,6 @@ export interface OverlayPageData {
 	translations: Map<string, string>;
 }
 
-interface PendingBox {
-	el: HTMLElement;
-	span: HTMLElement;
-	box: CssBox;
-	lineCount: number;
-}
 
 export class PdfOverlay {
 	private reader: ReaderLike;
@@ -240,8 +146,10 @@ export class PdfOverlay {
 	private destroyed = false;
 	private peekHandler: ((event: KeyboardEvent) => void) | null = null;
 	private peekDoc: Document | null = null;
-	/** Fraction of boxes whose text had to be shrunk a lot (quality signal). */
-	private lastShrinkWarnings = 0;
+	/** 严格页渲染器(会话装入);没有它覆盖层什么也不画。 */
+	private renderer: OverlayPageRenderer | null = null;
+	/** 每页在飞的渲染,新一轮开始时作废上一轮。 */
+	private inFlight = new Map<number, AbortController>();
 	/**
 	 * Geometry the currently drawn layer was built for, per page.
 	 *
@@ -275,8 +183,16 @@ export class PdfOverlay {
 		return this.enabled;
 	}
 
-	getShrinkWarnings(): number {
-		return this.lastShrinkWarnings;
+	/**
+	 * Install the page renderer — the SAME renderDocPage the pane uses, so
+	 * 覆盖 and 对照 typeset a page identically (3.1.0).
+	 */
+	setPageRenderer(renderer: OverlayPageRenderer): void {
+		this.renderer = renderer;
+		if (this.enabled) {
+			this.drawnSignature.clear();
+			this.scheduleRedraw();
+		}
 	}
 
 	setEnabled(enabled: boolean): void {
@@ -287,6 +203,9 @@ export class PdfOverlay {
 		if (enabled) {
 			// Re-sample paper colour: the reader theme may have changed.
 			this.paperColour.clear();
+			// 严格页的样式表与面板同源 (3.1.0):.pm-repage* 规则全部按类名限定,
+			// 注入 PDF.js 文档不会碰到它自己的任何东西。
+			adapter.injectPdfStyle(this.reader, REPAGE_STYLE_ID, paneCSS);
 			adapter.injectPdfStyle(this.reader, STYLE_ID, OVERLAY_CSS);
 			this.subscribe();
 			this.scheduleRedraw();
@@ -320,33 +239,6 @@ export class PdfOverlay {
 		}
 	}
 
-	/**
-	 * Hover a translated paragraph → its own masks lift and its text fades, so
-	 * the original shows through in place. Bound per box; the layer-level
-	 * attribute decides whether it is active.
-	 */
-	private bindPeekHover(layer: HTMLElement, box: HTMLElement): void {
-		const runKey = box.getAttribute('data-pm-run');
-		if (!runKey) {
-			return;
-		}
-		const lift = (on: boolean): void => {
-			if (!this.peekOnHover) {
-				return;
-			}
-			layer.querySelectorAll(`.${MASK_CLASS}[data-pm-run="${CSS_ESCAPE(runKey)}"]`).forEach((node) => {
-				if (on) {
-					node.setAttribute('data-pm-lifted', 'true');
-				}
-				else {
-					node.removeAttribute('data-pm-lifted');
-				}
-			});
-		};
-		box.addEventListener('mouseenter', () => lift(true));
-		box.addEventListener('mouseleave', () => lift(false));
-	}
-
 	/** 悬停看原文 on/off. */
 	setPeekOnHover(enabled: boolean): void {
 		this.peekOnHover = enabled;
@@ -354,9 +246,6 @@ export class PdfOverlay {
 			const doc = adapter.getPageView(this.reader, 0)?.doc;
 			doc?.querySelectorAll(`.${LAYER_CLASS}`).forEach((node) => {
 				node.setAttribute('data-pm-peekhover', String(enabled));
-				if (!enabled) {
-					node.querySelectorAll(`.${MASK_CLASS}[data-pm-lifted]`).forEach(m => m.removeAttribute('data-pm-lifted'));
-				}
 			});
 		}
 		catch {
@@ -364,18 +253,26 @@ export class PdfOverlay {
 		}
 	}
 
+	/** 显示模式只是层上的一个属性 (3.1.0):改它不必重排,直接改活着的层。 */
 	setDisplayMode(mode: OverlayDisplayMode): void {
 		this.displayMode = mode;
-		if (this.enabled) {
-			this.scheduleRedraw();
+		try {
+			const doc = adapter.getPageView(this.reader, 0)?.doc;
+			doc?.querySelectorAll(`.${LAYER_CLASS}`).forEach((node) => {
+				node.setAttribute('data-pm-mode', mode);
+			});
+		}
+		catch {
+			// reader may be gone
 		}
 	}
 
+	/**
+	 * 3.1.0 起无效:扩边由严格页自己的阶梯决定(先无损扩进邻近空白,再压缩、
+	 * 缩字、保留原文),不再有"严格/扩展"两档。保留接口免得偏好读取处报错。
+	 */
 	setFitMode(mode: FitMode): void {
 		this.fitMode = mode;
-		if (this.enabled) {
-			this.scheduleRedraw();
-		}
 	}
 
 	setPageData(pageIndex: number, data: OverlayPageData): void {
@@ -505,263 +402,141 @@ export class PdfOverlay {
 			return;
 		}
 		view.div.querySelectorAll(`.${LAYER_CLASS}`).forEach(node => node.remove());
-		view.div.classList.remove('pm-overlay-dim', 'pm-overlay-solid', 'pm-overlay-hover');
 		view.div.removeAttribute('data-pm-peek');
 	}
 
 	// ---- drawing ------------------------------------------------------------
 
+	/**
+	 * 覆盖模式改走严格原位替换引擎 (3.1.0, 用户要求「覆盖翻译模式也要按对照翻译的
+	 * 能力优化」)。
+	 *
+	 * 3.0.x 之前覆盖层有自己的一套排版:按行段分配译文、字号阶梯、放不下就裁掉加
+	 * 「…」—— 没有表格模型、没有墨迹检测、没有扩边、没有放弃原因;而左右对照的
+	 * 页面视图早已是 buildStrictPage(遮罩按行、量测后才提交、表格格模型、扩边
+	 * 阶梯、压缩重试、几何审计、每个没显示的块都有 abandonReason)。两套引擎意味
+	 * 着同一页在两种模式下译出两种结果,而且覆盖模式的「裁掉 + 省略号」正是排版
+	 * 禁令里的头一条。
+	 *
+	 * 现在覆盖层就是一张严格页:会话把与面板**同一个** renderDocPage 装进来
+	 * (setPageRenderer),本层充当它的槽。严格页自带一份底图副本 —— 覆盖时用 CSS
+	 * 把副本藏起来(visibility:hidden,位图仍在内存里供墨迹检测与纸色采样),只让
+	 * 遮罩画布和译文层盖在 PDF.js 的实时画布上。
+	 *
+	 * 原子替换语义保留:新层先挂进页节点(严格页的遮罩起初是空的、底图不可见,
+	 * 所以它挂上去什么都看不见),渲染承诺兑现、块开始提交之后再摘旧层 —— 缩放
+	 * 时旧译文一直在,直到新译文落地。
+	 */
 	private drawPage(pageIndex: number): void {
 		const data = this.pages.get(pageIndex);
 		const view = adapter.getPageView(this.reader, pageIndex);
-		if (!data || !view) {
+		if (!data || !view || !this.renderer) {
 			return;
+		}
+		const width = view.div.clientWidth;
+		const height = view.div.clientHeight || view.div.getBoundingClientRect().height;
+		if (width < 20 || height < 20) {
+			return; // 缩放中途还没有几何 —— 签名不记,下一个事件重试
 		}
 		// Scroll-only events: same page size, our layer still attached →
 		// nothing to do. Zoom and rotation both change these numbers, and a
 		// re-render after virtualisation removes the layer, so every case that
 		// genuinely needs a redraw still gets one.
-		const signature = `${Math.round(view.div.clientWidth)}x${Math.round(view.div.clientHeight)}|${this.displayMode}|${this.fitMode}`;
+		const signature = `${Math.round(width)}x${Math.round(height)}`;
 		if (this.drawnSignature.get(pageIndex) === signature && view.div.querySelector(`.${LAYER_CLASS}`)) {
 			return;
 		}
-		// ATOMIC REPLACE: build the new layer completely FIRST and only swap it in
-		// (and drop the old one, and record the signature) once we know it has real
-		// content. The old code removed the old layer and saved the signature up
-		// front, so any early-return below — a page mid-zoom with no geometry yet,
-		// pending.length === 0, a throw — left the page showing ONLY the original
-		// with a "done" signature that suppressed the retry. That is the zoom
-		// flash-then-vanish. Nothing is removed here.
+		// 同页在飞的旧渲染作废 —— renderDocPage 的世代闸会让它在下一个检查点退出。
+		this.inFlight.get(pageIndex)?.abort();
+		const ctrl = new AbortController();
+		this.inFlight.set(pageIndex, ctrl);
+
 		const layer = view.doc.createElement('div');
 		layer.className = LAYER_CLASS;
-		this.applyPaperColour(layer, pageIndex);
-		const pageHeight = view.div.clientHeight || view.div.getBoundingClientRect().height;
-
-		// Pass 1 — compute every box for this page (needed for collision-aware
-		// expansion, which must know where the following block starts).
-		const pending: PendingBox[] = [];
-		const allBoxes: CssBox[] = [];
-		const masks: HTMLElement[] = [];
-
-		for (const block of data.blocks) {
-			if (!isOverlayableType(block.type) || block.isReference) {
-				continue;
-			}
-			const lineRects = (block.lineRectsPdf ?? []) as PdfRect[];
-			if (!lineRects.length) {
-				continue;
-			}
-			// overlay 逐行分配无法承载样式跨度 → 剥标记 (styleRuns.ts)。
-			const rawTranslated = data.translations.get(block.id);
-			const translated = rawTranslated === undefined ? undefined : stripStyleMarkers(rawTranslated);
-			const runs = groupLineRects(lineRects);
-			const parts = distributeText(translated ?? '', runs);
-
-			runs.forEach((run, i) => {
-				const text = parts[i] ?? '';
-				// Until the translation for this block arrives, the page stays
-				// EXACTLY as printed. Masking a paragraph early — or dropping a
-				// placeholder "…" on it — blanks the page while the reader is
-				// still reading it, which is the opposite of what 覆盖模式 is for.
-				if (translated === undefined || !text) {
-					return;
-				}
-				const [x1, y1] = view.toCss(run.rect[0], run.rect[3]); // top-left
-				const [x2, y2] = view.toCss(run.rect[2], run.rect[1]); // bottom-right
-				const box = rectToCssBox([x1, y1], [x2, y2], 1);
-				if (box.width < 8 || box.height < 6) {
-					return;
-				}
-				// 局部遮盖: one mask per source line, sized to that line's own
-				// rect. Painted first so every text box sits above every mask.
-				const runKey = `${block.id}#${i}`;
-				for (const line of run.lines) {
-					const [lx1, ly1] = view.toCss(line[0], line[3]);
-					const [lx2, ly2] = view.toCss(line[2], line[1]);
-					const lineBox = rectToCssBox([lx1, ly1], [lx2, ly2], 1);
-					if (lineBox.width < 4 || lineBox.height < 3) {
-						continue;
-					}
-					const maskEl = view.doc.createElement('div');
-					maskEl.className = MASK_CLASS;
-					maskEl.setAttribute('data-pm-run', runKey);
-					maskEl.style.left = `${lineBox.left}px`;
-					maskEl.style.top = `${lineBox.top}px`;
-					maskEl.style.width = `${lineBox.width}px`;
-					maskEl.style.height = `${lineBox.height}px`;
-					masks.push(maskEl);
-				}
-				const el = view.doc.createElement('div');
-				el.className = BOX_CLASS;
-				el.setAttribute('data-pm-run', runKey);
-				if (block.type === 'heading' || block.type === 'title') {
-					el.setAttribute('data-pm-heading', 'true');
-				}
-				const span = view.doc.createElement('span');
-				span.textContent = text; // SAFE: text node only, never innerHTML
-				el.appendChild(span);
-				el.title = block.sourceText;
-				pending.push({ el, span, box, lineCount: run.lineCount });
-				allBoxes.push(box);
-			});
-		}
-
-		if (!pending.length) {
-			return;
-		}
-
-		// Pass 2 — masks first (they must sit under every text box), then
-		// place, optionally expand, and fit the type.
-		this.lastShrinkWarnings = 0;
-		for (const maskEl of masks) {
-			layer.appendChild(maskEl);
-		}
-		for (const item of pending) {
-			const height = availableHeight(item.box, allBoxes, pageHeight, this.fitMode);
-			item.el.style.left = `${item.box.left}px`;
-			item.el.style.top = `${item.box.top}px`;
-			item.el.style.width = `${item.box.width}px`;
-			item.el.style.height = `${height}px`;
-			this.bindPeekHover(layer, item.el);
-			layer.appendChild(item.el);
-		}
-		layer.setAttribute('data-pm-peekhover', String(this.peekOnHover));
 		layer.setAttribute('data-pm-mode', this.displayMode);
-
+		layer.setAttribute('data-pm-peekhover', String(this.peekOnHover));
+		this.applyPaperColour(layer, pageIndex);
 		if (!view.div.style.position) {
 			view.div.style.position = 'relative';
 		}
-		// 必须先入文档再量 (2.5.2)。这里原来的注释写着「Measure only after
-		// everything is in the document」,可 appendChild 在**测量之后**才发生
-		// —— 量的是一棵游离子树,getBoundingClientRect().height、scrollHeight、
-		// scrollWidth、clientWidth 全是 0,fits() 于是在第 0 级阶梯就恒真:每个
-		// 框都拿最大字号、字号阶梯形同虚设、data-pm-overflow 永不置位,而
-		// .pm-overlay-box 的 overflow:hidden 把超出的译文直接裁掉。
-		//
-		// 又不能为了量就先把旧层摘掉:原子替换的意义正是"新层落地那一帧之前
-		// 旧层一直可见",否则缩放会闪回原文。所以新层先以 visibility:hidden
-		// 入文档 —— 隐藏元素照常参与布局,量得到真实尺寸,而旧层仍在画面上
-		// (层本身 pointer-events:none,不会抢事件)。
-		layer.style.visibility = 'hidden';
+		// 必须先入文档再渲染:严格页的量测(settleStrictPage)只对在文档里的节点
+		// 有效,游离子树的 scrollHeight 恒为 0 (2.5.2 的教训,同样适用于这里)。
 		view.div.appendChild(layer);
 
-		for (const item of pending) {
-			const height = item.el.getBoundingClientRect().height || item.box.height;
-			const size = this.fitFontSize(item.el, item.span, height, item.lineCount);
-			if (shrinkRatio(size, item.box.height, item.lineCount) < 0.62) {
-				this.lastShrinkWarnings++;
+		void this.renderer(pageIndex, layer, width, ctrl.signal).then((result) => {
+			if (ctrl.signal.aborted || this.destroyed || !this.enabled) {
+				layer.remove();
+				return;
 			}
-		}
-
-		// The node may have been swapped by PDF.js during the 80ms debounce; only
-		// commit to a page div that is still live, else reschedule onto the fresh
-		// one instead of painting a layer that is about to be discarded.
-		const latest = adapter.getPageView(this.reader, pageIndex);
-		if (!latest || latest.div !== view.div || !view.div.isConnected) {
-			layer.remove(); // 量完就撤,绝不把一层隐藏的死层留在页上
-			this.drawnSignature.delete(pageIndex);
-			this.scheduleRedraw(pageIndex);
-			return;
-		}
-
-		// Atomic swap: reveal the finished new layer, THEN drop any previous
-		// layer(s) for this page and set the correct mode class. The old overlay
-		// stays visible right up to the frame the new one lands, so a zoom never
-		// blanks the page to the original in between.
-		layer.style.visibility = '';
-		for (const node of Array.from(view.div.querySelectorAll(`.${LAYER_CLASS}`))) {
-			if (node !== layer) {
-				node.remove();
+			// The node may have been swapped by PDF.js during the render; only
+			// commit to a page div that is still live, else reschedule onto the
+			// fresh one instead of leaving a layer on a node about to be discarded.
+			const latest = adapter.getPageView(this.reader, pageIndex);
+			if (!latest || latest.div !== view.div || !view.div.isConnected) {
+				layer.remove();
+				this.drawnSignature.delete(pageIndex);
+				this.scheduleRedraw(pageIndex);
+				return;
 			}
-		}
-		view.div.classList.remove('pm-overlay-dim', 'pm-overlay-solid', 'pm-overlay-hover');
-		view.div.classList.add(
-			this.displayMode === 'dim-original' ? 'pm-overlay-dim'
-				: this.displayMode === 'hover' ? 'pm-overlay-hover'
-					: 'pm-overlay-solid'
-		);
-		// Signature recorded ONLY now that a real layer is mounted — an aborted or
-		// empty draw above leaves it unset so the next event retries.
-		this.drawnSignature.set(pageIndex, signature);
+			if (result !== 'translated' && result !== 'partial') {
+				// 这页此刻没有可放的译文(原文页 / 重建失败):撤掉本层 —— 不能把一张
+				// 原文副本盖在实时页上;旧层也撤,免得显示过期译文。签名不记:
+				// 'degraded' 的页要靠下一个事件再试。
+				layer.remove();
+				for (const node of Array.from(view.div.querySelectorAll(`.${LAYER_CLASS}`))) {
+					node.remove();
+				}
+				this.drawnSignature.delete(pageIndex);
+				return;
+			}
+			this.bindPeekHover(layer);
+			// 旧层在新层的块提交之后再摘。提交发生在 document.fonts.ready 之后的
+			// 最终量测里(通常已就绪 → 一两个微任务),这里等两帧再摘,缩放不闪原文。
+			const win = view.doc.defaultView;
+			const dropOld = (): void => {
+				for (const node of Array.from(view.div.querySelectorAll(`.${LAYER_CLASS}`))) {
+					if (node !== layer) {
+						node.remove();
+					}
+				}
+			};
+			if (win?.requestAnimationFrame) {
+				win.requestAnimationFrame(() => win.requestAnimationFrame(dropOld));
+			}
+			else {
+				dropOld();
+			}
+			// Signature recorded ONLY now that a real layer is mounted — an aborted
+			// or empty draw above leaves it unset so the next event retries.
+			this.drawnSignature.set(pageIndex, signature);
+		}).catch((e) => {
+			layer.remove();
+			logger.debug(MODULE, `overlay render failed on page ${pageIndex + 1}`, e);
+		});
 	}
 
 	/**
-	 * Fit the translation into its box on three axes, in the order that costs
-	 * the reader least: leading, then letter-spacing, then — only if those are
-	 * exhausted — the font size, binary-searched and floored at
-	 * MIN_READABLE_PX.
-	 *
-	 * The ladder is walked AT THE SOURCE SIZE first. The common case is a
-	 * translation that runs one line long; tightening the leading absorbs that
-	 * invisibly, where the old size-only search would have shrunk the whole
-	 * paragraph. Only when no rung fits does the type get smaller.
-	 *
-	 * If even the floor overflows, the box keeps the readable size, is marked
-	 * `data-pm-overflow` (an "…" appears in the corner) and a click pins it
-	 * open with the full text. Shrinking to 4–6px to make it "fit" is what made
-	 * 覆盖翻译 unreadable in the first place.
+	 * 悬停看原文:指针停在某个已提交的译文块上,它自己的遮罩清掉、译文隐去,
+	 * 原文在原位露出;移开即恢复。逐块、即时,不动页面上任何别的东西。
+	 * 由严格页的 pmPeek 实现(只对已提交块生效)。
 	 */
-	private fitFontSize(box: HTMLElement, span: HTMLElement, boxHeight: number, lineCount: number): number {
-		const bounds = fontSizeBounds(boxHeight, lineCount, MIN_READABLE_PX);
-		const { min } = bounds;
-		// 用户字号倍率: in the overlay the box is fixed, so the factor can only
-		// LOWER the target (a smaller, airier setting); >1 is capped by the fit.
-		const factor = parseFactor(getPref('fontSizeFactor', '1'));
-		const max = Math.max(min, Math.min(bounds.max, bounds.max * factor));
-		const apply = (size: number, rung: number): void => {
-			const step = TYPE_LADDER[Math.min(rung, TYPE_LADDER.length - 1)]!;
-			span.style.fontSize = `${size}px`;
-			span.style.lineHeight = String(step.lineHeight);
-			span.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
-		};
-		const fits = (size: number, rung: number): boolean => {
-			apply(size, rung);
-			return span.scrollHeight <= boxHeight + 1 && span.scrollWidth <= box.clientWidth + 1;
-		};
-
-		// 1. the ladder, at full size
-		for (let rung = 0; rung < TYPE_LADDER.length; rung++) {
-			if (fits(max, rung)) {
-				return max;
-			}
+	private bindPeekHover(layer: HTMLElement): void {
+		const page = layer.querySelector('[data-pm-strict="true"]') as (HTMLElement & { pmPeek?: (ids: string[], on: boolean) => void }) | null;
+		if (!page?.pmPeek) {
+			return;
 		}
-
-		// 2. shrink, with the ladder fully tightened
-		const lastRung = TYPE_LADDER.length - 1;
-		let lo = min;
-		let hi = max;
-		for (let i = 0; i < 9 && hi - lo > 0.25; i++) {
-			const mid = (hi + lo) / 2;
-			if (fits(mid, lastRung)) {
-				lo = mid;
+		for (const node of Array.from(layer.querySelectorAll('[data-pm-block]')) as HTMLElement[]) {
+			const id = node.getAttribute('data-pm-block');
+			if (!id) {
+				continue;
 			}
-			else {
-				hi = mid;
-			}
+			node.addEventListener('mouseenter', () => {
+				if (this.peekOnHover) {
+					page.pmPeek?.([id], true);
+				}
+			});
+			node.addEventListener('mouseleave', () => page.pmPeek?.([id], false));
 		}
-		apply(lo, lastRung);
-		const chosen = lo;
-
-		// 3. still over: keep it readable, offer the full text on click.
-		if (span.scrollHeight > boxHeight + 1) {
-			box.setAttribute('data-pm-overflow', 'true');
-			const full = span.textContent ?? '';
-			box.title = full;
-			if (!box.dataset.pmExpandBound) {
-				box.dataset.pmExpandBound = '1';
-				box.addEventListener('click', (event) => {
-					// A click that is really a text selection must not toggle.
-					const selection = box.ownerDocument?.defaultView?.getSelection?.();
-					if (selection && String(selection).length > 1) {
-						return;
-					}
-					event.stopPropagation();
-					const open = box.getAttribute('data-pm-expanded') === 'true';
-					box.setAttribute('data-pm-expanded', String(!open));
-				});
-			}
-		}
-		return chosen;
 	}
 
 	// ---- diagnostics --------------------------------------------------------
@@ -811,7 +586,6 @@ export class PdfOverlay {
 			lines.push(`  "${head}…" overlay(${box.left.toFixed(1)}, ${box.top.toFixed(1)}, ${box.width.toFixed(1)}×${box.height.toFixed(1)}) ${delta}`);
 			checked++;
 		}
-		lines.push(`Boxes needing heavy shrink on last draw: ${this.lastShrinkWarnings}`);
 		return lines.join('\n');
 	}
 
@@ -837,6 +611,10 @@ export class PdfOverlay {
 			clearTimeout(this.redrawTimer);
 			this.redrawTimer = null;
 		}
+		for (const ctrl of this.inFlight.values()) {
+			ctrl.abort();
+		}
+		this.inFlight.clear();
 		for (const pageIndex of this.pages.keys()) {
 			this.removeLayer(pageIndex);
 		}
@@ -846,6 +624,7 @@ export class PdfOverlay {
 		this.drawnSignature.clear();
 		this.statusCapsule.remove();
 		adapter.removePdfStyle(this.reader, STYLE_ID);
+		adapter.removePdfStyle(this.reader, REPAGE_STYLE_ID);
 	}
 
 	destroy(): void {

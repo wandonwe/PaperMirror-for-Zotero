@@ -333,6 +333,13 @@ export class TranslationPane {
 	 */
 	private viewKind: 'page' | 'article' = 'page';
 	private pageRenderer: ((pageIndex: number, slot: HTMLElement, width: number, signal: AbortSignal) => Promise<PageRenderResult>) | null = null;
+	/**
+	 * 面板是不是当前可见的译文表面 (3.1.0)。覆盖模式下面板 display:none,但
+	 * clientHeight=0 的可视范围仍会算出一页来泵 —— 而覆盖层与面板共用同一个
+	 * renderDocPage 和同一套每页渲染世代:隐藏的面板抢到世代,覆盖层那一趟的
+	 * 提交回调就全部退出,页上留下一层永远不显示的译文。不可见即不泵。
+	 */
+	private surfaceActive = true;
 	private pageHost: HTMLElement | null = null;
 	private currentPage = -1;
 	private compareOriginal = false;
@@ -378,7 +385,7 @@ export class TranslationPane {
 	/** 渲染泵 (2.8.0 第一批): 当前页优先 + 过时任务取消,逻辑在 renderPump.ts。 */
 	private pump: RenderPump = new RenderPump({
 		windowOf: () => {
-			if (this.viewKind !== 'page' || !this.pageRenderer || !this.slots.length) {
+			if (!this.surfaceActive || this.viewKind !== 'page' || !this.pageRenderer || !this.slots.length) {
 				return null;
 			}
 			const [first, last] = this.visibleRange(0);
@@ -541,9 +548,6 @@ export class TranslationPane {
 		let moreChip: HTMLElement;
 		moreChip = this.iconButton(ICON_PATHS.more, this.strings.more, () => {
 			const items: { label: string; checked: boolean; onPick(): void }[] = [
-				// 3.0.2: 两种视图带勾选 —— 工具条按钮在窄窗会被裁掉,这里是永远够得到的出口。
-				{ label: this.strings.viewPage, checked: this.viewKind === 'page', onPick: () => this.callbacks.onToggleViewKind('page') },
-				{ label: this.strings.viewArticle, checked: this.viewKind === 'article', onPick: () => this.callbacks.onToggleViewKind('article') },
 				// 2.10.0: 保存到笔记从常驻按钮下沉到这里。
 				// 2.10.2: 术语回到工具条常驻(与解析并列),不再在这里重复出现 ——
 				// 同一个动作两个入口,菜单会越长越像杂物抽屉。
@@ -996,8 +1000,9 @@ export class TranslationPane {
 		// 视图切换 (3.0.2)。`viewKindButton` 从 1b62d31 起只声明、从未创建 ——
 		// 文章流视图在界面上一直没有入口,也没有出口。3.0.0 的「查看译文」把面板
 		// 切进文章流之后,用户就困在里面了(截图:右侧空白、回不去整页对照)。
-		// 按钮始终显示**另一个**视图的名字(refreshViewKindButton),点一下就切过去;
-		// 「更多」菜单里同时列出两项带勾选,窄窗把标签收起时仍有一条不裁的路。
+		// 按钮始终显示**另一个**视图的名字(refreshViewKindButton),点一下就切过去。
+		// 3.0.3: 「更多」菜单里不再重复列出两种视图(用户:只留工具条按钮)——
+		// 同一个动作两个入口,菜单会越长越像杂物抽屉(2.10.2 的同一条理由)。
 		const viewKindButton = actionButton(
 			'pm-bar-action-view', ICON_PATHS.viewArticle,
 			this.strings.viewArticle, this.strings.viewArticle,
@@ -1297,6 +1302,22 @@ export class TranslationPane {
 	setPageRenderer(renderer: (pageIndex: number, slot: HTMLElement, width: number, signal: AbortSignal) => Promise<PageRenderResult>): void {
 		this.pageRenderer = renderer;
 		this.observeResize();
+	}
+
+	/** 表面切换 (3.1.0):隐藏时停泵;重新可见时所有槽标脏 —— 隐藏期间覆盖层可能接管过同页的渲染世代。 */
+	setSurfaceActive(active: boolean): void {
+		if (this.surfaceActive === active) {
+			return;
+		}
+		this.surfaceActive = active;
+		if (!active) {
+			this.pump.cancelAll();
+			return;
+		}
+		for (let i = 0; i < this.slots.length; i++) {
+			this.slotDirty[i] = true;
+		}
+		this.pump.request();
 	}
 
 	setViewKind(kind: 'page' | 'article'): void {
