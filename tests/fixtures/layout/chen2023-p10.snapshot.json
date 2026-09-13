@@ -279,7 +279,7 @@
 		"readingIndex": 31,
 		"tableRow": 1,
 		"tableCol": 4,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Multivariate Analysis"
 	},
 	{
@@ -486,7 +486,7 @@
 		"readingIndex": 54,
 		"tableRow": 9,
 		"tableCol": 3,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "NA …"
 	},
 	{
@@ -531,7 +531,7 @@
 		"readingIndex": 59,
 		"tableRow": 11,
 		"tableCol": 3,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "NA …"
 	},
 	{
@@ -702,7 +702,7 @@
 		"readingIndex": 79,
 		"tableRow": 1,
 		"tableCol": 3,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Model 2 vs"
 	},
 	{

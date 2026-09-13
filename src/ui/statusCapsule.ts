@@ -321,7 +321,7 @@ export function capsuleStateFor(m: OverlayProgress): CapsuleState {
 				fraction: combined,
 				main: `第 ${m.currentPage} 页 · ${m.kept} 段保留原文`,
 				sub: counts,
-				action: { kind: 'view', label: '查看', title: '查看保留原文的段落' }
+				action: { kind: 'view', label: '查看译文', title: '定位保留原文的段落,并在文章流里查看这一页的完整译文' }
 			};
 		case 'failed':
 			return {

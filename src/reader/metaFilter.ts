@@ -57,92 +57,18 @@ export function isVerticalSliver(rect: Rect): boolean {
 }
 
 const RE_RECEIVED = /\b(received|revised|accepted|published online|available online|publish-ahead-of-print)\b.{0,60}\b(20\d\d|19\d\d)\b/i;
-// Front-matter labels journals set in the margin sidebar or above the title
-// (PLOS, Frontiers, MDPI…): "Citation:", "Academic Editor:", "Funding:" …
-// The colon is required so body prose starting with the same word survives.
-// 2.12.12 (内容保留规则审核第 2 条): 标签分两类。
-//   书目类 —— Citation / Editor / Received / Published / Copyright —— 是标识,跳过;
-//   说明类 —— Funding / Ethics / Patient consent / Data availability / Abbreviations /
-//   Author contributions / Conflicts of interest / Trial registration —— 后面跟的是
-//   读者要看的自然语言("Written informed consent was obtained."),以前整段丢弃。
-// 说明类只在标签后面**没有自然语言**(纯资助号、纯注册号)时才算元数据。
-const RE_META_LABEL = /^(citation|(?:academic|handling|section|associate|guest)\s+editor|editor|received|accepted|published|posted|copyright|provenance|peer review(?:er)?s?(?: information)?)\s*[::]/i;
 const RE_EXPLANATORY_LABEL = /^(funding|competing interests?|conflicts? of interest|data availability(?: statement)?|abbreviations|author contributions?|ethics(?: statement)?|patient consent|trial registration)\s*[::]\s*(.*)$/is;
 /** 标签后面有没有自然语言:至少 3 个普通词(≥3 字母、含小写)。 */
 function hasNaturalLanguage(body: string, min = 3): boolean {
 	const words = (body.match(/[A-Za-z][A-Za-z'’-]*/g) ?? []).filter(w => w.length >= 3 && /[a-z]{2}/.test(w));
 	return words.length >= min;
 }
-// Standalone article-type banners and badges.
-const RE_ARTICLE_BANNER = /^(research article|review(?: article)?|original (?:article|research|investigation)|open access|case report|short communication|brief report|editorial|systematic review|meta-analysis|clinical trial|letter to the editor|perspective|commentary|rapid communication|technical note|crossmark|check for updates)$/i;
 // Funding boilerplate: grant numbers and the funders-had-no-role sentence.
 const RE_GRANT = /\bgrants?\s?(?:nos?|numbers?|#)\b\.?\s*:?\s*[\w-]/i;
-// Licence tails split off from the © head block ("…provided the original
-// author and source are credited.").
-const RE_LICENSE_TAIL = /provided the original (?:work|author|source)|source are credited|reproduction in any medium|funders? had no role|decision to publish|preparation of the manuscript/i;
-const RE_COPYRIGHT = /©|\(c\)\s?20\d\d|\bcopyright\b|creative\s?commons|open access article|all rights reserved|licen[cs]e|\breuse\b.{0,40}\bdistribution\b|non-?commercial/i;
 const RE_CORRESPONDENCE = /\b(corresponding author|correspondence to|e-?mail|电子邮件|通讯作者)\b|@[a-z0-9.-]+\.[a-z]{2,}/i;
 const RE_DOI_URL = /\b(doi|https?):|doi\.org|academic\.oup\.com|downloaded from/i;
-const RE_AFFILIATION_HEAD = /^[\d¹²³⁴⁵*†‡§,\s]{0,8}(department|division|institute|university|hospital|center|centre|school|laboratory|faculty|clinic)\b/i;
-const RE_DEGREES = /\b(MD|PhD|MSc|MBBS|MBBCh|BChir|MB|DPhil|DrPH|FACC|FESC|FRCP|RN|MPH)\b/g;
-const RE_AUTHOR_NOTES = /contributed equally|authors.{0,3} affiliations|conflicts? of interest|funding (?:statement|sources?)|appendix paragraph|supplementary (?:data|material).{0,30}(?:online|published)/i;
 
 const INSTITUTION_WORDS = /\b(university|hospital|department|institute|center|centre|school|laboratory|clinic|college|academy)\b/gi;
-
-/** Line naming the authors: mostly capitalised name tokens + marks/digits. */
-function looksLikeAuthorList(text: string): boolean {
-	if (text.length > 420 || text.length < 12) {
-		return false;
-	}
-	// Sentences read like prose; author lines read like a roster. Initials
-	// ("Alexios S. Antonopoulos") are not sentence boundaries, so strip
-	// single-letter abbreviations before testing.
-	const withoutInitials = text.replace(/\b[A-Z]\./g, '');
-	if (/[.!?。][\s]/.test(withoutInitials.slice(0, -6))) {
-		return false;
-	}
-	// 分隔符含 '·' (2.5.13, wu2026 实证): Springer 系署名行用间隔号分隔
-	// ("Xiaofei Wu1 · Huiqing Gao2 · …"),只数逗号时整行漏网,作者名被逐个
-	// 猜成汉字 (且同页两处两套猜法)。
-	const commas = (text.match(/[,·]/g) ?? []).length;
-	if (commas < 2) {
-		return false;
-	}
-	const tokens = text.split(/\s+/).filter(t => /[a-zA-Z]/.test(t));
-	if (tokens.length < 4) {
-		return false;
-	}
-	// Names often carry their superscript affiliations inline once extracted
-	// ("Garg3," "Bax6,7,") — digits and marks are part of the roster look.
-	const nameLike = tokens.filter(t => /^[A-Z][a-zA-Z'’.-]*[\d,;*†‡§·]*$/.test(t)).length;
-	const hasMarks = /[*†‡§]|\d/.test(text);
-	return hasMarks && nameLike / tokens.length >= 0.66;
-}
-
-/** Three or more academic-degree tokens: nothing but an author roster has that. */
-function hasDegreeRoster(text: string): boolean {
-	const matches = text.match(RE_DEGREES);
-	return (matches?.length ?? 0) >= 3;
-}
-
-/** Affiliation line: institutions strung together with commas. */
-function looksLikeAffiliation(text: string): boolean {
-	if (RE_AFFILIATION_HEAD.test(text)) {
-		return true;
-	}
-	const institutions = (text.match(INSTITUTION_WORDS) ?? []).length;
-	const commas = (text.match(/,/g) ?? []).length;
-	if (institutions < 2 || commas < 3) {
-		return false;
-	}
-	// 密度判据取代长度上限 (2.5.6, jacc-ccta2020-p1 语料实证)。原先是
-	// `text.length > 600 → 不是单位块`,可 20 位作者的单位块有 **1647 字符** ——
-	// 恰好在它最像作者单位的时候被这条上限否掉,连同利益声明共约 2700 字符的
-	// 前置信息被原样翻译。上限本意是防长正文段误伤,但长度本身分不开两者:
-	// 该页单位块 **26 个机构词 / 49 个逗号**,摘要 **1 个机构词 / 10 个逗号**。
-	// 改看密度 —— 机构词要随篇幅一起长,正文段偶尔提两所大学不会满足。
-	return institutions >= text.length / 200;
-}
 
 /**
  * Running head / running foot: the journal's own furniture repeated on every
@@ -268,32 +194,25 @@ export function isMarginSidebar(rect: Rect, pageWidth: number, type?: { fontSize
 export type ContentDecision = 'translate' | 'preserve' | 'skip';
 /**
  * 保留原因 —— 每一个不翻译的块都必须带一个,"无提示缺失"是被禁止的 (2.12.13)。
- *   names         人名/作者名单/学位名单
- *   dates         收稿/接受/发表日期
- *   identifier    DOI、网址、纯资助号/注册号、纯标识行
- *   bibliographic Citation / Editor / Published 这类书目标签
- *   watermark     "Downloaded from …" 下载水印
- *   marks         孤立的数字/角标/页码
- *   banner        RESEARCH ARTICLE / OPEN ACCESS 这类栏目条
- *   boilerplate   短版权行(整句的开放获取声明会翻译)
- *   sliver        竖排细条(装订线文字)
- *   running-head  逐页重复的页眉/页脚(由 spanBlockBuilder 判定)
+ *
+ * 3.0.0:只剩**精确规则能认定**的两类。
+ *   标识:dates(收稿/接受日期行)、identifier(DOI/网址/邮箱/纯资助号/纯注册号)、marks(孤立数字/角标/页码)
+ *   页面附属物:watermark(下载水印)、sliver(竖排细条)、running-head(逐页页眉页脚)
+ * 3.0.0 之前还有 names / bibliographic / banner / boilerplate —— 全是**猜形状**的规则
+ * (作者名单像什么样、栏目条像什么样),猜错的代价是读者少看一段而不自知;猜对的收益只是
+ * 省一次回声请求。两类错的代价不对称,所以"拿不准就翻译"。人名由提示词原样保留。
  */
-export type PreserveReason = 'names' | 'dates' | 'identifier' | 'bibliographic' | 'watermark' | 'marks' | 'banner' | 'boilerplate' | 'sliver' | 'running-head';
+export type PreserveReason = 'dates' | 'identifier' | 'marks' | 'watermark' | 'sliver' | 'running-head';
 export interface ContentClassification { decision: ContentDecision; reason?: PreserveReason }
 
 const RE_WATERMARK = /^downloaded from\b/i;
 
 /**
- * 内容决策 (2.12.13):这个块**要不要翻译**。
+ * 内容决策 (2.12.13 / 3.0.0):这个块**要不要翻译**。
  *
  * 原则(用户 2026-09-13):原文侧负责忠实保留;译文侧负责完整理解。元素类别决定排版方式,
- * 不决定是否翻译。自然语言一律翻译;只有标识(人名、日期、DOI、网址、页码、水印)保留,
- * 而且保留必须带原因。**几何位置(页边栏)不再决定翻不翻** —— 以前页边栏里 <700 字符
- * 一票否决,PLOS 的 Funding / Data Availability 整段就这么没了。
- *
- * 与 2.12.12 之前的 isMetadataBlock 相比,翻转为"翻译"的有:作者单位、通讯句、
- * 整句版权/许可声明、资助句、作者贡献、"funders had no role" 尾句。
+ * 不决定是否翻译。有对照的双栏阅读里,故意留一块不译没有收益,只有误判的风险 ——
+ * 所以只有能用**精确规则**认定的标识和页面附属物才保留,其余一律翻译,几何位置不参与判定。
  */
 export function classifyContent(text: string, rect?: Rect, pageWidth?: number, type?: { fontSize?: number; bodySize?: number }): ContentClassification {
 	void pageWidth; void type;
@@ -307,68 +226,29 @@ export function classifyContent(text: string, rect?: Rect, pageWidth?: number, t
 	if (RE_WATERMARK.test(t)) {
 		return { decision: 'preserve', reason: 'watermark' };
 	}
-	// 日期行先于书目标签:"Received: … Accepted: …" 报 dates 比报 bibliographic 更有信息量。
-	// 把日期词汇(received/revised/accepted/月份…)抠掉,剩下没有自然语言才算日期行。
+	// 日期行:把日期词汇(received/revised/accepted/月份…)抠掉,剩下没有自然语言才算。
 	if (RE_RECEIVED.test(t) && !hasNaturalLanguage(stripDateVocabulary(t))) {
 		return { decision: 'preserve', reason: 'dates' };
 	}
-	if (RE_META_LABEL.test(t) && t.length < 700) {
-		return { decision: 'preserve', reason: 'bibliographic' };
-	}
+	// 说明类标签后面只有编号/标识(纯资助号、纯注册号)。
 	const explanatory = RE_EXPLANATORY_LABEL.exec(t);
-	if (explanatory) {
-		return hasNaturalLanguage(explanatory[2] ?? '') ? { decision: 'translate' } : { decision: 'preserve', reason: 'identifier' };
+	if (explanatory && !hasNaturalLanguage(explanatory[2] ?? '')) {
+		return { decision: 'preserve', reason: 'identifier' };
 	}
-	if (t.length < 40 && RE_ARTICLE_BANNER.test(t)) {
-		return { decision: 'preserve', reason: 'banner' };
-	}
-	// Orphan digits/marks: stray superscript affiliation numbers or page numbers.
+	// 孤立的数字/角标/页码。
 	if (t.length < 40 && /^[\d\s.,;:*†‡§()\-–—]+$/.test(t)) {
 		return { decision: 'preserve', reason: 'marks' };
 	}
-	if (hasDegreeRoster(t) && t.length < 900) {
-		return { decision: 'preserve', reason: 'names' };
-	}
-	// 作者单位先于作者名单判:单位行里的机构专名 + 角标数字,形状上与署名行几乎一样
-	// ("1st Department of Cardiology, Hippokration Hospital, …" 会被 looksLikeAuthorList 当名单)。
-	// 单位翻译机构名称;署名保留。
-	if (looksLikeAffiliation(t)) {
-		return { decision: 'translate' };
-	}
-	if (looksLikeAuthorList(t) || plainNameRoster(t)) {
-		return { decision: 'preserve', reason: 'names' };
-	}
-	// 标识行:DOI / 网址 / 邮箱 / 通讯作者标签。句子(有 ≥3 个小写起头的普通词:
-	// "The CONFIRM registry data are publicly documented at https://…")翻译;
-	// 标签行("European Journal of Preventive Cardiology (2022) 29, 608–624 doi:…"、
-	// "* Corresponding author. Tel: …, Email: …")只有专名和标识,保留。
+	// 标识行:DOI / 网址 / 邮箱,且没有句子(≥3 个小写起头的普通词)。
+	// "The CONFIRM registry data are publicly documented at https://…" 是句子,翻译;
+	// "European Journal of Preventive Cardiology (2022) 29, 608–624 doi:…" 是标识行,保留。
 	if ((RE_DOI_URL.test(t) || RE_CORRESPONDENCE.test(t)) && !hasSentenceWords(stripIdentifiers(t))) {
 		return { decision: 'preserve', reason: 'identifier' };
-	}
-	// 短版权行是样板;整句的开放获取声明是自然语言。
-	if (RE_COPYRIGHT.test(t) && !hasNaturalLanguage(t, 6)) {
-		return { decision: 'preserve', reason: 'boilerplate' };
 	}
 	if (RE_GRANT.test(t) && !hasNaturalLanguage(t.replace(RE_GRANT, ''))) {
 		return { decision: 'preserve', reason: 'identifier' };
 	}
 	return { decision: 'translate' };
-}
-
-/**
- * 没有角标的纯人名名单:"John A Smith, Mary Jones, Wei Zhang, and Li Wang"。
- * looksLikeAuthorList 要求有角标/数字;residueRules.looksLikeAuthorNameList 太松
- * (把 "Note.—CNR = contrast-to-noise ratio, FDA = U.S. Food and Drug Administration" 也当名单)。
- * 这里从严:≥3 段,每段 2~4 个词,**每个词**都是首字母大写或首字母缩写,不含 = : 数字。
- */
-function plainNameRoster(t: string): boolean {
-	if (t.length > 300 || /[=:\d@]/.test(t)) { return false; }
-	const segments = t.replace(/\band\b/g, ',').split(/[,;·]/).map(x => x.trim()).filter(Boolean);
-	if (segments.length < 3) { return false; }
-	return segments.every(seg => {
-		const words = seg.split(/\s+/);
-		return words.length >= 2 && words.length <= 4 && words.every(w => /^[A-Z](?:[a-z'’-]+|\.?)$/.test(w));
-	});
 }
 
 /** 小写起头的普通词(≥3 字母)至少 3 个 —— 专名与标签不算,句子才算。 */

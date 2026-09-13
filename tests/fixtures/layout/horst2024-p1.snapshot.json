@@ -16,7 +16,6 @@
 		"type": "paragraph",
 		"column": -1,
 		"readingIndex": 2,
-		"mode": "preserve",
 		"text": "Kelly K. Horst, MD • Joseph Y. Cao, MD •"
 	},
 	{
@@ -42,19 +41,12 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 6,
-		"mode": "preserve",
-		"text": "© RSNA, 2024"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 7,
 		"text": "The operational efficiency of CT, combin"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 8,
+		"readingIndex": 7,
 		"text": "In contrast, PCD CT uses semiconductors "
 	}
 ]

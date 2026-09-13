@@ -723,6 +723,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	let inkBlocked = 0;
 	// 排版量测累计耗时 (2.7.0, 审核 A-2): 只在 ladderFits 里累加。
 	let layoutMs = 0;
+	// 3.0.0:译了却没进排版的块,逐块记原因。以前 tooSmall / imageExcluded / tableIntentional
+	// 只是计数,块级摘要里它们仍报 translated —— "请求花了钱、页面仍是英文"没人看得见。
+	// 现在与放弃清单合并进 pmAbandoned,诊断联表后 state = unplaced + abandonReason。
+	const skipped: AbandonedBlock[] = [];
 	for (const block of translatable) {
 		if (consumedMemberIds.has(block.id)) {
 			continue; // owned by the table cell model (translated cell or kept original)
@@ -740,6 +744,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		}
 		if (guard.excluded.has(block.id)) {
 			tableIntentional++;
+			skipped.push({ id: block.id, reason: 'table-structure' });
 			continue; // protected table content the cell model didn't claim
 		}
 		const box = pxOf.get(block.id)!;
@@ -749,6 +754,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		const minWidth = (block.type === 'caption' || block.type === 'table') ? 28 : 50;
 		if (box.width < minWidth || box.height < 9 || block.sourceText.trim().length < 6) {
 			tooSmall++;
+			skipped.push({ id: block.id, reason: 'too-small' });
 			continue;
 		}
 		// A body box overlapping a real image is an extraction error — the
@@ -760,6 +766,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		const area = box.width * box.height;
 		if (overlapsImageInk(box, imageBoxes)) {
 			imageExcluded++;
+			skipped.push({ id: block.id, reason: 'image' });
 			continue;
 		}
 		// A block overlapping a detected table REGION that the cell model did
@@ -767,6 +774,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// cells) stays original — never stamped in Chinese across the table.
 		if (area > 0 && [...guard.regions, ...guard.textRegions].some(r => intersectArea(box, r as unknown as PixelBox) > area * 0.15)) {
 			tableIntentional++;
+			skipped.push({ id: block.id, reason: 'table-structure' });
 			continue;
 		}
 		// 结构化区域按段落拆回各自的盒子 (审核: 封面摘要塌顶 / 标题空洞根因):
@@ -1596,8 +1604,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 
 	// ---- 放弃清单 (2.7.0, 审核 B-1): 不采样像素,随时可读,供诊断把块级 state
 	// 与排版结果联表 —— "翻译成功但从未显示"不再报成 translated。
-	(page as HTMLElement & { pmAbandoned?: () => AbandonedBlock[] }).pmAbandoned = (): AbandonedBlock[] =>
-		items.filter(i => i.abandoned).map(i => ({ id: i.id, reason: fitFailureLabel(i.abandonReason) }));
+	(page as HTMLElement & { pmAbandoned?: () => AbandonedBlock[] }).pmAbandoned = (): AbandonedBlock[] => [
+		...items.filter(i => i.abandoned).map(i => ({ id: i.id, reason: fitFailureLabel(i.abandonReason) })),
+		...skipped
+	];
 
 	logger.debug(MODULE, `page ${input.pageIndex + 1}: ${items.length} strict block(s), ${guard.regions.length} protected table(s)`);
 	return {

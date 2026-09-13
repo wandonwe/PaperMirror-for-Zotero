@@ -344,7 +344,7 @@ export class ReaderSession {
 		this.reader = reader;
 		this.onClosed = onClosed;
 		this.extractor = new TextExtractor(reader, {
-			includeReferences: getPref<boolean>('translateReferences', false),
+			includeReferences: getPref<boolean>('translateReferences', true),
 			noTranslate: () => readNoTranslateList()
 		});
 	}
@@ -1279,17 +1279,19 @@ export class ReaderSession {
 			}
 			if (flashed > 0) {
 				boxes[0]?.scrollIntoView({ block: 'center' });
-				return;
 			}
 		}
-		// Overlay element gone or empty → let the pane locate them.
-		// 覆盖模式下面板 display:none (2.0.10, 审核 P3): pane 的高亮同样不可见,
-		// 构造处注释承诺的 "switch to pane + locate" 此前从未实现 —— 先切到
-		// 左右对照再定位,用户才真的看得到保留原文在哪。
+		// 3.0.0「查看完整译文」:保留原文的段落,译文并没有丢 —— 文章流视图
+		// (translationPane 的 'article')是完整的、从不裁剪。定位闪烁之后,把面板切到
+		// 文章流并滚到这一页,用户直接读译文,而不是只看到"哪里没放下"。
+		// 覆盖模式下面板 display:none (2.0.10, 审核 P3),先切到左右对照。
 		if (this.viewMode === 'overlay') {
 			this.setViewMode('split');
 		}
-		this.pane?.revealKeptOriginal(pageIndex);
+		if (this.pane) {
+			this.pane.setViewKind('article');
+			this.pane.scrollToPage(pageIndex);
+		}
 	}
 
 	/** 主窗口不可见(最小化/被遮挡切走)—— 不可见即停 (2.2.9, item1)。 */

@@ -294,7 +294,7 @@
 		"readingIndex": 33,
 		"tableRow": 1,
 		"tableCol": 5,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "FOV (cm) Clearance No."
 	},
 	{

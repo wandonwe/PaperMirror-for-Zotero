@@ -66,10 +66,10 @@ test('a fragment stitched across columns is kept original, never translated', ()
 	];
 	const model = buildTableModel(0, 0, region(40, 10, 360, 110), members);
 	const spanning = model.cells.find(c => c.memberIds.includes('span'))!;
-	assert.equal(spanning.kind, 'data', 'a cross-column fragment is never translated in place');
-	// 2.12.13 (审核第 4 条):跨列是**结构**问题,不是"内容无需翻译"。原因必须是
-	// structure-ambiguous,不许混进 data —— 摘要里读到 data 会以为它是数字格。
-	assert.equal(spanning.preserveReason, 'structure-ambiguous', '跨列格的原因是结构不明,不是数据');
+	// 3.0.0:跨列是**排版**问题,不是"内容无需翻译"。格照常翻译;能不能原位放回由排版侧
+	// 的表格守卫判(放不下就记 unplaced: table-structure,文章流里能看到完整译文)。
+	assert.equal(spanning.kind, 'text', '跨列格照常翻译');
+	assert.equal(spanning.preserveReason, undefined);
 });
 
 test('页面附属的 preserve 块(页眉/日期行)不进表,但仍原样留在输出里 (2.12.13)', () => {

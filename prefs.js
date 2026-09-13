@@ -23,7 +23,7 @@ pref('extensions.zotero.bilingualReader.perfMode', 'auto'); // stable | auto | h
 pref('extensions.zotero.bilingualReader.providerConcurrency', '{}'); // custom mode: {providerId: pages}
 pref('extensions.zotero.bilingualReader.customPrompt', '');
 pref('extensions.zotero.bilingualReader.translateCaptions', true);
-pref('extensions.zotero.bilingualReader.translateReferences', false);
+pref('extensions.zotero.bilingualReader.translateReferences', true);
 pref('extensions.zotero.bilingualReader.useContext', true);
 pref('extensions.zotero.bilingualReader.autoPrefetch', true);
 pref('extensions.zotero.bilingualReader.paneSide', 'right');

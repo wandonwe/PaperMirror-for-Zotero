@@ -16,82 +16,67 @@
 		"type": "paragraph",
 		"column": -1,
 		"readingIndex": 2,
-		"mode": "preserve",
 		"text": "Gilberto J. Aquino, MD • Jim O’Doherty, "
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
 		"readingIndex": 3,
-		"mode": "preserve",
-		"text": "Bernhard Schmidt, PhD • Thomas Flohr, Ph"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 4,
 		"text": "From the Division of Cardiovascular Imag"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 5,
+		"readingIndex": 4,
 		"text": "Supported by Siemens Healthineers. D.B. "
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 6,
+		"readingIndex": 5,
 		"mode": "preserve",
 		"text": "Radiology 2023; 307(2):e222030 • https:/"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 7,
+		"readingIndex": 6,
 		"text": "Background: Photon-counting detector (PC"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 8,
+		"readingIndex": 7,
 		"text": "Purpose: To compare ECV quantification f"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 9,
+		"readingIndex": 8,
 		"text": "Materials and Methods: In this single-ce"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 10,
-		"mode": "preserve",
-		"text": "© RSNA, 2023"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 11,
+		"readingIndex": 9,
 		"text": "Supplemental material is available for t"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 12,
+		"readingIndex": 10,
 		"text": "Late gadolinium enhancement (LGE) MRI is"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 13,
+		"readingIndex": 11,
 		"text": "implemented over the last decade with a "
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 14,
+		"readingIndex": 12,
 		"mode": "preserve",
 		"text": "Compared with energy-integrating detecto"
 	}

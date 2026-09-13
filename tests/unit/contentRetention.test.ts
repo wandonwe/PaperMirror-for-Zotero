@@ -55,18 +55,19 @@ test('缩写解释/伦理/知情同意/资助/数据可用性:有自然语言就
 	}
 });
 
-test('书目类标签仍是元数据:Citation/Editor/Received/Published/Copyright/DOI (2.12.12)', () => {
+test('3.0.0 起只有日期行、DOI 行按精确规则保留;书目标签与版权行翻译', () => {
+	assert.equal(isMetadataBlock('Received: 3 March 2024; Accepted: 5 May 2024'), true);
+	assert.equal(isMetadataBlock('doi:10.1093/eurheartj/ehae177'), true);
 	for (const s of [
 		'Citation: Lu N, Di Y (2015) CT Perfusion in C6 Gliomas. PLoS ONE 10(3): e0121631.',
 		'Academic Editor: Jonathan A Coles, Glasgow University, UNITED KINGDOM',
 		'Published: March 17, 2015',
-		'Received: 3 March 2024; Accepted: 5 May 2024',
-		'Copyright © 2024 The Authors.',
-		'doi:10.1093/eurheartj/ehae177'
+		'Copyright © 2024 The Authors.'
 	]) {
-		assert.equal(isMetadataBlock(s), true, `仍是元数据: "${s.slice(0, 40)}…"`);
+		assert.equal(isMetadataBlock(s), false, `拿不准就翻译: "${s.slice(0, 40)}…"`);
 	}
 });
+
 
 test('只有标识、没有自然语言的说明行仍可跳过:纯资助号/纯注册号 (2.12.12)', () => {
 	assert.equal(isMetadataBlock('Funding: Grant No. 30970805, 81400428.'), true);
@@ -143,18 +144,18 @@ test('classifyContent:自然语言一律翻译,标识保留并带原因,几何�
 		assert.equal(c.decision, 'preserve', `应保留: "${s.slice(0, 40)}"`);
 		assert.equal(c.reason, reason, `"${s.slice(0, 40)}" 的原因应为 ${reason}`);
 	};
-	P('John A Smith, Mary Jones, Wei Zhang, and Li Wang', 'names');
+	assert.equal(T('John A Smith, Mary Jones, Wei Zhang, and Li Wang').decision, 'translate', '3.0.0:名单不按形状保留,人名由提示词原样保留');
 	P('Received: 3 March 2024; Accepted: 5 May 2024', 'dates');
 	P('doi:10.1093/eurheartj/ehae177', 'identifier');
 	P('https://doi.org/10.1093/eurheartj/ehae177', 'identifier');
 	P('Downloaded from https://academic.oup.com/eurheartj by guest on 20 September 2024', 'watermark');
 	P('1234', 'marks');
-	P('Citation: Lu N, Di Y (2015) CT Perfusion in C6 Gliomas. PLoS ONE 10(3): e0121631.', 'bibliographic');
-	P('Copyright © 2024 The Authors.', 'boilerplate');
 	P('Funding: Grant No. 30970805, 81400428.', 'identifier');
-	P('RESEARCH ARTICLE', 'banner');
+	for (const s of ['Citation: Lu N, Di Y (2015) CT Perfusion in C6 Gliomas. PLoS ONE 10(3): e0121631.', 'Copyright © 2024 The Authors.', 'RESEARCH ARTICLE']) {
+		assert.equal(T(s).decision, 'translate', `3.0.0:拿不准就翻译 "${s.slice(0, 30)}"`);
+	}
 	// 每个 preserve 都必须带原因 —— "无提示缺失"是被禁止的。
-	for (const s of ['1234', 'RESEARCH ARTICLE', 'doi:10.1093/x']) { assert.ok(T(s).reason, '保留必须带原因'); }
+	for (const s of ['1234', 'doi:10.1093/x']) { assert.ok(T(s).reason, '保留必须带原因'); }
 });
 
 test('片段保护:邮箱、网址、DOI、注册号被掩蔽后原样还原 (2.12.13)', () => {
@@ -216,3 +217,29 @@ function charsFor(lines: { text: string; y: number }[]) {
 	}
 	return out;
 }
+
+// ================================================================ 3.0.0:拿不准就翻译
+
+test('3.0.0:参考文献默认翻译(prefs.js 与运行时默认值一致)', () => {
+	const prefs = readFileSync('prefs.js', 'utf8');
+	assert.match(prefs, /translateReferences', true\)/, 'prefs.js 默认 true');
+	const session = readFileSync('src/reader/readerSession.ts', 'utf8');
+	assert.match(session, /getPref<boolean>\('translateReferences', true\)/, '运行时默认 true');
+});
+
+test('3.0.0:整列多数是数据,不再把有词的格一并保留', async () => {
+	const { buildTableModel } = await import('../../src/reader/tableStructure');
+	const cell = (id: string, left: number, top: number, width: number, height: number, text: string) =>
+		({ id, box: { left, top, width, height }, text, fontSize: 8 });
+	const members = [
+		cell('h0', 40, 10, 80, 12, 'Outcome'), cell('h1', 150, 10, 80, 12, 'Value'),
+		cell('r1-0', 40, 30, 80, 12, 'Mortality'), cell('r1-1', 150, 30, 80, 12, '12 ± 3'),
+		cell('r2-0', 40, 50, 80, 12, 'Stroke'), cell('r2-1', 150, 50, 80, 12, '4 ± 1'),
+		cell('r3-0', 40, 70, 80, 12, 'Bleeding'), cell('r3-1', 150, 70, 80, 12, '7 ± 2'),
+		cell('r4-0', 40, 90, 80, 12, 'Any adverse event'), cell('r4-1', 150, 90, 80, 12, 'Not reported')
+	];
+	const model = buildTableModel(0, 0, { left: 40, top: 10, width: 200, height: 100 }, members);
+	const notReported = model.cells.find(c => c.memberIds.includes('r4-1'));
+	assert.ok(notReported, '格存在');
+	assert.equal(notReported!.kind, 'text', '"Not reported" 有词就翻译 —— 同列邻居是数字证明不了它不用翻');
+});
