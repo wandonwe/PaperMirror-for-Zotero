@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
 	collapseSpanningLanes,
 	expandSpanningLanes,
@@ -182,4 +184,19 @@ test('parseFactor clamps and defaults', () => {
 	assert.equal(parseFactor('abc'), 1);
 	assert.equal(parseFactor(undefined), 1);
 	assert.equal(parseFactor('0.5'), 0.7);
+});
+
+// ---- 3.1.10: 带外字号的块保留自己的字号 (Mets 2013 p2 / CAD-RADS p1 真机) --------
+//
+// 基准字号只统一同一档的正文。7pt 的作者单位脚注被排成 10pt 放不下;四条 7pt 脚注把基准
+// 拉到 7 时,10pt 的正文整页缩成 7pt。带 = [0.8, 1.25]×基准。
+test('3.1.10:严格页只对字号带内的段落套用页面基准字号', () => {
+	const src = readFileSync(join(process.cwd(), 'src/ui/strictPageReplacement.ts'), 'utf8')
+		.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+	assert.match(src, /const inBand = anchorPt > 0 && ownPt >= anchorPt \* 0\.8 && ownPt <= anchorPt \* 1\.25;/);
+	assert.match(src, /\(block\.type === 'paragraph' \|\| block\.type === 'list'\) && inBand && !isTableCellBlock\(block\)\s*\? anchorPt\s*: ownPt/,
+		'带外的块(脚注、表注)必须用自己的字号,不能被基准拉大或拉小');
+	// 一致性:带的边界与 bodyAnchorPt 选带的边界相同。
+	assert.equal(bodyAnchorPt([7, 7, 7, 7, 8.5, 10, 10, 20]), 7, 'CAD-RADS p1:四条 7pt 脚注让基准落在 7');
+	assert.ok(10 > 7 * 1.25, '10pt 正文在带外 → 保留 10pt,不再整页缩成 7pt');
 });

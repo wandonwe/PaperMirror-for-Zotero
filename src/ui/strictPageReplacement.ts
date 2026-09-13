@@ -1006,9 +1006,16 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// and — critically — its mask is NOT yet painted, so the original text
 		// shows through. Acceptance flips visibility AND paints the mask together.
 		node.style.visibility = 'hidden';
-		const rolePt = (block.type === 'paragraph' || block.type === 'list') && anchorPt > 0 && !isTableCellBlock(block)
+		// 页面基准字号只统一**同一档**的正文 (3.1.10, Mets 2013 p2 / CAD-RADS p1 真机):
+		// bodyAnchorPt 的字号带是 [0.8, 1.25]×中位数,但这里此前把**所有**段落都统一到
+		// 基准 —— 7pt 的作者单位脚注被排成 10pt(2039 字符的脚注放不下),反过来四条
+		// 7pt 脚注把基准拉到 7 时,10pt 的正文整页缩成 7pt。字号在带外的块是另一种
+		// 角色(脚注、表注、细则),保留自己的字号;带内的仍统一,免得相邻段落忽大忽小。
+		const ownPt = block.fontSize ?? bodyPt;
+		const inBand = anchorPt > 0 && ownPt >= anchorPt * 0.8 && ownPt <= anchorPt * 1.25;
+		const rolePt = (block.type === 'paragraph' || block.type === 'list') && inBand && !isTableCellBlock(block)
 			? anchorPt
-			: (block.fontSize ?? bodyPt);
+			: ownPt;
 		const fontPx = Math.max(6, rolePt * pxPerPoint * fontFactor);
 		node.style.fontSize = `${fontPx.toFixed(2)}px`;
 		const bg = blockPaper.get(block.id);
