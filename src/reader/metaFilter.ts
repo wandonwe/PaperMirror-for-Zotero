@@ -60,7 +60,19 @@ const RE_RECEIVED = /\b(received|revised|accepted|published online|available onl
 // Front-matter labels journals set in the margin sidebar or above the title
 // (PLOS, Frontiers, MDPI…): "Citation:", "Academic Editor:", "Funding:" …
 // The colon is required so body prose starting with the same word survives.
-const RE_META_LABEL = /^(citation|(?:academic|handling|section|associate|guest)\s+editor|editor|received|accepted|published|posted|copyright|funding|competing interests?|conflicts? of interest|data availability(?: statement)?|abbreviations|author contributions?|provenance|peer review(?:er)?s?(?: information)?|ethics(?: statement)?|patient consent|trial registration)\s*[::]/i;
+// 2.12.12 (内容保留规则审核第 2 条): 标签分两类。
+//   书目类 —— Citation / Editor / Received / Published / Copyright —— 是标识,跳过;
+//   说明类 —— Funding / Ethics / Patient consent / Data availability / Abbreviations /
+//   Author contributions / Conflicts of interest / Trial registration —— 后面跟的是
+//   读者要看的自然语言("Written informed consent was obtained."),以前整段丢弃。
+// 说明类只在标签后面**没有自然语言**(纯资助号、纯注册号)时才算元数据。
+const RE_META_LABEL = /^(citation|(?:academic|handling|section|associate|guest)\s+editor|editor|received|accepted|published|posted|copyright|provenance|peer review(?:er)?s?(?: information)?)\s*[::]/i;
+const RE_EXPLANATORY_LABEL = /^(funding|competing interests?|conflicts? of interest|data availability(?: statement)?|abbreviations|author contributions?|ethics(?: statement)?|patient consent|trial registration)\s*[::]\s*(.*)$/is;
+/** 标签后面有没有自然语言:至少 3 个普通词(≥3 字母、含小写)。 */
+function hasNaturalLanguage(body: string): boolean {
+	const words = (body.match(/[A-Za-z][A-Za-z'’-]*/g) ?? []).filter(w => w.length >= 3 && /[a-z]{2}/.test(w));
+	return words.length >= 3;
+}
 // Standalone article-type banners and badges.
 const RE_ARTICLE_BANNER = /^(research article|review(?: article)?|original (?:article|research|investigation)|open access|case report|short communication|brief report|editorial|systematic review|meta-analysis|clinical trial|letter to the editor|perspective|commentary|rapid communication|technical note|crossmark|check for updates)$/i;
 // Funding boilerplate: grant numbers and the funders-had-no-role sentence.
@@ -274,6 +286,13 @@ export function isMetadataBlock(text: string, rect?: Rect, pageWidth?: number, t
 	}
 	if (RE_META_LABEL.test(t) && t.length < 700) {
 		return true;
+	}
+	const explanatory = RE_EXPLANATORY_LABEL.exec(t);
+	if (explanatory) {
+		// 说明类标签:有自然语言就翻译;只有编号/标识才跳过。
+		// 这一条要在 RE_GRANT / RE_CORRESPONDENCE 之前判 —— "Funding: This work was
+		// supported by grant no. 12345" 含资助号,却是一整句要翻的话。
+		return !hasNaturalLanguage(explanatory[2] ?? '') && t.length < 700;
 	}
 	if (t.length < 40 && RE_ARTICLE_BANNER.test(t)) {
 		return true;

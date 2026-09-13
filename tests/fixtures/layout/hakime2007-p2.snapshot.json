@@ -52,5 +52,11 @@
 		"column": 2,
 		"readingIndex": 8,
 		"text": "Published online 10.1148/radiol.24330520"
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 9,
+		"text": "Author contributions: Guarantor of integ"
 	}
 ]

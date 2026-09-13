@@ -7,6 +7,45 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.12.12] — 2026-09-13
+
+**内容保留规则审核(用户 2026-09-13):七条发现全部在当前代码复现,这一版修前三条 + 第五条的第一步。**
+
+### 修了
+
+1. **短文本照抄不再算翻译成功。** `looksTranslated` 以前对散文词数 < 6 的块无条件放行,
+   "No evidence of benefit" / "Document Title" / "Year Published" 原样返回都被计作成功、写进缓存。
+   现在把"允许原样保留"与"译文合格"分开:**内容相同**(忽略大小写/标点/空白)的回声,只有当
+   原文没有自然语言词(数字、单位、缩写 CT/MRI/COVID-19/IIa、人名 "Powers WJ" / "J. Smith")时
+   才放行;含普通词的短句原样返回判为未译,进有上限的重试链。不要求短块必含中文。
+   整页缓存与段落缓存命中都走同一个 `accept()`,旧缓存里的照抄条目自动被重新检查,不用清缓存。
+2. **说明类标签不再整段丢弃。** `RE_META_LABEL` 拆成两类:书目类(Citation / Editor / Received /
+   Published / Copyright)仍是元数据;说明类(Funding / Ethics / Patient consent / Data availability /
+   Abbreviations / Author contributions / Conflicts of interest / Trial registration)后面有自然语言
+   (≥3 个普通词)就翻译,只有纯资助号/纯注册号才跳过。此判定先于资助号规则 ——
+   "Funding: This work was supported by grant no. 12345" 是一整句要翻的话。
+   布局快照 39 个里变了 2 个(chen2023-p10、hakime2007-p2),**全是加块**:各多出一段
+   "Author contributions: …",没有任何块丢失;请求计划基线相应 +1 块。
+3. **允许翻译的参考文献能显示了。** 排版的 `geometric` 以前无条件排除 `isReference`,
+   而开了"翻译参考文献"只是不打 preserve —— 请求花了钱,页面仍是英文。现在 `isReference` 只是
+   内容类别:仍保留原文(`translationMode === 'preserve'`)的参考文献才是墨迹遮挡物;允许翻译的
+   进排版,放不下由 `preserved` 接住。新增 `selectGeometricBlocks()`,与 `selectInkObstacleBlocks()`
+   严格互补。
+5. **排版不再独立重判"值不值得翻"(第一步)。** `strictPageReplacement` 里的 `isMetadataBlock`
+   只在**没有译文**时才生效;上游决定翻译并拿到译文的块,显示阶段只判"能不能安全放置"。
+
+### 没修(下一轮,需要设计)
+
+- 第 4 条:表格里 `straddles`(结构问题)与 `data`(内容无需翻译)混同;含邮箱整格保留;
+  人名判定只靠首字母大写。
+- 第 5 条的后半:提取两条路径(span / blockBuilder)的豁免范围统一,下游继承一次决策。
+- 第 6 条:真正的"翻译此处保留内容"(单块覆盖内容策略,贯通提取记录/翻译/显示/缓存)。
+- 第 7 条:放不下的译文提供"查看完整译文";小块准入按元素角色而非统一 6 字符门槛。
+- `preserveReason` 进逐块摘要;提取时丢弃的块也进摘要(位置、原因、规则来源)。
+
+测试 1296 通过。10 条变异逐条验证。**未做真实 Zotero 页面复现**;这些修正只对审核里
+点名的纯函数行为负责,不等于每一处英文残留的原因都在这里。
+
 ## [2.12.11] — 2026-09-13
 
 **拿到了真机那篇 PDF(2024 ESC 慢性冠脉综合征指南),2.12.9 遗留的两个问号都钉死了。**

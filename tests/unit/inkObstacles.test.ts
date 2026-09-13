@@ -20,10 +20,10 @@ const rects = [[0, 0, 1, 1]]; // 任意非空 lineRectsPdf
 
 test('selectInkObstacleBlocks 与 geometric 过滤严格互补 (2.8.14: 表题已移出)', () => {
 	const blocks = [
-		{ id: 'ref', isReference: true, type: 'paragraph', lineRectsPdf: rects },
+		{ id: 'ref', isReference: true, translationMode: 'preserve', type: 'paragraph', lineRectsPdf: rects },
 		{ id: 'tbl', isReference: false, type: 'table', lineRectsPdf: rects },
 		{ id: 'body', isReference: false, type: 'paragraph', lineRectsPdf: rects },
-		{ id: 'ref-no-geom', isReference: true, type: 'paragraph', lineRectsPdf: [] },
+		{ id: 'ref-no-geom', isReference: true, translationMode: 'preserve', type: 'paragraph', lineRectsPdf: [] },
 		{ id: 'cap', isReference: false, type: 'caption', lineRectsPdf: rects }
 	];
 	const picked = selectInkObstacleBlocks(blocks).map(b => b.id);
@@ -34,14 +34,15 @@ test('selectInkObstacleBlocks 与 geometric 过滤严格互补 (2.8.14: 表题�
 
 test('互补性由构造保证: 两个集合的并集恰是有几何的块,交集为空 (2.8.14)', () => {
 	const blocks = [
-		{ id: 'ref', isReference: true, type: 'paragraph', lineRectsPdf: rects },
+		{ id: 'ref', isReference: true, translationMode: 'preserve', type: 'paragraph', lineRectsPdf: rects },
 		{ id: 'tbl', isReference: false, type: 'table', lineRectsPdf: rects },
 		{ id: 'body', isReference: false, type: 'paragraph', lineRectsPdf: rects },
 		{ id: 'cap', isReference: false, type: 'caption', lineRectsPdf: rects },
 		{ id: 'ref-tbl', isReference: true, type: 'table', lineRectsPdf: rects }
 	];
 	// 与 buildStrictPage 里 `geometric` 的过滤条件逐字一致。
-	const geometric = blocks.filter(b => !b.isReference && !!b.lineRectsPdf?.length).map(b => b.id);
+	// 2.12.12: 与 selectGeometricBlocks 同一条规则 —— 只有仍保留原文的参考文献才被排除。
+	const geometric = blocks.filter(b => !(b.isReference && b.translationMode === 'preserve') && !!b.lineRectsPdf?.length).map(b => b.id);
 	const ink = selectInkObstacleBlocks(blocks).map(b => b.id);
 	assert.deepEqual(geometric.filter(id => ink.includes(id)), [], '交集必须为空');
 	assert.deepEqual([...geometric, ...ink].sort(), blocks.map(b => b.id).sort(),

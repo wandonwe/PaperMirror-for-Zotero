@@ -110,12 +110,14 @@ test('journal sidebar labels are filtered (Citation/Editor/Published/Data/Fundin
 		'Academic Editor: Jonathan A Coles, Glasgow University, UNITED KINGDOM'
 	), true);
 	assert.equal(isMetadataBlock('Published: March 17, 2015'), true);
+	// 2.12.12 (内容保留规则审核第 2 条): Data Availability / Funding 后面跟的是自然语言,
+	// 不再按文本规则整段丢弃 —— 真页边栏里的仍由 isMarginSidebar(带 rect)接住。
 	assert.equal(isMetadataBlock(
 		'Data Availability Statement: All relevant data are made available in supporting information files S1, S2, S3.'
-	), true);
+	), false);
 	assert.equal(isMetadataBlock(
 		'Funding: This work was supported by National Natural Science Foundations of China (Grant No. 30970805, 81400428), a grant from Science and Technology Commission of Shanghai Municipality (Grant No. 09JC1403100).'
-	), true);
+	), false);
 });
 
 test('article-type banners are filtered', () => {

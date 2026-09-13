@@ -53,10 +53,15 @@ test("'table' 类型只在分类【标题行】时产生 —— 表格主体永�
 
 test('geometric 过滤不再排除表题 (结构性回归闸, 2.8.14)', () => {
 	const src = read('src/ui/strictPageReplacement.ts');
-	const line = src.slice(src.indexOf('const geometric = input.blocks.filter'));
+	// 2.12.12: 准入收进 selectGeometricBlocks —— "不是**仍保留原文的**参考文献、有可用行矩形"。
+	// 允许翻译的参考文献必须进排版(审核第 3 条),否则请求花了钱页面仍是英文。
+	const line = src.slice(src.indexOf('const geometric = selectGeometricBlocks(input.blocks)'));
 	const decl = line.slice(0, line.indexOf('\n'));
-	assert.ok(/!b\.isReference && !!b\.lineRectsPdf\?\.length/.test(decl),
-		'替换流水线的准入只剩两条: 不是参考文献、有可用行矩形');
+	assert.ok(decl.length > 0, '替换流水线的准入必须走 selectGeometricBlocks');
+	const fn = src.slice(src.indexOf('export function selectGeometricBlocks'));
+	const body = fn.slice(0, fn.indexOf('\n}'));
+	assert.ok(/!isKeptReference\(b\) && !!b\.lineRectsPdf\?\.length/.test(body),
+		'准入只剩两条: 不是仍保留原文的参考文献、有可用行矩形');
 	assert.ok(!/type !== 'table'/.test(decl),
 		"不许退回 `type !== 'table'` —— 它挡掉的只有表题,真机第 9 页整页因此一个字没译");
 });
