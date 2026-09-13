@@ -16,77 +16,55 @@
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 2,
-		"mode": "preserve",
 		"text": "Qian Chen, MD* • Tao Pan, MBBS* • Yi Nin"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
 		"readingIndex": 3,
-		"mode": "preserve",
-		"text": "Samuel L. Bidwell, BS • Hongyan Qiao, MD"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 4,
-		"mode": "preserve",
-		"text": "Jian Zhong, MBBS • Yongyue Wei, PhD • Xi"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 5,
 		"text": "From the Departments of Radiology (Q.C.,"
 	},
 	{
 		"type": "list",
 		"column": 0,
-		"readingIndex": 6,
+		"readingIndex": 4,
 		"text": "* Q.C. and T.P. contributed equally to t"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 7,
+		"readingIndex": 5,
 		"mode": "preserve",
 		"text": "Radiology 2023; 307(2):e221693 • https:/"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 8,
+		"readingIndex": 6,
 		"text": "Background: A noninvasive coronary CT an"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 9,
+		"readingIndex": 7,
 		"text": "Purpose: To assess whether a CCTA-based "
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 10,
-		"mode": "preserve",
-		"text": "© RSNA, 2023"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 11,
+		"readingIndex": 8,
 		"text": "Supplemental material is available for t"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 12,
+		"readingIndex": 9,
 		"text": "Acute coronary syndrome remains one of t"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 13,
+		"readingIndex": 10,
 		"text": "worse clinical outcomes (4,5). However, "
 	}
 ]

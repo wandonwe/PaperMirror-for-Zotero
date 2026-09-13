@@ -24,6 +24,7 @@
 
 import type { BlockType, SourceBlock } from '../types/models';
 import { detectTableRegions } from './tableGuard';
+import type { BorderGrid } from './tableBorders';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
 import { classifyContent, endsMidSentence, isPublisherBoilerplateLine, isRunningHeadOrFoot, type PreserveReason } from './metaFilter';
 import {

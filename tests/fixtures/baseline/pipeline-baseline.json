@@ -1,14 +1,14 @@
 {
 	"Aquino_-_2023_-_Myocardial_Characterization_with_Extracellular_Volume_Mapping_with_a_First-Generation_Photon-countin-p1": {
-		"blocks": 15,
-		"translatable": 9,
+		"blocks": 13,
+		"translatable": 10,
 		"tableCells": 0,
 		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 9,
-		"payloadChars": 4664,
+		"maxBlocksPerChunk": 10,
+		"payloadChars": 5007,
 		"dupBlocks": 0
 	},
 	"Aquino_-_2023_-_Myocardial_Characterization_with_Extracellular_Volume_Mapping_with_a_First-Generation_Photon-countin-p2": {
@@ -24,15 +24,15 @@
 		"dupBlocks": 0
 	},
 	"aquino2023-p1": {
-		"blocks": 15,
-		"translatable": 9,
+		"blocks": 13,
+		"translatable": 10,
 		"tableCells": 0,
 		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 9,
-		"payloadChars": 4664,
+		"maxBlocksPerChunk": 10,
+		"payloadChars": 5007,
 		"dupBlocks": 0
 	},
 	"aquino2023-p2": {
@@ -48,40 +48,40 @@
 		"dupBlocks": 0
 	},
 	"booz2019-p1": {
-		"blocks": 11,
-		"translatable": 6,
+		"blocks": 9,
+		"translatable": 7,
 		"tableCells": 0,
 		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 6,
-		"payloadChars": 4992,
+		"maxBlocksPerChunk": 7,
+		"payloadChars": 5242,
 		"dupBlocks": 0
 	},
 	"chen2023-p1": {
-		"blocks": 14,
-		"translatable": 8,
+		"blocks": 11,
+		"translatable": 9,
 		"tableCells": 0,
 		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 8,
-		"payloadChars": 5306,
+		"maxBlocksPerChunk": 9,
+		"payloadChars": 5693,
 		"dupBlocks": 0
 	},
 	"chen2023-p10": {
 		"blocks": 96,
-		"translatable": 29,
+		"translatable": 33,
 		"tableCells": 85,
 		"modules": 4,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 21,
-		"payloadChars": 3749,
-		"dupBlocks": 2
+		"maxBlocksPerChunk": 24,
+		"payloadChars": 3784,
+		"dupBlocks": 3
 	},
 	"chen2023-p11": {
 		"blocks": 32,
@@ -252,15 +252,15 @@
 		"dupBlocks": 0
 	},
 	"horst2024-p1": {
-		"blocks": 9,
-		"translatable": 5,
+		"blocks": 8,
+		"translatable": 6,
 		"tableCells": 0,
 		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 5,
-		"payloadChars": 5300,
+		"maxBlocksPerChunk": 6,
+		"payloadChars": 5536,
 		"dupBlocks": 0
 	},
 	"horst2024-p11": {
@@ -289,26 +289,26 @@
 	},
 	"jacc-ccta2020-p1": {
 		"blocks": 14,
-		"translatable": 8,
+		"translatable": 9,
 		"tableCells": 0,
 		"modules": 6,
 		"chunks": 2,
 		"fastChunks": 1,
 		"slowChunks": 1,
-		"maxBlocksPerChunk": 7,
-		"payloadChars": 4090,
+		"maxBlocksPerChunk": 8,
+		"payloadChars": 4562,
 		"dupBlocks": 0
 	},
 	"jacc2020-p15": {
-		"blocks": 80,
-		"translatable": 8,
+		"blocks": 78,
+		"translatable": 7,
 		"tableCells": 0,
 		"modules": 4,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 8,
-		"payloadChars": 2496,
+		"maxBlocksPerChunk": 7,
+		"payloadChars": 2552,
 		"dupBlocks": 0
 	},
 	"nejm-defuse3-p7": {
@@ -325,14 +325,14 @@
 	},
 	"powers2019-p4-p1": {
 		"blocks": 47,
-		"translatable": 12,
+		"translatable": 13,
 		"tableCells": 34,
-		"modules": 7,
+		"modules": 9,
 		"chunks": 3,
 		"fastChunks": 2,
 		"slowChunks": 1,
 		"maxBlocksPerChunk": 7,
-		"payloadChars": 4171,
+		"payloadChars": 4198,
 		"dupBlocks": 0
 	},
 	"radiology2023-p11": {
@@ -361,14 +361,14 @@
 	},
 	"radiology2023-p3": {
 		"blocks": 91,
-		"translatable": 58,
+		"translatable": 59,
 		"tableCells": 81,
 		"modules": 4,
 		"chunks": 3,
 		"fastChunks": 3,
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 40,
-		"payloadChars": 4014,
+		"payloadChars": 4036,
 		"dupBlocks": 7
 	},
 	"radiology2026-p10": {
@@ -421,26 +421,26 @@
 	},
 	"wu2026-p1": {
 		"blocks": 36,
-		"translatable": 13,
+		"translatable": 16,
 		"tableCells": 26,
 		"modules": 5,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 6,
-		"payloadChars": 2474,
+		"maxBlocksPerChunk": 8,
+		"payloadChars": 2779,
 		"dupBlocks": 1
 	},
 	"wu2026-p3": {
 		"blocks": 58,
-		"translatable": 24,
+		"translatable": 30,
 		"tableCells": 49,
 		"modules": 5,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 18,
-		"payloadChars": 3160,
+		"maxBlocksPerChunk": 24,
+		"payloadChars": 3277,
 		"dupBlocks": 0
 	},
 	"wu2026-p4": {
@@ -457,26 +457,26 @@
 	},
 	"wu2026-p5": {
 		"blocks": 27,
-		"translatable": 13,
+		"translatable": 14,
 		"tableCells": 16,
 		"modules": 7,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 8,
-		"payloadChars": 4078,
+		"payloadChars": 4116,
 		"dupBlocks": 0
 	},
 	"wu2026-p6": {
 		"blocks": 121,
-		"translatable": 41,
+		"translatable": 53,
 		"tableCells": 96,
-		"modules": 12,
+		"modules": 9,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 19,
-		"payloadChars": 2323,
-		"dupBlocks": 9
+		"maxBlocksPerChunk": 21,
+		"payloadChars": 2682,
+		"dupBlocks": 13
 	}
 }

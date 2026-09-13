@@ -22,14 +22,12 @@
 		"type": "paragraph",
 		"column": -1,
 		"readingIndex": 3,
-		"mode": "preserve",
 		"text": "Xiaofei Wu1· Huiqing Gao2· Yuanyuan Gao1"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
 		"readingIndex": 4,
-		"mode": "preserve",
 		"text": "Received: 3 December 2025 / Revised: 30 "
 	},
 	{
@@ -50,7 +48,7 @@
 		"readingIndex": 7,
 		"tableRow": 0,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Weifeng Han hanweifeng1981@163.com"
 	},
 	{
@@ -59,7 +57,7 @@
 		"readingIndex": 8,
 		"tableRow": 1,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Yuxi Ge gmy1986@126.com"
 	},
 	{
@@ -182,7 +180,7 @@
 		"readingIndex": 22,
 		"tableRow": 0,
 		"tableCol": 2,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Xinyi Zhou xin_13.40@126.com"
 	},
 	{
@@ -200,7 +198,7 @@
 		"readingIndex": 24,
 		"tableRow": 1,
 		"tableCol": 2,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Shudong Hu hsd2001054@163.com"
 	},
 	{
@@ -209,7 +207,7 @@
 		"readingIndex": 25,
 		"tableRow": 1,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Shudong Hu"
 	},
 	{

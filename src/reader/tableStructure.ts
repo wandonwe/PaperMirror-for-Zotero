@@ -64,7 +64,7 @@ export interface TableCell {
 //   citation-label       "Kim et al,19 2022"、"Nacif et al. (2012)"
 // 尾部脚注符 (*†‡§¶) 与上标引用数字不影响匹配。
 
-export type PreserveReason = 'glossary' | 'defined-abbreviation' | 'citation-label' | 'data' | 'symbol' | 'name' | 'identifier' | 'structure-ambiguous' | 'empty' | 'column-data';
+export type PreserveReason = 'glossary' | 'defined-abbreviation' | 'citation-label' | 'data' | 'symbol' | 'identifier' | 'empty';
 
 export interface CellPreserveEvidence {
 	noTranslate: Set<string>;
@@ -331,16 +331,18 @@ export function buildTableModel(
 		//  - straddles 是结构问题,不是"内容无需翻译":单独记为 structure-ambiguous,
 		//    不再混进 data;
 		//  - 每个不翻译的格都带原因,摘要里看得见。
+		// 3.0.0:只有精确规则能认定的格才保留 —— 空格、纯标识、纯数字/符号、等级标记、
+		// 用户不译词、已定义缩写、引用标签。以前的 structure-ambiguous(跨列)、name(表里有邮箱
+		// 时的首字母大写形态)都是猜:跨列是排版问题,交给排版侧判"能不能放";人名由提示词原样保留。
 		let preserveReason: PreserveReason | undefined = preserveReasonFor(text, evidence);
 		if (!preserveReason) {
 			if (!text) { preserveReason = 'empty'; }
-			else if (slot.straddles) { preserveReason = 'structure-ambiguous'; }
 			else if (identifierOnly) { preserveReason = 'identifier'; }
-			else if (nameOnly) { preserveReason = 'name'; }
 			else if (row < headerDepth && hasWord && !isPureNumeric) { preserveReason = undefined; }
 			else if (tinySymbol || CLASS_LEVEL.test(text)) { preserveReason = 'symbol'; }
 			else if (looksTabular(text) || text.length < 3) { preserveReason = 'data'; }
 		}
+		void nameOnly;
 		const kind: TableCell['kind'] = preserveReason ? 'data' : 'text';
 		cells.push({
 			id: `page-${pageIndex}-table-${tableIndex}-r${row}-c${col}`,
@@ -546,7 +548,7 @@ export function buildTextTableModel(
 		if (!preserveReason) {
 			if (!text) { preserveReason = 'empty'; }
 			else if (!hasWord || tinySymbol || CLASS_LEVEL.test(text)) { preserveReason = 'symbol'; }
-			else if (!d.straddles && (looksTabular(text) || text.length < 3)) { preserveReason = 'data'; }
+			else if (looksTabular(text) || text.length < 3) { preserveReason = 'data'; }
 		}
 		const kind: TableCell['kind'] = preserveReason ? 'data' : 'text';
 		cells.push({
@@ -672,15 +674,9 @@ function coerceNumericColumns(cells: TableCell[], colCount: number, headerDepth 
 		if (body.length < 3) {
 			continue;
 		}
-		const data = body.filter(cell => cell.kind === 'data').length;
-		if (data / body.length >= 0.7) {
-			for (const cell of body) {
-				cell.kind = 'data';
-				// 2.12.13:被"整列多数是数据"带成 data 的格,原因记 column-data —— 摘要里能看出
-				// 这一格是被同列邻居定性的,不是自身内容判的。
-				if (!cell.preserveReason) { cell.preserveReason = 'column-data'; }
-			}
-		}
+		// 3.0.0:去掉"整列多数是数据就整列保留"。同列邻居是数字,证明不了这一格的词不用翻;
+		// 有词的格翻译,回声的格由验收放行,多花的是一次请求,少翻的却是读者看不见的内容。
+		void body;
 	}
 }
 

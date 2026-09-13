@@ -16,58 +16,43 @@
 		"type": "paragraph",
 		"column": -1,
 		"readingIndex": 2,
-		"mode": "preserve",
 		"text": "Christian Booz, MD • Jochen Nöske, MED •"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
 		"readingIndex": 3,
-		"mode": "preserve",
-		"text": "Ibrahim Yel, MD • Lukas Lenga, MD • Tatj"
-	},
-	{
-		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 4,
 		"text": "From the Division of Experimental and Tr"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 5,
+		"readingIndex": 4,
 		"mode": "preserve",
 		"text": "Radiology 2019; 290:446–455 • https://do"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 6,
+		"readingIndex": 5,
 		"text": "Purpose: To assess the diagnostic perfor"
 	},
 	{
 		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 7,
+		"readingIndex": 6,
 		"text": "Conclusion: Color-coded dual-energy CT v"
 	},
 	{
 		"type": "paragraph",
-		"column": -1,
-		"readingIndex": 8,
-		"mode": "preserve",
-		"text": "©RSNA, 2018"
-	},
-	{
-		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 9,
+		"readingIndex": 7,
 		"text": "Lumbar disk herniation is a frequent deg"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 10,
+		"readingIndex": 8,
 		"text": "with application of iterative reconstruc"
 	}
 ]

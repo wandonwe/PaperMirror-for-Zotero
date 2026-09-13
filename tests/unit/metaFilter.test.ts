@@ -4,10 +4,11 @@ import { isMarginSidebar, isMetadataBlock, isRunningHeadOrFoot, isVerticalSliver
 
 // ---- the exact failure cases from the ESC review paper ----------------------
 
+// 3.0.0:拿不准就翻译。作者名单不再按形状保留 —— 人名由提示词原样保留,猜错形状的代价是丢一段正文。
 test('the author list that garbled the abstract is filtered', () => {
 	assert.equal(isMetadataBlock(
 		'Alexios S. Antonopoulos 1,2*, Andreas Angelopoulos1, Konstantinos Tsioufis1, Charalambos Antoniades 2, and Dimitris Tousoulis 1'
-	), true);
+	), false);
 });
 
 // 2.12.13 原则:译文侧默认全文翻译,元素类别只决定排版,不决定是否翻译。作者单位翻译机构名称。
@@ -84,10 +85,11 @@ test('a normal paragraph rect is not a vertical sliver', () => {
 	assert.equal(isVerticalSliver([54, 500, 292, 560]), false);
 });
 
+// 3.0.0:拿不准就翻译。
 test('semicolon-style rosters with inline superscripts and degrees are filtered', () => {
 	assert.equal(isMetadataBlock(
 		'Patrick W. Serruys1*, MD, PhD; Nozomi Kotoku1, MD; Bjarne L. Nørgaard2, MD, PhD; Scot Garg3, MD, PhD; Koen Nieman4, MD, PhD; Marc R. Dweck5, MD, PhD'
-	), true);
+	), false);
 });
 
 test('orphan affiliation numbers and author notes are filtered', () => {
@@ -106,14 +108,15 @@ test('a year inside body prose does not make it metadata', () => {
 
 // ---- the PLOS ONE front-matter sidebar that leaked into the translation -----
 
+// 3.0.0:拿不准就翻译。Citation/Editor/Published 标签行翻译(只有日期行、DOI 行按精确规则保留)。
 test('journal sidebar labels are filtered (Citation/Editor/Published/Data/Funding)', () => {
 	assert.equal(isMetadataBlock(
 		'Citation: Lu N, Di Y, Feng X-Y, Qiang J-W, Zhang J-w, Wang Y-g, et al. (2015) CT Perfusion with Acetazolamide Challenge in C6 Gliomas and Angiogenesis. PLoS ONE 10(3): e0121631. doi:10.1371/journal.pone.0121631'
-	), true);
+	), true); // 带 DOI、没有句子的引用行 = 精确标识规则,保留
 	assert.equal(isMetadataBlock(
 		'Academic Editor: Jonathan A Coles, Glasgow University, UNITED KINGDOM'
-	), true);
-	assert.equal(isMetadataBlock('Published: March 17, 2015'), true);
+	), false);
+	assert.equal(isMetadataBlock('Published: March 17, 2015'), false);
 	// 2.12.12 (内容保留规则审核第 2 条): Data Availability / Funding 后面跟的是自然语言,
 	// 不再按文本规则整段丢弃 —— 真页边栏里的仍由 isMarginSidebar(带 rect)接住。
 	assert.equal(isMetadataBlock(
@@ -124,10 +127,11 @@ test('journal sidebar labels are filtered (Citation/Editor/Published/Data/Fundin
 	), false);
 });
 
+// 3.0.0:拿不准就翻译。栏目条翻译。
 test('article-type banners are filtered', () => {
-	assert.equal(isMetadataBlock('RESEARCH ARTICLE'), true);
-	assert.equal(isMetadataBlock('OPEN ACCESS'), true);
-	assert.equal(isMetadataBlock('Review'), true);
+	assert.equal(isMetadataBlock('RESEARCH ARTICLE'), false);
+	assert.equal(isMetadataBlock('OPEN ACCESS'), false);
+	assert.equal(isMetadataBlock('Review'), false);
 });
 
 // 2.12.13 原则:译文侧默认全文翻译,元素类别只决定排版,不决定是否翻译。
@@ -309,9 +313,10 @@ test('短单位块照旧丢弃 —— 密度判据不放松近距离的防守', 
 
 // ---- 2.5.13: Springer 间隔号署名行 (wu2026-p1 实证) --------------------------
 
+// 3.0.0:署名行翻译,人名由提示词原样保留。
 test('an interpunct-separated author byline is metadata (·-style, 2.5.13)', async () => {
 	const { isMetadataBlock } = await import('../../src/reader/metaFilter');
-	assert.equal(isMetadataBlock('Xiaofei Wu1· Huiqing Gao2· Yuanyuan Gao1· Huimin Zha1· Xinyi Zhou3· Shudong Hu1· Weifeng Han4· Yuxi Ge1'), true);
+	assert.equal(isMetadataBlock('Xiaofei Wu1· Huiqing Gao2· Yuanyuan Gao1· Huimin Zha1· Xinyi Zhou3· Shudong Hu1· Weifeng Han4· Yuxi Ge1'), false);
 	// Keywords 行同样用 · 分隔,但含小写普通词 —— 不是署名。
 	assert.equal(isMetadataBlock('Photon-counting detector · Computed tomography · Colorectal polyps · Image quality · Diagnostic performance'), false);
 });

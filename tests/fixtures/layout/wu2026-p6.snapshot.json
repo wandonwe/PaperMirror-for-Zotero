@@ -317,7 +317,7 @@
 		"readingIndex": 35,
 		"tableRow": 18,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "SNR Signal-to-noise ratio, CNR Contrast-"
 	},
 	{
@@ -326,7 +326,7 @@
 		"readingIndex": 36,
 		"tableRow": 18,
 		"tableCol": 2,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "ratio, differences"
 	},
 	{
@@ -335,7 +335,7 @@
 		"readingIndex": 37,
 		"tableRow": 19,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "(95% CI) present paired mean differences"
 	},
 	{
@@ -344,7 +344,7 @@
 		"readingIndex": 38,
 		"tableRow": 19,
 		"tableCol": 2,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "confidence inter-"
 	},
 	{
@@ -621,7 +621,7 @@
 		"readingIndex": 74,
 		"tableRow": 10,
 		"tableCol": 5,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Fig. 3 Sensitivity comparison of EID-CT "
 	},
 	{
@@ -630,7 +630,7 @@
 		"readingIndex": 75,
 		"tableRow": 11,
 		"tableCol": 5,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "colorectal polyps stratified by polyp si"
 	},
 	{
@@ -639,7 +639,7 @@
 		"readingIndex": 76,
 		"tableRow": 13,
 		"tableCol": 5,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Table 5 Comparison of reader diagnostic "
 	},
 	{
@@ -648,7 +648,7 @@
 		"readingIndex": 77,
 		"tableRow": 14,
 		"tableCol": 4,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "and PCD-CT stratified by polyp size"
 	},
 	{
@@ -657,7 +657,7 @@
 		"readingIndex": 78,
 		"tableRow": 15,
 		"tableCol": 3,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Polyp size"
 	},
 	{
@@ -675,7 +675,7 @@
 		"readingIndex": 80,
 		"tableRow": 15,
 		"tableCol": 5,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "PCD-CT"
 	},
 	{
@@ -693,7 +693,7 @@
 		"readingIndex": 82,
 		"tableRow": 15,
 		"tableCol": 7,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "P value"
 	},
 	{
@@ -711,7 +711,7 @@
 		"readingIndex": 84,
 		"tableRow": 16,
 		"tableCol": 5,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Confidence"
 	},
 	{
