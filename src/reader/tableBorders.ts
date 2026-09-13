@@ -121,6 +121,15 @@ export interface BorderGridOptions {
 	tol?: number;
 	/** 最短可用线段。默认 6 —— 比这更短的是勾号、脚注符,不是表格线。 */
 	minLen?: number;
+	/**
+	 * 最窄的格(点)。默认 5 —— 比最小的可读字号还小,装不下任何文字 (2.12.10)。
+	 *
+	 * 期刊表格的小节标题带常常是"上缝 3.3pt + 灰带 9pt + 下缝 3.7pt":两块填充之间
+	 * 留着一条白缝,缝的两边各一条边。缝不是格 —— 2024 ESC 指南 p87 因此报了 35 行,
+	 * 实际(pdfplumber 独立切表、肉眼核对)是 27 行,多出来的 8 条正好是 4 条标题带的 8 条缝。
+	 * 窄于这个数的格,两条边界合成一条(取中点)。
+	 */
+	minCell?: number;
 }
 
 /**
@@ -138,6 +147,17 @@ export interface BorderGridOptions {
 export function borderGrids(segments: Segment[], options: BorderGridOptions): BorderGrid[] {
 	const tol = options.tol ?? 1.5;
 	const minLen = options.minLen ?? 6;
+	const minCell = options.minCell ?? 5;
+	// 窄于 minCell 的格是两块填充之间的缝,不是格:两条边界合成一条。
+	const collapseThin = (xs: number[]): number[] => {
+		const out: number[] = [];
+		for (const x of xs) {
+			const last = out[out.length - 1];
+			if (last !== undefined && x - last < minCell) { out[out.length - 1] = (last + x) / 2; }
+			else { out.push(x); }
+		}
+		return out;
+	};
 	const { h, v } = classify(segments, tol, minLen);
 	if (h.length < 3 || v.length < 3) {
 		return [];
@@ -197,8 +217,8 @@ export function borderGrids(segments: Segment[], options: BorderGridOptions): Bo
 		if (spanX <= 0 || spanY <= 0) { continue; }
 		// 围合判据: 列边界要纵向盖住 ≥60% 表高,行边界要横向盖住 ≥60% 表宽。
 		// 用**实际覆盖区间**,不把短线延长。
-		const cols = coverage(g.lines, spanY * 0.6);
-		const rowsUp = coverage(gh, spanX * 0.6);
+		const cols = collapseThin(coverage(g.lines, spanY * 0.6));
+		const rowsUp = collapseThin(coverage(gh, spanX * 0.6));
 		// ≥2 列且 ≥2 行 = 各至少 3 条边界。以前只要 2 条线,于是一个单列的框
 		// (真机 p44 的 1×6)也成了"网格" —— 一个盒子不是需要分格归属的表。
 		if (cols.length < 3 || rowsUp.length < 3) { continue; }

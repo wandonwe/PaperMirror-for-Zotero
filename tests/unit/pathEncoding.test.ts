@@ -525,3 +525,86 @@ test('多表页:同一 x 上几张表各自的竖线不许连成一根 (2.12.10)
 	assert.equal(gs.length, 2, `应为两张表,实得 ${gs.length}`);
 	assert.ok(gs.every((g) => g.rows.length === 3 && g.columns.length === 3), '每张 2×2');
 });
+
+// ---------------------------------------------------------------- 2.12.11:真机文档 (2024 ESC CCS 指南) 逐页核对
+
+/**
+ * 用户提供的原始 PDF。真机 2.12.9 的 18 页 `edgeOps` 与本地 5.7.284 逐页 **18/18 分毫不差**,
+ * 所以这些夹具就是真机看到的操作符列表。真值两路:pdfplumber 独立切表 + 渲染叠加肉眼核对
+ * (Grade 列 pdfplumber 漏了,肉眼看是真的一列,以肉眼为准)。
+ */
+test('ESC p87 推荐表:3 列 27 行,与 pdfplumber 逐行一致 (2.12.11)', () => {
+	const r = rawops('esc2024-p87-new');
+	const stats = newStats();
+	const gs = borderGrids(scan(r, stats), { pageHeight: r.height });
+	assert.equal(stats.skipped, 0);
+	assert.equal(gs.length, 1, `应为 1 张表,实得 ${gs.length}`);
+	const g = gs[0]!;
+	// 真机 2.12.9 只看到右侧 2 列(x486..558):推荐文字那一列的色块是"三条 lineTo + fill",
+	// 第四条边(左边 x=42.5)是填充隐式闭合出来的。不认隐式闭合,这一列就没有。
+	const truthCols = [42.5, 487.0, 522.6, 558.4];
+	assert.equal(g.columns.length, 4, `应为 3 列,实得 ${g.columns.length - 1}`);
+	g.columns.forEach((x, i) => assert.ok(Math.abs(x - truthCols[i]!) < 1.5, `列边 ${i}: 应≈${truthCols[i]},实得 ${x.toFixed(1)}`));
+	// 4 条小节标题带各带上下两条 3~4pt 的白缝;缝不是行。35 - 8 = 27。
+	const truthRows = [59.0, 83.8, 109.2, 123.9, 149.8, 294.7, 332.2, 358.9, 372.7, 397.7, 410.7, 436.2, 450.9, 476.7,
+		489.7, 502.7, 515.7, 528.7, 542.2, 556.9, 570.7, 595.7, 608.7, 633.7, 658.7, 683.7, 708.7, 733.6];
+	assert.equal(g.rows.length, truthRows.length, `应为 27 行,实得 ${g.rows.length - 1}`);
+	// pdfplumber 把缝并到标题带的边上,我取缝的中点,标题带两侧差 ≤2pt;其余行 ≤1pt。
+	g.rows.forEach((y, i) => assert.ok(Math.abs(y - truthRows[i]!) < 2.5, `行边 ${i}: 应≈${truthRows[i]},实得 ${y.toFixed(1)}`));
+});
+
+test('ESC p22:左表 Grade 列是真的一列(pdfplumber 漏了,肉眼核对),右表 3×8 (2.12.11)', () => {
+	const r = rawops('esc2024-p22-new');
+	const gs = borderGrids(scan(r), { pageHeight: r.height });
+	assert.equal(gs.length, 2, `应为 2 张表,实得 ${gs.length}`);
+	const [left, right] = gs;
+	assert.equal(left!.columns.length - 1, 3, 'Grade / 描述 / 描述 三列');
+	assert.ok(Math.abs(left!.columns[0]! - 36.9) < 1.5, `Grade 列左边应≈36.9,实得 ${left!.columns[0]!.toFixed(1)}`);
+	assert.equal(left!.rows.length - 1, 5, '表头 + I/II/III/IV');
+	assert.equal(right!.columns.length - 1, 3);
+	const truthRows = [321.1, 344.3, 358.9, 432.8, 494.3, 508.9, 582.8, 643.8, 704.1];
+	assert.equal(right!.rows.length, truthRows.length, `右表应为 8 行,实得 ${right!.rows.length - 1}`);
+	right!.rows.forEach((y, i) => assert.ok(Math.abs(y - truthRows[i]!) < 2.5, `右表行边 ${i}: 应≈${truthRows[i]},实得 ${y.toFixed(1)}`));
+});
+
+test('ESC p45:两张推荐表 3×6 与 3×8 (2.12.11)', () => {
+	const r = rawops('esc2024-p45-new');
+	const gs = borderGrids(scan(r), { pageHeight: r.height });
+	assert.equal(gs.length, 2);
+	assert.deepEqual(gs.map((g) => `${g.columns.length - 1}x${g.rows.length - 1}`), ['3x6', '3x8']);
+});
+
+test('ESC 插图页 p25/p44/p80:裁剪路径不画、曲线不再误判、没有网格 (2.12.11)', () => {
+	// 真机 2.12.9:这三页的网格恰好是整页 [0,0,595,794],p44 有 36/80 条路径被 skipped。
+	for (const [pg, minClip] of [[25, 20], [44, 16], [80, 29]] as const) {
+		const r = rawops(`esc2024-p${pg}-new`);
+		const stats = newStats();
+		const segs = scan(r, stats);
+		assert.ok(stats.unpainted >= minClip, `p${pg}: 裁剪路径应≥${minClip},实得 ${stats.unpainted}`);
+		assert.equal(stats.skipped, 0, `p${pg}: 曲线包围盒改紧后不该再有误判,实得 skipped=${stats.skipped}`);
+		assert.equal(borderGrids(segs, { pageHeight: r.height }).length, 0, `p${pg}: 插图页不该有网格`);
+	}
+});
+
+test('窄于 5pt 的格是缝不是格;9pt 的标题带是格 (2.12.11)', () => {
+	// 上缝 3.3 + 灰带 9 + 下缝 3.7:两条缝各合成一条线,标题带保留。
+	const ys = [100, 120, 123.3, 132.3, 136, 156, 176];
+	const segs: Segment[] = [];
+	for (const y of ys) { segs.push([50, y, 350, y]); }
+	for (const x of [50, 200, 350]) { segs.push([x, 100, x, 176]); }
+	const g = borderGrid(segs, { pageHeight: 500 })!;
+	assert.equal(g.rows.length - 1, 4, `应为 4 行(缝合掉两条),实得 ${g.rows.length - 1}`);
+	const heights = g.rows.slice(1).map((y, i) => y - g.rows[i]!);
+	assert.ok(heights.every((h) => h >= 5), `没有一行窄于 5pt:${heights.map((h) => h.toFixed(1))}`);
+	assert.ok(heights.some((h) => Math.abs(h - 12.5) < 0.5), '标题带 = 9 + 两侧半条缝 ≈ 12.5');
+});
+
+test('反向锁:9pt 的行紧挨着正常行时也必须保留 —— 阈值不许悄悄放大 (2.12.11)', () => {
+	// 上一条锁里标题带夹在两条缝之间,阈值放到 10 时行数碰巧不变(变异验证抓到)。
+	// 这里让 9pt 的行直接挨着一条 21pt 的行:阈值 ≥9 就会把它合掉。
+	const segs: Segment[] = [];
+	for (const y of [100, 109, 130, 151]) { segs.push([50, y, 350, y]); }
+	for (const x of [50, 200, 350]) { segs.push([x, 100, x, 151]); }
+	const g = borderGrid(segs, { pageHeight: 500 })!;
+	assert.equal(g.rows.length - 1, 3, `9pt 的行要保留,实得 ${g.rows.length - 1} 行`);
+});
