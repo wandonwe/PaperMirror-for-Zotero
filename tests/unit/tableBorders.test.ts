@@ -225,7 +225,7 @@ test('码认不出时按参数形状认出 constructPath (2.12.7 真机故障)',
 	const WRONG = 77; // 运行时真实的 constructPath 码,与内置的 91 不同
 	const fn = [WRONG];
 	const args = [[[OP.moveTo, OP.lineTo], [10, 20, 110, 20]]];
-	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false, shapeUnknown: 0, newShape: 0, unpainted: 0 };
 	const segs = segmentsFromOperatorList(fn, args as never, {}, 20000, stats);
 	assert.equal(segs.length, 1, '码认不出也必须取到这条线段');
 	assert.deepEqual(segs[0], [10, 20, 110, 20]);
@@ -240,7 +240,7 @@ test('子操作映射不平就整条跳过,绝不按错步长继续读 (2.12.7)'
 	const fn = [OP.constructPath];
 	// 声称两个 moveTo/lineTo(该吃 4 个坐标),却给了 7 个 —— 映射对不上。
 	const args = [[[OP.moveTo, OP.lineTo], [1, 2, 3, 4, 5, 6, 7]]];
-	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false, shapeUnknown: 0, newShape: 0, unpainted: 0 };
 	const segs = segmentsFromOperatorList(fn, args as never, {}, 20000, stats);
 	assert.equal(segs.length, 0, '账不平必须一条都不产出');
 	assert.equal(stats.skipped, 1, '并且要记下来');
@@ -249,7 +249,7 @@ test('子操作映射不平就整条跳过,绝不按错步长继续读 (2.12.7)'
 test('未知子操作码同样让整条路径被跳过 (2.12.7)', () => {
 	const fn = [OP.constructPath];
 	const args = [[[OP.moveTo, 250, OP.lineTo], [1, 2, 3, 4]]];
-	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false, shapeUnknown: 0, newShape: 0, unpainted: 0 };
 	const segs = segmentsFromOperatorList(fn, args as never, {}, 20000, stats);
 	assert.equal(segs.length, 0, '出现未知子操作码时不许瞎猜步长');
 	assert.equal(stats.skipped, 1);
@@ -264,7 +264,7 @@ test('形状判据不会把别的操作符误认成路径 (2.12.7)', () => {
 		[[3, 3], 0],
 		['img_1', 100, 200]
 	];
-	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false, shapeUnknown: 0, newShape: 0, unpainted: 0 };
 	const segs = segmentsFromOperatorList(fn, args as never, {}, 20000, stats);
 	assert.equal(segs.length, 0);
 	assert.equal(stats.byShape, 0, '这三种形状都不该被认成路径');
@@ -276,7 +276,7 @@ test('真机夹具在"取不到 OPS"的情形下也能取到全部线段 (2.12.7
 	const { segments, pageHeight } = edges('powers2019-p4-p1');
 	const grid = borderGrid(segments, { pageHeight })!;
 	assert.equal(grid.columns.length - 1, 3, '夹具本身仍是 3 列 —— 这条只是基准');
-	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false, shapeUnknown: 0, newShape: 0, unpainted: 0 };
 	assert.equal(stats.realOps, false, 'realOps 默认 false,遥测里能看出用的是内置码');
 });
 
@@ -286,7 +286,7 @@ test('未知子操作码即使"猜 2 个坐标"恰好配平,也必须跳过 (2.1
 	// 线段 —— 错位的线会推出一张假网格,比一条都不取更糟。
 	const fn = [OP.constructPath];
 	const args = [[[OP.moveTo, 250, OP.lineTo], [0, 0, 9, 9, 50, 0]]];
-	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false };
+	const stats = { ops: 0, byCode: 0, byShape: 0, skipped: 0, realOps: false, shapeUnknown: 0, newShape: 0, unpainted: 0 };
 	const segs = segmentsFromOperatorList(fn, args as never, {}, 20000, stats);
 	assert.equal(segs.length, 0, '未知子操作码一出现就必须整条跳过,不许靠"账平了"放行');
 	assert.equal(stats.skipped, 1);
