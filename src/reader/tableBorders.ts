@@ -190,25 +190,29 @@ export function borderGrids(segments: Segment[], options: BorderGridOptions): Bo
 		}
 		return out;
 	};
-	// 竖线按 y 区间连通分组:区间重叠(或间隔不超过 joinGap)的竖线属于同一张表。
-	// 不做笛卡尔积、不延长短线 —— 只按每条线**实际覆盖的区间**判连通。
-	const byFrom = [...vs].sort((a, b) => a.from - b.from);
-	const groups: { from: number; to: number; lines: typeof vs }[] = [];
-	for (const l of byFrom) {
-		const g = groups[groups.length - 1];
-		if (g && l.from <= g.to + tol * 2) {
-			g.lines.push(l);
-			g.to = Math.max(g.to, l.to);
-		}
-		else {
-			groups.push({ from: l.from, to: l.to, lines: [l] });
+	// Connected border components in BOTH dimensions. Overlapping y ranges
+	// alone join independent left/right tables and destroy coverage thresholds.
+	const lines = [...hs, ...vs];
+	const parents = lines.map((_, i) => i);
+	const root = (i: number): number => { while (parents[i] !== i) { parents[i] = parents[parents[i]!]!; i = parents[i]!; } return i; };
+	const joinGap = Math.max(tol * 2, minCell);
+	for (let hi = 0; hi < hs.length; hi++) for (let vi = 0; vi < vs.length; vi++) {
+		const h = hs[hi]!, v = vs[vi]!;
+		if (v.pos >= h.from - joinGap && v.pos <= h.to + joinGap && h.pos >= v.from - joinGap && h.pos <= v.to + joinGap) {
+			parents[root(hi)] = root(hs.length + vi);
 		}
 	}
+	const components = new Map<number, { horizontal: Line[]; vertical: Line[] }>();
+	lines.forEach((line, i) => {
+		const key = root(i), component = components.get(key) ?? { horizontal: [], vertical: [] };
+		(i < hs.length ? component.horizontal : component.vertical).push(line);
+		components.set(key, component);
+	});
 	const out: BorderGrid[] = [];
-	for (const g of groups) {
+	for (const component of components.values()) {
+		const g = { lines: component.vertical };
+		const gh = component.horizontal;
 		if (g.lines.length < 3) { continue; }
-		// 这一组的横线:位置落在组的 y 区间内。
-		const gh = hs.filter(l => l.pos >= g.from - tol && l.pos <= g.to + tol);
 		if (gh.length < 3) { continue; }
 		const xMin = Math.min(...g.lines.map(l => l.pos), ...gh.map(l => l.from));
 		const xMax = Math.max(...g.lines.map(l => l.pos), ...gh.map(l => l.to));
