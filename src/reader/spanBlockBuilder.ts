@@ -1,3 +1,4 @@
+import { semanticBoundary } from './semanticBoundary';
 import { extractAbbreviationTables } from './abbreviationTable';
 import { columnOfX, rowOfTop } from './tableBorders';
 import { imageCaptionRegions, withinCaption, markImageCaptions } from './imageCaption';
@@ -489,6 +490,7 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 		if (!next) {
 			break;
 		}
+		if (semanticBoundary(lineText(line), lineText(next))) { flush(); continue; }
 		// 边框硬屏障: a figure between two lines separates layout regions.
 		if (obstacleBetween(line.rect, next.rect, obstacles)) {
 			flush();
@@ -867,7 +869,15 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		draft[i]!.gapAfter = draft[i]!.rect[1] - draft[i + 1]!.rect[3];
 	}
 
-	const merged = planMerges(draft).map((indexes) => {
+	const merged = planMerges(draft).flatMap(indexes => {
+  const groups: number[][] = [];
+  for (const index of indexes) {
+   const last = groups[groups.length - 1];
+   if (!last || semanticBoundary(draft[last[last.length - 1]!]!.text, draft[index]!.text)) groups.push([index]);
+   else last.push(index);
+  }
+  return groups;
+ }).map((indexes) => {
 		const members = indexes.map(i => draft[i]!);
 		const head = members[0]!;
 		let rect = head.rect;

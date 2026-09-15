@@ -51,3 +51,8 @@ test('ownership failure remains in diagnostics after page content is released',a
  assert.equal(rows[0]?.tableStructureIssue,'duplicate-member:a');
  assert.equal(JSON.stringify(rows).includes('Private source text'),false);
 });
+
+test('assigned source cells cannot silently move to another row while conserving their text',()=>{
+ const source={id:'cell',sourceText:'MCA',tableId:'t',tableRow:1,tableCol:0};
+ assert.ok(auditTableOwnership([source],[{...source,tableRow:2}]).includes('cell-reassigned:cell:cell'));
+});

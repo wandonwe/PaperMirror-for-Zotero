@@ -1,3 +1,4 @@
+import { StructureCache } from './structureCache';
 /**
  * Per-page text extraction.
  *
@@ -125,6 +126,7 @@ export interface ExtractInputs {
  * "等 PDFWorker"与"等文本层渲染"分开 —— 不分开就只能猜。
  */
 export interface ExtractPhases {
+ structureCacheHit?: boolean;
 	obstaclesMs: number;
 	/**
 	 * 2.12.6 边框取证的可观测性。上一版把网格接进了建格却**没有任何遥测**,
@@ -182,6 +184,12 @@ export interface ExtractPhases {
 }
 
 export class TextExtractor implements PageParser {
+ private structureCache=new StructureCache();
+ private extracting=new Map<string,Promise<SourceBlock[]>>();
+ private structureKey(pageIndex:number):string {
+  return JSON.stringify(['structure-3.3.0-1',pageIndex,this.currentExtractInputs(pageIndex)]);
+ }
+
 	private reader: ReaderLike;
 	private includeReferences: boolean;
 	private referencesStartedByPage = new Map<number, boolean>();
@@ -456,7 +464,21 @@ export class TextExtractor implements PageParser {
 		}
 	}
 
-	async extractPage(pageIndex: number): Promise<SourceBlock[]> {
+ async extractPage(pageIndex: number): Promise<SourceBlock[]> {
+  const key=this.structureKey(pageIndex),hit=this.structureCache.get(key);
+  if(hit){this.inputsByPage.set(pageIndex,this.currentExtractInputs(pageIndex));const phases=this.phasesByPage.get(pageIndex);if(phases)phases.structureCacheHit=true;return hit;}
+  const running=this.extracting.get(key);
+  if(running)return JSON.parse(JSON.stringify(await running)) as SourceBlock[];
+  const work=this.extractPageUncached(pageIndex);
+  this.extracting.set(key,work);
+  try {
+   const blocks=await work,path=this.pathByPage.get(pageIndex);
+   // DOM text layers may still be changing. Cache only PDF-coordinate sources.
+   if(blocks.length&&(path==='chars'||path==='text-content'))this.structureCache.put(key,blocks);
+   return blocks;
+  } finally {if(this.extracting.get(key)===work)this.extracting.delete(key);}
+ }
+ private async extractPageUncached(pageIndex: number): Promise<SourceBlock[]> {
 		// 2.8.7: 先把这次抽取实际依赖的可变输入拍下来 —— 事后重解析时逐项比对,
 		// 变了就把结构比对结论降为 unverifiable,不拿"碰巧相等"当证据。
 		this.inputsByPage.set(pageIndex, this.currentExtractInputs(pageIndex));

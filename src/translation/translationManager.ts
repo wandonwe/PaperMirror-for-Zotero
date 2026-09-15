@@ -160,6 +160,14 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 	if (!/^zh/i.test(targetLang)) {
 		return true;
 	}
+	// A provider that preserves paragraph boundaries can be validated locally:
+ // an unchanged byline must not dominate the language score of translated prose.
+ const sourceParts=source.split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
+ const targetParts=t.split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
+ if(sourceParts.length>1 && sourceParts.length===targetParts.length
+  && sourceParts.some(p=>looksLikeAuthorNameList(p)||looksLikePersonNames(p))) {
+  return sourceParts.every((p,i)=>looksTranslated(p,targetParts[i]!,targetLang,opts));
+ }
 	// Preserve only identifiable author/journal fragments, never all reference prose.
 	if (opts?.isReference && isEcho(source, t) && (looksLikeAuthorNameList(source.replace(/^\d+\.\s*/, ''))
 		|| looksLikePersonNames(source.replace(/^\d+\.\s*/, ''))
@@ -2773,7 +2781,7 @@ export class TranslationManager {
 			state.rejectHistory!.set(id, [...(state.rejectHistory!.get(id) ?? []), reason].slice(-8));
 		};
 		const rejectedResponse = (id: string, text: string, phase: string): string => {
-			if (!refById.has(id)) return phase;
+			if (!refById.has(id)) return `${phase}:${translationRejectReason(sourceById.get(id) ?? '', text, target) ?? 'integrity'}`;
 			const source = sourceById.get(id) ?? '';
 			return referenceRejectReason(source, text, phase);
 		};
@@ -2793,7 +2801,7 @@ export class TranslationManager {
 			}
 			const reg = regById.get(id);
 			if (reg && !reg.ok(text)) {
-				noteReject(id, 'placeholder');
+				noteReject(id, reg.status.last?.missing.length ? 'placeholder:missing' : 'placeholder:unexpected');
 				return false;
 			}
 			return true;
@@ -3377,5 +3385,15 @@ export function referenceRejectReason(source: string, translated: string, phase:
  if(!translated.trim()) return `${phase}:empty`;
  if(isEcho(source,translated)) return `${phase}:reference-echo`;
  if(isTruncatedTranslation(stripProtectable(source),stripProtectable(translated))) return `${phase}:reference-truncated`;
- return `${phase}:reference-language-or-residue`;
+ return `${phase}:reference-${translationRejectReason(source,translated,'zh-CN') ?? 'integrity'}`;
+}
+
+/** Same validator, with a stable, text-free explanation for its rejection. */
+export function translationRejectReason(source: string, translated: string, target: string): string | null {
+ if (looksTranslated(source, translated, target)) return null;
+ if (!translated.trim()) return 'empty';
+ if (isEcho(source, translated)) return 'echo';
+ if (isTruncatedTranslation(stripProtectable(source), stripProtectable(translated))) return 'truncated';
+ if (hasMixedCopiedResidue(source, translated)) return 'copied-residue';
+ return 'target-language-ratio';
 }

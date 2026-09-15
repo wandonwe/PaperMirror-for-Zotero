@@ -1,3 +1,4 @@
+import { auditTableModel } from './tableModel';
 /**
  * Document IR — 显式化的中间表示契约层 (1.1.0 目标架构第 1 步)。
  *
@@ -59,7 +60,7 @@ export interface IRViolation {
  *  - boundingBox 尺寸为正(0/负宽高会让像素换算与表格聚类静默出错)。
  */
 export function validatePageIR(ir: PageIR): IRViolation[] {
-	const out: IRViolation[] = [];
+	const out: IRViolation[] = auditTableModel(ir.blocks).map(detail => ({ invariant: 'table-model', detail }));
 	const seen = new Set<string>();
 	ir.blocks.forEach((b, i) => {
 		if (seen.has(b.id)) {
@@ -77,7 +78,7 @@ export function validatePageIR(ir: PageIR): IRViolation[] {
 			out.push({ invariant: 'table-cell-pair', blockId: b.id, detail: `tableRow=${b.tableRow} tableCol=${b.tableCol} must both be set` });
 		}
 		if (isCell && typeof b.column === 'number' && typeof b.tableCol === 'number'
-			&& b.column === b.tableCol && b.column > 0 && !b.id.includes('-table-')) {
+			&& b.column === b.tableCol && b.column > 0 && !b.tableId) {
 			// 弱信号,只在非合成 id 上报——真正的硬约束由 tableStructure 测试守。
 			out.push({ invariant: 'page-column-not-table-column', blockId: b.id, detail: `column ${b.column} suspicious` });
 		}

@@ -1,3 +1,4 @@
+import { auditTableModel, tableCellBounds } from '../ir/tableModel';
 import { auditTableOwnership } from './tableOwnership';
 /**
  * Table Row/Cell model for in-place cell translation.
@@ -697,7 +698,7 @@ function contained(box: Box, region: Box): number {
  */
 export function structureTableCells(...args: Parameters<typeof structureTableCellsUnchecked>): SourceBlock[] {
  const result=structureTableCellsUnchecked(...args);
- const issues=auditTableOwnership(args[0],result);
+ const issues=[...auditTableOwnership(args[0],result), ...auditTableModel(result.filter(b => tableCellBounds(b)))];
  return issues.length ? args[0].map(b=>({...b,tableStructureIssue:issues.slice(0,8).join(';')})) : result;
 }
 
@@ -801,7 +802,7 @@ function structureTableCellsUnchecked(
 						boundingBox: { x: cell.box.left, y: cell.box.top, width: cell.box.width, height: cell.box.height },
 						...cellPdfBounds(cell.box, originals, pageHeight),
 						tableGeometry: 'border' as const,
-						tableId: `page-${pageIndex}-border-${tableIndex}`, tableSource: 'border',
+						tableId: `page-${pageIndex}-border-${tableIndex}`, tableSource: 'border', tableConfidence: 'strong',
 						...(cell.rowSpan ? { tableRowSpan: cell.rowSpan } : {}),
 						...(cell.colSpan ? { tableColSpan: cell.colSpan } : {}),
 						lineRectsPdf: originals.flatMap(o => o.lineRectsPdf ?? []),
@@ -886,7 +887,7 @@ function structureTableCellsUnchecked(
 				sourceText: cell.text,
 				boundingBox: { x: cell.box.left, y: cell.box.top, width: cell.box.width, height: cell.box.height },
 				tableGeometry: 'inferred' as const,
-				tableId: `page-${pageIndex}-inferred-${tableIndex}`, tableSource: 'text-alignment',
+				tableId: `page-${pageIndex}-inferred-${tableIndex}`, tableSource: 'text-alignment', tableConfidence: 'tentative',
 				tableContentRectPdf: cellPdfBounds(inferredCellBox(cell, model, em), originals, pageHeight).tableRectPdf,
 				...(cell.rowSpan ? { tableRowSpan: cell.rowSpan } : {}),
 				...(cell.colSpan ? { tableColSpan: cell.colSpan } : {}),

@@ -94,6 +94,8 @@ export interface SourceBlock {
 	/** Shared identity/provenance for every table detector, independent of cell IDs. */
 	tableId?: string;
 	tableSource?: 'border' | 'text-alignment' | 'abbreviation';
+ /** Evidence strength, not a calibrated probability of correctness. */
+ tableConfidence?: 'strong' | 'tentative';
 	/** Structural conversion was rejected; original content was retained. */
 	tableStructureIssue?: string;
 	/** Extracted caption inside a composite image; renderer must verify a text-only background. */

@@ -828,18 +828,19 @@ test('extraction runs outside provider slots with its own concurrency cap of 2',
 });
 
 test('cancelled pages persist already-translated segments (增量持久化)', async () => {
+	let actualCalls = 0;
 	const written: { hash: string; translatedText: string }[] = [];
 	const { deps } = makeDeps({
 		extractPage: async (pageIndex) => [0, 1].map(i => ({
 			id: `page-${pageIndex}-block-${i}`,
 			pageIndex, order: i, type: 'paragraph' as const,
-			sourceText: 'x'.repeat(5000) // two chunks → chunk 1 completes, chunk 2 cancels
+			sourceText: (i === 0 ? 'x' : 'y').repeat(5000) // two chunks → chunk 1 completes, chunk 2 cancels
 		})),
 		writeSegments: async (_p, entries) => { written.push(...entries); },
 		translateRequest: (() => {
 			let calls = 0;
 			return async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
-				calls++;
+				calls++;actualCalls++;
 				if (calls === 1) {
 					return { translations: request.blocks.map(b => ({ id: b.id, translatedText: '第一批译文成功保留' })) };
 				}
@@ -852,6 +853,7 @@ test('cancelled pages persist already-translated segments (增量持久化)', as
 	});
 	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
 	await manager.ensurePage(0, 10);
+	assert.ok(actualCalls >= 2, 'must exercise a real second request cancellation');
 	assert.ok(written.length >= 1, 'the completed chunk was persisted despite the cancel');
 	assert.equal(written[0]!.translatedText, '第一批译文成功保留');
 	manager.dispose();

@@ -13,6 +13,9 @@ export function auditTableOwnership(before: Content[], after: Content[]): string
   for(const id of ids) {
    if(!sources.has(id)) {issues.push(`unknown-member:${cell.id}:${id}`);continue;}
    counts.set(id,(counts.get(id)??0)+1);
+   const source=sources.get(id)!;
+   if(source.tableId && (source.tableId!==cell.tableId || source.tableRow!==cell.tableRow || source.tableCol!==cell.tableCol
+    || (source.tableRowSpan??1)!==(cell.tableRowSpan??1) || (source.tableColSpan??1)!==(cell.tableColSpan??1))) issues.push(`cell-reassigned:${cell.id}:${id}`);
   }
   if(!ids.length) issues.push(`unowned-content:${cell.id}`);
   if(ids.every(id=>sources.has(id)) && inventory(cell.sourceText)!==inventory(ids.map(id=>sources.get(id)!.sourceText).join(''))) issues.push(`content-changed:${cell.id}`);

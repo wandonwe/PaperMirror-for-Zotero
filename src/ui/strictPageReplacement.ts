@@ -1,3 +1,5 @@
+import { RenderMeasurementCache } from './measurementCache';
+import { pageContentKey } from '../export/pageArchive';
 /**
  * 严格原位替换 — the 整页对照 renderer.
  *
@@ -109,7 +111,8 @@ const SHRINK_STEPS_ISOLATED = [0.94, 0.88, 0.82];
 /** 墙钟 (2.7.0): 浏览器窗口有 performance,单测环境退回 Date.now。 */
 const now = (): number =>
 	(typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
-const SHRINK_FLOOR_PX = 8.5;
+// PDF-point floor: screen pixels must shrink together with the page.
+const SHRINK_FLOOR_PT = 8.5;
 
 /**
  * 末位缩字是否允许作用于该块类型 (2.2.7, 计划 第三批 item7(b) · LO-3) — pure。
@@ -506,6 +509,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const BITMAP_SCALE = bitmapScaleFor(pageWidthPx, pageHeightPx);
 
 	const page = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
+ page.setAttribute('data-pm-content-key', pageContentKey(input.blocks, input.translations));
 	page.className = 'pm-repage';
 	page.setAttribute('data-pm-strict', 'true');
 	page.setAttribute('data-pm-page', String(input.pageIndex));
@@ -1044,7 +1048,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		const rolePt = (block.type === 'paragraph' || block.type === 'list') && inBand && !isTableCellBlock(block)
 			? anchorPt
 			: ownPt;
-		const fontPx = Math.max(6, rolePt * pxPerPoint * fontFactor);
+		// Apply the readability floor in PDF points, then scale the whole page.
+		const fontPx = Math.max(6, rolePt * fontFactor) * pxPerPoint;
 		node.style.fontSize = `${fontPx.toFixed(2)}px`;
 		const bg = blockPaper.get(block.id);
 		if (bg) {
@@ -1090,6 +1095,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	 * 内容区的超出部分是空白(墨迹在 em 框内,em 框与行框重合),不是多出来的一行:
 	 * 真多一行至少多 1em,0.35em 的容差永远吸收不了它,所以不会把溢出的块放行。
 	 */
+	const measurementCache = new RenderMeasurementCache();
 	const heightSlack = (item: StrictItem): number => Math.max(1.5, item.fontPx * 0.35);
 
 	/** Ladder-fit a hidden node; true when it fits its fixed rectangle. */
@@ -1126,15 +1132,17 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 					});
 					const parts = flowText(fullText, item.flowBoxes, (text, b, index, offset) => {
 						const child = nodes[index]!; fillSlice(child, offset, text.length);
-						return child.scrollHeight <= b.height + heightSlack(item) && child.scrollWidth <= b.width + 1.5;
+						return child.scrollHeight <= Math.round(b.height + heightSlack(item)) && child.scrollWidth <= b.width + 1.5;
 					});
 					if (parts) { let offset = 0; parts.forEach((text,i) => { fillSlice(nodes[i]!, offset, text.length); offset += text.length; }); item.lastOverflow = 'none'; return true; }
 					fillStyled(item.node, markup);
 					item.lastOverflow = 'height';
 					continue;
 				}
-				if (item.node.scrollHeight <= item.box.height + heightSlack(item)
-					&& item.node.scrollWidth <= item.box.width + 1.5) {
+    // CSSOM scroll sizes are integers; compare in the same rounded units.
+    const measured = measurementCache.measure(item.node, markup, () => ({height:item.node.scrollHeight,width:item.node.scrollWidth}));
+				if (measured.height <= Math.round(item.box.height + heightSlack(item))
+					&& measured.width <= item.box.width + 1.5) {
 					item.lastOverflow = 'none';
 					return true;
 				}
@@ -1423,11 +1431,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 					isTableCell: item.node.hasAttribute('data-pm-cell'),
 					tinyLine
 				});
+    const floor = Math.min(SHRINK_FLOOR_PT * pxPerPoint, item.fontPx * 0.82);
 				for (const factor of steps) {
-					const px = Math.max(Math.min(SHRINK_FLOOR_PX, item.fontPx * 0.82), item.fontPx * factor);
+					const px = Math.max(floor, item.fontPx * factor);
 					item.node.style.fontSize = `${px.toFixed(2)}px`;
 					fits = ladderFits(item);
-					if (fits || px <= SHRINK_FLOOR_PX) {
+					if (fits || px <= floor) {
 						break;
 					}
 				}
@@ -1639,11 +1648,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				applyBox(item, item.originalBox.width, item.originalBox.height);
 				let fits = ladderFits(item);
 				if (!fits) {
+     const floor = Math.min(SHRINK_FLOOR_PT * pxPerPoint, item.fontPx * 0.82);
 					for (const factor of SHRINK_STEPS) {
-						const px = Math.max(Math.min(SHRINK_FLOOR_PX, item.fontPx * 0.82), item.fontPx * factor);
+						const px = Math.max(floor, item.fontPx * factor);
 						item.node.style.fontSize = `${px.toFixed(2)}px`;
 						fits = ladderFits(item);
-						if (fits || px <= SHRINK_FLOOR_PX) {
+						if (fits || px <= floor) {
 							break;
 						}
 					}

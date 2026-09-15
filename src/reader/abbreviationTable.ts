@@ -44,7 +44,7 @@ export function extractAbbreviationTables(items: SpanItem[], pageIndex: number, 
    const rect=union(parts),text=parts.map(i=>i.text.trim()).join(col===0?'':' ');
    cells.push({id:`page-${pageIndex}-abbrev-${ti}-r${row}-c${col}`,pageIndex,order:cells.length,type:'paragraph',sourceText:text,fontSize:font,
     boundingBox:{x:rect[0],y:pageHeight-rect[3],width:rect[2]-rect[0],height:rect[3]-rect[1]},lineRectsPdf:[rect],
-    tableRow:row,tableCol:col,tableGeometry:'inferred',tableId:`page-${pageIndex}-abbreviation-${ti}`,tableSource:'abbreviation',memberIds:parts.map(p=>spanIds.get(p)!),tableContentRectPdf:[col===0?head.rect[0]-font*.4:split,e.bottom,col===0?split:right,e.top],
+    tableRow:row,tableCol:col,tableGeometry:'inferred',tableId:`page-${pageIndex}-abbreviation-${ti}`,tableSource:'abbreviation',tableConfidence:'strong',memberIds:parts.map(p=>spanIds.get(p)!),tableContentRectPdf:[col===0?head.rect[0]-font*.4:split,e.bottom,col===0?split:right,e.top],
     translationMode:col===0 && row>0?'preserve':'translate',...(col===0 && row>0?{preserveReason:'defined-abbreviation' as const}:{})});
   }
  }

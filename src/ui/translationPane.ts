@@ -1,3 +1,4 @@
+import { pageContentKey } from '../export/pageArchive';
 /**
  * Translation pane UI — DOM structure mirrors demo/index.html exactly:
  *
@@ -382,6 +383,7 @@ export class TranslationPane {
 	private slotDegradeTries: number[] = [];
 	/** 增量显示: 每槽上次画上去的译文修订号与时刻 (2.8.2)。 */
 	private slotRenderedRevision: number[] = [];
+ private finalPageKeys = new Map<number,string>();
 	private slotPartialAt: number[] = [];
 	/** One render at a time; re-prioritised between renders. */
 	private ensureTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1347,6 +1349,7 @@ export class TranslationPane {
 		this.slotRetryAt = [];
 		this.slotDegradeTries = [];
 		this.slotRenderedRevision = [];
+ this.finalPageKeys.clear();
 		this.slotPartialAt = [];
 		this.slotRenderSeq = [];
 		this.mounted.clear();
@@ -1526,6 +1529,7 @@ export class TranslationPane {
 		this.slotRetryAt = [];
 		this.slotDegradeTries = [];
 		this.slotRenderedRevision = [];
+ this.finalPageKeys.clear();
 		this.slotPartialAt = [];
 		this.slotRenderSeq = [];
 		this.mounted.clear();
@@ -1771,6 +1775,7 @@ export class TranslationPane {
 				// 槽被回收 = 下次进入是一次全新的重建,降级预算随之复位。
 				this.slotDegradeTries[i] = 0;
 				this.slotRenderedRevision[i] = 0;
+ this.finalPageKeys.delete(i);
 				this.slotPartialAt[i] = 0;
 				this.slots[i]!.replaceChildren(this.makeGhost(i));
 			}
@@ -1868,6 +1873,9 @@ export class TranslationPane {
 		if (this.viewKind === 'page') {
 			const revision = state.translationRevision ?? 0;
 			if (state.status === 'done') {
+    const key = pageContentKey(state.blocks,state.translations);
+    if (this.finalPageKeys.get(state.pageIndex) === key && this.slotState[state.pageIndex] === 'translated' && !this.slotDirty[state.pageIndex]) return;
+    this.finalPageKeys.set(state.pageIndex,key);
 				// 终态无条件重建,并记下最终修订号 —— 之后同一修订的重复通知
 				// 不会再触发一次重建。
 				this.slotRenderedRevision[state.pageIndex] = revision;

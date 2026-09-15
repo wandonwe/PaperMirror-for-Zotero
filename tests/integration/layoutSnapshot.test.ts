@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import contentInventory from '../fixtures/baseline/content-inventory.json';
 /**
  * 布局快照回归 (1.1.2, 无 BabelDOC 的回归测试集方案):
  *
@@ -68,6 +70,9 @@ test(`layout snapshots (${dumps.length} fixture(s))`, () => {
 	for (const file of dumps) {
 		const dump = JSON.parse(readFileSync(join(layoutDir, file), 'utf8')) as SpanDump;
 		const blocks = pipeline(dump);
+  const inventory=[...blocks.map(b=>b.sourceText).join('').normalize('NFKC').replace(/[^\p{L}\p{N}]/gu,'')].sort().join('');
+  assert.equal(createHash('sha256').update(inventory).digest('hex'),(contentInventory as Record<string,string>)[file],`${file}: full source character inventory changed`);
+
 		// 每个语料页同时也是 IR 契约的回归载体。
 		assert.deepEqual(validatePageIR({ pageIndex: 0, blocks }), [], `${file}: IR violations`);
 		const summary = summarize(blocks);

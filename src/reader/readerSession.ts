@@ -1,3 +1,5 @@
+import { temporaryPageArchive, pageContentKey } from '../export/pageArchive';
+import { showUnplacedTranslations } from '../ui/unplacedTranslations';
 /**
  * Per-reader-tab session: split view + pane + extraction + translation +
  * sync + notes, with complete teardown.
@@ -250,6 +252,8 @@ export class ReaderSession {
 	private placementStats = new Map<number, import('../ui/strictPageReplacement').StrictPageStats>();
 	/** 每页 placement 探针 (审核: 封面标题空洞定位): 每块的 base 位图/遮罩取样
 	 *  (baseInk/maskOpaque),分辨「底图缺字」与「遮罩误盖」。只几何+布尔,无文本。 */
+	private pageArchive = temporaryPageArchive();
+ private placementKeys = new Map<number,string>();
 	private placementProbe = new Map<number, import('../ui/strictPageReplacement').StrictProbeRow[]>();
 	/** 放弃清单 (2.7.0, 审核 B-1): 页索引 → 放弃块 id + 原因枚举串,无文本。 */
 	private abandonedBlocks = new Map<number, import('../ui/strictPageReplacement').AbandonedBlock[]>();
@@ -1053,10 +1057,30 @@ export class ReaderSession {
 		};
 	}
 
+ private archivePage(state: PageTranslationState, placement=false): void {
+  this.pageArchive.put(state.pageIndex, pageContentKey(state.blocks,state.translations), {
+   spans:null, spansMissing:'missing:not-rendered', blocks:state.blocks, blocksSource:'archived',
+   diagnostics: (placement ? joinPlacementOutcome([this.manager?.exportPageDiagnostics(state.pageIndex)] as Parameters<typeof joinPlacementOutcome>[0],this.abandonedBlocks)[0] : this.manager?.exportPageDiagnostics(state.pageIndex)) as Record<string,unknown>,
+   check:{structureMatch:'as-translated',blocksCompared:state.blocks.length},
+   translations:[...state.translations].map(([id,translatedText])=>({id,translatedText})),translationSource:'archived',
+   ...(placement ? {placement: {stats:this.placementStats.get(state.pageIndex),abandoned:this.abandonedBlocks.get(state.pageIndex),geometryAudit:this.geometryAudits.get(state.pageIndex)}} : {}),
+   ...(placement && this.placementProbe.has(state.pageIndex) ? {probe:this.placementProbe.get(state.pageIndex)} : {})
+  }, placement);
+ }
+ private resetPageArchive(): void {
+  void this.pageArchive.close();this.pageArchive=temporaryPageArchive();
+  this.placementKeys.clear();this.placementProbe.clear();this.abandonedBlocks.clear();this.geometryAudits.clear();this.placementStats.clear();
+ }
 	private onPageUpdate(state: PageTranslationState): void {
 		if (this.destroyed) {
 			return;
 		}
+  const key = pageContentKey(state.blocks, state.translations);
+  if (this.placementKeys.get(state.pageIndex) !== key) {
+   this.placementProbe.delete(state.pageIndex);this.abandonedBlocks.delete(state.pageIndex);
+   this.geometryAudits.delete(state.pageIndex);this.placementStats.delete(state.pageIndex);
+  }
+  if (state.blocks.length && (state.status === 'done' || state.status === 'error')) this.archivePage(state);
 		this.pane?.renderPage(state);
 		this.overlay?.setPageData(state.pageIndex, {
 			blocks: state.blocks,
@@ -1270,7 +1294,16 @@ export class ReaderSession {
 			: undefined;
 		const pageIndex = target?.pageIndex
 			?? (topPage ? topPage - 1 : adapter.getCurrentPageIndex(this.reader));
-		// Bring the PDF (and thus any on-page overlay) to the right page first.
+		const state = this.manager?.getPageState(pageIndex);
+  const failures = this.abandonedBlocks.get(pageIndex) ?? [];
+  const rows = failures.flatMap(f => {
+   const id=f.id.replace(/::p\d+$/, '');
+   const b = state?.blocks.find(b => b.id === id), t = state?.translations.get(id);
+   return b && t && f.reason !== 'echo' ? [{ source: b.sourceText, translation: t, reason: f.reason }] : [];
+  });
+  const doc = this.getMainWindow()?.document;
+  if (doc && showUnplacedTranslations(doc, rows, pageIndex + 1)) return;
+  // Bring the PDF (and thus any on-page overlay) to the right page first.
 		adapter.navigateToPage(this.reader, pageIndex);
 		if (target && target.element.isConnected) {
 			const boxes = Array.from(
@@ -1823,6 +1856,11 @@ export class ReaderSession {
 	}
 
 	private reportPlacement(pageIndex: number, element: HTMLElement): void {
+  const state = this.manager?.getPageState(pageIndex);
+  if (!state || element.getAttribute('data-pm-content-key') !== pageContentKey(state.blocks,state.translations)) return;
+  this.placementKeys.set(pageIndex, pageContentKey(state.blocks,state.translations));
+  this.placementProbe.delete(pageIndex);
+
 		// 几何安全复核 (1.1.0 目标架构第 5 步): FINAL 状态下审计一次;违例的
 		// 块回退扩展/缩字重试,仍不适配则保留原文——处置结果反映进随后的
 		// stats/tally,所以必须先审计后取数。
@@ -1872,6 +1910,7 @@ export class ReaderSession {
 				logger.debug(MODULE, `placement probe failed on page ${pageIndex + 1} (ignored)`, e);
 			}
 		}
+		this.archivePage(state, true);
 		logger.info(
 			MODULE,
 			`page ${pageIndex + 1} placement: ${s.committed}/${s.replaceable} shown, `
@@ -2296,6 +2335,7 @@ export class ReaderSession {
 			if (this.destroyed || this.manager !== manager) {
 				return;
 			}
+   this.resetPageArchive();
 			if (getPref<boolean>('privacyNoticeAccepted', false)) {
 				manager.setCurrentPage(adapter.getCurrentPageIndex(this.reader));
 			}
@@ -2394,6 +2434,7 @@ export class ReaderSession {
 		// 用户明确要求丢弃的译文复活,并被紧接着的 normal 运行当段落命中复用,
 		// 「强制全量」不成立。resetAllAndWait 与 quiesceThenReconfigure 同构。
 		await this.manager.resetAllAndWait();
+ this.resetPageArchive();
 		if (this.destroyed) {
 			return;
 		}
@@ -2643,7 +2684,13 @@ export class ReaderSession {
 				textContentApi: this.extractor.textContentApiState(),
 				cacheWrites: cacheManager.cacheWriteStats()
 			}),
-			readPage: (pageIndex: number) => {
+			readPage: async (pageIndex: number) => {
+    const state=manager.getPageState(pageIndex);
+    const archived=await this.pageArchive.get(pageIndex,state?.blocks.length?pageContentKey(state.blocks,state.translations):undefined);
+    if(archived?.diagnostics) {
+     const placement=archived.placement as {stats?:unknown;geometryAudit?:unknown}|undefined;
+     return {...archived.diagnostics,snapshotSource:'archived',currentLifecycle:state?.status??'released',geometryAudit:placement?.geometryAudit??null,placement:placement?.stats??null,placementProbe:archived.probe??'not-sampled'};
+    }
 				const row = manager.exportPageDiagnostics(pageIndex);
 				if (!row) {
 					throw new PaperMirrorError('UNKNOWN', 'page state is gone', { retryable: false });
@@ -2983,6 +3030,10 @@ export class ReaderSession {
 			readPage: async (pageIndex: number): Promise<CorpusPageRecord> => {
 				const state = manager.getPageState(pageIndex);
 				const spans = this.pageSpans(pageIndex);
+    const key = state?.blocks.length ? pageContentKey(state.blocks,state.translations) : undefined;
+    const archived = await this.pageArchive.get(pageIndex,key);
+    if (archived) return archived;
+
 				// —— 内存里还有原件就用原件 (2.8.12 真机修正)。
 				//
 				// 原方案假定"结构只能重新解析",漏了最短的一条: 没被淘汰的页,
@@ -2994,12 +3045,11 @@ export class ReaderSession {
 					return {
 						spans: spans ?? null,
 						...(spans ? {} : { spansMissing: 'missing:not-rendered' as const }),
-						blocks: state.blocks,
+						blocks: JSON.parse(JSON.stringify(state.blocks)) as SourceBlock[],
 						blocksSource: 'live',
 						check: { structureMatch: 'as-translated', blocksCompared: state.blocks.length },
 						translations: [...state.translations].map(([id, translatedText]) => ({ id, translatedText })),
 						translationSource: 'live',
-						...(this.placementProbe.has(pageIndex) ? { probe: this.placementProbe.get(pageIndex) } : {})
 					};
 				}
 				// —— 原件已被淘汰: 只能重解析,而且必须如实标注它的可信度。
@@ -3026,7 +3076,6 @@ export class ReaderSession {
 						},
 						translations: null,
 						translationsMissing: state?.evicted ? 'missing:evicted' : 'missing:never-processed',
-						...(this.placementProbe.has(pageIndex) ? { probe: this.placementProbe.get(pageIndex) } : {})
 					};
 				}
 				// 被卸过的页没有留存结构可比 —— checkStructure 如实报 no-stored-structure,
@@ -3043,7 +3092,6 @@ export class ReaderSession {
 					translations,
 					...(translationSource ? { translationSource } : {}),
 					...(translationsMissing ? { translationsMissing } : {}),
-					...(this.placementProbe.has(pageIndex) ? { probe: this.placementProbe.get(pageIndex) } : {})
 				};
 			},
 			pin: (pageIndex: number) => { this.exportPins.add(pageIndex); },
@@ -3445,6 +3493,7 @@ export class ReaderSession {
 		this.overlay?.destroy();
 		this.overlay = null;
 		this.manager?.dispose();
+ void this.pageArchive.close();
 		this.manager = null;
 		this.pane?.destroy();
 		this.pane = null;

@@ -84,15 +84,15 @@
 		"dupBlocks": 3
 	},
 	"chen2023-p11": {
-		"blocks": 32,
-		"translatable": 2,
+		"blocks": 33,
+		"translatable": 3,
 		"tableCells": 0,
 		"modules": 2,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 2,
-		"payloadChars": 1230,
+		"maxBlocksPerChunk": 3,
+		"payloadChars": 1228,
 		"dupBlocks": 0
 	},
 	"chen2023-p2": {
@@ -252,7 +252,7 @@
 		"dupBlocks": 1
 	},
 	"hakime2007-p2": {
-		"blocks": 16,
+		"blocks": 17,
 		"translatable": 10,
 		"tableCells": 0,
 		"modules": 6,
@@ -260,7 +260,7 @@
 		"fastChunks": 1,
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 10,
-		"payloadChars": 5710,
+		"payloadChars": 5688,
 		"dupBlocks": 0
 	},
 	"horst2024-p1": {
