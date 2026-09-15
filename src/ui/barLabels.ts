@@ -1,7 +1,7 @@
-/** Stable uppercase language abbreviations for the narrow toolbar. */
+/** Chinese script labels and uppercase language abbreviations for the narrow toolbar. */
 const LABELS: Record<string,string> = {
  'en':'EN', 'english':'EN', 'zh':'ZH', '中文':'ZH',
- 'zh-cn':'ZH-CN', '简体中文':'ZH-CN', 'zh-tw':'ZH-TW', '繁體中文':'ZH-TW', '繁体中文':'ZH-TW',
+ 'zh-cn':'简', '简体中文':'简', 'zh-tw':'繁', '繁體中文':'繁', '繁体中文':'繁',
  'ja':'JA', '日本語':'JA', 'ko':'KO', '한국어':'KO',
  'de':'DE', 'deutsch':'DE', 'fr':'FR', 'français':'FR',
  'es':'ES', 'español':'ES', 'ru':'RU', 'русский':'RU',

@@ -256,8 +256,8 @@ test('短语言标签:字母文字取两位并大写', () => {
 });
 
 test('短语言标签:汉字/假名/谚文取首字', () => {
-	assert.equal(shortLangLabel('简体中文'), 'ZH-CN');
-	assert.equal(shortLangLabel('繁體中文'), 'ZH-TW');
+	assert.equal(shortLangLabel('简体中文'), '简');
+	assert.equal(shortLangLabel('繁體中文'), '繁');
 	assert.equal(shortLangLabel('日本語'), 'JA');
 	assert.equal(shortLangLabel('한국어'), 'KO');
 	// 简繁必须分得开 —— 这正是用户最常切的一对。
@@ -369,5 +369,5 @@ test('切到文章流要把已有页面状态重新喂给面板,而不是留一�
 });
 
 test('language codes including two-letter lowercase codes always display uppercase',()=>{
- for(const [code,label] of [['de','DE'],['ko','KO'],['ja','JA'],['zh-CN','ZH-CN'],['zh-TW','ZH-TW'],['auto','AUTO']]) assert.equal(shortLangLabel(code!),label);
+ for(const [code,label] of [['de','DE'],['ko','KO'],['ja','JA'],['zh-CN','简'],['zh-TW','繁'],['auto','AUTO']]) assert.equal(shortLangLabel(code!),label);
 });
