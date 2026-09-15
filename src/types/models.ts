@@ -90,6 +90,9 @@ export interface SourceBlock {
 	tableColSpan?: number;
 	/** Authoritative cell bounds in raw PDF coordinates, separate from source ink. */
 	tableRectPdf?: [number, number, number, number];
+	tableGeometry?: 'border' | 'inferred';
+	/** Safe whitespace assigned from neighbouring inferred cells, not a drawn border. */
+	tableContentRectPdf?: [number, number, number, number];
 	/** Canonical reading-order index (0-based) stamped by
 	 * orderBlocksForReading — the explicit IR field for page sequence.
 	 * `order` mirrors it after ordering, but `order` also carries stream

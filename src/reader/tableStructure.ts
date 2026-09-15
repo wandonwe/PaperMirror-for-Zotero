@@ -342,7 +342,7 @@ export function buildTableModel(
 			else if (identifierOnly) { preserveReason = 'identifier'; }
 			else if (row < headerDepth && hasWord && !isPureNumeric) { preserveReason = undefined; }
 			else if (tinySymbol || CLASS_LEVEL.test(text)) { preserveReason = 'symbol'; }
-			else if (looksTabular(text) || text.length < 3) { preserveReason = 'data'; }
+			else if (isPureTableValue(text)) { preserveReason = 'data'; }
 		}
 		void nameOnly;
 		const kind: TableCell['kind'] = preserveReason ? 'data' : 'text';
@@ -550,7 +550,7 @@ export function buildTextTableModel(
 		if (!preserveReason) {
 			if (!text) { preserveReason = 'empty'; }
 			else if (!hasWord || tinySymbol || CLASS_LEVEL.test(text)) { preserveReason = 'symbol'; }
-			else if (looksTabular(text) || text.length < 3) { preserveReason = 'data'; }
+			else if (isPureTableValue(text)) { preserveReason = 'data'; }
 		}
 		const kind: TableCell['kind'] = preserveReason ? 'data' : 'text';
 		cells.push({
@@ -719,7 +719,8 @@ export function structureTableCells(
 	 *    用户导出的 dual PDF 上左栏译文跨格叠字 —— 网格路径给出 33 个格,推荐文字落 c0/c3;
 	 *  - 跨列的合并单元格块退回段落路径(spansColumns),不再掉进窄列。
 	 */
-	useGrid = true
+	useGrid = true,
+	pageHeight?: number
 ): SourceBlock[] {
 	const originalById = new Map(blocks.map(block => [block.id, block]));
 	// 页面附属内容不进表 (2.12.13):提取阶段不再丢块之后,页码、水印、页眉、日期行、
@@ -785,7 +786,8 @@ export function structureTableCells(
 						type: 'paragraph',
 						sourceText: cell.text,
 						boundingBox: { x: cell.box.left, y: cell.box.top, width: cell.box.width, height: cell.box.height },
-						...cellPdfBounds(cell.box, originals),
+						...cellPdfBounds(cell.box, originals, pageHeight),
+						tableGeometry: 'border' as const,
 						...(cell.rowSpan ? { tableRowSpan: cell.rowSpan } : {}),
 						...(cell.colSpan ? { tableColSpan: cell.colSpan } : {}),
 						lineRectsPdf: originals.flatMap(o => o.lineRectsPdf ?? []),
@@ -804,7 +806,7 @@ export function structureTableCells(
 	if (gridCells.length) {
 		// 网格已经把这些块处理掉了;剩下的块照旧走文字几何那条路。
 		const rest = blocks.filter(b => !gridConsumed.has(b.id));
-		const restStructured = rest.length >= 2 ? structureTableCells(rest, pageIndex, em, noTranslate).map(b => {
+		const restStructured = rest.length >= 2 ? structureTableCells(rest, pageIndex, em, noTranslate, undefined, true, pageHeight).map(b => {
 			if (typeof b.tableRow !== 'number') return b;
 			return { ...b, id: b.id.replace(/-table-(\d+)-/, (_, n: string) => `-table-${Number(n) + grids.length}-`) };
 		}) : rest;
@@ -869,7 +871,8 @@ export function structureTableCells(
 				type: 'paragraph',
 				sourceText: cell.text,
 				boundingBox: { x: cell.box.left, y: cell.box.top, width: cell.box.width, height: cell.box.height },
-				...cellPdfBounds(cell.box, originals),
+				tableGeometry: 'inferred' as const,
+				tableContentRectPdf: cellPdfBounds(inferredCellBox(cell, model, em), originals, pageHeight).tableRectPdf,
 				...(cell.rowSpan ? { tableRowSpan: cell.rowSpan } : {}),
 				...(cell.colSpan ? { tableColSpan: cell.colSpan } : {}),
 				lineRectsPdf: originals.flatMap(b => b.lineRectsPdf ?? []),
@@ -961,7 +964,7 @@ export function buildGridTableModel(
 		if (!preserveReason) {
 			if (!text) { preserveReason = 'empty'; }
 			else if (!hasWord || tinySymbol || CLASS_LEVEL.test(text)) { preserveReason = 'symbol'; }
-			else if (looksTabular(text) || text.length < 3) { preserveReason = 'data'; }
+			else if (isPureTableValue(text)) { preserveReason = 'data'; }
 		}
 		const kind: TableCell['kind'] = preserveReason ? 'data' : 'text';
 		cells.push({
@@ -985,9 +988,26 @@ export function buildGridTableModel(
 }
 
 /** Source blocks use top-down bounding boxes and bottom-up PDF ink rectangles. */
-function cellPdfBounds(box: Box, originals: SourceBlock[]): Pick<SourceBlock, 'tableRectPdf'> {
+function cellPdfBounds(box: Box, originals: SourceBlock[], explicitHeight?: number): Pick<SourceBlock, 'tableRectPdf'> {
  const anchor = originals.find(b => b.boundingBox && b.lineRectsPdf?.length && !b.tableRectPdf);
- if (!anchor?.boundingBox) return {};
- const pageHeight = anchor.boundingBox.y + Math.max(...anchor.lineRectsPdf!.map(r => r[3]));
+ if (!explicitHeight && !anchor?.boundingBox) return {};
+ const pageHeight = explicitHeight ?? anchor!.boundingBox!.y + Math.max(...anchor!.lineRectsPdf!.map(r => r[3]));
  return { tableRectPdf: [box.left, pageHeight - box.top - box.height, box.left + box.width, pageHeight - box.top] };
+}
+
+/** Statistical labels and sentence fragments are language, even when digits dominate. */
+export function isPureTableValue(text: string): boolean {
+ const residue = text.replace(/\b(?:CI|SD|SE|IQR|HR|OR|RR|CT|MRI|HU|mmHg|mm|cm|kg|mL|keV|mGy|ms|msec|n|N|P|p)\b/g, '');
+ return !/[A-Za-z\u3400-\u9fff]/.test(residue);
+}
+
+/** Use row/column whitespace without crossing another cell's source ink. */
+export function inferredCellBox(cell: TableCell, model: TableModel, em: number): Box {
+ const b=cell.box, gap=Math.max(0.5, em*0.12);
+ const rightCandidates=model.cells.filter(c=>c!==cell && c.col>cell.col
+  && c.box.top < b.top+b.height && c.box.top+c.box.height>b.top).map(c=>c.box.left-gap);
+ const nextRow=model.cells.filter(c=>c.row>cell.row).map(c=>c.box.top-gap);
+ const right=Math.max(b.left+b.width,Math.min(model.region.left+model.region.width,...rightCandidates));
+ const bottom=Math.max(b.top+b.height,Math.min(model.region.top+model.region.height,...nextRow));
+ return {...b,width:right-b.left,height:bottom-b.top};
 }

@@ -333,7 +333,7 @@
 		"readingIndex": 37,
 		"tableRow": 18,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "70–80 kVp"
 	},
 	{
@@ -351,7 +351,7 @@
 		"readingIndex": 39,
 		"tableRow": 19,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "100–120 kVp"
 	},
 	{

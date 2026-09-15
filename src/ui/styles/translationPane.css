@@ -1644,3 +1644,13 @@
 	white-space: normal;
 	line-height: 1.35;
 }
+
+/* The union wrapper includes image holes: highlight only occupied pieces. */
+.pm-repage-block[data-pm-flow="true"],
+.pm-repage-block[data-pm-flow="true"]:hover,
+.pm-repage-block[data-pm-flow="true"].pm-focused {
+ background: transparent !important;
+ box-shadow: none !important;
+}
+.pm-flow-piece:hover,
+.pm-repage-block.pm-focused .pm-flow-piece { background: rgba(64, 122, 255, .09); }

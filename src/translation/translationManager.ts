@@ -559,6 +559,7 @@ export interface PageTranslationState {
 	keepOrigin?: Map<string, string>;
 	/** 最近一次验收拒绝的原因 (仅原因码,无文本): validator | placeholder。 */
 	rejectReasons?: Map<string, string>;
+	rejectHistory?: Map<string, string[]>;
 	/**
 	 * 译文修订号 (2.8.2, 性能第三批): 每次 notify 之前算一遍译文指纹,内容
 	 * **真的变了**才 +1。页视图据此决定要不要在译完之前先把已到的译文画上,
@@ -1126,6 +1127,7 @@ export class TranslationManager {
 			state.translations = new Map();
 			state.keepOrigin = undefined;
 			state.rejectReasons = undefined;
+			state.rejectHistory = undefined;
 			state.evicted = true;
 			this.revisions.delete(pageIndex);
 			logger.debug(MODULE, `page ${pageIndex + 1}: full content evicted (cached, cold)`);
@@ -2764,6 +2766,16 @@ export class TranslationManager {
 		// 拒" —— 记住每块最近一次验收失败的原因码(validator = looksTranslated/
 		// 完整性;placeholder = 清单校验),进诊断导出。
 		state.rejectReasons = state.rejectReasons ?? new Map();
+		state.rejectHistory = new Map();
+		const noteReject = (id: string, reason: string): void => {
+			state.rejectReasons!.set(id, reason);
+			state.rejectHistory!.set(id, [...(state.rejectHistory!.get(id) ?? []), reason].slice(-8));
+		};
+		const rejectedResponse = (id: string, text: string, phase: string): string => {
+			if (!refById.has(id)) return phase;
+			const source = sourceById.get(id) ?? '';
+			return referenceRejectReason(source, text, phase);
+		};
 		const acceptResponse = (id: string, text: string): boolean => {
 			// 'empty' 与 'validator' 分开 (1.1.8): 引擎带着 id 回了一个空串,
 			// 和「回了英文回声被验收拒掉」是两种完全不同的故障 —— 前者要换
@@ -2771,16 +2783,16 @@ export class TranslationManager {
 			// 一个 11 字符的块显示 lastReject: "validator" 会把人引向阈值,
 			// 而阈值那条路对它根本不成立(散文词数不足 6,压根走不到比率判定)。
 			if (!text.trim()) {
-				state.rejectReasons!.set(id, 'empty');
+				noteReject(id, 'empty');
 				return false;
 			}
 			if (!accept(id, text)) {
-				state.rejectReasons!.set(id, 'validator');
+				noteReject(id, rejectedResponse(id, text, 'validator'));
 				return false;
 			}
 			const reg = regById.get(id);
 			if (reg && !reg.ok(text)) {
-				state.rejectReasons!.set(id, 'placeholder');
+				noteReject(id, 'placeholder');
 				return false;
 			}
 			return true;
@@ -3057,14 +3069,14 @@ export class TranslationManager {
 							received.set(block.id, first.translatedText);
 						}
 						else if (single.translations.length) {
-							state.rejectReasons?.set(block.id, 'salvage-validator');
+							noteReject(block.id, rejectedResponse(block.id, single.translations[0]?.translatedText ?? '', 'salvage-validator'));
 						}
 						else {
 							// 死分支修复 (1.1.8): 这里原本是与上面条件完全相同的
 							// 第二个 else if,永不可达 —— 于是「打捞请求回了个空
 							// 数组」这一支从不落原因码,块的 lastReject 停在批次
 							// 阶段的旧值上,诊断读起来就像打捞从没跑过。
-							state.rejectReasons?.set(block.id, 'salvage-empty');
+							noteReject(block.id, 'salvage-empty');
 						}
 					}
 					catch (e) {
@@ -3232,15 +3244,15 @@ export class TranslationManager {
 							logger.info(MODULE, `Page ${pageIndex + 1}: unmasked plain recovery rescued ${block.id} (placeholder chain had failed)`);
 						}
 						else {
-							state.rejectReasons?.set(block.id, 'plain-placeholder');
+							noteReject(block.id, 'plain-placeholder');
 						}
 					}
 					else if (resp.translations.length) {
-						state.rejectReasons?.set(block.id, 'plain-validator');
+						noteReject(block.id, rejectedResponse(block.id, resp.translations[0]?.translatedText ?? '', 'plain-validator'));
 					}
 					else {
 						// 同一处死分支 (1.1.8): 见上面 salvage 的说明。
-						state.rejectReasons?.set(block.id, 'plain-empty');
+						noteReject(block.id, 'plain-empty');
 					}
 				}
 				catch (e) {
@@ -3357,4 +3369,12 @@ export class TranslationManager {
 			logger.warn(MODULE, `Page ${pageIndex + 1} left uncached (${untranslatedCount} untranslated block(s)) so a revisit retries`);
 		}
 	}
+}
+
+/** Reason codes contain no source or response text and are safe for diagnostics. */
+export function referenceRejectReason(source: string, translated: string, phase: string): string {
+ if(!translated.trim()) return `${phase}:empty`;
+ if(isEcho(source,translated)) return `${phase}:reference-echo`;
+ if(isTruncatedTranslation(stripProtectable(source),stripProtectable(translated))) return `${phase}:reference-truncated`;
+ return `${phase}:reference-language-or-residue`;
 }

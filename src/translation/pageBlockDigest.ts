@@ -36,6 +36,7 @@ export interface BlockDigestRow {
 	keepOrigin?: string;
 	/** 最后一次验收拒绝的原因枚举(validator / placeholder / plain-* 等)。 */
 	lastReject?: string;
+	rejectHistory?: string[];
 }
 
 export interface PageBlockDigest {
@@ -51,6 +52,7 @@ export interface DigestSource {
 	translations: Map<string, string>;
 	keepOrigin?: Map<string, string>;
 	rejectReasons?: Map<string, string>;
+	rejectHistory?: Map<string, string[]>;
 }
 
 /** 从活着的页内容算出逐块摘要 —— 纯函数,不碰任何文本内容。 */
@@ -69,7 +71,8 @@ export function digestRows(state: DigestSource): BlockDigestRow[] {
 			outcome,
 			...(outcome === 'preserved' && block.preserveReason ? { preserveReason: block.preserveReason } : {}),
 			...(keepOrigin ? { keepOrigin } : {}),
-			...(lastReject ? { lastReject } : {})
+			...(lastReject ? { lastReject } : {}),
+			...(!translated && state.rejectHistory?.has(block.id) ? { rejectHistory: [...state.rejectHistory.get(block.id)!] } : {})
 		};
 	});
 }
@@ -87,6 +90,7 @@ export interface DiagnosticBlockRow {
 	chars: number;
 	state: string;
 	lastReject?: string;
+	rejectHistory?: string[];
 	keepOrigin?: string;
 }
 
@@ -106,6 +110,7 @@ export function diagnosticRows(rows: BlockDigestRow[]): DiagnosticBlockRow[] {
 		// 2.12.13 加进摘要、2.12.14 才接到导出 —— 真机 2.12.13 的导出里 preserveReason 是空的。
 		...(row.preserveReason ? { preserveReason: row.preserveReason } : {}),
 		...(row.keepOrigin ? { keepOrigin: row.keepOrigin } : {}),
-		...(row.lastReject ? { lastReject: row.lastReject } : {})
+		...(row.lastReject ? { lastReject: row.lastReject } : {}),
+		...(row.rejectHistory ? { rejectHistory: row.rejectHistory } : {})
 	}));
 }

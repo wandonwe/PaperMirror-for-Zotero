@@ -124,7 +124,7 @@
 		"readingIndex": 15,
 		"tableRow": 4,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "2013 AIS Guidelines"
 	},
 	{
@@ -178,7 +178,7 @@
 		"readingIndex": 21,
 		"tableRow": 7,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "2014 Brain Swelling"
 	},
 	{
@@ -196,7 +196,7 @@
 		"readingIndex": 23,
 		"tableRow": 8,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "2014 Palliative Care"
 	},
 	{
@@ -214,7 +214,7 @@
 		"readingIndex": 25,
 		"tableRow": 9,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "2014 Secondary Prevention"
 	},
 	{
@@ -250,7 +250,7 @@
 		"readingIndex": 29,
 		"tableRow": 11,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "2015 CPR/ECC"
 	},
 	{
@@ -268,7 +268,7 @@
 		"readingIndex": 31,
 		"tableRow": 12,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "2015 Endovascular"
 	},
 	{
@@ -286,7 +286,7 @@
 		"readingIndex": 33,
 		"tableRow": 13,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "2015 IV Alteplase"
 	},
 	{
@@ -304,7 +304,7 @@
 		"readingIndex": 35,
 		"tableRow": 14,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "2016 Rehab Guidelines"
 	},
 	{

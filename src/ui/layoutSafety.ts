@@ -131,7 +131,11 @@ export function violationStillPresent(
 ): boolean {
 	const tol = (a: PixelBox, b: PixelBox): number =>
 		Math.max(12, 0.02 * Math.min(a.width * a.height, b.width * b.height));
-	const self = placed.find(p => p.id === v.id);
+	const selves = placed.filter(p => p.id === v.id);
+	if (selves.length > 1) {
+		return selves.some(self => violationStillPresent(v, [self, ...placed.filter(p => p.id !== v.id)], obstacles, pageW, pageH));
+	}
+	const self = selves[0];
 	if (!self) {
 		return false; // offender 本轮已被回退/放弃
 	}
@@ -302,4 +306,59 @@ export function imageSafeBox(box: PixelBox, images: PixelBox[]): PixelBox | null
    && (b.width * b.height > a.width * a.height || j < i)));
  }
  return candidates.sort((a,b) => b.width*b.height-a.width*a.height)[0] ?? null;
+}
+
+/** Disjoint horizontal bands, in reading order, covering all image-free space. */
+export function imageSafeRegions(box: PixelBox, images: PixelBox[]): PixelBox[] {
+ const touching=images.filter(i=>inter(box,i)>0);
+ if(!touching.length) return [box];
+ const ys=[...new Set([box.top,box.top+box.height,...touching.flatMap(i=>[
+  Math.max(box.top,i.top),Math.min(box.top+box.height,i.top+i.height)])])].sort((a,b)=>a-b);
+ const result:PixelBox[]=[];
+ for(let n=0;n<ys.length-1;n++) {
+  const top=ys[n]!,bottom=ys[n+1]!;
+  let intervals:[number,number][]=[[box.left,box.left+box.width]];
+  for(const img of touching.filter(i=>i.top<bottom && i.top+i.height>top)) {
+   intervals=intervals.flatMap(([l,r]):[number,number][]=> img.left>=r || img.left+img.width<=l ? [[l,r]] :
+    [[l,Math.max(l,img.left)],[Math.min(r,img.left+img.width),r]].filter(([a,b])=>b!>a!) as [number,number][]);
+  }
+  for(const [left,right] of intervals) {
+   const previous=[...result].reverse().find(p=>p.left===left && p.width===right-left && p.top+p.height===top);
+   if(previous) previous.height+=bottom-top;
+   else result.push({left,top,width:right-left,height:bottom-top});
+  }
+ }
+ return result.sort((a,b)=>a.top-b.top || a.left-b.left);
+}
+
+/** Split without loss; measurement is provided by the actual renderer/font. */
+export function flowText<T>(text: string, regions: T[], fits: (text: string, region: T, index: number, offset: number)=>boolean): string[] | null {
+ const chars=Array.from(text),parts:string[]=[];
+ let offset=0;
+ for(let i=0;i<regions.length;i++) {
+  const start=chars.slice(0,offset).join('').length;
+  let lo=0,hi=chars.length-offset;
+  while(lo<hi) {
+   const mid=Math.ceil((lo+hi)/2);
+   if(fits(chars.slice(offset,offset+mid).join(''),regions[i]!,i,start)) lo=mid;else hi=mid-1;
+  }
+  parts.push(chars.slice(offset,offset+lo).join(''));offset+=lo;
+ }
+ return offset===chars.length ? parts : null;
+}
+
+/** Recover the available bands of an L-shaped source paragraph, including vector figures. */
+export function sourceFlowRegions(lines: PixelBox[], fontPx: number): PixelBox[] {
+ const groups:PixelBox[]=[];
+ for(const line of [...lines].sort((a,b)=>a.top-b.top || a.left-b.left)) {
+  const previous=groups[groups.length-1];
+  if(!previous || Math.abs(line.left-previous.left)>fontPx*2
+   || line.left+line.width>previous.left+previous.width+fontPx*2) groups.push({...line});
+  else {
+   const right=Math.max(previous.left+previous.width,line.left+line.width);
+   const bottom=Math.max(previous.top+previous.height,line.top+line.height);
+   previous.left=Math.min(previous.left,line.left);previous.width=right-previous.left;previous.height=bottom-previous.top;
+  }
+ }
+ return groups;
 }

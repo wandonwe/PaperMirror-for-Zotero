@@ -514,7 +514,7 @@ export class TextExtractor implements PageParser {
 				// Canonical reading order BEFORE coalescing: row-wise streams
 				// interleave the columns, and the coalescer only merges adjacent
 				// blocks — without this, one-line shreds never rejoin.
-				const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), (await this.gridFor(pageIndex, pageHeight), this.allBorderGrids.get(pageIndex)));
+				const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), (await this.gridFor(pageIndex, pageHeight), this.allBorderGrids.get(pageIndex)), true, pageHeight);
 				const tableCells = structured.filter(b => b.translationMode !== undefined);
 				const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
 				result.blocks = orderBlocksForReading([...prose, ...tableCells]);
@@ -741,7 +741,7 @@ export class TextExtractor implements PageParser {
 				}).length;
 			}
 		}
-		const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), this.allBorderGrids.get(pageIndex) ?? grid);
+		const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), this.allBorderGrids.get(pageIndex) ?? grid, true, page.pageHeight);
 		const tableCells = structured.filter(b => b.translationMode !== undefined);
 		const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
 		result.blocks = orderBlocksForReading([...prose, ...tableCells]);

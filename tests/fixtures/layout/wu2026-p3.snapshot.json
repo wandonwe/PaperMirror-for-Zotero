@@ -237,7 +237,7 @@
 		"readingIndex": 28,
 		"tableRow": 8,
 		"tableCol": 2,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "DoseRight Index: 22"
 	},
 	{
@@ -309,7 +309,7 @@
 		"readingIndex": 36,
 		"tableRow": 11,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "VMI:70 keV"
 	},
 	{
@@ -399,7 +399,7 @@
 		"readingIndex": 46,
 		"tableRow": 14,
 		"tableCol": 2,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "0.8 (minimum available)"
 	},
 	{
@@ -444,7 +444,7 @@
 		"readingIndex": 51,
 		"tableRow": 16,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Qr40"
 	},
 	{
@@ -471,7 +471,7 @@
 		"readingIndex": 54,
 		"tableRow": 17,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "QIR4"
 	},
 	{
@@ -480,7 +480,7 @@
 		"readingIndex": 55,
 		"tableRow": 17,
 		"tableCol": 2,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "iDose4"
 	},
 	{
