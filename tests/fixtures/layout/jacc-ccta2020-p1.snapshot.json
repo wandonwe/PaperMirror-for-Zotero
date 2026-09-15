@@ -87,5 +87,11 @@
 		"column": 1,
 		"readingIndex": 13,
 		"text": "Listen to this manuscript’s audio summar"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 14,
+		"text": "JACC.org."
 	}
 ]

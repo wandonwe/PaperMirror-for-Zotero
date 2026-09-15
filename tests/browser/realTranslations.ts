@@ -10,10 +10,17 @@ export async function checkRealTranslations():Promise<unknown[]> {
   for(const scale of [1,.75,1.0266666666666666]) {
    const canvas=document.createElement('canvas');canvas.width=f.width*scale;canvas.height=f.height*scale;canvas.getContext('2d')!.drawImage(img,0,0,canvas.width,canvas.height);
    const blocks=f.blocks as SourceBlock[], translations=new Map(f.translations.map(t=>[t.id,t.translatedText]));
-   const built=buildStrictPage(document,{pageIndex:f.page-1,blocks,translations,imageRectsPdf:(f as any).imageRectsPdf,render:{canvas,viewportWidth:canvas.width,viewportHeight:canvas.height,scale,toViewport:(x,y)=>[x*scale,(f.height-y)*scale]}})!;
+   const built=buildStrictPage(document,{pageIndex:f.page-1,blocks,translations,imageRectsPdf:(f as any).imageRectsPdf,render:{canvas,viewportWidth:canvas.width,viewportHeight:canvas.height,scale,toViewport:(x,y)=>[(x-((f as any).offsetX??0))*scale,(f.height+((f as any).offsetY??0)-y)*scale]}})!;
    gallery.append(built.element);const p=built.element as any;
    const initial=p.pmSettleStrict(true),expanded=p.pmExpandFit(initial.map((b:any)=>b.id));
    const still=p.pmShrinkFit(expanded);p.pmRevert(still);p.pmGeometryAudit();
+   if(f.page===19) {
+    const middle=built.element.querySelector('[data-pm-block="page-18-region-1"]')!;
+    const right=built.element.querySelector('[data-pm-block="page-18-region-2"]')!;
+    const ink=right.querySelector('.pm-flow-piece') ?? right;
+    if(ink.getBoundingClientRect().left-middle.getBoundingClientRect().right<11*scale-1)
+     throw Error('Bae p50: old footer contaminated the inter-column gutter');
+   }
    const finalAudit=p.pmGeometryAudit();if(finalAudit.violations)throw Error('Real translation overlaps after audit on page '+f.page);
    const minimum=(f as any).minimumCommitted ?? (f.page===35?30:f.page===40?15:f.page===27?10:38);
    if(p.pmStats().committed<minimum)throw Error('Real translation placement regressed on page '+f.page+' at '+scale+' '+JSON.stringify({stats:p.pmStats(),abandoned:p.pmAbandoned()}));

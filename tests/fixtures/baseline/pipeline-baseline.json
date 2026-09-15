@@ -300,15 +300,15 @@
 		"dupBlocks": 0
 	},
 	"jacc-ccta2020-p1": {
-		"blocks": 14,
-		"translatable": 9,
+		"blocks": 15,
+		"translatable": 10,
 		"tableCells": 0,
 		"modules": 6,
 		"chunks": 2,
 		"fastChunks": 1,
 		"slowChunks": 1,
-		"maxBlocksPerChunk": 8,
-		"payloadChars": 4562,
+		"maxBlocksPerChunk": 9,
+		"payloadChars": 4561,
 		"dupBlocks": 0
 	},
 	"jacc2020-p15": {
@@ -384,7 +384,7 @@
 		"dupBlocks": 10
 	},
 	"radiology2026-p10": {
-		"blocks": 8,
+		"blocks": 9,
 		"translatable": 5,
 		"tableCells": 0,
 		"modules": 4,
@@ -392,7 +392,7 @@
 		"fastChunks": 1,
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 5,
-		"payloadChars": 2617,
+		"payloadChars": 2553,
 		"dupBlocks": 0
 	},
 	"radiology2026-p13": {
@@ -408,7 +408,7 @@
 		"dupBlocks": 0
 	},
 	"radiology2026-p4": {
-		"blocks": 10,
+		"blocks": 11,
 		"translatable": 8,
 		"tableCells": 0,
 		"modules": 5,
@@ -416,7 +416,7 @@
 		"fastChunks": 1,
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 8,
-		"payloadChars": 4309,
+		"payloadChars": 4245,
 		"dupBlocks": 0
 	},
 	"sample-twocol-p1": {

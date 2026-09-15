@@ -373,6 +373,19 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 			&& item.rect[0] - prev.rect[2] >= size * 1.05
 			? [{ left: prev.rect[2], right: item.rect[0], y: (item.rect[1] + item.rect[3]) / 2 }] : [];
 	}));
+	// Track a genuinely wide caption band, without imposing its geometry on
+	// body rows or a caption printed beside another column.
+	const captionRows=new Set<SpanItem[]>();
+	let tail: {left:number;bottom:number;size:number}|undefined;
+	for(const row of [...rows].sort((a,b)=>rectOf(b)[3]-rectOf(a)[3])) {
+		const rect=rectOf(row),size=sizeOf(row),text=row.map(i=>i.text).join(' ');
+		const starts=rect[2]-rect[0]>pageWidth*0.7 && /^(?:Figure|Fig\.?|Table)\s*\d+[.:]/i.test(text.trim());
+		const continues=tail && Math.abs(rect[0]-tail.left)<size
+			&& tail.bottom-rect[3]>=-1 && tail.bottom-rect[3]<size*0.8 && Math.abs(size-tail.size)<size*0.1;
+		const separated=row.some((item,i)=>i>0 && !(i===1 && /^(?:Figure|Fig\.?|Table)\s*\d+[.:]$/i.test(row[0]!.text.trim())) && item.rect[0]-row[i-1]!.rect[2]>=size*0.8);
+		if((starts || continues) && !separated) {captionRows.add(row);tail={left:rect[0],bottom:rect[1],size};}
+		else tail=undefined;
+	}
 	const lines: SpanLine[] = [];
 	for (const row of rows) {
 		let rowTop = -Infinity;
@@ -402,7 +415,7 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 				// strictly before the gutter centre let that single line bridge the
 				// two columns into one scrambled line (三栏页连字符悬垂焊行).
 				const slack = Math.min(6, size * 0.6);
-				const crossesGutter = rowGutters.some(g => previous.rect[2] <= g.x + slack && item.rect[0] >= g.x)
+				const crossesGutter = ((!captionRows.has(row) || gap >= size * 0.8) && rowGutters.some(g => previous.rect[2] <= g.x + slack && item.rect[0] >= g.x))
 					|| (gap >= size * 1.05
 						&& weakGutterXs.some(x => previous.rect[2] <= x + slack && item.rect[0] >= x));
 				const repeatedLocalGap = gap >= size * 1.05
@@ -510,6 +523,10 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 			break;
 		}
 		if (semanticBoundary(lineText(line), lineText(next))) { flush(); continue; }
+		// Isolate page furniture before a full-width body line can absorb it.
+		const footer = (l: SpanLine): boolean => pageHeight > 0 && l.rect[3] < pageHeight * 0.1
+			&& (/^\d{1,4}$/.test(lineText(l).trim()) || /^(?:[\w.-]+\.(?:org|com|edu)\b|Radiology:\s*Volume\b)/i.test(lineText(l).trim()));
+		if (footer(line) !== footer(next)) { flush(); continue; }
 		// 边框硬屏障: a figure between two lines separates layout regions.
 		if (obstacleBetween(line.rect, next.rect, obstacles)) {
 			flush();
@@ -892,7 +909,8 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
   const groups: number[][] = [];
   for (const index of indexes) {
    const last = groups[groups.length - 1];
-   if (!last || semanticBoundary(draft[last[last.length - 1]!]!.text, draft[index]!.text)) groups.push([index]);
+   const isPageNumber=(i:number):boolean=>draft[i]!.rect[3]<options.pageHeight*0.1 && /^\d{1,4}$/.test(draft[i]!.text.trim());
+   if (!last || isPageNumber(last[last.length-1]!) || isPageNumber(index) || semanticBoundary(draft[last[last.length - 1]!]!.text, draft[index]!.text)) groups.push([index]);
    else last.push(index);
   }
   return groups;

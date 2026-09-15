@@ -258,6 +258,7 @@ export function canAbsorb(host: SourceBlock, shard: SourceBlock, obstacles: Rect
 	}
 	const rh = unionRect(host.lineRectsPdf as Rect[]);
 	const rs = unionRect(shard.lineRectsPdf as Rect[]);
+
 	if (obstacleBetween(rh, rs, obstacles)) {
 		return false;
 	}
@@ -353,6 +354,10 @@ export function canMergeCaption(host: SourceBlock, next: SourceBlock, obstacles:
 	}
 	// 必须紧接在下方 (PDF y 向上): 行距量级,不是段间距。
 	const gap = rh[1] - rn[3];
+	// A multi-line narrow column below a wide caption is a new region.
+	// Caption tail lines may be short, but do not authorize swallowing prose.
+	if (next.lineRectsPdf.length >= 2 && rn[2] - rn[0] < (rh[2] - rh[0]) * 0.65
+		&& gap > em * 0.8) return false;
 	if (gap < -em * 1.2 || gap > em * 1.9) {
 		return false;
 	}

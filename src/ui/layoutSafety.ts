@@ -363,7 +363,7 @@ export function sourceFlowRegions(lines: PixelBox[], fontPx: number): PixelBox[]
  const groups:PixelBox[]=[];
  for(const line of [...lines].sort((a,b)=>a.top-b.top || a.left-b.left)) {
   const previous=groups[groups.length-1];
-  if(!previous || Math.abs(line.left-previous.left)>fontPx*2
+  if(!previous || previous.left-line.left>fontPx*0.75 || Math.abs(line.left-previous.left)>fontPx*2
    || line.left+line.width>previous.left+previous.width+fontPx*2) groups.push({...line});
   else {
    const right=Math.max(previous.left+previous.width,line.left+line.width);

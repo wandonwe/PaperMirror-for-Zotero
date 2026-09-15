@@ -45,20 +45,27 @@
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 7,
+		"mode": "preserve",
+		"text": "Radiology: Volume 319: Number 1—April 20"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 8,
 		"text": "196 patients with post–COVID-19 conditio"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 8,
+		"readingIndex": 9,
 		"text": "Diffuse Lung Diseases"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 9,
+		"readingIndex": 10,
 		"text": "In patients with post–COVID-19 condition"
 	}
 ]
