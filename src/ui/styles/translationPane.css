@@ -1674,3 +1674,11 @@
 @container pm-pane (max-width: 430px) { .pm-bar { gap: 2px; padding: 0 4px; } .pm-bar-sep { margin: 0 2px; } }
 
 @container pm-pane (max-width: 430px) { .pm-bar .pm-brand { display: none; } }
+
+/* Leave room for complete uppercase tags such as EN → ZH-CN. */
+@container pm-pane (max-width: 430px) {
+ .pm-bar { gap: 0; }
+ .pm-chip-lang { padding-left: 4px; padding-right: 4px; font-size: 10px; }
+ .pm-chip-lang .pm-lang-short { gap: 2px; }
+ .pm-bar-sep { margin: 0; }
+}

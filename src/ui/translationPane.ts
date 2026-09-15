@@ -1116,6 +1116,7 @@ export class TranslationPane {
 	}
 
 	setLanguagePair(source: string, target: string): void {
+		if (this.languagePill.getAttribute('aria-label') === `${this.strings.switchLanguage}:${source} → ${target}`) return;
 		// One chip, both languages. Two separate truncating pills turned this
 		// into "Eng… → 简体…", which tells the reader nothing.
 		//

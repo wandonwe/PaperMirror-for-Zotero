@@ -140,6 +140,12 @@ function languageLabel(code: string): string {
 		case 'en': return 'English';
 		case 'zh': case 'zh-CN': return '简体中文';
 		case 'zh-TW': return '繁體中文';
+		case 'ja': return '日本語';
+		case 'ko': return '한국어';
+		case 'de': return 'Deutsch';
+		case 'fr': return 'Français';
+		case 'es': return 'Español';
+		case 'ru': return 'Русский';
 		case 'auto': return getString('papermirror-lang-auto');
 		default: return code;
 	}
@@ -872,13 +878,13 @@ export class ReaderSession {
 		if (!this.detectedSource) {
 			const detected = detectLanguage(sample);
 			this.detectedSource = sourceCodeFor(detected);
-			const shownTarget = prefTarget !== 'auto' ? prefTarget : defaultTargetFor(detected);
-			this.pane?.setLanguagePair(languageLabel(this.detectedSource), languageLabel(shownTarget));
 		}
 		const source = prefSource !== 'auto' ? prefSource : this.detectedSource;
 		const target = prefTarget !== 'auto'
 			? prefTarget
-			: defaultTargetFor(source === 'zh' ? 'zh' : source === 'en' ? 'en' : 'other');
+			: defaultTargetFor(/^zh(?:-|$)/i.test(source) ? 'zh' : source === 'en' ? 'en' : 'other');
+		// Display the same effective pair sent to providers; explicit choices win.
+		this.pane?.setLanguagePair(languageLabel(source), languageLabel(target));
 		return { source, target };
 	}
 

@@ -256,17 +256,17 @@ test('短语言标签:字母文字取两位并大写', () => {
 });
 
 test('短语言标签:汉字/假名/谚文取首字', () => {
-	assert.equal(shortLangLabel('简体中文'), '简');
-	assert.equal(shortLangLabel('繁體中文'), '繁');
-	assert.equal(shortLangLabel('日本語'), '日');
-	assert.equal(shortLangLabel('한국어'), '한');
+	assert.equal(shortLangLabel('简体中文'), 'ZH-CN');
+	assert.equal(shortLangLabel('繁體中文'), 'ZH-TW');
+	assert.equal(shortLangLabel('日本語'), 'JA');
+	assert.equal(shortLangLabel('한국어'), 'KO');
 	// 简繁必须分得开 —— 这正是用户最常切的一对。
 	assert.notEqual(shortLangLabel('简体中文'), shortLangLabel('繁體中文'));
 });
 
 test('短语言标签:本来就短的原样返回,空串不炸', () => {
-	assert.equal(shortLangLabel('自动'), '自动');
-	assert.equal(shortLangLabel('中文'), '中文');
+	assert.equal(shortLangLabel('自动'), 'AUTO');
+	assert.equal(shortLangLabel('中文'), 'ZH');
 	assert.equal(shortLangLabel(''), '');
 	assert.equal(shortLangLabel('   '), '');
 });
@@ -366,4 +366,8 @@ test('切到文章流要把已有页面状态重新喂给面板,而不是留一�
 	const kept = session.slice(session.indexOf('private viewKeptOriginal('), session.indexOf('private applyPaneViewKind('));
 	assert.ok(/this\.applyPaneViewKind\('article', \{ persist: false, pageIndex \}\)/.test(kept));
 	assert.ok(!/this\.pane\.setViewKind\('article'\)/.test(kept), 'viewKeptOriginal 不许绕过重喂直接 setViewKind');
+});
+
+test('language codes including two-letter lowercase codes always display uppercase',()=>{
+ for(const [code,label] of [['de','DE'],['ko','KO'],['ja','JA'],['zh-CN','ZH-CN'],['zh-TW','ZH-TW'],['auto','AUTO']]) assert.equal(shortLangLabel(code!),label);
 });
