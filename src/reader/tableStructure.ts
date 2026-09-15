@@ -43,6 +43,8 @@ export interface TableCell {
 	id: string;
 	/** Source block ids composing this cell, in reading order. */
 	memberIds: string[];
+	rowSpan?: number;
+	colSpan?: number;
 	box: Box;
 	text: string;
 	row: number;
@@ -697,7 +699,7 @@ export function structureTableCells(
 	pageIndex: number,
 	em: number,
 	noTranslate: string[] = [],
-	grid?: BorderGrid | null,
+	grid?: BorderGrid | BorderGrid[] | null,
 	/**
 	 * 2.12.6: 网格默认**只观测、不建格**。
 	 *
@@ -730,7 +732,7 @@ export function structureTableCells(
 	const isFurniture = (b: SourceBlock): boolean =>
 		b.translationMode === 'preserve' && !!b.preserveReason && FURNITURE.has(b.preserveReason);
 	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox && !isFurniture(b));
-	if (geometric.length < 2) {
+	if (!geometric.length || (geometric.length < 2 && !grid)) {
 		return blocks;
 	}
 	// 2.12.5 边框优先: 这一页画着网格时,行列不必再从文字几何去猜。
@@ -745,16 +747,18 @@ export function structureTableCells(
 	// 逐字节一致 —— 绝大多数页面本来就没有表格线。
 	const gridConsumed = new Set<string>();
 	const gridCells: SourceBlock[] = [];
-	if (grid && useGrid) {
+	const grids = useGrid && grid ? (Array.isArray(grid) ? grid : [grid]) : [];
+	for (const [tableIndex, grid] of grids.entries()) {
 		const inGrid = geometric.filter(b => {
+			if (gridConsumed.has(b.id)) return false;
 			const cx = b.boundingBox.x + b.boundingBox.width / 2;
 			const cy = b.boundingBox.y + b.boundingBox.height / 2;
 			return columnOfX(grid, cx) >= 0 && rowOfTop(grid, cy) >= 0;
 		});
-		// 网格里没几个块就不算数 —— 一条装饰线框住半句话不是表格。
-		if (inGrid.length >= 6) {
+		// BorderGrid already passed the grid evidence gate; sparse cells still belong to it.
+		if (inGrid.length >= 1) {
 			const ev = cellPreserveEvidence(blocks.map(b => b.sourceText), noTranslate);
-			const model = buildGridTableModel(pageIndex, 0, grid, inGrid.map(b => ({
+			const model = buildGridTableModel(pageIndex, tableIndex, grid, inGrid.map(b => ({
 				id: b.id,
 				box: { left: b.boundingBox.x, top: b.boundingBox.y, width: b.boundingBox.width, height: b.boundingBox.height },
 				text: b.sourceText,
@@ -781,6 +785,9 @@ export function structureTableCells(
 						type: 'paragraph',
 						sourceText: cell.text,
 						boundingBox: { x: cell.box.left, y: cell.box.top, width: cell.box.width, height: cell.box.height },
+						...cellPdfBounds(cell.box, originals),
+						...(cell.rowSpan ? { tableRowSpan: cell.rowSpan } : {}),
+						...(cell.colSpan ? { tableColSpan: cell.colSpan } : {}),
 						lineRectsPdf: originals.flatMap(o => o.lineRectsPdf ?? []),
 						...(sizes.length ? { fontSize: sizes[Math.floor(sizes.length / 2)] } : {}),
 						...(pageColumn !== undefined ? { column: pageColumn } : {}),
@@ -797,7 +804,10 @@ export function structureTableCells(
 	if (gridCells.length) {
 		// 网格已经把这些块处理掉了;剩下的块照旧走文字几何那条路。
 		const rest = blocks.filter(b => !gridConsumed.has(b.id));
-		const restStructured = rest.length >= 2 ? structureTableCells(rest, pageIndex, em, noTranslate) : rest;
+		const restStructured = rest.length >= 2 ? structureTableCells(rest, pageIndex, em, noTranslate).map(b => {
+			if (typeof b.tableRow !== 'number') return b;
+			return { ...b, id: b.id.replace(/-table-(\d+)-/, (_, n: string) => `-table-${Number(n) + grids.length}-`) };
+		}) : rest;
 		return [...restStructured, ...gridCells];
 	}
 	const guard = detectTableRegions(geometric.map(b => ({
@@ -859,6 +869,9 @@ export function structureTableCells(
 				type: 'paragraph',
 				sourceText: cell.text,
 				boundingBox: { x: cell.box.left, y: cell.box.top, width: cell.box.width, height: cell.box.height },
+				...cellPdfBounds(cell.box, originals),
+				...(cell.rowSpan ? { tableRowSpan: cell.rowSpan } : {}),
+				...(cell.colSpan ? { tableColSpan: cell.colSpan } : {}),
 				lineRectsPdf: originals.flatMap(b => b.lineRectsPdf ?? []),
 				fontSize: sizes.length ? sizes[Math.floor(sizes.length / 2)] : undefined,
 				column: pageColumn,
@@ -915,15 +928,17 @@ export function buildGridTableModel(
 		// 归属按**文字框中心**判 —— 用左上角会让贴着边界的字跑到邻格。
 		const cx = m.box.left + m.box.width / 2;
 		const cy = m.box.top + m.box.height / 2;
-		const col = columnOfX(grid, cx);
-		const row = rowOfTop(grid, cy);
+		let col = columnOfX(grid, cx);
+		let row = rowOfTop(grid, cy);
 		if (col < 0 || row < 0) {
 			continue; // 落在网格外的不强行塞进来
 		}
 		// 跨列的块不按中心点分格 (2.12.14, ESC p16 实证):横跨六列的小节标题带,中心点
 		// 掉进 35pt 宽的 Level 列,127 个字符塞不进去。均匀网格表达不了合并单元格 ——
 		// 这样的块退回段落路径,按自己的框摆放。判据:框比所在列宽出一格以上。
-		if (spansColumns(grid, m.box, col)) {
+		const span = grid.spans?.find(s => row >= s.row && row < s.row + s.rowSpan && col >= s.col && col < s.col + s.colSpan);
+		if (span) { row = span.row; col = span.col; }
+		if (!span && spansColumns(grid, m.box, col)) {
 			continue;
 		}
 		const key = `${row}:${col}`;
@@ -937,6 +952,7 @@ export function buildGridTableModel(
 	const cells: TableCell[] = [];
 	for (const [key, list] of slots) {
 		const [row, col] = key.split(':').map(Number) as [number, number];
+		const span = grid.spans?.find(s => s.row === row && s.col === col);
 		const ordered = [...list].sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left);
 		const text = joinCellText(ordered.map(m => m.text));
 		const hasWord = /[A-Za-z一-鿿]{2,}/.test(text);
@@ -956,13 +972,22 @@ export function buildGridTableModel(
 			box: {
 				left: grid.columns[col]!,
 				top: grid.rows[row]!,
-				width: grid.columns[col + 1]! - grid.columns[col]!,
-				height: grid.rows[row + 1]! - grid.rows[row]!
+				width: grid.columns[col + (span?.colSpan ?? 1)]! - grid.columns[col]!,
+				height: grid.rows[row + (span?.rowSpan ?? 1)]! - grid.rows[row]!
 			},
 			text, row, col, kind,
+			...(span ? { rowSpan: span.rowSpan, colSpan: span.colSpan } : {}),
 			...(preserveReason ? { preserveReason } : {})
 		});
 	}
 	cells.sort((a, b) => a.row - b.row || a.col - b.col);
 	return { region: grid.region, rowCount: grid.rows.length - 1, colCount: grid.columns.length - 1, cells };
+}
+
+/** Source blocks use top-down bounding boxes and bottom-up PDF ink rectangles. */
+function cellPdfBounds(box: Box, originals: SourceBlock[]): Pick<SourceBlock, 'tableRectPdf'> {
+ const anchor = originals.find(b => b.boundingBox && b.lineRectsPdf?.length && !b.tableRectPdf);
+ if (!anchor?.boundingBox) return {};
+ const pageHeight = anchor.boundingBox.y + Math.max(...anchor.lineRectsPdf!.map(r => r[3]));
+ return { tableRectPdf: [box.left, pageHeight - box.top - box.height, box.left + box.width, pageHeight - box.top] };
 }

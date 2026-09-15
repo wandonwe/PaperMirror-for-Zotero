@@ -8,7 +8,7 @@ import type { BlockType, BoundingBox, PdfChar, SourceBlock } from '../types/mode
 import { insideObstacle, obstacleBetween } from './figureBarriers';
 import { detectGlyphFormulaRuns } from './glyphFormula';
 import { detectStyleRuns } from './styleRuns';
-import { classifyContent, isPublisherBoilerplateLine } from './metaFilter';
+import { isIdentifierLabel, classifyContent, isPublisherBoilerplateLine } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -556,7 +556,7 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 				? { translationMode: 'preserve' as const, preserveReason: 'reference' }
 				: content.decision === 'preserve'
 					? { translationMode: 'preserve' as const, preserveReason: content.reason }
-					: {}),
+					: (isIdentifierLabel(text) ? { translationMode: 'translate' as const } : {})),
 			...(formulaRuns.length ? { formulaRuns } : {}),
 			...(styleRuns.length ? { styleRuns } : {})
 		});

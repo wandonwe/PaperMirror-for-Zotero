@@ -239,10 +239,13 @@ export function classifyContent(text: string, rect?: Rect, pageWidth?: number, t
 	if (t.length < 40 && /^[\d\s.,;:*†‡§()\-–—]+$/.test(t)) {
 		return { decision: 'preserve', reason: 'marks' };
 	}
-	// 标识行:DOI / 网址 / 邮箱,且没有句子(≥3 个小写起头的普通词)。
-	// "The CONFIRM registry data are publicly documented at https://…" 是句子,翻译;
-	// "European Journal of Preventive Cardiology (2022) 29, 608–624 doi:…" 是标识行,保留。
-	if ((RE_DOI_URL.test(t) || RE_CORRESPONDENCE.test(t)) && !hasSentenceWords(stripIdentifiers(t))) {
+	// A journal/year/volume/page locator has no title or explanatory prose.
+	if ((RE_DOI_URL.test(t) || RE_CORRESPONDENCE.test(t))
+		&& /^[A-Z][A-Za-z .&-]{1,80}\s+\(?(?:19|20)\d{2}\)?[\s;,]+\d[\d\s():,e–—.-]*[•|.\s]*$/.test(stripIdentifiers(t).trim())) {
+		return { decision: 'preserve', reason: 'identifier' };
+	}
+	// Only bare identifiers stay unchanged; even short surrounding labels translate.
+	if ((RE_DOI_URL.test(t) || RE_CORRESPONDENCE.test(t)) && !/[A-Za-z]{2,}|[\u3400-\u9fff]/.test(stripIdentifiers(t))) {
 		return { decision: 'preserve', reason: 'identifier' };
 	}
 	if (RE_GRANT.test(t) && !hasNaturalLanguage(t.replace(RE_GRANT, ''))) {
@@ -264,7 +267,7 @@ function stripDateVocabulary(t: string): string {
 /** 把邮箱/网址/DOI 从文本里抠掉,剩下的才拿去数自然语言词。 */
 function stripIdentifiers(t: string): string {
 	return t
-		.replace(/[\w.+-]+@[\w-]+\.[A-Za-z]{2,}/g, ' ')
+		.replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}/g, ' ')
 		.replace(/https?:\/\/\S+/gi, ' ')
 		.replace(/\b(?:doi|DOI)\s*[::]?\s*10\.\d{4,9}\/\S+/g, ' ')
 		.replace(/\b10\.\d{4,9}\/\S+/g, ' ')
@@ -280,4 +283,11 @@ function stripIdentifiers(t: string): string {
  */
 export function isMetadataBlock(text: string, rect?: Rect, pageWidth?: number, type?: { fontSize?: number; bodySize?: number }): boolean {
 	return classifyContent(text, rect, pageWidth, type).decision !== 'translate';
+}
+
+/** Keep identifier labels separate from surrounding prose even when translated.
+ * This is a grouping hint only, never a reason to skip translation.
+ */
+export function isIdentifierLabel(text: string): boolean {
+ return (RE_DOI_URL.test(text) || RE_CORRESPONDENCE.test(text)) && !hasSentenceWords(stripIdentifiers(text));
 }

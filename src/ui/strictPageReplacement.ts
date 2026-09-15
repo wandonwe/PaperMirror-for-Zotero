@@ -31,7 +31,7 @@ import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
 import { detectTableRegions } from '../reader/tableGuard';
 import { buildTableModel, buildTextTableModel, cellPreserveEvidence, type CellMember } from '../reader/tableStructure';
-import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, planOverlapClips, type AuditBox, type AuditObstacles } from './layoutSafety';
+import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, planOverlapClips, imageSafeBox, type AuditBox, type AuditObstacles } from './layoutSafety';
 import { parseStyledSegments } from '../reader/styleRuns';
 import {
 	inkFor,
@@ -556,7 +556,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const geometric = selectGeometricBlocks(input.blocks);
 	// 表格几何模型的输入 —— 与改动前的 `geometric` 逐字相同(不含表题)。
 	// 表题不当区域种子、不当单元格成员: 它在表框外,进去只会污染区域范围。
-	const tabular = geometric.filter(b => b.type !== 'table');
+	const tabular = geometric.filter(b => b.type !== 'table' && !isTableCellBlock(b));
 	const translatable = geometric.filter(b => b.translationMode !== 'preserve');
 	// 页面基准字号仍只看正文侧样本(不含表题)—— bodyPt 会喂给 detectTableRegions
 	// 的 em,表题字号掺进中位数就会改变表格判定,而这一版不该动表格。
@@ -757,25 +757,19 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			skipped.push({ id: block.id, reason: 'echo' });
 			continue;
 		}
+		// Extraction already assigned this cell. Never infer its structure again.
+		if (isTableCellBlock(block) && block.boundingBox) {
+			replaceable.push(block);
+			continue;
+		}
 		if (guard.excluded.has(block.id)) {
 			tableIntentional++;
 			skipped.push({ id: block.id, reason: 'table-structure' });
 			continue; // protected table content the cell model didn't claim
 		}
 		const box = pxOf.get(block.id)!;
-		// 表题按图注的门槛 (2.8.14): 它就是图注的一种,"Table 3." 这类短标题
-		// 的盒子天然窄,套 50px 的正文门槛会被当成噪声丢掉 —— 而它是整张表
-		// 唯一能替换的散文。
-		// 标题标签同样窄 (3.0.3, Goenka 2016 p1 实证): "Purpose:" / "Results:" 是 9pt、
-		// 33pt 宽的独立标题块,有译文、8 个字符,却因 50px 门槛被当噪声丢掉 —— 而宽
-		// 1.5pt 的 "Methods:" 在同一缩放下刚好过线被译出。短标题与表题、图注同类。
-		// 门槛按 PDF 点算,不按屏幕像素 (3.1.3, Goenka 2016 p8 实证): 面板窄一点、
-		// 页面缩小一点,7pt 的参考文献行就矮于 9px,44–46 字符的条目整条被当噪声丢掉 ——
-		// 同一页在宽面板里全部放回。"这一块值不值得放"是页面几何的性质,不能随缩放变。
-		// 28/50 px 是按 100% 缩放(1.333 px/pt)定的,折成 21/37.5pt;高度 9px → 6.75pt
-		// 会把 7pt 小字行(行盒常 7–8pt)卡在边上,取 6pt。
-		const minWidthPt = (block.type === 'caption' || block.type === 'table' || block.type === 'heading') ? 21 : 37.5;
-		if (box.width < minWidthPt * pxPerPoint || box.height < 6 * pxPerPoint || block.sourceText.trim().length < 6) {
+		// Size is a fit decision, not a content filter. Admit every nonempty box.
+		if (box.width <= 0 || box.height <= 0) {
 			tooSmall++;
 			skipped.push({ id: block.id, reason: 'too-small' });
 			continue;
@@ -868,10 +862,13 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			const lines: PixelBox[] = [];
 			for (const rect of block.lineRectsPdf as Rect[]) {
 				const box = rectToPixels(rect, render, 1);
-				lines.push({
-					left: box.left - pad, top: box.top - pad,
-					width: box.width + pad * 2, height: box.height + pad * 2
-				});
+				// A cell mask may erase source glyphs, never its border or neighbour.
+				const inset = block.tableRectPdf ? Math.min(pxPerPoint, whole.width / 4, whole.height / 4) : 0;
+				const left = block.tableRectPdf ? Math.max(box.left - pad, whole.left + inset) : box.left - pad;
+				const top = block.tableRectPdf ? Math.max(box.top - pad, whole.top + inset) : box.top - pad;
+				const right = block.tableRectPdf ? Math.min(box.left + box.width + pad, whole.left + whole.width - inset) : box.left + box.width + pad;
+				const bottom = block.tableRectPdf ? Math.min(box.top + box.height + pad, whole.top + whole.height - inset) : box.top + box.height + pad;
+				if (right > left && bottom > top) lines.push({ left, top, width: right - left, height: bottom - top });
 			}
 			lineBoxesFor.set(block.id, lines);
 		}
@@ -984,7 +981,16 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const items: StrictItem[] = [];
 	const byId = new Map<string, StrictItem>();
 	for (const block of replaceable) {
-		const box = clippedBox.get(block.id) ?? pixelBox(block, render, 1);
+		const candidate = isTableCellBlock(block) ? pixelBox(block, render, 1)
+			: clippedBox.get(block.id) ?? pixelBox(block, render, 1);
+		const inset = isTableCellBlock(block) ? Math.min(pxPerPoint, candidate.width / 4, candidate.height / 4) : 0;
+		const box = imageSafeBox({ left: candidate.left + inset, top: candidate.top + inset,
+			width: candidate.width - inset * 2, height: candidate.height - inset * 2 }, imageBoxes);
+		if (!box) {
+			skipped.push({ id: block.id, reason: 'image' });
+			imageExcluded++;
+			continue;
+		}
 		const node = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
 		node.className = 'pm-repage-block';
 		node.setAttribute('data-pm-block', block.id);
@@ -1169,7 +1175,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// 或水平向(下扩)重叠者的最近边,留 3px 边距;右扩以版心 90% 为界
 	// (BabelDOC 同),下扩以页高 95% 为界;各设温和上限防贪婪。
 	const expansionAllowance = (item: StrictItem): { right: number; down: number } =>
-		computeExpansionAllowance(item.box, [
+		item.node.hasAttribute('data-pm-cell') ? { right: 0, down: 0 } : computeExpansionAllowance(item.box, [
 			...imageBoxes,
 			// P2-14: 参考文献/表格墨迹也是遮挡物 —— 扩展不得长进它们的原文。
 			...inkObstacles.map(o => o.box),

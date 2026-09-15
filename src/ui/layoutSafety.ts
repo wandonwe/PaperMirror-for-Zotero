@@ -9,10 +9,10 @@
  * (回退扩展→缩字重试→放弃)由 strictPageReplacement 的 pmGeometryAudit
  * 钩子完成。
  *
- * 关键设计:**只报"新增"的违例**。原始 PDF 几何本身就存在紧贴与轻微重叠
+ * 关键设计:文字之间报告新增违例;图片报告绝对侵入。原始 PDF 几何本身就存在紧贴与轻微重叠
  * (行矩形跨块交叠是常态),按绝对重叠报会淹没在误报里——所以每条规则都以
  * "现在的侵入面积 − 原始盒的侵入面积 > 容差"为准:排版没有让页面变得比
- * 原文更糟,就不算违例。
+ * 原文更糟,就不算文字间违例。图片不适用此豁免,原文外接矩形可能包含绕图空洞。
  *
  * Pure module — no DOM, unit-tested.
  */
@@ -81,10 +81,10 @@ export function auditPlacedBoxes(
 			}
 		}
 	}
-	// 2. 压住真实图形(硬规则的排版侧镜像:mask 永不碰图,文本盒也不该)。
+	// 2. Absolute image intersection: source union-box overlap is not permission to paint.
 	for (const p of placed) {
 		for (const img of obstacles.images) {
-			const added = inter(p.box, img) - inter(p.originalBox, img);
+			const added = inter(p.box, img);
 			if (added > tol(p.box, img)) {
 				out.push({ id: p.id, kind: 'occludes-image', area: added });
 			}
@@ -146,7 +146,7 @@ export function violationStillPresent(
 		}
 		case 'occludes-image':
 			return obstacles.images.some((img) => {
-				const added = inter(self.box, img) - inter(self.originalBox, img);
+				const added = inter(self.box, img);
 				return added > tol(self.box, img);
 			});
 		case 'occludes-preserved': {
@@ -198,7 +198,7 @@ export function boxNewlyViolates(
 		}
 	}
 	for (const img of obstacles.images) {
-		const added = inter(self.box, img) - inter(self.originalBox, img);
+		const added = inter(self.box, img);
 		if (added > tol(self.box, img)) {
 			return true;
 		}
@@ -276,4 +276,30 @@ export function planOverlapClips(blocks: ClipCandidate[]): Map<string, PixelBox>
 		}
 	}
 	return out;
+}
+
+/** Largest rectangular text area left after subtracting image obstacles.
+ * Conservative fixed-page fallback: keeps all text, letting the fit pipeline
+ * route overflow to the full translation view rather than painting on images.
+ */
+export function imageSafeBox(box: PixelBox, images: PixelBox[]): PixelBox | null {
+ let candidates = [box];
+ for (const img of images) {
+  candidates = candidates.flatMap(b => {
+   if (inter(b, img) === 0) return [b];
+   const right = b.left + b.width, bottom = b.top + b.height;
+   return [
+    { ...b, width: Math.max(0, img.left - b.left) },
+    { ...b, left: Math.max(b.left, img.left + img.width), width: Math.max(0, right - Math.max(b.left, img.left + img.width)) },
+    { ...b, height: Math.max(0, img.top - b.top) },
+    { ...b, top: Math.max(b.top, img.top + img.height), height: Math.max(0, bottom - Math.max(b.top, img.top + img.height)) }
+   ].filter(r => r.width > 0 && r.height > 0);
+  });
+  // Remove duplicate/contained candidates without dropping a potential optimum.
+  candidates = candidates.filter((a, i, all) => !all.some((b, j) => j !== i
+   && b.left <= a.left && b.top <= a.top
+   && b.left + b.width >= a.left + a.width && b.top + b.height >= a.top + a.height
+   && (b.width * b.height > a.width * a.height || j < i)));
+ }
+ return candidates.sort((a,b) => b.width*b.height-a.width*a.height)[0] ?? null;
 }

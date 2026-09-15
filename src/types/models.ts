@@ -86,6 +86,10 @@ export interface SourceBlock {
 	/** Table-internal row index for structured table cells (0 = header row).
 	 * 与 tableCol 配对的显式字段;此前行号只活在 id 的 `r<row>` 里。 */
 	tableRow?: number;
+	tableRowSpan?: number;
+	tableColSpan?: number;
+	/** Authoritative cell bounds in raw PDF coordinates, separate from source ink. */
+	tableRectPdf?: [number, number, number, number];
 	/** Canonical reading-order index (0-based) stamped by
 	 * orderBlocksForReading — the explicit IR field for page sequence.
 	 * `order` mirrors it after ordering, but `order` also carries stream

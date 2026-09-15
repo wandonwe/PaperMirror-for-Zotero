@@ -160,11 +160,11 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 	if (!/^zh/i.test(targetLang)) {
 		return true;
 	}
-	// 参考文献块的回声视为合格 (3.2.0, Mets 2013 p8 真机): 文献条目按规则"作者/期刊/年份/DOI
-	// 原样保留、标题翻译",模型对一条被拆成单行的碎片("IEEE Trans Med Imaging 2012;31:"、
-	// "6. Mets OM, Buckens CF, Zanen P, et al.")原样返回时,它的判断比任何正则都可靠;
-	// 拒收只换来同一结果的重试和 unrecovered。原文留在页上就是这条的正确结果。
-	if (opts?.isReference && isEcho(source, t)) {
+	// Preserve only identifiable author/journal fragments, never all reference prose.
+	if (opts?.isReference && isEcho(source, t) && (looksLikeAuthorNameList(source.replace(/^\d+\.\s*/, ''))
+		|| looksLikePersonNames(source.replace(/^\d+\.\s*/, ''))
+|| /^(?:\d+\.\s*)?(?:[A-Z][a-z'’-]+\s+[A-Z]{1,4},\s*)+(?:[A-Z][a-z'’-]+\s+[A-Z]{1,4},?\s*)?et al\.$/.test(source.trim())
+		|| /^[A-Z][A-Za-z .&-]{1,70}\s+(?:19|20)\d{2}\s*;\s*\d+[\d:()–—-]*[.:]?\s*$/.test(source.trim()))) {
 		return true;
 	}
 	// PROSE-ONLY scoring (审核项: 统计密集行被误拒): citations, p-values, CIs and

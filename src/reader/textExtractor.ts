@@ -191,6 +191,7 @@ export class TextExtractor implements PageParser {
 	private imageRects = new Map<number, [number, number, number, number][]>();
 	/** 逐页边框网格缓存;undefined = 还没取过,null = 取过但这页没有网格。 */
 	private borderGrids = new Map<number, BorderGrid | null>();
+	private allBorderGrids = new Map<number, BorderGrid[]>();
 	/** 网格取证的计数,随网格一起缓存 (2.12.14):重抽取时从缓存拿网格,遥测也得跟着回填 ——
 	 *  真机 2.12.13 的 p12–18 就是这样:gridInside 有值,edgeSegments/gridCols 全空。 */
 	private gridPhases = new Map<number, Partial<ExtractPhases>>();
@@ -386,7 +387,9 @@ export class TextExtractor implements PageParser {
 			segCount = segs?.length ?? 0;
 			if (segs && segs.length) {
 				grid = borderGrid(segs, { pageHeight });
-				gridCount = borderGrids(segs, { pageHeight }).length;
+				const all = borderGrids(segs, { pageHeight });
+				this.allBorderGrids.set(pageIndex, all);
+				gridCount = all.length;
 			}
 		}
 		catch {
@@ -417,7 +420,7 @@ export class TextExtractor implements PageParser {
 				];
 			}
 		}
-		this.borderGrids.set(pageIndex, grid);
+		if (grid) this.borderGrids.set(pageIndex, grid);
 		{
 			const phases = this.phasesByPage.get(pageIndex);
 			if (phases) {
@@ -511,7 +514,7 @@ export class TextExtractor implements PageParser {
 				// Canonical reading order BEFORE coalescing: row-wise streams
 				// interleave the columns, and the coalescer only merges adjacent
 				// blocks — without this, one-line shreds never rejoin.
-				const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), await this.gridFor(pageIndex, pageHeight));
+				const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), (await this.gridFor(pageIndex, pageHeight), this.allBorderGrids.get(pageIndex)));
 				const tableCells = structured.filter(b => b.translationMode !== undefined);
 				const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
 				result.blocks = orderBlocksForReading([...prose, ...tableCells]);
@@ -721,7 +724,8 @@ export class TextExtractor implements PageParser {
 			includeReferences: this.includeReferences,
 			referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
 			imageRectsPdf: obstacles,
-			grid
+			grid,
+			grids: this.allBorderGrids.get(pageIndex)
 		});
 		// Rebuild semantic regions from whatever fragments extraction
 		// produced: whole regions translate as whole sentences.
@@ -737,7 +741,7 @@ export class TextExtractor implements PageParser {
 				}).length;
 			}
 		}
-		const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), grid);
+		const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), this.allBorderGrids.get(pageIndex) ?? grid);
 		const tableCells = structured.filter(b => b.translationMode !== undefined);
 		const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
 		result.blocks = orderBlocksForReading([...prose, ...tableCells]);

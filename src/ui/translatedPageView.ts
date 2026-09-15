@@ -251,6 +251,10 @@ export function rectToPixels(rect: Rect, render: adapter.PageRender, pxPerViewpo
 
 /** Union of a block's line rects, in page pixels. */
 export function pixelBox(block: SourceBlock, render: adapter.PageRender, pxPerViewport: number): PixelBox {
+	// Raw PDF cell bounds survive zoom and rotation; ink rectangles remain for masks.
+	if (block.tableRectPdf) {
+		return rectToPixels(block.tableRectPdf, render, pxPerViewport);
+	}
 	let left = Infinity;
 	let top = Infinity;
 	let right = -Infinity;

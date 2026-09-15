@@ -115,7 +115,7 @@ test('nothing outside the top/bottom band is ever a running head', () => {
 
 test('a page-foot DOI line is caught by either filter', () => {
 	const text = 'PLOS ONE | DOI:10.1371/journal.pone.0121631   March 17, 2015';
-	assert.equal(isMetadataBlock(text), true, 'DOI rule');
+	assert.equal(isMetadataBlock(text), false, 'a mixed label is not a bare DOI');
 	assert.equal(isRunningHeadOrFoot([54, 28, 558, 40], 792, 1, text), true, 'geometry rule');
 });
 

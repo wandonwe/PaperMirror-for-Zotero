@@ -1,14 +1,14 @@
 {
 	"Aquino_-_2023_-_Myocardial_Characterization_with_Extracellular_Volume_Mapping_with_a_First-Generation_Photon-countin-p1": {
 		"blocks": 13,
-		"translatable": 10,
+		"translatable": 11,
 		"tableCells": 0,
 		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 10,
-		"payloadChars": 5007,
+		"maxBlocksPerChunk": 11,
+		"payloadChars": 5094,
 		"dupBlocks": 0
 	},
 	"Aquino_-_2023_-_Myocardial_Characterization_with_Extracellular_Volume_Mapping_with_a_First-Generation_Photon-countin-p2": {
@@ -25,14 +25,14 @@
 	},
 	"aquino2023-p1": {
 		"blocks": 13,
-		"translatable": 10,
+		"translatable": 11,
 		"tableCells": 0,
 		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 10,
-		"payloadChars": 5007,
+		"maxBlocksPerChunk": 11,
+		"payloadChars": 5094,
 		"dupBlocks": 0
 	},
 	"aquino2023-p2": {
@@ -49,26 +49,26 @@
 	},
 	"booz2019-p1": {
 		"blocks": 9,
-		"translatable": 7,
+		"translatable": 8,
 		"tableCells": 0,
 		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 7,
-		"payloadChars": 5242,
+		"maxBlocksPerChunk": 8,
+		"payloadChars": 5330,
 		"dupBlocks": 0
 	},
 	"chen2023-p1": {
 		"blocks": 11,
-		"translatable": 9,
+		"translatable": 10,
 		"tableCells": 0,
 		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 9,
-		"payloadChars": 5693,
+		"maxBlocksPerChunk": 10,
+		"payloadChars": 5780,
 		"dupBlocks": 0
 	},
 	"chen2023-p10": {
@@ -265,14 +265,14 @@
 	},
 	"horst2024-p1": {
 		"blocks": 8,
-		"translatable": 6,
+		"translatable": 7,
 		"tableCells": 0,
 		"modules": 1,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 6,
-		"payloadChars": 5536,
+		"maxBlocksPerChunk": 7,
+		"payloadChars": 5623,
 		"dupBlocks": 0
 	},
 	"horst2024-p11": {
@@ -433,14 +433,14 @@
 	},
 	"wu2026-p1": {
 		"blocks": 36,
-		"translatable": 16,
+		"translatable": 20,
 		"tableCells": 26,
-		"modules": 5,
+		"modules": 7,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 8,
-		"payloadChars": 2779,
+		"maxBlocksPerChunk": 11,
+		"payloadChars": 2893,
 		"dupBlocks": 1
 	},
 	"wu2026-p3": {

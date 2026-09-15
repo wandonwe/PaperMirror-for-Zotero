@@ -26,7 +26,7 @@ import type { BlockType, SourceBlock } from '../types/models';
 import { detectTableRegions } from './tableGuard';
 import type { BorderGrid } from './tableBorders';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
-import { classifyContent, endsMidSentence, isPublisherBoilerplateLine, isRunningHeadOrFoot, type PreserveReason } from './metaFilter';
+import { isIdentifierLabel, classifyContent, endsMidSentence, isPublisherBoilerplateLine, isRunningHeadOrFoot, type PreserveReason } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -446,7 +446,7 @@ export function lineText(line: SpanLine): string {
  * refuses to end a paragraph after a line that ran to its column's right
  * margin — that line wrapped, so the sentence continues on the next one.
  */
-export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeight = 0, obstacles: Rect[] = [], gridRows: GridRowBarriers | null = null): SpanLine[][] {
+export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeight = 0, obstacles: Rect[] = [], gridRows: GridRowBarriers | GridRowBarriers[] | null = null): SpanLine[][] {
 	if (!lines.length) {
 		return [];
 	}
@@ -665,7 +665,8 @@ export function gridRowBarriers(grid: BorderGrid, pageHeight: number): GridRowBa
 }
 
 /** 两行(PDF y-up 矩形 [x1, 底, x2, 顶])之间是否隔着一条网格行线,且两行都在网格横向范围内。 */
-function gridRowBetween(a: Rect, b: Rect, rows: GridRowBarriers): boolean {
+function gridRowBetween(a: Rect, b: Rect, rows: GridRowBarriers | GridRowBarriers[]): boolean {
+	if (Array.isArray(rows)) return rows.some(r => gridRowBetween(a, b, r));
 	// 竖向间隙 = [下面那行的顶边, 上面那行的底边]。
 	const lo = Math.min(a[3], b[3]);
 	const hi = Math.max(a[1], b[1]);
@@ -733,6 +734,7 @@ export interface SpanBuildOptions {
 	 * 横跨六列退回段落路径后溢出,那一格只剩下半截。行坐标是 top-down,这里换算成 PDF y。
 	 */
 	grid?: BorderGrid | null;
+	grids?: BorderGrid[];
 }
 
 export interface SpanBuildResult {
@@ -802,8 +804,9 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// 一致,不影响任何非表格版面。
 	const tableLineIdx = detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10), obstacles);
 	const proseLines = tableLineIdx.size ? lines.filter((_, i) => !tableLineIdx.has(i)) : lines;
-	const gridRows = options.grid ? gridRowBarriers(options.grid, options.pageHeight) : null;
-	const paragraphs = mergeGridCellStacks(groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, obstacles, gridRows), gridRows);
+	const gridRows = (options.grids ?? (options.grid ? [options.grid] : [])).map(g => gridRowBarriers(g, options.pageHeight));
+	const paragraphs = gridRows.reduce((groups, rows) => mergeGridCellStacks(groups, rows),
+		groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, obstacles, gridRows));
 
 	// Materialise, then repair anything still split mid-sentence.
 	const bands = detectColumns(lines.map(l => l.rect), pageWidth, options.pageHeight);
@@ -1096,7 +1099,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 				? { translationMode: 'preserve' as const, preserveReason: 'reference' }
 				: keepReason
 					? { translationMode: 'preserve' as const, preserveReason: keepReason }
-					: {})
+					: (isIdentifierLabel(p.text) ? { translationMode: 'translate' as const } : {}))
 		});
 		order++;
 	}
