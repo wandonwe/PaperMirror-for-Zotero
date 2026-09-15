@@ -722,6 +722,12 @@ export function structureTableCells(
 	useGrid = true,
 	pageHeight?: number
 ): SourceBlock[] {
+	// Explicit glossary cells already have stable row/column ownership.
+	const glossaryCells = blocks.filter(b => /-abbrev-\d+-r\d+-c\d+$/.test(b.id) && b.tableContentRectPdf);
+	if (glossaryCells.length) {
+		const owned = new Set(glossaryCells);
+		return [...structureTableCells(blocks.filter(b => !owned.has(b)), pageIndex, em, noTranslate, grid, useGrid, pageHeight), ...glossaryCells];
+	}
 	const originalById = new Map(blocks.map(block => [block.id, block]));
 	// 页面附属内容不进表 (2.12.13):提取阶段不再丢块之后,页码、水印、页眉、日期行、
 	// DOI 行这些 preserve 块也带着几何进来了 —— 它们从来不是表格成员,一个页脚的页码

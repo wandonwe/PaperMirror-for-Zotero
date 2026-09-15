@@ -1,3 +1,4 @@
+import { extractAbbreviationTables } from './abbreviationTable';
 import { columnOfX, rowOfTop } from './tableBorders';
 import { imageCaptionRegions, withinCaption, markImageCaptions } from './imageCaption';
 /**
@@ -784,6 +785,11 @@ export function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em
 
 export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOptions): SpanBuildResult {
 	const pageWidth = options.pageWidth && options.pageWidth > 0 ? options.pageWidth : 612;
+	const glossary = extractAbbreviationTables(items, options.pageIndex, pageWidth, options.pageHeight);
+	if (glossary.cells.length) {
+		const rest = buildBlocksFromSpans(glossary.rest, options);
+		return { ...rest, blocks: [...rest.blocks, ...glossary.cells] };
+	}
 	const obstacles = options.imageRectsPdf ?? [];
 	const captionRegions = obstacles.length ? imageCaptionRegions(groupIntoLines(items,pageWidth,options.pageHeight).map(l=>({text:lineText(l),rect:l.rect,fontSize:l.fontSize})),obstacles) : [];
 	const filteredItems = obstacles.length

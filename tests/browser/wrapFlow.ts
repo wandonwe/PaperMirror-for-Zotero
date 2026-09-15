@@ -1,3 +1,4 @@
+import { checkAbbreviationTable } from './abbreviationTable';
 import flowFixtures from '../fixtures/regression/cadrads2022-flow-overlap.json';
 import { checkImageCaption } from './imageCaption';
 import { checkScroll } from './scrollSync';
@@ -7,6 +8,7 @@ async function run() {
 try {
  await checkImageCaption();
  checkScroll();
+ checkAbbreviationTable();
  for(const fixture of flowFixtures) {
   const canvas=document.createElement('canvas');canvas.width=594;canvas.height=783;
   const ctx=canvas.getContext('2d')!;ctx.fillStyle='white';ctx.fillRect(0,0,594,783);
