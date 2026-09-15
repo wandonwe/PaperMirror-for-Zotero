@@ -31,7 +31,9 @@ export function extractAbbreviationTables(items: SpanItem[], pageIndex: number, 
   const entries=keys.map((key,r)=>{
    const box=union(key),top=r===0?box[3]+font*.4:(union(keys[r-1]!)[1]+box[3])/2;
    const bottom=r+1<keys.length?(box[1]+union(keys[r+1]!)[3])/2:box[1]-font*.4;
-   const value=items.filter(i=>!used.has(i) && i.rect[0]>=split && i.rect[2]<rightLimit && (i.rect[1]+i.rect[3])/2<=top && (i.rect[1]+i.rect[3])/2>=bottom);
+   // Vertical page furniture may have its centre inside a row; require
+   // a horizontal text-sized box inside the row instead of centre-only ownership.
+   const value=items.filter(i=>!used.has(i) && i.rect[3]-i.rect[1]<=font*1.8 && i.rect[1]>=bottom-font*.25 && i.rect[3]<=top+font*.25 && i.rect[0]>=split && i.rect[2]<rightLimit && (i.rect[1]+i.rect[3])/2<=top && (i.rect[1]+i.rect[3])/2>=bottom);
    return {key,value,top,bottom};
   });
   if(entries.some(e=>!e.value.length)) continue;

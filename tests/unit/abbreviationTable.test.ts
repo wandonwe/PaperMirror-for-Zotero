@@ -13,7 +13,7 @@ test('e321 abbreviation tables preserve independent row pairs through the pipeli
  const final=[...coalesceRegions(structured.filter(b=>b.translationMode===undefined)),...structured.filter(b=>b.translationMode!==undefined)];
  const cells=final.filter(b=>b.id.includes('-abbrev-'));
  assert.ok(cells.length>140,`only ${cells.length} cells`);
- for(const [key,value] of [['AF','atrial fibrillation'],['MCA','middle cerebral artery'],['GPC','graded compression stockings'],['GTN','glyceryl trinitrate'],['SpO2','oxygen saturation'],['LVO','large vessel occlusion']]) {
+ for(const [key,value] of [['AF','atrial fibrillation'],['MCA','middle cerebral artery'],['MI','myocardial infarction'],['GPC','graded compression stockings'],['GTN','glyceryl trinitrate'],['SpO2','oxygen saturation'],['LVO','large vessel occlusion']]) {
   const c=cells.find(b=>b.sourceText===key)!;assert.ok(c,key);
   const v=cells.find(b=>b.id===c.id.replace(/c0$/,'c1'))!;assert.equal(v.sourceText,value);
   assert.equal(c.translationMode,'preserve');assert.equal(v.translationMode,'translate');
@@ -26,4 +26,17 @@ test('e321 abbreviation tables preserve independent row pairs through the pipeli
 test('a header alone does not turn ordinary prose into a glossary',()=>{
  const few=items.filter(i=>i.rect[3]>680);
  assert.equal(extractAbbreviationTables(few,5,585,783).cells.length,0);
+});
+
+test('vertical page furniture is not absorbed by a glossary row or its mask',()=>{
+ const {cells,rest}=extractAbbreviationTables(items,5,585,783);
+ const furniture=items.filter(i=>/CLINICAL STATEMENTS|AND GUIDELINES/.test(i.text));
+ assert.ok(furniture.length>=2);
+ for(const span of furniture) assert.ok(rest.includes(span));
+ assert.ok(cells.every(c=>!c.sourceText.includes('CLINICAL STATEMENTS')&&!c.sourceText.includes('AND GUIDELINES')));
+ const mi=cells.find(c=>c.sourceText==='MI')!;
+ const meaning=cells.find(c=>c.id===mi.id.replace(/c0$/,'c1'))!;
+ assert.equal(meaning.sourceText,'myocardial infarction');
+ assert.ok(meaning.boundingBox!.height<10);
+ assert.ok(meaning.tableContentRectPdf![2]<540);
 });

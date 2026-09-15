@@ -20,6 +20,9 @@ export function checkAbbreviationTable():void {
    const left=parseFloat(node.style.left),top=parseFloat(node.style.top),width=parseFloat(node.style.width),height=parseFloat(node.style.height);
    if(left<r[0]*scale-1 || left+width>r[2]*scale+1 || top<(783-r[3])*scale-1 || top+height>(783-r[1])*scale+1) throw Error('Glossary crosses cell '+cell.id);
   }
+  const mask=rendered.element.querySelector('.pm-repage-mask') as HTMLCanvasElement;
+  const mx=mask.width/(585*scale),my=mask.height/(783*scale);
+  if(mask.getContext('2d')!.getImageData(Math.floor(570*scale*mx),Math.floor(110*scale*my),1,1).data[3]!==0) throw Error('Glossary mask covered vertical page furniture');
   rendered.element.remove();
  }
 }
