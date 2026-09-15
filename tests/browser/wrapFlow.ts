@@ -1,7 +1,10 @@
+import { checkImageCaption } from './imageCaption';
 import { checkScroll } from './scrollSync';
 import { buildStrictPage } from '../../src/ui/strictPageReplacement';
 const result=document.createElement('pre');result.id='result';document.body.append(result);
+async function run() {
 try {
+ await checkImageCaption();
  checkScroll();
  const canvas=document.createElement('canvas');canvas.width=300;canvas.height=300;
  const ctx=canvas.getContext('2d')!;ctx.fillStyle='white';ctx.fillRect(0,0,300,300);ctx.fillStyle='red';ctx.fillRect(0,0,100,100);
@@ -40,3 +43,6 @@ try {
  }
  result.setAttribute('data-pass','true');
 } catch(e) {result.textContent+=' ERROR '+String(e);result.setAttribute('data-pass','false');}
+
+}
+void run();

@@ -74,6 +74,7 @@ function endsHyphenated(text: string): boolean {
 }
 
 export function canMerge(a: SourceBlock, b: SourceBlock, obstacles: Rect[] = []): boolean {
+	if (!!a.imageTextRegionPdf !== !!b.imageTextRegionPdf) return false;
 	if (!isBodyBlock(a) || !isBodyBlock(b)) {
 		return false;
 	}
@@ -242,6 +243,7 @@ export function isShard(block: SourceBlock): boolean {
  * geometry only has to say "same column, adjacent-ish".
  */
 export function canAbsorb(host: SourceBlock, shard: SourceBlock, obstacles: Rect[] = []): boolean {
+	if (!!host.imageTextRegionPdf !== !!shard.imageTextRegionPdf) return false;
 	if (!isBodyBlock(host) || !host.lineRectsPdf?.length || !shard.lineRectsPdf?.length) {
 		return false;
 	}
@@ -307,6 +309,7 @@ export function canAbsorb(host: SourceBlock, shard: SourceBlock, obstacles: Rect
  * 之间,所以这里对整页扫描,每轮取「紧贴在 host 下方」的那一块。
  */
 export function canMergeCaption(host: SourceBlock, next: SourceBlock, obstacles: Rect[] = []): boolean {
+	if (!!host.imageTextRegionPdf !== !!next.imageTextRegionPdf) return false;
 	// 只有 caption 能当宿主;只有 paragraph/list 会是题注尾巴的误分类形态。
 	if (host.type !== 'caption') {
 		return false;

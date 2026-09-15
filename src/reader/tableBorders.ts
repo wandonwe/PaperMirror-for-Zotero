@@ -232,7 +232,7 @@ export function borderGrids(segments: Segment[], options: BorderGridOptions): Bo
 		const bottom = rows[rows.length - 1]!;
 		const horizontal = gh.map(l => ({ ...l, pos: options.pageHeight - l.pos }));
 		const vertical = g.lines.map(l => ({ ...l, from: options.pageHeight - l.to, to: options.pageHeight - l.from }));
-		const spans = gridSpans(cols, rows, horizontal, vertical, tol);
+		const spans = gridSpans(cols, rows, horizontal, vertical, Math.max(tol, minCell / 2));
 		out.push({ columns: cols, rows, region: { left, top, width: right - left, height: bottom - top }, ...(spans.length ? { spans } : {}) });
 	}
 	return out.sort((a, b) => a.region.top - b.region.top);

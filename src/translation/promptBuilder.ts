@@ -28,6 +28,7 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 	// 样式标记/上下文的请求,不再携带对应规则 —— 大多数请求省 ~50–120 输入 token,
 	// 且对确实携带这些标记的请求一字不变(无需 bump PROMPT_VERSION、不作废缓存)。
 	const hasPlaceholders = request.blocks.some(b => b.text.includes('⟦PM'));
+	const referenceRule = 'In bibliography entries, translate the article or book TITLE into the target language. Keep author names, journal names, years, volumes, pages and DOIs unchanged. A reference title is natural language, not an identifier; do not copy the entire entry unchanged.';
 	const hasStyleTags = request.blocks.some(b => b.text.includes('⟦b⟧') || b.text.includes('⟦i⟧'));
 	if (request.plain) {
 		// 纯文本兜底 (修复链路最后一环): the block failed the JSON path repeatedly —
@@ -37,6 +38,7 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 			'Output ONLY the translation itself — no explanations, no quotes, no JSON, no markdown.',
 			'Never alter numbers, statistics, citation markers, URLs, or math.'
 		];
+		if (request.referenceContent) lines.push(referenceRule);
 		if (hasPlaceholders) {
 			lines.push('Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation unchanged.');
 		}
@@ -66,6 +68,7 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 		// →"火星生物成像"、厂商与型号名被意译 —— 专有名词只认原文。
 		'- Keep proper names EXACTLY as written in the source: person names (authors, acknowledged people, cited researchers), company/manufacturer names, institutions, and product/model names (e.g. scanner or software names). Never transliterate them or convert them into target-language characters.'
 	];
+	if (request.referenceContent) lines.push('- ' + referenceRule);
 	if (hasPlaceholders) {
 		lines.push('- Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation UNCHANGED and in a natural position.');
 	}

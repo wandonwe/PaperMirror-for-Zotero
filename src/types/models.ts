@@ -91,6 +91,8 @@ export interface SourceBlock {
 	/** Authoritative cell bounds in raw PDF coordinates, separate from source ink. */
 	tableRectPdf?: [number, number, number, number];
 	tableGeometry?: 'border' | 'inferred';
+	/** Extracted caption inside a composite image; renderer must verify a text-only background. */
+	imageTextRegionPdf?: [number, number, number, number];
 	/** Safe whitespace assigned from neighbouring inferred cells, not a drawn border. */
 	tableContentRectPdf?: [number, number, number, number];
 	/** Canonical reading-order index (0-based) stamped by
@@ -129,6 +131,8 @@ export interface TranslatedBlock {
 export type LanguageCode = 'en' | 'zh-CN' | 'zh-TW' | 'auto' | string;
 
 export interface TranslationRequest {
+	/** Contains bibliography entries; translate their titles while keeping bibliographic identifiers. */
+	referenceContent?: boolean;
 	/** Page this request belongs to — the provider pool shards on it. */
 	pageIndex?: number;
 	sourceLanguage: LanguageCode;

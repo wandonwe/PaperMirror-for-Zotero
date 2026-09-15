@@ -926,6 +926,18 @@ export function buildGridTableModel(
 	if (grid.columns.length < 2 || grid.rows.length < 2) {
 		return null;
 	}
+	grid = { ...grid, spans: grid.spans?.filter(span => {
+		if (span.colSpan < 2 || span.rowSpan !== 1) return true;
+		const rowMembers=members.filter(m=>rowOfTop(grid,m.box.top+m.box.height/2)===span.row);
+		const occupied=new Set<number>();
+		for(const m of rowMembers) {
+			const col=columnOfX(grid,m.box.left+m.box.width/2);
+			if(col<span.col || col>=span.col+span.colSpan) continue;
+			if(spansColumns(grid,m.box,col)) return true;
+			occupied.add(col);
+		}
+		return occupied.size < span.colSpan;
+	}) };
 	const slots = new Map<string, CellMember[]>();
 	for (const m of members) {
 		// 归属按**文字框中心**判 —— 用左上角会让贴着边界的字跑到邻格。

@@ -579,9 +579,18 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const fontFactor = parseFactor(getPref('fontSizeFactor', '1'));
 	const lineFactor = parseFactor(getPref('lineHeightFactor', '1'), 0.9, 1.4);
 
-	const imageBoxes: PixelBox[] = (input.imageRectsPdf ?? [])
+	let imageBoxes: PixelBox[] = (input.imageRectsPdf ?? [])
 		.map(r => rectToPixels(r, render, 1))
 		.filter(b => b.width > 8 && b.height > 8);
+	const imageTextBoxes = new Map<string, PixelBox>();
+	for (const block of geometric) {
+		if (!block.imageTextRegionPdf || block.type !== 'caption' || !ctx) continue;
+		const box=pixelBox(block,render,1);
+		const lines=((block.lineRectsPdf ?? []) as Rect[]).map(r=>rectToPixels(r,render,1));
+		if (!captionBackgroundIsClear(ctx, box, lines, BITMAP_SCALE)) continue;
+		imageTextBoxes.set(block.id,box);
+		imageBoxes=imageBoxes.flatMap(image=>imageSafeRegions(image,[box]));
+	}
 
 	const pxOf = new Map<string, PixelBox>();
 	// GEOMETRIC, not translatable (1.0.3 卡死修复): preserve table cells are in
@@ -864,10 +873,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				const box = rectToPixels(rect, render, 1);
 				// A cell mask may erase source glyphs, never its border or neighbour.
 				const inset = block.tableRectPdf ? Math.min(pxPerPoint, whole.width / 4, whole.height / 4) : 0;
-				const left = block.tableRectPdf ? Math.max(box.left - pad, whole.left + inset) : box.left - pad;
-				const top = block.tableRectPdf ? Math.max(box.top - pad, whole.top + inset) : box.top - pad;
-				const right = block.tableRectPdf ? Math.min(box.left + box.width + pad, whole.left + whole.width - inset) : box.left + box.width + pad;
-				const bottom = block.tableRectPdf ? Math.min(box.top + box.height + pad, whole.top + whole.height - inset) : box.top + box.height + pad;
+				const left = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.max(box.left - pad, whole.left + inset) : box.left - pad;
+				const top = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.max(box.top - pad, whole.top + inset) : box.top - pad;
+				const right = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.min(box.left + box.width + pad, whole.left + whole.width - inset) : box.left + box.width + pad;
+				const bottom = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.min(box.top + box.height + pad, whole.top + whole.height - inset) : box.top + box.height + pad;
 				if (right > left && bottom > top) lines.push({ left, top, width: right - left, height: bottom - top });
 			}
 			lineBoxesFor.set(block.id, lines);
@@ -1222,7 +1231,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// 或水平向(下扩)重叠者的最近边,留 3px 边距;右扩以版心 90% 为界
 	// (BabelDOC 同),下扩以页高 95% 为界;各设温和上限防贪婪。
 	const expansionAllowance = (item: StrictItem): { right: number; down: number } =>
-		item.flowBoxes ? { right: 0, down: 0 } : item.node.hasAttribute('data-pm-cell') ? { right: 0, down: 0 } : computeExpansionAllowance(item.box, [
+		(item.flowBoxes || imageTextBoxes.has(item.id)) ? { right: 0, down: 0 } : item.node.hasAttribute('data-pm-cell') ? { right: 0, down: 0 } : computeExpansionAllowance(item.box, [
 			...imageBoxes,
 			// P2-14: 参考文献/表格墨迹也是遮挡物 —— 扩展不得长进它们的原文。
 			...inkObstacles.map(o => o.box),
@@ -2160,4 +2169,24 @@ export function shrinkStrictBlocks(element: HTMLElement, ids: string[]): string[
 export function expandStrictBlocks(element: HTMLElement, ids: string[]): string[] {
 	const expand = (element as HTMLElement & { pmExpandFit?: (ids: string[]) => string[] }).pmExpandFit;
 	return expand ? expand(ids) : ids;
+}
+
+/** Certify a caption's paper area; extraction metadata alone cannot authorize painting over a figure. */
+export function captionBackgroundIsClear(ctx: CanvasRenderingContext2D, box: PixelBox, lines: PixelBox[], scale: number): boolean {
+ if (lines.length<2 || box.width<20 || box.height<10) return false;
+ const left=Math.floor(box.left*scale),top=Math.floor(box.top*scale);
+ const width=Math.ceil(box.width*scale),height=Math.ceil(box.height*scale);
+ if(left<0 || top<0 || left+width>ctx.canvas.width || top+height>ctx.canvas.height) return false;
+ try {
+  const data=ctx.getImageData(left,top,width,height).data;
+  const step=Math.max(1,Math.floor(Math.sqrt(width*height/5000)));
+  let clean=0,total=0;
+  for(let y=0;y<height;y+=step) for(let x=0;x<width;x+=step) {
+   const px=(left+x)/scale,py=(top+y)/scale;
+   if(lines.some(l=>px>=l.left-0.5 && px<=l.left+l.width+0.5 && py>=l.top-0.5 && py<=l.top+l.height+0.5)) continue;
+   const offset=(y*width+x)*4;const r=data[offset]!,g=data[offset+1]!,b=data[offset+2]!;
+   total++;if(data[offset+3]!>250 && Math.min(r,g,b)>=235 && Math.max(r,g,b)-Math.min(r,g,b)<15) clean++;
+  }
+  return total>=20 && clean/total>=0.98;
+ } catch { return false; }
 }

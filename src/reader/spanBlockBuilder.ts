@@ -1,3 +1,5 @@
+import { columnOfX, rowOfTop } from './tableBorders';
+import { imageCaptionRegions, withinCaption, markImageCaptions } from './imageCaption';
 /**
  * Build SourceBlocks from positioned text items (the PDF.js text layer).
  *
@@ -783,10 +785,24 @@ export function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em
 export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOptions): SpanBuildResult {
 	const pageWidth = options.pageWidth && options.pageWidth > 0 ? options.pageWidth : 612;
 	const obstacles = options.imageRectsPdf ?? [];
+	const captionRegions = obstacles.length ? imageCaptionRegions(groupIntoLines(items,pageWidth,options.pageHeight).map(l=>({text:lineText(l),rect:l.rect,fontSize:l.fontSize})),obstacles) : [];
 	const filteredItems = obstacles.length
-		? items.filter(i => !insideObstacle(i.rect, obstacles))
+		? items.filter(i => !insideObstacle(i.rect, obstacles) || withinCaption(i.rect,captionRegions))
 		: items;
-	const lines = groupIntoLines(filteredItems, pageWidth, options.pageHeight);
+	// Grid columns separate source runs BEFORE line grouping can weld neighbouring cells.
+	const gridList=options.grids ?? (options.grid ? [options.grid] : []);
+	const buckets=new Map<string,SpanItem[]>();
+	for(const item of filteredItems) {
+		let key='prose';
+		for(let gi=0;gi<gridList.length;gi++) {
+			const grid=gridList[gi]!;
+			const row=rowOfTop(grid,options.pageHeight-(item.rect[1]+item.rect[3])/2);
+			const col=columnOfX(grid,(item.rect[0]+item.rect[2])/2);
+			if(row>=0 && col>=0) {key=`${gi}:${row}:${col}`;break;}
+		}
+		const list=buckets.get(key) ?? [];list.push(item);buckets.set(key,list);
+	}
+	const lines=[...buckets.values()].flatMap(items=>groupIntoLines(items,pageWidth,options.pageHeight));
 
 	// 页面正文字号 = 行字号的众数,不是中位数 (1.2.5)。封面页的前置件
 	// (7pt 作者单位 17 行 + 8.5pt 摘要 18 行) 在行数上压过 10pt 正文 (28 行),
@@ -840,7 +856,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			gapAfter: undefined as number | undefined,
 			isTableLine: false
 		};
-	}).filter(p => p.text.length >= 2);
+	}).filter(p => p.text.length >= 2 || (p.text.length === 1 && gridList.some(g=>columnOfX(g,(p.rect[0]+p.rect[2])/2)>=0 && rowOfTop(g,options.pageHeight-(p.rect[1]+p.rect[3])/2)>=0)));
 	for (let i = 0; i < draft.length - 1; i++) {
 		draft[i]!.gapAfter = draft[i]!.rect[1] - draft[i + 1]!.rect[3];
 	}
@@ -1103,5 +1119,6 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		});
 		order++;
 	}
+	markImageCaptions(blocks, captionRegions);
 	return { blocks, referencesStarted };
 }

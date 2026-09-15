@@ -2507,6 +2507,7 @@ export class TranslationManager {
 		// 止损轮次序号 (P3): 本运行的发起顺序,见 failedSegments 注释。
 		const runId = ++this.runSeq;
 		const countedTranslate = async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
+			request = { ...request, referenceContent: request.blocks.some(b => refById.has(b.id)) };
 			metrics.requestCount++;
 			// Request-level retry (network/rate-limit; TIMEOUT retried ONCE — a
 			// request that already burned its full timeout usually times out again,
