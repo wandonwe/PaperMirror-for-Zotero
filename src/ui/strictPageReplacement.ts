@@ -994,6 +994,13 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	if (clippedBox.size) {
 		logger.debug(MODULE, `page ${input.pageIndex + 1}: clipped ${clippedBox.size} extraction-born box overlap(s)`);
 	}
+	// Compute source occupancy once per page, not once per neighbour per block.
+	const sourceOccupancy = new Map(geometric.map(b => {
+		const bands = !isTableCellBlock(b)
+			? sourceFlowRegions(((b.lineRectsPdf ?? []) as Rect[]).map(r => rectToPixels(r, render, 1)), (b.fontSize ?? bodyPt) * pxPerPoint)
+			: [];
+		return [b.id, bands.length > 1 ? bands : [clippedBox.get(b.id) ?? pxOf.get(b.id)!].filter(Boolean)] as const;
+	}));
 	const items: StrictItem[] = [];
 	const byId = new Map<string, StrictItem>();
 	for (const block of replaceable) {
@@ -1004,8 +1011,14 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			width: candidate.width - inset * 2, height: candidate.height - inset * 2 };
 		const sourceBands = sourceFlowRegions(((block.lineRectsPdf ?? []) as Rect[]).map(r => rectToPixels(r, render, 1)), (block.fontSize ?? bodyPt) * pxPerPoint);
 		const ownerId = block.id.split('::p')[0];
-		const obstacles = [...imageBoxes, ...geometric.filter(b => b.id !== ownerId).map(b => pxOf.get(b.id)!).filter(Boolean)];
-		const safeRegions = (sourceBands.length > 1 ? sourceBands : [region])
+		// Reserve actual source bands instead of empty corners of a wrapped block.
+		// Final placed-box auditing still checks every rendered translation.
+		const obstacles = [...imageBoxes, ...geometric.filter(b => b.id !== ownerId).flatMap(b => sourceOccupancy.get(b.id) ?? [])];
+		// Unequal line lengths alone do not require narrow strips. A left-aligned,
+		// unobstructed block can use its complete rectangle without shrinking.
+		const rectangular = sourceBands.every(b => Math.abs(b.left - region.left) <= (block.fontSize ?? bodyPt) * pxPerPoint * 1.5)
+			&& !obstacles.some(b => intersectArea(region, b) > 0);
+		const safeRegions = (sourceBands.length > 1 && !rectangular ? sourceBands : [region])
 			.flatMap(band => imageSafeRegions(band, obstacles))
 			.filter(r => r.width >= 4 * pxPerPoint && r.height >= 4 * pxPerPoint);
 		const fullSourceBox = pixelBox(block, render, 1);
@@ -1148,7 +1161,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				}
 			}
 			// 记下最后一档的溢出方向 (2.7.0): 放弃原因需要它。
-			item.lastOverflow = fitOverflow(item.node.scrollWidth, item.node.scrollHeight, item.box.width, item.box.height);
+			if (!item.flowBoxes) item.lastOverflow = fitOverflow(item.node.scrollWidth, item.node.scrollHeight, item.box.width, item.box.height);
 			return false;
 		}
 		finally {

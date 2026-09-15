@@ -56,3 +56,13 @@ test('assigned source cells cannot silently move to another row while conserving
  const source={id:'cell',sourceText:'MCA',tableId:'t',tableRow:1,tableCol:0};
  assert.ok(auditTableOwnership([source],[{...source,tableRow:2}]).includes('cell-reassigned:cell:cell'));
 });
+
+// Original PDF text spans, including leader dots and destination page numbers.
+test('Stroke contents entries are not inferred as a table spanning independent columns',()=>{
+ const f=JSON.parse(readFileSync('tests/fixtures/regression/stroke2026-contents.json','utf8'));
+ const source=orderBlocksForReading(buildBlocksFromSpans(f.items,{pageIndex:1,pageWidth:f.pageWidth,pageHeight:f.pageHeight,includeReferences:true}).blocks);
+ const output=structureTableCells(source,1,10);
+ assert.ok(source.some(b=>/(?:\.\s*){3,}/.test(b.sourceText)));
+ assert.equal(output.filter(b=>b.tableSource==='text-alignment').length,0);
+ assert.deepEqual(output.map(b=>b.sourceText),source.map(b=>b.sourceText));
+});

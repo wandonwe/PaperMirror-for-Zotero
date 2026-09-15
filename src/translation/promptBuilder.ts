@@ -5,11 +5,11 @@
 
 import type { TranslationRequest } from '../types/models';
 
-// v2: layout budgets (charBudget) + compact-translation rules for strict
-// in-place replacement. The bump also invalidates every cached translation
-// produced under the old prompts — old long-form output must not resurface
-// inside fixed-geometry boxes.
-export const PROMPT_VERSION = 2;
+// v3: translate natural-language names and affiliations as well as prose.
+// Cached original-language names from the previous policy must be retranslated.
+export const PROMPT_VERSION = 3;
+
+const allTextRule = 'Translate all natural-language content, including person names, company/manufacturer names, institutions, product names, author lists, affiliations and publication names. Use established target-language names where known, otherwise a faithful transliteration; do not invent an original spelling or identity. Translate surrounding titles and roles too. Preserve numerical values, formulas, URLs, DOIs and exact alphanumeric model identifiers.';
 
 export function languageDisplayName(code: string): string {
 	switch (code) {
@@ -28,7 +28,7 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 	// 样式标记/上下文的请求,不再携带对应规则 —— 大多数请求省 ~50–120 输入 token,
 	// 且对确实携带这些标记的请求一字不变(无需 bump PROMPT_VERSION、不作废缓存)。
 	const hasPlaceholders = request.blocks.some(b => b.text.includes('⟦PM'));
-	const referenceRule = 'In bibliography entries, translate the article or book TITLE into the target language. Keep author names, journal names, years, volumes, pages and DOIs unchanged. A reference title is natural language, not an identifier; do not copy the entire entry unchanged.';
+	const referenceRule = 'In bibliography entries, translate the article or book TITLE into the target language. Translate author and journal names too; keep years, volumes, pages and DOIs unchanged. A reference title is natural language, not an identifier; do not copy the entire entry unchanged.';
 	const hasStyleTags = request.blocks.some(b => b.text.includes('⟦b⟧') || b.text.includes('⟦i⟧'));
 	if (request.plain) {
 		// 纯文本兜底 (修复链路最后一环): the block failed the JSON path repeatedly —
@@ -36,7 +36,8 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 		const lines = [
 			`Translate the academic text the user sends into ${target}.`,
 			'Output ONLY the translation itself — no explanations, no quotes, no JSON, no markdown.',
-			'Never alter numbers, statistics, citation markers, URLs, or math.'
+			'Never alter numbers, statistics, citation markers, URLs, or math.',
+            allTextRule
 		];
 		if (request.referenceContent) lines.push(referenceRule);
 		if (hasPlaceholders) {
@@ -61,12 +62,7 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 		'- Use standard academic terminology in the target language.',
 		'- On first occurrence of a technical abbreviation, keep the original abbreviation in parentheses.',
 		'- Never alter numbers, P values, confidence intervals, units, DOIs, URLs, citation markers (e.g. [12], (Smith et al., 2020)), gene names, chemical formulas, variable names, or math.',
-		// 人名保护 (2.5.13, wu2026 实证): "Weifeng Han"→韩伟峰(猜字)、"Yuxi Ge"
-		// 同页两处两套汉字、"Joo Myung Lee"→李柱明。人名一律原样保留 —— 音译
-		// 只能猜,拼音名猜汉字必错。
-		// 机构/产品名并入同一条 (2.6.0, radiology2023 实证): "MARS Bioimaging"
-		// →"火星生物成像"、厂商与型号名被意译 —— 专有名词只认原文。
-		'- Keep proper names EXACTLY as written in the source: person names (authors, acknowledged people, cited researchers), company/manufacturer names, institutions, and product/model names (e.g. scanner or software names). Never transliterate them or convert them into target-language characters.'
+		allTextRule
 	];
 	if (request.referenceContent) lines.push('- ' + referenceRule);
 	if (hasPlaceholders) {

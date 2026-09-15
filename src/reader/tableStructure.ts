@@ -827,6 +827,10 @@ function structureTableCellsUnchecked(
 		}) : rest;
 		return [...restStructured, ...gridCells];
 	}
+	// Leader dots plus destination page numbers identify contents entries, not cells.
+	// Do not infer a row joining unrelated entries in adjacent page columns.
+	const contentsEntries = geometric.filter(b => /(?:\.\s*){3,}\s*(?:[a-z]\d+|\d+)\b/i.test(b.sourceText));
+	if (contentsEntries.length >= 3) return blocks;
 	const guard = detectTableRegions(geometric.map(b => ({
 		id: b.id,
 		text: b.sourceText,
