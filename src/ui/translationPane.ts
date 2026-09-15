@@ -22,7 +22,7 @@ import { RenderPump } from './renderPump';
 import { CachedPageIndex, anchorFractionOf, anchorScrollTarget, toScrollTop, type PageOffsetIndex } from './pageOffsetIndex';
 import { shortLangLabel } from './barLabels';
 // 回声抑制窗口与 SyncGuard 共用同一个常量 (2.9.8) —— 两处各写各的会留出缝隙。
-import { SYNC_ECHO_MS } from '../reader/scrollSynchronizer';
+import { SYNC_ECHO_MS, onScrollIntent } from '../reader/scrollSynchronizer';
 import { getPref } from '../utils/prefs';
 import type { ExplanationSection } from '../translation/explainer';
 import type { PageTranslationState } from '../translation/translationManager';
@@ -298,6 +298,8 @@ export interface PaneCallbacks {
 	onSwapSides(): void;
 	onBlockClick(pageIndex: number, blockId: string): void;
 	onScrolledToPage(pageIndex: number): void;
+	onScrollPosition?(pageIndex: number, fraction: number): void;
+	onScrollIntent?(): void;
 	onAcceptPrivacy(): void;
 }
 
@@ -324,6 +326,7 @@ export class TranslationPane {
 	private selectedBlockId: string | null = null;
 	private privacyNoticeEl: HTMLElement | null = null;
 	private scrollHandler: (() => void) | null = null;
+	private disposeScrollIntent: (() => void) | null = null;
 	private keyHandler: ((event: KeyboardEvent) => void) | null = null;
 
 	/**
@@ -1040,6 +1043,10 @@ export class TranslationPane {
 		this.scroll.append(this.articleHost);
 		this.scrollHandler = () => this.handleScroll();
 		this.scroll.addEventListener('scroll', this.scrollHandler, { passive: true });
+		this.disposeScrollIntent = onScrollIntent(this.scroll, () => {
+			this.suppressScrollUntil = 0;
+			this.callbacks.onScrollIntent?.();
+		});
 
 		// Every notification — task, error AND transient success — now lives in
 		// the StatusCapsule. There is no separate bottom toast module anymore.
@@ -1459,8 +1466,8 @@ export class TranslationPane {
 		}
 		const index = this.ensurePageIndex();
 		const top = this.scroll.scrollTop;
-		const hit = index?.rangeFor(top, top + 1);
-		const pageIndex = hit ? hit[0] : this.currentPage;
+		const hit = index?.rangeFor(top, top + 1) ?? index?.rangeFor(top, top + Math.max(1, this.scroll.clientHeight));
+		const pageIndex = hit ? hit[0] : this.slots.length - 1;
 		const slot = this.slots[pageIndex];
 		if (!slot || !slot.offsetHeight) {
 			return null;
@@ -1496,14 +1503,14 @@ export class TranslationPane {
 		}
 	}
 
-	/** Target CSS width for one page: the reader's display width, pane-capped. */
+	/** Same physical scale as the PDF; narrow panes can scroll horizontally. */
 	private slotWidthFor(pageIndex: number): number {
 		const available = this.pageWidthAvailable();
 		const size = this.docPageSizes[pageIndex];
 		if (!size || this.displayPxPerPoint <= 0) {
 			return available;
 		}
-		return Math.min(available, Math.round(size.width * this.displayPxPerPoint));
+		return Math.round(size.width * this.displayPxPerPoint);
 	}
 
 	private initPageList(): void {
@@ -1548,9 +1555,21 @@ export class TranslationPane {
 		this.scheduleEnsure();
 	}
 
+	private pdfPageGap = 4;
+
+	setPdfPageGap(gap: number | null): void {
+		if (gap === null || !Number.isFinite(gap) || gap < 0 || Math.abs(gap-this.pdfPageGap)<0.25) return;
+		const anchor=this.readingAnchor();
+		this.pdfPageGap=gap;
+		for (const slot of this.slots) slot.style.marginBottom=`${gap}px`;
+		this.invalidatePageIndex();
+		if(anchor) this.setPdfScrollFraction(anchor.pageIndex,anchor.fraction);
+	}
+
 	private sizeSlot(slot: HTMLElement, pageIndex: number): void {
 		const size = this.docPageSizes[pageIndex]!;
 		const width = this.slotWidthFor(pageIndex);
+		slot.style.marginBottom = `${this.pdfPageGap}px`;
 		slot.style.width = `${width}px`;
 		slot.style.height = `${Math.round(width * (size.height / size.width))}px`;
 	}
@@ -2068,13 +2087,15 @@ export class TranslationPane {
 			// **另一把尺子**(offsetTop 含标题栏,anchor 却是 scrollTop 坐标),
 			// 于是连判出来的"当前页"都偏。索引本来就在(建一次、用很多次),
 			// 这里本该用它。
-			const anchor = this.scroll.scrollTop + this.scroll.clientHeight * 0.35;
-			const index = this.ensurePageIndex();
-			const hit = index?.rangeFor(anchor, anchor + 1);
-			best = hit ? hit[0] : null;
-			if (best !== null && best !== this.currentPage) {
-				this.currentPage = best;
-				this.callbacks.onScrolledToPage(best);
+			const anchor = this.readingAnchor();
+			if (anchor) {
+				const changed = anchor.pageIndex !== this.currentPage;
+				this.currentPage = anchor.pageIndex;
+				if (this.callbacks.onScrollPosition) {
+					this.callbacks.onScrollPosition(anchor.pageIndex, anchor.fraction);
+				} else if (changed) {
+					this.callbacks.onScrolledToPage(anchor.pageIndex);
+				}
 			}
 			return;
 		}
@@ -2114,6 +2135,8 @@ export class TranslationPane {
 	}
 
 	destroy(): void {
+		this.disposeScrollIntent?.();
+		this.disposeScrollIntent = null;
 		if (this.scrollHandler) {
 			this.scroll.removeEventListener('scroll', this.scrollHandler);
 			this.scrollHandler = null;

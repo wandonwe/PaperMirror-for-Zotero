@@ -1,6 +1,8 @@
+import { checkScroll } from './scrollSync';
 import { buildStrictPage } from '../../src/ui/strictPageReplacement';
 const result=document.createElement('pre');result.id='result';document.body.append(result);
 try {
+ checkScroll();
  const canvas=document.createElement('canvas');canvas.width=300;canvas.height=300;
  const ctx=canvas.getContext('2d')!;ctx.fillStyle='white';ctx.fillRect(0,0,300,300);ctx.fillStyle='red';ctx.fillRect(0,0,100,100);
  const lines:[number,number,number,number][]=[];

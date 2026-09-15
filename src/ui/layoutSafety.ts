@@ -349,6 +349,20 @@ export function flowText<T>(text: string, regions: T[], fits: (text: string, reg
 
 /** Recover the available bands of an L-shaped source paragraph, including vector figures. */
 export function sourceFlowRegions(lines: PixelBox[], fontPx: number): PixelBox[] {
+ const sortedX = [...lines].sort((a,b) => a.left-b.left);
+ let right = sortedX[0] ? sortedX[0].left+sortedX[0].width : 0;
+ for (let i=1;i<sortedX.length;i++) {
+  const line=sortedX[i]!;
+  if (line.left-right > fontPx) {
+   const leftLines=sortedX.slice(0,i), rightLines=sortedX.slice(i);
+   const overlap=Math.min(Math.max(...leftLines.map(l=>l.top+l.height)), Math.max(...rightLines.map(l=>l.top+l.height)))
+    - Math.max(Math.min(...leftLines.map(l=>l.top)),Math.min(...rightLines.map(l=>l.top)));
+   if(leftLines.length>=2 && rightLines.length>=2 && overlap>fontPx) {
+    return [...sourceFlowRegions(leftLines,fontPx),...sourceFlowRegions(rightLines,fontPx)];
+   }
+  }
+  right=Math.max(right,line.left+line.width);
+ }
  const groups:PixelBox[]=[];
  for(const line of [...lines].sort((a,b)=>a.top-b.top || a.left-b.left)) {
   const previous=groups[groups.length-1];

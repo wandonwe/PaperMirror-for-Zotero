@@ -171,6 +171,7 @@ export class ReaderSession {
 	private viewMode: ViewMode = 'split';
 	private onViewModeChanged: ((mode: ViewMode) => void) | null = null;
 	private disposePdfEvents: (() => void) | null = null;
+	private disposePdfScrollIntent: (() => void) | null = null;
 	/** 2.9.2: 只订阅 `textlayerrendered` —— 释放过的页在这一刻被捡回来。 */
 	private disposeTextLayerEvents: (() => void) | null = null;
 	/** visibilitychange 监听的解除器 (2.2.9, item1 不可见即停)。 */
@@ -425,6 +426,8 @@ export class ReaderSession {
 			onSwapSides: () => this.swapSides(),
 			onBlockClick: (pageIndex, _blockId) => this.sync?.onPaneNavigated(pageIndex),
 			onScrolledToPage: pageIndex => this.sync?.onPaneNavigated(pageIndex),
+			onScrollIntent: () => this.sync?.guard.takeControl('pane'),
+			onScrollPosition: (pageIndex, fraction) => this.sync?.onPanePositionChanged(pageIndex, fraction),
 			onAcceptPrivacy: () => {
 				setPref('privacyNoticeAccepted', true);
 				this.applyViewMode();
@@ -476,6 +479,8 @@ export class ReaderSession {
 
 		this.sync = createSyncController({
 			scrollPaneToPage: pageIndex => this.pane?.scrollToPage(pageIndex),
+			scrollPaneToPosition: (pageIndex, fraction) => this.pane?.setPdfScrollFraction(pageIndex, fraction),
+			scrollPdfToPosition: (pageIndex, fraction) => { adapter.setPageScrollFraction(this.reader, pageIndex, fraction); },
 			navigatePdfToPage: pageIndex => adapter.navigateToPage(this.reader, pageIndex)
 		});
 		this.sync.enabled = getPref<boolean>('syncScroll', true);
@@ -531,6 +536,7 @@ export class ReaderSession {
 		// 同步滚动 (following the reader's position continuously) AND — 2.2.9,
 		// item1 — 事件驱动的页同步: updateviewarea 每滚动帧触发 syncCurrentPage
 		// (廉价比较、幂等),翻页当帧即被捕捉,350ms 轮询从此只是兜底。
+		this.disposePdfScrollIntent = adapter.onPdfScrollIntent(this.reader, () => this.sync?.guard.takeControl('pdf'));
 		this.disposePdfEvents = adapter.onPdfRenderEvents(this.reader, (pageIndex) => {
 			if (this.destroyed) {
 				return;
@@ -543,11 +549,12 @@ export class ReaderSession {
 			}
 			// Zoom on the left → the right pages match the new glyph size.
 			this.pane?.setDisplayScale(this.actualPxPerPoint());
-			if (this.sync?.enabled) {
+			if (this.sync?.enabled && this.sync.guard.shouldPropagate('pdf')) {
 				const current = adapter.getCurrentPageIndex(this.reader);
+				this.pane?.setPdfPageGap(adapter.getPageGap(this.reader, current));
 				const fraction = adapter.getPageScrollFraction(this.reader, current);
 				if (fraction !== null) {
-					this.pane?.setPdfScrollFraction(current, fraction);
+					this.sync.onPdfPositionChanged(current, fraction);
 				}
 			}
 		});
@@ -3425,6 +3432,8 @@ export class ReaderSession {
 		this.compressBlocked.clear(); // P2-10: 不再持有已卸载页元素
 		this.placementStats.clear();
 		this.baseBitmaps.clear(); // 释放缓存的底图 canvas
+		this.disposePdfScrollIntent?.();
+		this.disposePdfScrollIntent = null;
 		this.disposePdfEvents?.();
 		this.disposePdfEvents = null;
 		this.disposeTextLayerEvents?.();

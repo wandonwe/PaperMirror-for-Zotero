@@ -142,7 +142,8 @@ test('连续跟随是瞬时滚动,离散跳转才平滑 (结构性回归闸, 2.9
 test('判当前页走二分,不再逐页扫 (结构性回归闸, 2.9.8)', () => {
 	const src = read('src/ui/translationPane.ts');
 	const fn = src.slice(src.indexOf('private handleScroll'), src.indexOf('const sections:'));
-	assert.ok(/this\.ensurePageIndex\(\)/.test(fn) && /rangeFor\(/.test(fn),
+	const anchor = src.slice(src.indexOf('private readingAnchor'), src.indexOf('private readingAnchor') + 800);
+	assert.ok(/this\.readingAnchor\(\)/.test(fn) && /this\.ensurePageIndex\(\)/.test(anchor) && /rangeFor\(/.test(anchor),
 		'索引本来就在(建一次用很多次),滚动热路径本该用它');
 	assert.ok(!/for \(let i = 0; i < this\.slots\.length; i\+\+\)/.test(fn),
 		'97 页的文档,一次滚动 194 次布局读取 —— 逐页扫不能回来');

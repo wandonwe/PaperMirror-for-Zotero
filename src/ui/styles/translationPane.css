@@ -1654,3 +1654,6 @@
 }
 .pm-flow-piece:hover,
 .pm-repage-block.pm-focused .pm-flow-piece { background: rgba(64, 122, 255, .09); }
+
+/* Page labels are metadata, not extra height in the synchronized page stack. */
+.pm-scroll[data-pm-view="page"] .pm-repage-page-label { display: none; }
