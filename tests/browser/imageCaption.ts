@@ -4,7 +4,8 @@ import fixture from '../fixtures/regression/simohamed2021-p4.json';
 import type { SpanItem } from '../../src/reader/spanBlockBuilder';
 
 export async function checkImageCaption():Promise<void> {
- const image=new Image();image.src=(window as any).captionFixtureImage;await image.decode();
+ const image=new Image();
+ await new Promise<void>((resolve,reject)=>{image.onload=()=>resolve();image.onerror=()=>reject(new Error('Caption fixture image failed to load'));image.src=(window as any).captionFixtureImage;});
  const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
  const ctx=canvas.getContext('2d')!;ctx.drawImage(image,0,0);
  const blocks=buildBlocksFromSpans(fixture.items as SpanItem[],{pageIndex:3,pageWidth:594,pageHeight:783,imageRectsPdf:fixture.images as any,includeReferences:true}).blocks;

@@ -1300,7 +1300,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			.filter(p => !!p.box)
 			.concat(inkObstacles, items.filter(i => i.abandoned).map(i => ({ id: i.id, box: i.box })))
 	});
-	const violatesGeometry = (item: StrictItem): boolean => (item.flowBoxes ?? [item.box]).some(box => boxNewlyViolates(
+	const violatesGeometry = (item: StrictItem): boolean => (item.flowBoxes !== undefined
+		&& auditPlacedBoxes(item.flowBoxes.map(box => ({ id: item.id, box, originalBox: { ...box, width: 0, height: 0 } })),
+			{ images: [], preserved: [] }, canvas.width / BITMAP_SCALE, canvas.height / BITMAP_SCALE).length > 0)
+		|| (item.flowBoxes ?? [item.box]).some(box => boxNewlyViolates(
 		{ id: item.id, box, originalBox: item.flowBoxes ? { ...box, width: 0, height: 0 } : item.originalBox },
 		items
 			.filter(i => i.committed && !i.abandoned && i.id !== item.id)

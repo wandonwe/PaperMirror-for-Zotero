@@ -1,3 +1,4 @@
+import flowFixtures from '../fixtures/regression/cadrads2022-flow-overlap.json';
 import { checkImageCaption } from './imageCaption';
 import { checkScroll } from './scrollSync';
 import { buildStrictPage } from '../../src/ui/strictPageReplacement';
@@ -6,6 +7,20 @@ async function run() {
 try {
  await checkImageCaption();
  checkScroll();
+ for(const fixture of flowFixtures) {
+  const canvas=document.createElement('canvas');canvas.width=594;canvas.height=783;
+  const ctx=canvas.getContext('2d')!;ctx.fillStyle='white';ctx.fillRect(0,0,594,783);
+  const text='列表正文完整翻译，不得重复叠加。'.repeat(4);
+  const rendered=buildStrictPage(document,{pageIndex:0,blocks:[{id:fixture.id,pageIndex:0,order:0,type:'paragraph',sourceText:'A complete paragraph followed by list markers and their descriptions.',fontSize:fixture.fontPx,lineRectsPdf:fixture.lines.map(l=>[l.left,783-l.top-l.height,l.left+l.width,783-l.top])}],translations:new Map([[fixture.id,text]]),render:{canvas,viewportWidth:594,viewportHeight:783,scale:1,toViewport:(x,y)=>[x,783-y]}})!;
+  document.body.append(rendered.element);
+  const page=rendered.element as any;
+  const pending=page.pmSettleStrict(true);
+  const still=page.pmShrinkFit(pending.map((b:any)=>b.id));
+  const node=rendered.element.querySelector('[data-pm-block]') as HTMLElement;
+  const audit=page.pmGeometryAudit();
+  if(still.length || node.textContent!==text || node.style.visibility==='hidden' || audit.violations || audit.adjusted) throw Error('CAD-RADS list flow failed: '+fixture.id+JSON.stringify(audit));
+ }
+
  const canvas=document.createElement('canvas');canvas.width=300;canvas.height=300;
  const ctx=canvas.getContext('2d')!;ctx.fillStyle='white';ctx.fillRect(0,0,300,300);ctx.fillStyle='red';ctx.fillRect(0,0,100,100);
  const lines:[number,number,number,number][]=[];

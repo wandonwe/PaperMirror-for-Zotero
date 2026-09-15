@@ -132,22 +132,19 @@ export function violationStillPresent(
 	const tol = (a: PixelBox, b: PixelBox): number =>
 		Math.max(12, 0.02 * Math.min(a.width * a.height, b.width * b.height));
 	const selves = placed.filter(p => p.id === v.id);
+	if (v.kind === 'overlap') {
+		const others = placed.filter(p => p.id === v.otherId);
+		return selves.some(self => others.some(other => self !== other
+			&& inter(self.box, other.box) - inter(self.originalBox, other.originalBox) > tol(self.box, other.box)));
+	}
 	if (selves.length > 1) {
-		return selves.some(self => violationStillPresent(v, [self, ...placed.filter(p => p.id !== v.id)], obstacles, pageW, pageH));
+		return selves.some(self => violationStillPresent(v, [self], obstacles, pageW, pageH));
 	}
 	const self = selves[0];
 	if (!self) {
 		return false; // offender 本轮已被回退/放弃
 	}
 	switch (v.kind) {
-		case 'overlap': {
-			const other = placed.find(p => p.id === v.otherId);
-			if (!other) {
-				return false;
-			}
-			const added = inter(self.box, other.box) - inter(self.originalBox, other.originalBox);
-			return added > tol(self.box, other.box);
-		}
 		case 'occludes-image':
 			return obstacles.images.some((img) => {
 				const added = inter(self.box, img);
@@ -374,5 +371,10 @@ export function sourceFlowRegions(lines: PixelBox[], fontPx: number): PixelBox[]
    previous.left=Math.min(previous.left,line.left);previous.width=right-previous.left;previous.height=bottom-previous.top;
   }
  }
- return groups;
+ // A list marker can extend the previous band to a row whose text starts a
+ // new band. Give earlier bands ownership of shared space; never count or
+ // render the same area twice. Subtraction preserves the union and gutters.
+ const disjoint:PixelBox[]=[];
+ for(const group of groups) disjoint.push(...imageSafeRegions(group,disjoint));
+ return disjoint;
 }
