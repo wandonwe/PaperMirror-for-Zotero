@@ -761,6 +761,8 @@ export interface TranslationDeps {
 	extractPathOf?(pageIndex: number): string | undefined;
 	/** 2.8.15: 这一页抽取的分段耗时 —— 纯毫秒,回答 extractMs 花在哪一段。 */
 	extractPhasesOf?(pageIndex: number): NonNullable<PageDiagnostics['extractPhases']> | undefined;
+	/** Read an immutable session snapshot without starting translation work. */
+	restoreSnapshot?(pageIndex: number): Promise<PageTranslationState | null>;
 	/** Cache access; may be no-ops. */
 	readCache(pageIndex: number, blocks: SourceBlock[]): Promise<TranslatedBlock[] | null>;
 	writeCache(pageIndex: number, blocks: SourceBlock[], translations: TranslatedBlock[]): Promise<void>;
@@ -869,7 +871,14 @@ export class TranslationManager {
 	 *   2. 预取浪费了多少 —— 后台预取翻译的页里,用户最终没读到的有几页。
 	 * prefetchedUnviewed 按页去重;用户滚到该页时移出(不再算浪费)。
 	 */
+	private restoreEpoch = 0;
+	private displayRestores = new Map<number, Promise<PageTranslationState | undefined>>();
+	private requestedContent = new Set<string>();
 	private usage = {
+		displayRestores: 0,
+		resumedPages: 0,
+		supplementBlocks: 0,
+		repeatedBlockSubmissions: 0,
 		pageCacheLookups: 0,
 		pageCacheFullHits: 0,
 		pageCachePartialHits: 0,
@@ -926,7 +935,17 @@ export class TranslationManager {
 			}
 		};
 		const hooks: TranslateHooks = {
-			onAttempt: () => { attempts++; },
+			onAttempt: () => {
+                attempts++;
+                for (const block of request.blocks) {
+                    const key = `${request.pageIndex}:${segmentHash(block.text, request.sourceLanguage, request.targetLanguage)}`;
+                    if (this.requestedContent.has(key)) this.usage.repeatedBlockSubmissions++;
+                    this.requestedContent.add(key);
+                }
+                if (this.requestedContent.size > 20000) {
+                    for (const key of [...this.requestedContent].slice(0, 10000)) this.requestedContent.delete(key);
+                }
+            },
 			onUsage: record,
 			onParamHeal: param => bump(this.paramHeals, param)
 		};
@@ -1100,6 +1119,29 @@ export class TranslationManager {
 
 	getPageState(pageIndex: number): PageTranslationState | undefined {
 		return this.pages.get(pageIndex);
+	}
+
+	/** Display restoration never enters the scheduler or calls a provider. */
+	async restoreForDisplay(pageIndex: number): Promise<PageTranslationState | undefined> {
+		const current = this.pages.get(pageIndex);
+		if (current && !current.evicted) return current;
+		if (!this.deps.restoreSnapshot || this.disposed) return current;
+		const pending = this.displayRestores.get(pageIndex);
+		if (pending) return pending;
+		const epoch = this.restoreEpoch;
+		const job = (async () => {
+			const saved = await this.deps.restoreSnapshot!(pageIndex).catch(() => null);
+			if (this.disposed || epoch !== this.restoreEpoch) return undefined;
+			if (this.pages.get(pageIndex) !== current) return this.pages.get(pageIndex);
+			if (!saved?.blocks.length) return current;
+			this.pages.set(pageIndex, saved);
+			this.touchPage(pageIndex);
+			this.usage.displayRestores++;
+			return saved;
+		})();
+		this.displayRestores.set(pageIndex, job);
+		try { return await job; }
+		finally { if (this.displayRestores.get(pageIndex) === job) this.displayRestores.delete(pageIndex); }
 	}
 
 	/** 用到了这一页 —— 刷新它在 LRU 里的位置 (2.8.3)。 */
@@ -1682,7 +1724,10 @@ export class TranslationManager {
 	 */
 	private releasePage(pageIndex: number, state: PageTranslationState, reason: ReleaseReason): void {
 		if (this.pages.get(pageIndex) === state) {
-			this.pages.delete(pageIndex);
+			if (state.translations.size) {
+				state.status = 'idle';
+				this.notify(state);
+			} else this.pages.delete(pageIndex);
 		}
 		const prior = this.released.get(pageIndex);
 		const count = (prior?.count ?? 0) + 1;
@@ -1855,6 +1900,10 @@ export class TranslationManager {
 			usage: {
 				pageCacheLookups: this.usage.pageCacheLookups,
 				pageCacheFullHits: this.usage.pageCacheFullHits,
+                displayRestores: this.usage.displayRestores,
+                resumedPages: this.usage.resumedPages,
+                supplementBlocks: this.usage.supplementBlocks,
+                repeatedBlockSubmissions: this.usage.repeatedBlockSubmissions,
 				pageCachePartialHits: this.usage.pageCachePartialHits,
 				...(this.usage.pageCacheLookups
 					? { pageCacheHitRate: Number((this.usage.pageCacheFullHits / this.usage.pageCacheLookups).toFixed(3)) }
@@ -1938,6 +1987,7 @@ export class TranslationManager {
 	 * provider+language, so the old entries simply stop matching.
 	 */
 	resetAll(): void {
+		this.restoreEpoch++; this.displayRestores.clear(); this.requestedContent.clear();
 		this.scheduler.cancelAll();
 		this.pages.clear();
 		this.unstableFired.clear();
@@ -1957,10 +2007,12 @@ export class TranslationManager {
 	 * 停在旧译文或原文,得手动点圆环)。
 	 */
 	async resetAllAndWait(): Promise<void> {
+		this.restoreEpoch++; this.displayRestores.clear(); this.requestedContent.clear();
 		await this.scheduler.cancelAllAndWait();
 		// 已发出但还没落盘的段落写入也要等 (2.5.9): 它们不再阻塞调度槽,
 		// 清盘前必须在这里收口,否则就是 2.0.7 修过的那条竞态。
 		await this.flushPendingWrites();
+		this.restoreEpoch++; this.displayRestores.clear();
 		this.pages.clear();
 		this.unstableFired.clear();
 		this.docMemory.clear();
@@ -2162,6 +2214,8 @@ export class TranslationManager {
 				return;
 			}
 		}
+		if (this.deps.restoreSnapshot && !options?.bypassCache && !options?.bypassSegments) await this.restoreForDisplay(pageIndex);
+		if (this.disposed) return;
 		const existing = this.pages.get(pageIndex);
 		this.touchPage(pageIndex);
 		// 2.8.3: 被卸过内容的已完成页必须能重新装载 —— 否则用户翻回去只剩原文。
@@ -2181,11 +2235,13 @@ export class TranslationManager {
 			return;
 		}
 
+		const resume = existing?.status === 'idle' && existing.translations.size > 0 && !options?.bypassCache && !options?.bypassSegments ? existing : undefined;
+		if (resume) this.usage.resumedPages++;
 		const state: PageTranslationState = {
 			pageIndex,
 			status: 'extracting',
-			blocks: [],
-			translations: new Map(),
+			blocks: resume?.blocks ?? [],
+			translations: new Map(resume?.translations),
 			extractingSince: Date.now()
 		};
 		const navigationAtStart = this.navigationGeneration;
@@ -2210,7 +2266,8 @@ export class TranslationManager {
 			let blocks: SourceBlock[];
 			try {
 				const zombie = this.extractZombies.get(pageIndex);
-				if (zombie && this.deps.extractRenderedPage) {
+				if (resume) { blocks = resume.blocks; }
+				else if (zombie && this.deps.extractRenderedPage) {
 					// Never start a second PDF-worker extraction while the timed-out
 					// one is still alive. The visible page can still be recovered from
 					// its rendered text layer (timeout-guarded like any extraction).
@@ -2715,6 +2772,7 @@ export class TranslationManager {
 			}
 			return true;
 		});
+		if (state.translations.size && toTranslate.length) this.usage.supplementBlocks += toTranslate.length;
 		// 同页相同内容去重 (2.3.5, 第四批 item7 · API-2): 同一页里 sourceText 完全
 		// 相同的块(模板化表头/重复短语/密集表格)只把**代表块**送去翻译,其余
 		// 同文块在代表译文到达时镜像共享 —— 省下重复块的输入+输出 token,零风险

@@ -1657,3 +1657,20 @@
 
 /* Page labels are metadata, not extra height in the synchronized page stack. */
 .pm-scroll[data-pm-view="page"] .pm-repage-page-label { display: none; }
+
+/* Toolbar responsiveness follows the split pane, not the entire host window. */
+.pm-bilingual-pane { container-type: inline-size; container-name: pm-pane; }
+.pm-chip-provider { min-width: 28px; max-width: 180px; }
+.pm-provider-name { min-width: 0; white-space: nowrap; }
+@container pm-pane (max-width: 860px) { .pm-chip-provider .pm-provider-name { display: none; } }
+@container pm-pane (max-width: 760px) {
+ .pm-chip-lang .pm-lang-full { display: none; }
+ .pm-chip-lang .pm-lang-short { display: inline-flex; align-items: center; gap: 4px; }
+}
+@container pm-pane (max-width: 640px) {
+ .pm-bar .pm-switch-label span:last-child, .pm-bar-action-view span, .pm-bar-action-explain span, .pm-bar-action-terms span { display: none; }
+ .pm-bar-action-view, .pm-bar-action-explain, .pm-bar-action-terms { padding: 0 6px; }
+}
+@container pm-pane (max-width: 430px) { .pm-bar { gap: 2px; padding: 0 4px; } .pm-bar-sep { margin: 0 2px; } }
+
+@container pm-pane (max-width: 430px) { .pm-bar .pm-brand { display: none; } }

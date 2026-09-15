@@ -856,6 +856,16 @@ test('cancelled pages persist already-translated segments (增量持久化)', as
 	assert.ok(actualCalls >= 2, 'must exercise a real second request cancellation');
 	assert.ok(written.length >= 1, 'the completed chunk was persisted despite the cancel');
 	assert.equal(written[0]!.translatedText, '第一批译文成功保留');
+	assert.equal(manager.getPageState(0)?.status, 'idle');
+	assert.equal(manager.getPageState(0)?.translations.size, 1, 'cancellation retains accepted blocks in memory');
+	deps.translateRequest = async request => {
+		assert.ok(request.blocks.every(b => b.id !== 'page-0-block-0'), 'completed chunk must never be resent');
+		return {translations:request.blocks.map(b=>({id:b.id,translatedText:'第二批译文'}))};
+	};
+	await manager.ensurePage(0,10);
+	assert.equal(manager.getPageState(0)?.translations.size,2);
+	assert.equal((manager.exportDiagnostics() as any).usage.resumedPages,1);
+	assert.equal((manager.exportDiagnostics() as any).usage.supplementBlocks,1);
 	manager.dispose();
 });
 
@@ -2707,4 +2717,38 @@ test('reference title fragments must be translated even when marked isReference'
 	assert.equal(looksTranslated(frag, frag, 'zh-CN'), false, '正文里同样的短语原样返回还是没译');
 	assert.equal(looksTranslated(frag, '', 'zh-CN', { isReference: true }), false, '空响应不算');
 	assert.equal(looksTranslated('6. Mets OM, Buckens CF, Zanen P, et al.', '6. Mets OM, Buckens CF, Zanen P, et al.', 'zh-CN', { isReference: true }), true);
+});
+
+test('display restoration coalesces archive reads and sends no provider requests',async()=>{
+ let reads=0,extracts=0;
+ const blocks=makeBlocks(0,2);
+ const {deps,calls}=makeDeps({extractPage:async()=>{extracts++;return blocks;},restoreSnapshot:async()=>{reads++;return {pageIndex:0,status:'done',blocks,translations:new Map(blocks.map(b=>[b.id,'完整译文']))};}});
+ const manager=new TranslationManager(deps,{onPageUpdate:()=>{}},{prefetch:false});
+ const [a,b]=await Promise.all([manager.restoreForDisplay(0),manager.restoreForDisplay(0)]);
+ assert.equal((manager.exportDiagnostics() as any).usage.displayRestores,1);
+ assert.equal(a,b);assert.equal(reads,1);assert.equal(extracts,0);assert.equal(calls.translate,0);
+ await manager.ensurePage(0,10);
+ assert.equal(calls.translate,0);assert.equal(extracts,0);
+ manager.dispose();
+});
+test('an archive read started before reset cannot resurrect old-language content',async()=>{
+ let resolve!:(state:PageTranslationState)=>void;
+ const {deps}=makeDeps({restoreSnapshot:()=>new Promise(r=>{resolve=r;})});
+ const manager=new TranslationManager(deps,{onPageUpdate:()=>{}},{prefetch:false});
+ const pending=manager.restoreForDisplay(0);manager.resetAll();
+ resolve({pageIndex:0,status:'done',blocks:makeBlocks(0,1),translations:new Map([['a','旧译文']])});
+ assert.equal(await pending,undefined);assert.equal(manager.getPageState(0),undefined);manager.dispose();
+});
+
+test('repeat submission counter records repeated block payloads, not page renders',async()=>{
+ const {deps}=makeDeps({translateRequest:async(request,_signal,hooks)=>{
+  hooks?.onAttempt?.();hooks?.onAttempt?.();
+  return {translations:request.blocks.map(b=>({id:b.id,translatedText:'完整译文'}))};
+ }});
+ const manager=new TranslationManager(deps,{onPageUpdate:()=>{}},{prefetch:false});
+ await manager.ensurePage(0,10);
+ assert.equal((manager.exportDiagnostics() as any).usage.repeatedBlockSubmissions,2);
+ await manager.restoreForDisplay(0);
+ assert.equal((manager.exportDiagnostics() as any).usage.repeatedBlockSubmissions,2);
+ manager.dispose();
 });

@@ -1143,6 +1143,8 @@ export class TranslationPane {
 
 	setProviderInfo(displayName: string, providerId?: string): void {
 		this.providerName.textContent = displayName;
+		this.providerPill?.setAttribute('title', `${this.strings.switchProvider}: ${displayName}`);
+		this.providerPill?.setAttribute('aria-label', `${this.strings.switchProvider}: ${displayName}`);
 		this.providerMark.replaceChildren();
 		if (providerId) {
 			this.currentProviderId = providerId;

@@ -672,6 +672,17 @@ export class ReaderSession {
 				extractPathOf: pageIndex => this.extractor.extractPathFor(pageIndex),
 				extractPhasesOf: pageIndex => this.extractor.extractPhasesFor(pageIndex),
 				translateRequest: (request, signal, hooks) => this.translateRequest(request, signal, hooks),
+                restoreSnapshot: async pageIndex => {
+                    const saved = await this.pageArchive.get(pageIndex);
+                    if (!saved?.blocks?.length || !saved.translations?.length) return null;
+                    const diagnostics = saved.diagnostics as {status?: string; metrics?: PageTranslationState['diagnostics']} | undefined;
+                    const translations = new Map(saved.translations.map(t => [t.id, t.translatedText]));
+                    const blocks = saved.blocks as SourceBlock[];
+                    return {pageIndex, blocks, translations,
+                        status:diagnostics?.status === 'done' ? 'done' : 'idle',
+                        diagnostics:diagnostics?.metrics,
+                        cached:blocks.every(b => b.translationMode === 'preserve' || translations.has(b.id))};
+                },
 				readCache: async (pageIndex, blocks) => {
 					const texts = blocks.map(b => b.sourceText);
 					const parts = await this.cacheKey(pageIndex, texts);
@@ -1080,7 +1091,7 @@ export class ReaderSession {
    this.placementProbe.delete(state.pageIndex);this.abandonedBlocks.delete(state.pageIndex);
    this.geometryAudits.delete(state.pageIndex);this.placementStats.delete(state.pageIndex);
   }
-  if (state.blocks.length && (state.status === 'done' || state.status === 'error')) this.archivePage(state);
+  if (state.blocks.length && (state.status === 'done' || state.status === 'error' || (state.status === 'idle' && state.translations.size > 0))) this.archivePage(state);
 		this.pane?.renderPage(state);
 		this.overlay?.setPageData(state.pageIndex, {
 			blocks: state.blocks,
@@ -1569,7 +1580,8 @@ export class ReaderSession {
 			return el;
 		};
 		const doc = slot.ownerDocument!;
-		const state = this.manager?.getPageState(pageIndex);
+		const state = await this.manager?.restoreForDisplay(pageIndex);
+		if (!current()) return false;
 		// 扫描/纯图页提示 (BabelDOC detect_scanned_file 思想的用户侧一半):
 		// 提取干净地得到 0 块时,这页不是"翻译失败"而是"没有可译文本"——
 		// 明说一次,免得用户对着原样页面点圆环等翻译。每页只提示一次。
@@ -1582,7 +1594,7 @@ export class ReaderSession {
 		// 增量显示 (2.7.10): 途中也可以重建 —— 已到的块画译文,没到的保持原文。
 		// 但半成品页**不**做压缩重试、不报排版统计、不弹排版失败提示: 那些都是
 		// 对"这页最终结果"的判断,对着一个还在长的页面做只会白花请求、误报数字。
-		const partial = !!(state && state.status === 'translating' && state.blocks.length && state.translations.size);
+		const partial = !!(state && (state.status === 'translating' || state.status === 'idle' || state.status === 'extracting') && state.blocks.length && state.translations.size);
 		if (state && (state.status === 'done' || partial) && state.blocks.length) {
 			// Real image boundaries (operator list) — fetched once per page and
 			// cached for the document's lifetime; null = fall back to the grid.

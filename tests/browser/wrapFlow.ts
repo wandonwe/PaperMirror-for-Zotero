@@ -1,3 +1,4 @@
+import {checkToolbar} from './toolbar';
 import { checkRealTranslations } from './realTranslations';
 import { checkRecommendationTables } from './recommendationTables';
 import { checkAbbreviationTable } from './abbreviationTable';
@@ -8,6 +9,7 @@ import { buildStrictPage } from '../../src/ui/strictPageReplacement';
 const result=document.createElement('pre');result.id='result';document.body.append(result);
 async function run() {
 try {
+ checkToolbar();
  await checkImageCaption();
  checkScroll();
  checkAbbreviationTable();
