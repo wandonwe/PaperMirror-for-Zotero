@@ -362,6 +362,17 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 	// 真栏沟 (≥1.1em) 照切。
 	const weakGutterXs: number[] = bandedActive ? [] : detectGutters(rowRects, pageWidth);
 
+	// Short multi-column bands can be outvoted by full-width figures/captions.
+	// Require three nearby rows with matching gap edges, not a page-wide vote.
+	const localGaps = rows.flatMap(row => row.slice(1).flatMap((item, i) => {
+		const prev = row[i]!;
+		const size = fontSizeOf(prev) || 10;
+		return Math.abs(fontSizeOf(item) - size) <= size * 0.15
+			&& prev.rect[2] - row[0]!.rect[0] >= size * 8
+			&& row[row.length - 1]!.rect[2] - item.rect[0] >= size * 8
+			&& item.rect[0] - prev.rect[2] >= size * 1.05
+			? [{ left: prev.rect[2], right: item.rect[0], y: (item.rect[1] + item.rect[3]) / 2 }] : [];
+	}));
 	const lines: SpanLine[] = [];
 	for (const row of rows) {
 		let rowTop = -Infinity;
@@ -394,7 +405,15 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 				const crossesGutter = rowGutters.some(g => previous.rect[2] <= g.x + slack && item.rect[0] >= g.x)
 					|| (gap >= size * 1.05
 						&& weakGutterXs.some(x => previous.rect[2] <= x + slack && item.rect[0] >= x));
-				if (crossesGutter || gap > columnGapThreshold(size)) {
+				const repeatedLocalGap = gap >= size * 1.05
+					&& Math.abs(fontSizeOf(item) - size) <= size * 0.15
+					&& previous.rect[2] - row[0]!.rect[0] >= size * 8
+					&& row[row.length - 1]!.rect[2] - item.rect[0] >= size * 8
+					&& localGaps.filter(g =>
+					Math.abs(g.y - rowMid) <= size * 4
+					&& Math.abs(g.left - previous.rect[2]) <= 2
+					&& Math.abs(g.right - item.rect[0]) <= 2).length >= 3;
+				if (crossesGutter || repeatedLocalGap || gap > columnGapThreshold(size)) {
 					flush();
 				}
 			}

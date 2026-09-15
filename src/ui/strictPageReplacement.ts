@@ -1257,8 +1257,11 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			// P2-14: 参考文献/表格墨迹也是遮挡物 —— 扩展不得长进它们的原文。
 			...inkObstacles.map(o => o.box),
 			...geometric.filter(b => b.id !== item.id).map(b => pxOf.get(b.id)!).filter(Boolean)
-		], canvas.width / BITMAP_SCALE, canvas.height / BITMAP_SCALE, item.fontPx);
+		], canvas.width / BITMAP_SCALE, canvas.height / BITMAP_SCALE, item.fontPx, true);
 	const applyBox = (item: StrictItem, width: number, height: number): void => {
+		// Original horizontal extent is a hard layout constraint. Empty space
+		// next to a paragraph may be a column gutter, not expansion capacity.
+		width = Math.min(width, item.box.width);
 		item.box = { ...item.box, width, height };
 		item.node.style.width = `${width}px`;
 		item.node.style.height = `${height}px`;
@@ -2159,7 +2162,8 @@ export function computeExpansionAllowance(
 	blockers: PixelBox[],
 	pageW: number,
 	pageH: number,
-	fontPx: number
+	fontPx: number,
+	strictSourceWidth = false
 ): { right: number; down: number } {
 	let right = Math.max(0, pageW * 0.9 - (box.left + box.width));
 	let down = Math.max(0, pageH * 0.95 - (box.top + box.height));
@@ -2179,7 +2183,7 @@ export function computeExpansionAllowance(
 	}
 	right = Math.max(0, Math.min(right, box.width * 0.6));
 	down = Math.max(0, Math.min(down, Math.max(fontPx * 2.8, box.height * 0.5)));
-	return { right, down };
+	return { right: strictSourceWidth ? 0 : right, down };
 }
 
 export function shrinkStrictBlocks(element: HTMLElement, ids: string[]): string[] {
