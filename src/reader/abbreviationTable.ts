@@ -1,3 +1,4 @@
+import { auditTableOwnership } from './tableOwnership';
 import type { SpanItem } from './spanBlockBuilder';
 import type { SourceBlock } from '../types/models';
 type Rect = [number, number, number, number];
@@ -6,6 +7,7 @@ type Rect = [number, number, number, number];
  * including two independent tables on the same page. Run before prose merging. */
 export function extractAbbreviationTables(items: SpanItem[], pageIndex: number, pageWidth: number, pageHeight: number): { cells: SourceBlock[]; rest: SpanItem[] } {
  const headers=items.filter(i=>/^Abbreviation$/i.test(i.text.trim())).sort((a,b)=>a.rect[0]-b.rect[0]);
+ const spanIds=new Map(items.map((item,i)=>[item,`page-${pageIndex}-span-${i}`]));
  const used=new Set<SpanItem>(),cells:SourceBlock[]=[];
  const union=(xs:SpanItem[]):Rect=>[Math.min(...xs.map(i=>i.rect[0])),Math.min(...xs.map(i=>i.rect[1])),Math.max(...xs.map(i=>i.rect[2])),Math.max(...xs.map(i=>i.rect[3]))];
  for(let ti=0;ti<headers.length;ti++) {
@@ -40,9 +42,12 @@ export function extractAbbreviationTables(items: SpanItem[], pageIndex: number, 
    const rect=union(parts),text=parts.map(i=>i.text.trim()).join(col===0?'':' ');
    cells.push({id:`page-${pageIndex}-abbrev-${ti}-r${row}-c${col}`,pageIndex,order:cells.length,type:'paragraph',sourceText:text,fontSize:font,
     boundingBox:{x:rect[0],y:pageHeight-rect[3],width:rect[2]-rect[0],height:rect[3]-rect[1]},lineRectsPdf:[rect],
-    tableRow:row,tableCol:col,tableGeometry:'inferred',tableContentRectPdf:[col===0?head.rect[0]-font*.4:split,e.bottom,col===0?split:right,e.top],
+    tableRow:row,tableCol:col,tableGeometry:'inferred',tableId:`page-${pageIndex}-abbreviation-${ti}`,tableSource:'abbreviation',memberIds:parts.map(p=>spanIds.get(p)!),tableContentRectPdf:[col===0?head.rect[0]-font*.4:split,e.bottom,col===0?split:right,e.top],
     translationMode:col===0 && row>0?'preserve':'translate',...(col===0 && row>0?{preserveReason:'defined-abbreviation' as const}:{})});
   }
  }
- return {cells,rest:items.filter(i=>!used.has(i))};
+ const rest=items.filter(i=>!used.has(i));
+ const source=(i:SpanItem)=>({id:spanIds.get(i)!,sourceText:i.text});
+ if(auditTableOwnership(items.map(source),[...cells,...rest.map(source)]).length) return {cells:[],rest:items};
+ return {cells,rest};
 }

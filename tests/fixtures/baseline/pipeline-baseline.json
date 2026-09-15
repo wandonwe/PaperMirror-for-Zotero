@@ -432,16 +432,16 @@
 		"dupBlocks": 0
 	},
 	"wu2026-p1": {
-		"blocks": 36,
-		"translatable": 24,
-		"tableCells": 26,
+		"blocks": 26,
+		"translatable": 20,
+		"tableCells": 16,
 		"modules": 7,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 15,
-		"payloadChars": 3014,
-		"dupBlocks": 1
+		"maxBlocksPerChunk": 12,
+		"payloadChars": 2950,
+		"dupBlocks": 0
 	},
 	"wu2026-p3": {
 		"blocks": 58,

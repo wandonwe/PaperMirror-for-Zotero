@@ -32,6 +32,7 @@ export interface BlockDigestRow {
 	outcome: BlockOutcome;
 	/** 为什么保留不译 (2.12.13):names / dates / identifier / reference / data / structure-ambiguous … */
 	preserveReason?: string;
+	tableStructureIssue?: string;
 	/** keep-origin 原因枚举('unrecovered' | 'repeated-failure' 等)。 */
 	keepOrigin?: string;
 	/** 最后一次验收拒绝的原因枚举(validator / placeholder / plain-* 等)。 */
@@ -69,6 +70,7 @@ export function digestRows(state: DigestSource): BlockDigestRow[] {
 			type: block.type,
 			chars: block.sourceText.length,
 			outcome,
+			...(block.tableStructureIssue ? { tableStructureIssue: block.tableStructureIssue } : {}),
 			...(outcome === 'preserved' && block.preserveReason ? { preserveReason: block.preserveReason } : {}),
 			...(keepOrigin ? { keepOrigin } : {}),
 			...(lastReject ? { lastReject } : {}),
@@ -86,6 +88,7 @@ export interface DiagnosticBlockRow {
 	id: string;
 	/** 为什么保留不译(枚举,2.12.14 起导出)。 */
 	preserveReason?: string;
+	tableStructureIssue?: string;
 	type: SourceBlock['type'];
 	chars: number;
 	state: string;
@@ -108,6 +111,7 @@ export function diagnosticRows(rows: BlockDigestRow[]): DiagnosticBlockRow[] {
 		chars: row.chars,
 		state: row.outcome === 'untranslated' ? (row.keepOrigin ?? 'untranslated') : row.outcome,
 		// 2.12.13 加进摘要、2.12.14 才接到导出 —— 真机 2.12.13 的导出里 preserveReason 是空的。
+		...(row.tableStructureIssue ? { tableStructureIssue: row.tableStructureIssue } : {}),
 		...(row.preserveReason ? { preserveReason: row.preserveReason } : {}),
 		...(row.keepOrigin ? { keepOrigin: row.keepOrigin } : {}),
 		...(row.lastReject ? { lastReject: row.lastReject } : {}),

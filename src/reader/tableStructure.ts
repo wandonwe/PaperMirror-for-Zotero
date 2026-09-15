@@ -1,3 +1,4 @@
+import { auditTableOwnership } from './tableOwnership';
 /**
  * Table Row/Cell model for in-place cell translation.
  *
@@ -694,7 +695,13 @@ function contained(box: Box, region: Box): number {
  * stable ids and become provider request units; numeric/data cells remain in
  * the page model but are explicitly marked preserve.
  */
-export function structureTableCells(
+export function structureTableCells(...args: Parameters<typeof structureTableCellsUnchecked>): SourceBlock[] {
+ const result=structureTableCellsUnchecked(...args);
+ const issues=auditTableOwnership(args[0],result);
+ return issues.length ? args[0].map(b=>({...b,tableStructureIssue:issues.slice(0,8).join(';')})) : result;
+}
+
+function structureTableCellsUnchecked(
 	blocks: SourceBlock[],
 	pageIndex: number,
 	em: number,
@@ -722,11 +729,11 @@ export function structureTableCells(
 	useGrid = true,
 	pageHeight?: number
 ): SourceBlock[] {
-	// Explicit glossary cells already have stable row/column ownership.
-	const glossaryCells = blocks.filter(b => /-abbrev-\d+-r\d+-c\d+$/.test(b.id) && b.tableContentRectPdf);
-	if (glossaryCells.length) {
-		const owned = new Set(glossaryCells);
-		return [...structureTableCells(blocks.filter(b => !owned.has(b)), pageIndex, em, noTranslate, grid, useGrid, pageHeight), ...glossaryCells];
+	// Every detector uses the same explicit ownership contract.
+	const assignedCells = blocks.filter(b => b.tableId && b.tableSource && b.tableRow !== undefined && b.tableCol !== undefined && (b.tableRectPdf || b.tableContentRectPdf));
+	if (assignedCells.length) {
+		const owned = new Set(assignedCells);
+		return [...structureTableCells(blocks.filter(b => !owned.has(b)), pageIndex, em, noTranslate, grid, useGrid, pageHeight), ...assignedCells];
 	}
 	const originalById = new Map(blocks.map(block => [block.id, block]));
 	// 页面附属内容不进表 (2.12.13):提取阶段不再丢块之后,页码、水印、页眉、日期行、
@@ -794,6 +801,7 @@ export function structureTableCells(
 						boundingBox: { x: cell.box.left, y: cell.box.top, width: cell.box.width, height: cell.box.height },
 						...cellPdfBounds(cell.box, originals, pageHeight),
 						tableGeometry: 'border' as const,
+						tableId: `page-${pageIndex}-border-${tableIndex}`, tableSource: 'border',
 						...(cell.rowSpan ? { tableRowSpan: cell.rowSpan } : {}),
 						...(cell.colSpan ? { tableColSpan: cell.colSpan } : {}),
 						lineRectsPdf: originals.flatMap(o => o.lineRectsPdf ?? []),
@@ -842,7 +850,7 @@ export function structureTableCells(
 		...guard.textRegions.map(region => ({ region, text: true }))
 	];
 	allRegions.forEach(({ region, text: isTextTable }, tableIndex) => {
-		const members = geometric.filter(b => contained({
+		const members = geometric.filter(b => !consumed.has(b.id) && contained({
 			left: b.boundingBox.x, top: b.boundingBox.y,
 			width: b.boundingBox.width, height: b.boundingBox.height
 		}, region) >= 0.5).map(b => ({
@@ -878,6 +886,7 @@ export function structureTableCells(
 				sourceText: cell.text,
 				boundingBox: { x: cell.box.left, y: cell.box.top, width: cell.box.width, height: cell.box.height },
 				tableGeometry: 'inferred' as const,
+				tableId: `page-${pageIndex}-inferred-${tableIndex}`, tableSource: 'text-alignment',
 				tableContentRectPdf: cellPdfBounds(inferredCellBox(cell, model, em), originals, pageHeight).tableRectPdf,
 				...(cell.rowSpan ? { tableRowSpan: cell.rowSpan } : {}),
 				...(cell.colSpan ? { tableColSpan: cell.colSpan } : {}),

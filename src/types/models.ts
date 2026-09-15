@@ -91,6 +91,11 @@ export interface SourceBlock {
 	/** Authoritative cell bounds in raw PDF coordinates, separate from source ink. */
 	tableRectPdf?: [number, number, number, number];
 	tableGeometry?: 'border' | 'inferred';
+	/** Shared identity/provenance for every table detector, independent of cell IDs. */
+	tableId?: string;
+	tableSource?: 'border' | 'text-alignment' | 'abbreviation';
+	/** Structural conversion was rejected; original content was retained. */
+	tableStructureIssue?: string;
 	/** Extracted caption inside a composite image; renderer must verify a text-only background. */
 	imageTextRegionPdf?: [number, number, number, number];
 	/** Safe whitespace assigned from neighbouring inferred cells, not a drawn border. */
