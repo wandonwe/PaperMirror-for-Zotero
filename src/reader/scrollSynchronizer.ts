@@ -51,6 +51,12 @@ export class SyncGuard {
 		return true;
 	}
 
+	/** Explicit input takes ownership immediately, even during an echo window. */
+	takeControl(source: SyncSide): void {
+		this.reset();
+		this.willMove(source === 'pdf' ? 'pane' : 'pdf');
+	}
+
 	reset(): void {
 		this.suppressUntil = {};
 	}
@@ -61,18 +67,32 @@ export interface SyncController {
 	guard: SyncGuard;
 	/** Move the pane to a page (called when the PDF page changes). */
 	onPdfPageChanged(pageIndex: number): void;
+	onPdfPositionChanged(pageIndex: number, fraction: number): void;
+	onPanePositionChanged(pageIndex: number, fraction: number): void;
 	/** Move the PDF to a page (called when the pane scrolls / block clicked). */
 	onPaneNavigated(pageIndex: number, blockId?: string): void;
 }
 
 export function createSyncController(handlers: {
 	scrollPaneToPage(pageIndex: number): void;
+	scrollPaneToPosition?(pageIndex: number, fraction: number): void;
+	scrollPdfToPosition?(pageIndex: number, fraction: number): void;
 	navigatePdfToPage(pageIndex: number, blockId?: string): void;
 }, guard?: SyncGuard): SyncController {
 	const g = guard ?? new SyncGuard();
 	return {
 		enabled: true,
 		guard: g,
+		onPdfPositionChanged(pageIndex: number, fraction: number): void {
+			if (!this.enabled || !g.shouldPropagate('pdf') || !Number.isFinite(fraction)) return;
+			g.willMove('pane');
+			handlers.scrollPaneToPosition?.(pageIndex, fraction);
+		},
+		onPanePositionChanged(pageIndex: number, fraction: number): void {
+			if (!this.enabled || !g.shouldPropagate('pane') || !Number.isFinite(fraction)) return;
+			g.willMove('pdf');
+			handlers.scrollPdfToPosition?.(pageIndex, fraction);
+		},
 		onPdfPageChanged(pageIndex: number): void {
 			if (!this.enabled || !g.shouldPropagate('pdf')) {
 				return;
@@ -88,4 +108,20 @@ export function createSyncController(handlers: {
 			handlers.navigatePdfToPage(pageIndex, blockId);
 		}
 	};
+}
+
+/** Listen to intent, never to programmatic scroll events. Dispose with the view. */
+export function onScrollIntent(element: HTMLElement, handler: () => void): () => void {
+ const input = (event: Event): void => {
+  if (event.type === 'keydown') {
+   const key = (event as KeyboardEvent).key;
+   const target = event.target as HTMLElement | null;
+   if (target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+   if (!['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(key)) return;
+  }
+  handler();
+ };
+ const names = ['wheel','pointerdown','touchstart','keydown'];
+ names.forEach(name => element.addEventListener(name, input, { passive: true }));
+ return () => names.forEach(name => element.removeEventListener(name, input));
 }

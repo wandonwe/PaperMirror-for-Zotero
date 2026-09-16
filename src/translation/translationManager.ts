@@ -160,11 +160,19 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 	if (!/^zh/i.test(targetLang)) {
 		return true;
 	}
-	// 参考文献块的回声视为合格 (3.2.0, Mets 2013 p8 真机): 文献条目按规则"作者/期刊/年份/DOI
-	// 原样保留、标题翻译",模型对一条被拆成单行的碎片("IEEE Trans Med Imaging 2012;31:"、
-	// "6. Mets OM, Buckens CF, Zanen P, et al.")原样返回时,它的判断比任何正则都可靠;
-	// 拒收只换来同一结果的重试和 unrecovered。原文留在页上就是这条的正确结果。
-	if (opts?.isReference && isEcho(source, t)) {
+	// A provider that preserves paragraph boundaries can be validated locally:
+ // an unchanged byline must not dominate the language score of translated prose.
+ const sourceParts=source.split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
+ const targetParts=t.split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
+ if(sourceParts.length>1 && sourceParts.length===targetParts.length
+  && sourceParts.some(p=>looksLikeAuthorNameList(p)||looksLikePersonNames(p))) {
+  return sourceParts.every((p,i)=>looksTranslated(p,targetParts[i]!,targetLang,opts));
+ }
+	// Preserve only identifiable author/journal fragments, never all reference prose.
+	if (opts?.isReference && isEcho(source, t) && (looksLikeAuthorNameList(source.replace(/^\d+\.\s*/, ''))
+		|| looksLikePersonNames(source.replace(/^\d+\.\s*/, ''))
+|| /^(?:\d+\.\s*)?(?:[A-Z][a-z'’-]+\s+[A-Z]{1,4},\s*)+(?:[A-Z][a-z'’-]+\s+[A-Z]{1,4},?\s*)?et al\.$/.test(source.trim())
+		|| /^[A-Z][A-Za-z .&-]{1,70}\s+(?:19|20)\d{2}\s*;\s*\d+[\d:()–—-]*[.:]?\s*$/.test(source.trim()))) {
 		return true;
 	}
 	// PROSE-ONLY scoring (审核项: 统计密集行被误拒): citations, p-values, CIs and
@@ -559,6 +567,7 @@ export interface PageTranslationState {
 	keepOrigin?: Map<string, string>;
 	/** 最近一次验收拒绝的原因 (仅原因码,无文本): validator | placeholder。 */
 	rejectReasons?: Map<string, string>;
+	rejectHistory?: Map<string, string[]>;
 	/**
 	 * 译文修订号 (2.8.2, 性能第三批): 每次 notify 之前算一遍译文指纹,内容
 	 * **真的变了**才 +1。页视图据此决定要不要在译完之前先把已到的译文画上,
@@ -752,6 +761,8 @@ export interface TranslationDeps {
 	extractPathOf?(pageIndex: number): string | undefined;
 	/** 2.8.15: 这一页抽取的分段耗时 —— 纯毫秒,回答 extractMs 花在哪一段。 */
 	extractPhasesOf?(pageIndex: number): NonNullable<PageDiagnostics['extractPhases']> | undefined;
+	/** Read an immutable session snapshot without starting translation work. */
+	restoreSnapshot?(pageIndex: number): Promise<PageTranslationState | null>;
 	/** Cache access; may be no-ops. */
 	readCache(pageIndex: number, blocks: SourceBlock[]): Promise<TranslatedBlock[] | null>;
 	writeCache(pageIndex: number, blocks: SourceBlock[], translations: TranslatedBlock[]): Promise<void>;
@@ -860,7 +871,14 @@ export class TranslationManager {
 	 *   2. 预取浪费了多少 —— 后台预取翻译的页里,用户最终没读到的有几页。
 	 * prefetchedUnviewed 按页去重;用户滚到该页时移出(不再算浪费)。
 	 */
+	private restoreEpoch = 0;
+	private displayRestores = new Map<number, Promise<PageTranslationState | undefined>>();
+	private requestedContent = new Set<string>();
 	private usage = {
+		displayRestores: 0,
+		resumedPages: 0,
+		supplementBlocks: 0,
+		repeatedBlockSubmissions: 0,
 		pageCacheLookups: 0,
 		pageCacheFullHits: 0,
 		pageCachePartialHits: 0,
@@ -917,7 +935,17 @@ export class TranslationManager {
 			}
 		};
 		const hooks: TranslateHooks = {
-			onAttempt: () => { attempts++; },
+			onAttempt: () => {
+                attempts++;
+                for (const block of request.blocks) {
+                    const key = `${request.pageIndex}:${segmentHash(block.text, request.sourceLanguage, request.targetLanguage)}`;
+                    if (this.requestedContent.has(key)) this.usage.repeatedBlockSubmissions++;
+                    this.requestedContent.add(key);
+                }
+                if (this.requestedContent.size > 20000) {
+                    for (const key of [...this.requestedContent].slice(0, 10000)) this.requestedContent.delete(key);
+                }
+            },
 			onUsage: record,
 			onParamHeal: param => bump(this.paramHeals, param)
 		};
@@ -1093,6 +1121,29 @@ export class TranslationManager {
 		return this.pages.get(pageIndex);
 	}
 
+	/** Display restoration never enters the scheduler or calls a provider. */
+	async restoreForDisplay(pageIndex: number): Promise<PageTranslationState | undefined> {
+		const current = this.pages.get(pageIndex);
+		if (current && !current.evicted) return current;
+		if (!this.deps.restoreSnapshot || this.disposed) return current;
+		const pending = this.displayRestores.get(pageIndex);
+		if (pending) return pending;
+		const epoch = this.restoreEpoch;
+		const job = (async () => {
+			const saved = await this.deps.restoreSnapshot!(pageIndex).catch(() => null);
+			if (this.disposed || epoch !== this.restoreEpoch) return undefined;
+			if (this.pages.get(pageIndex) !== current) return this.pages.get(pageIndex);
+			if (!saved?.blocks.length) return current;
+			this.pages.set(pageIndex, saved);
+			this.touchPage(pageIndex);
+			this.usage.displayRestores++;
+			return saved;
+		})();
+		this.displayRestores.set(pageIndex, job);
+		try { return await job; }
+		finally { if (this.displayRestores.get(pageIndex) === job) this.displayRestores.delete(pageIndex); }
+	}
+
 	/** 用到了这一页 —— 刷新它在 LRU 里的位置 (2.8.3)。 */
 	private touchPage(pageIndex: number): void {
 		this.pageTouch.set(pageIndex, ++this.touchSeq);
@@ -1126,6 +1177,7 @@ export class TranslationManager {
 			state.translations = new Map();
 			state.keepOrigin = undefined;
 			state.rejectReasons = undefined;
+			state.rejectHistory = undefined;
 			state.evicted = true;
 			this.revisions.delete(pageIndex);
 			logger.debug(MODULE, `page ${pageIndex + 1}: full content evicted (cached, cold)`);
@@ -1672,7 +1724,10 @@ export class TranslationManager {
 	 */
 	private releasePage(pageIndex: number, state: PageTranslationState, reason: ReleaseReason): void {
 		if (this.pages.get(pageIndex) === state) {
-			this.pages.delete(pageIndex);
+			if (state.translations.size) {
+				state.status = 'idle';
+				this.notify(state);
+			} else this.pages.delete(pageIndex);
 		}
 		const prior = this.released.get(pageIndex);
 		const count = (prior?.count ?? 0) + 1;
@@ -1845,6 +1900,10 @@ export class TranslationManager {
 			usage: {
 				pageCacheLookups: this.usage.pageCacheLookups,
 				pageCacheFullHits: this.usage.pageCacheFullHits,
+                displayRestores: this.usage.displayRestores,
+                resumedPages: this.usage.resumedPages,
+                supplementBlocks: this.usage.supplementBlocks,
+                repeatedBlockSubmissions: this.usage.repeatedBlockSubmissions,
 				pageCachePartialHits: this.usage.pageCachePartialHits,
 				...(this.usage.pageCacheLookups
 					? { pageCacheHitRate: Number((this.usage.pageCacheFullHits / this.usage.pageCacheLookups).toFixed(3)) }
@@ -1928,6 +1987,7 @@ export class TranslationManager {
 	 * provider+language, so the old entries simply stop matching.
 	 */
 	resetAll(): void {
+		this.restoreEpoch++; this.displayRestores.clear(); this.requestedContent.clear();
 		this.scheduler.cancelAll();
 		this.pages.clear();
 		this.unstableFired.clear();
@@ -1947,10 +2007,12 @@ export class TranslationManager {
 	 * 停在旧译文或原文,得手动点圆环)。
 	 */
 	async resetAllAndWait(): Promise<void> {
+		this.restoreEpoch++; this.displayRestores.clear(); this.requestedContent.clear();
 		await this.scheduler.cancelAllAndWait();
 		// 已发出但还没落盘的段落写入也要等 (2.5.9): 它们不再阻塞调度槽,
 		// 清盘前必须在这里收口,否则就是 2.0.7 修过的那条竞态。
 		await this.flushPendingWrites();
+		this.restoreEpoch++; this.displayRestores.clear();
 		this.pages.clear();
 		this.unstableFired.clear();
 		this.docMemory.clear();
@@ -2152,6 +2214,8 @@ export class TranslationManager {
 				return;
 			}
 		}
+		if (this.deps.restoreSnapshot && !options?.bypassCache && !options?.bypassSegments) await this.restoreForDisplay(pageIndex);
+		if (this.disposed) return;
 		const existing = this.pages.get(pageIndex);
 		this.touchPage(pageIndex);
 		// 2.8.3: 被卸过内容的已完成页必须能重新装载 —— 否则用户翻回去只剩原文。
@@ -2171,11 +2235,13 @@ export class TranslationManager {
 			return;
 		}
 
+		const resume = existing?.status === 'idle' && existing.translations.size > 0 && !options?.bypassCache && !options?.bypassSegments ? existing : undefined;
+		if (resume) this.usage.resumedPages++;
 		const state: PageTranslationState = {
 			pageIndex,
 			status: 'extracting',
-			blocks: [],
-			translations: new Map(),
+			blocks: resume?.blocks ?? [],
+			translations: new Map(resume?.translations),
 			extractingSince: Date.now()
 		};
 		const navigationAtStart = this.navigationGeneration;
@@ -2200,7 +2266,8 @@ export class TranslationManager {
 			let blocks: SourceBlock[];
 			try {
 				const zombie = this.extractZombies.get(pageIndex);
-				if (zombie && this.deps.extractRenderedPage) {
+				if (resume) { blocks = resume.blocks; }
+				else if (zombie && this.deps.extractRenderedPage) {
 					// Never start a second PDF-worker extraction while the timed-out
 					// one is still alive. The visible page can still be recovered from
 					// its rendered text layer (timeout-guarded like any extraction).
@@ -2505,6 +2572,7 @@ export class TranslationManager {
 		// 止损轮次序号 (P3): 本运行的发起顺序,见 failedSegments 注释。
 		const runId = ++this.runSeq;
 		const countedTranslate = async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
+			request = { ...request, referenceContent: request.blocks.some(b => refById.has(b.id)) };
 			metrics.requestCount++;
 			// Request-level retry (network/rate-limit; TIMEOUT retried ONCE — a
 			// request that already burned its full timeout usually times out again,
@@ -2704,6 +2772,7 @@ export class TranslationManager {
 			}
 			return true;
 		});
+		if (state.translations.size && toTranslate.length) this.usage.supplementBlocks += toTranslate.length;
 		// 同页相同内容去重 (2.3.5, 第四批 item7 · API-2): 同一页里 sourceText 完全
 		// 相同的块(模板化表头/重复短语/密集表格)只把**代表块**送去翻译,其余
 		// 同文块在代表译文到达时镜像共享 —— 省下重复块的输入+输出 token,零风险
@@ -2764,6 +2833,16 @@ export class TranslationManager {
 		// 拒" —— 记住每块最近一次验收失败的原因码(validator = looksTranslated/
 		// 完整性;placeholder = 清单校验),进诊断导出。
 		state.rejectReasons = state.rejectReasons ?? new Map();
+		state.rejectHistory = new Map();
+		const noteReject = (id: string, reason: string): void => {
+			state.rejectReasons!.set(id, reason);
+			state.rejectHistory!.set(id, [...(state.rejectHistory!.get(id) ?? []), reason].slice(-8));
+		};
+		const rejectedResponse = (id: string, text: string, phase: string): string => {
+			if (!refById.has(id)) return `${phase}:${translationRejectReason(sourceById.get(id) ?? '', text, target) ?? 'integrity'}`;
+			const source = sourceById.get(id) ?? '';
+			return referenceRejectReason(source, text, phase);
+		};
 		const acceptResponse = (id: string, text: string): boolean => {
 			// 'empty' 与 'validator' 分开 (1.1.8): 引擎带着 id 回了一个空串,
 			// 和「回了英文回声被验收拒掉」是两种完全不同的故障 —— 前者要换
@@ -2771,16 +2850,16 @@ export class TranslationManager {
 			// 一个 11 字符的块显示 lastReject: "validator" 会把人引向阈值,
 			// 而阈值那条路对它根本不成立(散文词数不足 6,压根走不到比率判定)。
 			if (!text.trim()) {
-				state.rejectReasons!.set(id, 'empty');
+				noteReject(id, 'empty');
 				return false;
 			}
 			if (!accept(id, text)) {
-				state.rejectReasons!.set(id, 'validator');
+				noteReject(id, rejectedResponse(id, text, 'validator'));
 				return false;
 			}
 			const reg = regById.get(id);
 			if (reg && !reg.ok(text)) {
-				state.rejectReasons!.set(id, 'placeholder');
+				noteReject(id, reg.status.last?.missing.length ? 'placeholder:missing' : 'placeholder:unexpected');
 				return false;
 			}
 			return true;
@@ -3057,14 +3136,14 @@ export class TranslationManager {
 							received.set(block.id, first.translatedText);
 						}
 						else if (single.translations.length) {
-							state.rejectReasons?.set(block.id, 'salvage-validator');
+							noteReject(block.id, rejectedResponse(block.id, single.translations[0]?.translatedText ?? '', 'salvage-validator'));
 						}
 						else {
 							// 死分支修复 (1.1.8): 这里原本是与上面条件完全相同的
 							// 第二个 else if,永不可达 —— 于是「打捞请求回了个空
 							// 数组」这一支从不落原因码,块的 lastReject 停在批次
 							// 阶段的旧值上,诊断读起来就像打捞从没跑过。
-							state.rejectReasons?.set(block.id, 'salvage-empty');
+							noteReject(block.id, 'salvage-empty');
 						}
 					}
 					catch (e) {
@@ -3232,15 +3311,15 @@ export class TranslationManager {
 							logger.info(MODULE, `Page ${pageIndex + 1}: unmasked plain recovery rescued ${block.id} (placeholder chain had failed)`);
 						}
 						else {
-							state.rejectReasons?.set(block.id, 'plain-placeholder');
+							noteReject(block.id, 'plain-placeholder');
 						}
 					}
 					else if (resp.translations.length) {
-						state.rejectReasons?.set(block.id, 'plain-validator');
+						noteReject(block.id, rejectedResponse(block.id, resp.translations[0]?.translatedText ?? '', 'plain-validator'));
 					}
 					else {
 						// 同一处死分支 (1.1.8): 见上面 salvage 的说明。
-						state.rejectReasons?.set(block.id, 'plain-empty');
+						noteReject(block.id, 'plain-empty');
 					}
 				}
 				catch (e) {
@@ -3357,4 +3436,22 @@ export class TranslationManager {
 			logger.warn(MODULE, `Page ${pageIndex + 1} left uncached (${untranslatedCount} untranslated block(s)) so a revisit retries`);
 		}
 	}
+}
+
+/** Reason codes contain no source or response text and are safe for diagnostics. */
+export function referenceRejectReason(source: string, translated: string, phase: string): string {
+ if(!translated.trim()) return `${phase}:empty`;
+ if(isEcho(source,translated)) return `${phase}:reference-echo`;
+ if(isTruncatedTranslation(stripProtectable(source),stripProtectable(translated))) return `${phase}:reference-truncated`;
+ return `${phase}:reference-${translationRejectReason(source,translated,'zh-CN') ?? 'integrity'}`;
+}
+
+/** Same validator, with a stable, text-free explanation for its rejection. */
+export function translationRejectReason(source: string, translated: string, target: string): string | null {
+ if (looksTranslated(source, translated, target)) return null;
+ if (!translated.trim()) return 'empty';
+ if (isEcho(source, translated)) return 'echo';
+ if (isTruncatedTranslation(stripProtectable(source), stripProtectable(translated))) return 'truncated';
+ if (hasMixedCopiedResidue(source, translated)) return 'copied-residue';
+ return 'target-language-ratio';
 }

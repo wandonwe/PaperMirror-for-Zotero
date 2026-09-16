@@ -776,3 +776,23 @@ test('分带页几何门: 文献标题所在带里位于其上方的正文栏不
 	assert.ok(refs.length > 30);
 	assert.ok(refs.every(b => b.isReference && b.translationMode === 'preserve'), '下带三栏全部 preserve');
 });
+
+// Geometry from Bae 2010 p6 (20260916 corpus): the 12pt gutter is
+// smaller than 1.6em, and surrounding full-width captions dominate the vote.
+test('short three-column band retains the 12pt gutter beside a wide figure', async () => {
+ const items: SpanItem[] = [];
+ for (let i=0;i<5;i++) {
+  items.push(span('left body text',84,693-i*11,158,8.8));
+  items.push(span('middle key point',254,693-i*11,158,8.8));
+ }
+ for (let i=0;i<20;i++) items.push(span('Full width caption text',84,600-i*11,498,8.5));
+ const result=groupIntoLines(items,612,783);
+ assert.equal(result.filter(l=>lineText(l).includes('left body')).length,5);
+ assert.ok(result.every(l=>!(lineText(l).includes('left body')&&lineText(l).includes('middle key'))));
+ assert.equal(result.filter(l=>lineText(l)==='Full width caption text').length,20);
+ const {coalesceRegions}=await import('../../src/reader/regionCoalescer');
+ const blocks=coalesceRegions(buildBlocksFromSpans(items,{pageIndex:5,pageWidth:612,pageHeight:783}).blocks);
+ assert.ok(blocks.every(b=>!(b.sourceText.includes('left body')&&b.sourceText.includes('middle key'))));
+ assert.equal(blocks.find(b=>b.sourceText.includes('left body'))?.boundingBox?.width,158);
+ assert.equal(blocks.find(b=>b.sourceText.includes('middle key'))?.boundingBox?.x,254);
+});

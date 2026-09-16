@@ -485,6 +485,14 @@ export function detectTableRegions(
 		if (cluster.members.length < 4 && !(cluster.members.length >= 2 && nearCaption)) {
 			continue;
 		}
+		// Narrow wrapped prose is not a table: require row partners for linguistic
+		// number fragments when there is no table caption. Pure numeric columns remain valid.
+		const continuation = cluster.members.some(m => /\b(?:and|at|of|for|to|with|was|were|mean|median)\b|[a-z]-$/i.test(m.text));
+		const rowPartners = cluster.members.filter(a => items.some(b => b.id !== a.id
+			&& Math.abs((a.box.top + a.box.height / 2) - (b.box.top + b.box.height / 2)) < em * 0.6
+			&& (b.box.left >= a.box.left + a.box.width + em * 0.3 || a.box.left >= b.box.left + b.box.width + em * 0.3)
+			&& hGapBetween(a.box, b.box) < em * 8 && b.text.length < 80)).length;
+		if (!nearCaption && continuation && rowPartners < 2) continue;
 		let region = cluster.region;
 		// The numeric cells' row centres — the anchors a label column lines up
 		// with. Fixed from the seed cells, so growing the region leftward can't

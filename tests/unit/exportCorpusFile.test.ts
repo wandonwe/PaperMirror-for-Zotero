@@ -306,7 +306,7 @@ test('内存里的原件带译文,且不需要"核对" (2.8.12 真机修正)', a
 		'原件与译文同源同 id,对齐是定义上成立的 —— 不该被"结构不匹配"扣下');
 	assert.equal(result.translationsAttached, 1);
 	assert.equal(result.translationsWithheld, 0);
-	assert.deepEqual(result.blocksBySource, { live: 1, 're-extracted': 0, missing: 0 });
+	assert.deepEqual(result.blocksBySource, { live: 1, 're-extracted': 0, archived: 0, missing: 0 });
 });
 
 test('一块都没重建出来: 标 missing,不拿空数组冒充"重解析过了" (2.8.12 真机修正)', async () => {
@@ -331,7 +331,7 @@ test('一块都没重建出来: 标 missing,不拿空数组冒充"重解析过�
 	assert.equal((page.availability as Record<string, string>).blocks, 'missing:not-rendered');
 	assert.deepEqual(page.unverifiableReasons, ['re-extraction-unavailable']);
 	assert.equal((page.availability as Record<string, string>).translations, 'missing:evicted');
-	assert.deepEqual(result.blocksBySource, { live: 0, 're-extracted': 0, missing: 1 });
+	assert.deepEqual(result.blocksBySource, { live: 0, 're-extracted': 0, archived: 0, missing: 1 });
 });
 
 test('result 里数得出这份语料有多少是原件 (2.8.12 真机修正)', async () => {
@@ -353,9 +353,9 @@ test('result 里数得出这份语料有多少是原件 (2.8.12 真机修正)', 
 			return record({ check: { structureMatch: 'unverifiable', blocksCompared: 0 }, translations: null });
 		}
 	}));
-	assert.deepEqual(result.blocksBySource, { live: 2, 're-extracted': 1, missing: 1 },
+	assert.deepEqual(result.blocksBySource, { live: 2, 're-extracted': 1, archived: 0, missing: 1 },
 		'一眼看出多少是原件、多少是重建、多少压根没有');
-	assert.deepEqual((sink.parsed().at(-1)!).blocksBySource, { live: 2, 're-extracted': 1, missing: 1 });
+	assert.deepEqual((sink.parsed().at(-1)!).blocksBySource, { live: 2, 're-extracted': 1, archived: 0, missing: 1 });
 	assert.equal(result.structureMatch['as-translated'], 2);
 });
 
@@ -394,7 +394,7 @@ test('宿主接线: 内存里有原件就用原件,没有才重解析 (结构性
 	const reExtract = body.indexOf('await this.extractor.extractPage(pageIndex)');
 	assert.ok(live > 0 && live < reExtract,
 		'内存里有原件就直接用 —— 重解析是退路,不是首选');
-	assert.ok(/blocks: state\.blocks,\s*\n\s*blocksSource: 'live',\s*\n\s*check: \{ structureMatch: 'as-translated'/.test(body),
+	assert.ok(/blocks: JSON\.parse\(JSON\.stringify\(state\.blocks\)\) as SourceBlock\[\],\s*\n\s*blocksSource: 'live',\s*\n\s*check: \{ structureMatch: 'as-translated'/.test(body),
 		'原件要标 as-translated: 它就是那份结构,不是"重建得一样"');
 
 	// 2. 退路仍然走与翻译相同的流水线,并且先查四项可变输入。

@@ -1,3 +1,4 @@
+import { onScrollIntent } from './scrollSynchronizer';
 /**
  * ============================================================================
  * Zotero Reader adapter — THE ONLY module allowed to touch undocumented
@@ -1381,15 +1382,14 @@ export function getPageScrollFraction(reader: ReaderLike, pageIndex: number): nu
 		if (!container || !div || !div.clientHeight) {
 			return null;
 		}
-		const offset = container.scrollTop - div.offsetTop;
+		const offset = container.getBoundingClientRect().top + container.clientTop - div.getBoundingClientRect().top;
 		// UNTRUNCATED anchor ratio: allow slightly negative / >1 so the pane maps
 		// the reader's real position even when the page is only partly in view
 		// (a page-top just above the viewport, a short page scrolled past). The
-		// old 0–1 clamp snapped every partial position to the page edge, which is
-		// what made the right side jump on page transitions. A wide guard keeps a
-		// stray value from throwing the pane far off.
+		// old clamp snapped partial positions to page edges. The inverse supports
+		// finite fractions outside the page; clamp only the final scroll target.
 		const ratio = offset / div.clientHeight;
-		return Number.isFinite(ratio) ? Math.max(-0.5, Math.min(1.5, ratio)) : null;
+		return Number.isFinite(ratio) ? ratio : null;
 	}
 	catch {
 		return null;
@@ -1620,4 +1620,38 @@ export function watchTheme(reader: ReaderLike, onChange: (dark: boolean) => void
 		logger.debug(MODULE, 'watchTheme unavailable', e);
 		return () => { /* 无法订阅 */ };
 	}
+}
+
+/** Exact inverse of getPageScrollFraction; no page-top navigation or smooth animation. */
+export function setPageScrollFraction(reader: ReaderLike, pageIndex: number, fraction: number): boolean {
+ if (!Number.isFinite(fraction)) return false;
+ try {
+  const viewer = reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication?.pdfViewer;
+  const container = viewer?.container as HTMLElement | undefined;
+  const page = viewer?.getPageView?.(pageIndex)?.div as HTMLElement | undefined;
+  if (!container || !page || !page.clientHeight) return false;
+  const top = container.scrollTop + page.getBoundingClientRect().top - container.getBoundingClientRect().top - container.clientTop;
+  const old = container.style.scrollBehavior;
+  container.style.scrollBehavior = 'auto';
+  try { container.scrollTop = Math.max(0, Math.min(top + fraction * page.clientHeight, container.scrollHeight - container.clientHeight)); }
+  finally { container.style.scrollBehavior = old; }
+  return true;
+ } catch { return false; }
+}
+
+export function onPdfScrollIntent(reader: ReaderLike, handler: () => void): () => void {
+ const container = reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication?.pdfViewer?.container as HTMLElement | undefined;
+ return container ? onScrollIntent(container, handler) : () => {};
+}
+
+/** Read the actual vertical page gap, including PDF.js borders/margins. */
+export function getPageGap(reader: ReaderLike, pageIndex: number): number | null {
+ try {
+  const viewer=reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication?.pdfViewer;
+  const first=viewer?.getPageView?.(pageIndex)?.div as HTMLElement | undefined;
+  const next=viewer?.getPageView?.(pageIndex+1)?.div as HTMLElement | undefined;
+  if(!first || !next) return null;
+  const gap=next.getBoundingClientRect().top-first.getBoundingClientRect().top-first.clientHeight;
+  return Number.isFinite(gap) && gap>=0 && gap<200 ? gap : null;
+ } catch { return null; }
 }

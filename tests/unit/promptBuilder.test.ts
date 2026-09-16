@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 test('charBudget blocks add layout-budget rules; absent budgets add none', async () => {
 	const { buildSystemPrompt, PROMPT_VERSION } = await import('../../src/translation/promptBuilder');
-	assert.equal(PROMPT_VERSION, 2, 'prompt version bumped to invalidate long-form caches');
+	assert.equal(PROMPT_VERSION, 3, 'prompt version bumped to invalidate long-form caches');
 	const base = {
 		sourceLanguage: 'en', targetLanguage: 'zh-CN', documentTitle: 'T',
 		previousContext: '', blocks: [{ id: 'a', type: 'paragraph', text: 'x' }]
@@ -60,17 +60,13 @@ test('携带占位符/样式/上下文时对应规则一字不少 (行为不变,
 	assert.ok(!plainSys.includes('⟦PM0⟧'));
 });
 
-test('人名保护规则进系统提示 (2.5.13)', async () => {
-	const { buildSystemPrompt } = await import('../../src/translation/promptBuilder');
-	const system = buildSystemPrompt({
-		pageIndex: 0, sourceLanguage: 'en', targetLanguage: 'zh-CN',
-		documentTitle: 't', previousContext: '',
-		blocks: [{ id: 'b1', type: 'paragraph', text: 'The authors acknowledge Dr. Joo Myung Lee.' }],
-		glossary: []
-	} as never);
-	assert.ok(/person names/i.test(system) && /transliterate/i.test(system),
-		'system prompt must forbid transliterating person names');
-	// 2.6.0: 机构/产品名并入同一条 (radiology2023 "MARS Bioimaging"→"火星生物成像")。
-	assert.ok(/company|manufacturer/i.test(system) && /product/i.test(system),
-		'system prompt must also protect company and product names');
+test('all translation routes translate names instead of requiring English preservation', async () => {
+ const { buildSystemPrompt } = await import('../../src/translation/promptBuilder');
+ for (const plain of [false,true]) for (const referenceContent of [false,true]) {
+  const prompt=buildSystemPrompt({sourceLanguage:'en',targetLanguage:'zh-CN',documentTitle:'T',previousContext:'',plain,referenceContent,blocks:[{id:'a',type:'paragraph',text:'University of Virginia'}]} as never);
+  assert.match(prompt,/Translate all natural-language content/);
+  assert.match(prompt,/faithful transliteration/);
+  assert.doesNotMatch(prompt,/Keep proper names EXACTLY|Keep author names, journal names/);
+  assert.match(prompt,/Preserve numerical values/);
+ }
 });

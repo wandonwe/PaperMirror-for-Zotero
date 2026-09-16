@@ -1,3 +1,4 @@
+import { StructureCache } from './structureCache';
 /**
  * Per-page text extraction.
  *
@@ -125,6 +126,7 @@ export interface ExtractInputs {
  * "等 PDFWorker"与"等文本层渲染"分开 —— 不分开就只能猜。
  */
 export interface ExtractPhases {
+ structureCacheHit?: boolean;
 	obstaclesMs: number;
 	/**
 	 * 2.12.6 边框取证的可观测性。上一版把网格接进了建格却**没有任何遥测**,
@@ -182,6 +184,12 @@ export interface ExtractPhases {
 }
 
 export class TextExtractor implements PageParser {
+ private structureCache=new StructureCache();
+ private extracting=new Map<string,Promise<SourceBlock[]>>();
+ private structureKey(pageIndex:number):string {
+  return JSON.stringify(['structure-3.3.0-1',pageIndex,this.currentExtractInputs(pageIndex)]);
+ }
+
 	private reader: ReaderLike;
 	private includeReferences: boolean;
 	private referencesStartedByPage = new Map<number, boolean>();
@@ -191,6 +199,7 @@ export class TextExtractor implements PageParser {
 	private imageRects = new Map<number, [number, number, number, number][]>();
 	/** 逐页边框网格缓存;undefined = 还没取过,null = 取过但这页没有网格。 */
 	private borderGrids = new Map<number, BorderGrid | null>();
+	private allBorderGrids = new Map<number, BorderGrid[]>();
 	/** 网格取证的计数,随网格一起缓存 (2.12.14):重抽取时从缓存拿网格,遥测也得跟着回填 ——
 	 *  真机 2.12.13 的 p12–18 就是这样:gridInside 有值,edgeSegments/gridCols 全空。 */
 	private gridPhases = new Map<number, Partial<ExtractPhases>>();
@@ -386,7 +395,9 @@ export class TextExtractor implements PageParser {
 			segCount = segs?.length ?? 0;
 			if (segs && segs.length) {
 				grid = borderGrid(segs, { pageHeight });
-				gridCount = borderGrids(segs, { pageHeight }).length;
+				const all = borderGrids(segs, { pageHeight });
+				this.allBorderGrids.set(pageIndex, all);
+				gridCount = all.length;
 			}
 		}
 		catch {
@@ -417,7 +428,7 @@ export class TextExtractor implements PageParser {
 				];
 			}
 		}
-		this.borderGrids.set(pageIndex, grid);
+		if (grid) this.borderGrids.set(pageIndex, grid);
 		{
 			const phases = this.phasesByPage.get(pageIndex);
 			if (phases) {
@@ -453,7 +464,21 @@ export class TextExtractor implements PageParser {
 		}
 	}
 
-	async extractPage(pageIndex: number): Promise<SourceBlock[]> {
+ async extractPage(pageIndex: number): Promise<SourceBlock[]> {
+  const key=this.structureKey(pageIndex),hit=this.structureCache.get(key);
+  if(hit){this.inputsByPage.set(pageIndex,this.currentExtractInputs(pageIndex));const phases=this.phasesByPage.get(pageIndex);if(phases)phases.structureCacheHit=true;return hit;}
+  const running=this.extracting.get(key);
+  if(running)return JSON.parse(JSON.stringify(await running)) as SourceBlock[];
+  const work=this.extractPageUncached(pageIndex);
+  this.extracting.set(key,work);
+  try {
+   const blocks=await work,path=this.pathByPage.get(pageIndex);
+   // DOM text layers may still be changing. Cache only PDF-coordinate sources.
+   if(blocks.length&&(path==='chars'||path==='text-content'))this.structureCache.put(key,blocks);
+   return blocks;
+  } finally {if(this.extracting.get(key)===work)this.extracting.delete(key);}
+ }
+ private async extractPageUncached(pageIndex: number): Promise<SourceBlock[]> {
 		// 2.8.7: 先把这次抽取实际依赖的可变输入拍下来 —— 事后重解析时逐项比对,
 		// 变了就把结构比对结论降为 unverifiable,不拿"碰巧相等"当证据。
 		this.inputsByPage.set(pageIndex, this.currentExtractInputs(pageIndex));
@@ -511,7 +536,7 @@ export class TextExtractor implements PageParser {
 				// Canonical reading order BEFORE coalescing: row-wise streams
 				// interleave the columns, and the coalescer only merges adjacent
 				// blocks — without this, one-line shreds never rejoin.
-				const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), await this.gridFor(pageIndex, pageHeight));
+				const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), (await this.gridFor(pageIndex, pageHeight), this.allBorderGrids.get(pageIndex)), true, pageHeight);
 				const tableCells = structured.filter(b => b.translationMode !== undefined);
 				const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
 				result.blocks = orderBlocksForReading([...prose, ...tableCells]);
@@ -721,7 +746,8 @@ export class TextExtractor implements PageParser {
 			includeReferences: this.includeReferences,
 			referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
 			imageRectsPdf: obstacles,
-			grid
+			grid,
+			grids: this.allBorderGrids.get(pageIndex)
 		});
 		// Rebuild semantic regions from whatever fragments extraction
 		// produced: whole regions translate as whole sentences.
@@ -737,7 +763,7 @@ export class TextExtractor implements PageParser {
 				}).length;
 			}
 		}
-		const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), grid);
+		const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), this.allBorderGrids.get(pageIndex) ?? grid, true, page.pageHeight);
 		const tableCells = structured.filter(b => b.translationMode !== undefined);
 		const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
 		result.blocks = orderBlocksForReading([...prose, ...tableCells]);

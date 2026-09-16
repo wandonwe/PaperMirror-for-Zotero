@@ -1,3 +1,7 @@
+import { semanticBoundary } from './semanticBoundary';
+import { extractAbbreviationTables } from './abbreviationTable';
+import { columnOfX, rowOfTop } from './tableBorders';
+import { imageCaptionRegions, withinCaption, markImageCaptions } from './imageCaption';
 /**
  * Build SourceBlocks from positioned text items (the PDF.js text layer).
  *
@@ -26,7 +30,7 @@ import type { BlockType, SourceBlock } from '../types/models';
 import { detectTableRegions } from './tableGuard';
 import type { BorderGrid } from './tableBorders';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
-import { classifyContent, endsMidSentence, isPublisherBoilerplateLine, isRunningHeadOrFoot, type PreserveReason } from './metaFilter';
+import { isIdentifierLabel, classifyContent, endsMidSentence, isPublisherBoilerplateLine, isRunningHeadOrFoot, type PreserveReason } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -358,6 +362,30 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 	// 真栏沟 (≥1.1em) 照切。
 	const weakGutterXs: number[] = bandedActive ? [] : detectGutters(rowRects, pageWidth);
 
+	// Short multi-column bands can be outvoted by full-width figures/captions.
+	// Require three nearby rows with matching gap edges, not a page-wide vote.
+	const localGaps = rows.flatMap(row => row.slice(1).flatMap((item, i) => {
+		const prev = row[i]!;
+		const size = fontSizeOf(prev) || 10;
+		return Math.abs(fontSizeOf(item) - size) <= size * 0.15
+			&& prev.rect[2] - row[0]!.rect[0] >= size * 8
+			&& row[row.length - 1]!.rect[2] - item.rect[0] >= size * 8
+			&& item.rect[0] - prev.rect[2] >= size * 1.05
+			? [{ left: prev.rect[2], right: item.rect[0], y: (item.rect[1] + item.rect[3]) / 2 }] : [];
+	}));
+	// Track a genuinely wide caption band, without imposing its geometry on
+	// body rows or a caption printed beside another column.
+	const captionRows=new Set<SpanItem[]>();
+	let tail: {left:number;bottom:number;size:number}|undefined;
+	for(const row of [...rows].sort((a,b)=>rectOf(b)[3]-rectOf(a)[3])) {
+		const rect=rectOf(row),size=sizeOf(row),text=row.map(i=>i.text).join(' ');
+		const starts=rect[2]-rect[0]>pageWidth*0.7 && /^(?:Figure|Fig\.?|Table)\s*\d+[.:]/i.test(text.trim());
+		const continues=tail && Math.abs(rect[0]-tail.left)<size
+			&& tail.bottom-rect[3]>=-1 && tail.bottom-rect[3]<size*0.8 && Math.abs(size-tail.size)<size*0.1;
+		const separated=row.some((item,i)=>i>0 && !(i===1 && /^(?:Figure|Fig\.?|Table)\s*\d+[.:]$/i.test(row[0]!.text.trim())) && item.rect[0]-row[i-1]!.rect[2]>=size*0.8);
+		if((starts || continues) && !separated) {captionRows.add(row);tail={left:rect[0],bottom:rect[1],size};}
+		else tail=undefined;
+	}
 	const lines: SpanLine[] = [];
 	for (const row of rows) {
 		let rowTop = -Infinity;
@@ -387,10 +415,18 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 				// strictly before the gutter centre let that single line bridge the
 				// two columns into one scrambled line (三栏页连字符悬垂焊行).
 				const slack = Math.min(6, size * 0.6);
-				const crossesGutter = rowGutters.some(g => previous.rect[2] <= g.x + slack && item.rect[0] >= g.x)
+				const crossesGutter = ((!captionRows.has(row) || gap >= size * 0.8) && rowGutters.some(g => previous.rect[2] <= g.x + slack && item.rect[0] >= g.x))
 					|| (gap >= size * 1.05
 						&& weakGutterXs.some(x => previous.rect[2] <= x + slack && item.rect[0] >= x));
-				if (crossesGutter || gap > columnGapThreshold(size)) {
+				const repeatedLocalGap = gap >= size * 1.05
+					&& Math.abs(fontSizeOf(item) - size) <= size * 0.15
+					&& previous.rect[2] - row[0]!.rect[0] >= size * 8
+					&& row[row.length - 1]!.rect[2] - item.rect[0] >= size * 8
+					&& localGaps.filter(g =>
+					Math.abs(g.y - rowMid) <= size * 4
+					&& Math.abs(g.left - previous.rect[2]) <= 2
+					&& Math.abs(g.right - item.rect[0]) <= 2).length >= 3;
+				if (crossesGutter || repeatedLocalGap || gap > columnGapThreshold(size)) {
 					flush();
 				}
 			}
@@ -446,7 +482,7 @@ export function lineText(line: SpanLine): string {
  * refuses to end a paragraph after a line that ran to its column's right
  * margin — that line wrapped, so the sentence continues on the next one.
  */
-export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeight = 0, obstacles: Rect[] = [], gridRows: GridRowBarriers | null = null): SpanLine[][] {
+export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeight = 0, obstacles: Rect[] = [], gridRows: GridRowBarriers | GridRowBarriers[] | null = null): SpanLine[][] {
 	if (!lines.length) {
 		return [];
 	}
@@ -486,6 +522,11 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 		if (!next) {
 			break;
 		}
+		if (semanticBoundary(lineText(line), lineText(next))) { flush(); continue; }
+		// Isolate page furniture before a full-width body line can absorb it.
+		const footer = (l: SpanLine): boolean => pageHeight > 0 && l.rect[3] < pageHeight * 0.1
+			&& (/^\d{1,4}$/.test(lineText(l).trim()) || /^(?:[\w.-]+\.(?:org|com|edu)\b|Radiology:\s*Volume\b)/i.test(lineText(l).trim()));
+		if (footer(line) !== footer(next)) { flush(); continue; }
 		// 边框硬屏障: a figure between two lines separates layout regions.
 		if (obstacleBetween(line.rect, next.rect, obstacles)) {
 			flush();
@@ -665,7 +706,8 @@ export function gridRowBarriers(grid: BorderGrid, pageHeight: number): GridRowBa
 }
 
 /** 两行(PDF y-up 矩形 [x1, 底, x2, 顶])之间是否隔着一条网格行线,且两行都在网格横向范围内。 */
-function gridRowBetween(a: Rect, b: Rect, rows: GridRowBarriers): boolean {
+function gridRowBetween(a: Rect, b: Rect, rows: GridRowBarriers | GridRowBarriers[]): boolean {
+	if (Array.isArray(rows)) return rows.some(r => gridRowBetween(a, b, r));
 	// 竖向间隙 = [下面那行的顶边, 上面那行的底边]。
 	const lo = Math.min(a[3], b[3]);
 	const hi = Math.max(a[1], b[1]);
@@ -733,6 +775,7 @@ export interface SpanBuildOptions {
 	 * 横跨六列退回段落路径后溢出,那一格只剩下半截。行坐标是 top-down,这里换算成 PDF y。
 	 */
 	grid?: BorderGrid | null;
+	grids?: BorderGrid[];
 }
 
 export interface SpanBuildResult {
@@ -780,11 +823,30 @@ export function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em
 
 export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOptions): SpanBuildResult {
 	const pageWidth = options.pageWidth && options.pageWidth > 0 ? options.pageWidth : 612;
+	const glossary = extractAbbreviationTables(items, options.pageIndex, pageWidth, options.pageHeight);
+	if (glossary.cells.length) {
+		const rest = buildBlocksFromSpans(glossary.rest, options);
+		return { ...rest, blocks: [...rest.blocks, ...glossary.cells] };
+	}
 	const obstacles = options.imageRectsPdf ?? [];
+	const captionRegions = obstacles.length ? imageCaptionRegions(groupIntoLines(items,pageWidth,options.pageHeight).map(l=>({text:lineText(l),rect:l.rect,fontSize:l.fontSize})),obstacles) : [];
 	const filteredItems = obstacles.length
-		? items.filter(i => !insideObstacle(i.rect, obstacles))
+		? items.filter(i => !insideObstacle(i.rect, obstacles) || withinCaption(i.rect,captionRegions))
 		: items;
-	const lines = groupIntoLines(filteredItems, pageWidth, options.pageHeight);
+	// Grid columns separate source runs BEFORE line grouping can weld neighbouring cells.
+	const gridList=options.grids ?? (options.grid ? [options.grid] : []);
+	const buckets=new Map<string,SpanItem[]>();
+	for(const item of filteredItems) {
+		let key='prose';
+		for(let gi=0;gi<gridList.length;gi++) {
+			const grid=gridList[gi]!;
+			const row=rowOfTop(grid,options.pageHeight-(item.rect[1]+item.rect[3])/2);
+			const col=columnOfX(grid,(item.rect[0]+item.rect[2])/2);
+			if(row>=0 && col>=0) {key=`${gi}:${row}:${col}`;break;}
+		}
+		const list=buckets.get(key) ?? [];list.push(item);buckets.set(key,list);
+	}
+	const lines=[...buckets.values()].flatMap(items=>groupIntoLines(items,pageWidth,options.pageHeight));
 
 	// 页面正文字号 = 行字号的众数,不是中位数 (1.2.5)。封面页的前置件
 	// (7pt 作者单位 17 行 + 8.5pt 摘要 18 行) 在行数上压过 10pt 正文 (28 行),
@@ -802,8 +864,9 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// 一致,不影响任何非表格版面。
 	const tableLineIdx = detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10), obstacles);
 	const proseLines = tableLineIdx.size ? lines.filter((_, i) => !tableLineIdx.has(i)) : lines;
-	const gridRows = options.grid ? gridRowBarriers(options.grid, options.pageHeight) : null;
-	const paragraphs = mergeGridCellStacks(groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, obstacles, gridRows), gridRows);
+	const gridRows = (options.grids ?? (options.grid ? [options.grid] : [])).map(g => gridRowBarriers(g, options.pageHeight));
+	const paragraphs = gridRows.reduce((groups, rows) => mergeGridCellStacks(groups, rows),
+		groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, obstacles, gridRows));
 
 	// Materialise, then repair anything still split mid-sentence.
 	const bands = detectColumns(lines.map(l => l.rect), pageWidth, options.pageHeight);
@@ -837,12 +900,21 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			gapAfter: undefined as number | undefined,
 			isTableLine: false
 		};
-	}).filter(p => p.text.length >= 2);
+	}).filter(p => p.text.length >= 2 || (p.text.length === 1 && gridList.some(g=>columnOfX(g,(p.rect[0]+p.rect[2])/2)>=0 && rowOfTop(g,options.pageHeight-(p.rect[1]+p.rect[3])/2)>=0)));
 	for (let i = 0; i < draft.length - 1; i++) {
 		draft[i]!.gapAfter = draft[i]!.rect[1] - draft[i + 1]!.rect[3];
 	}
 
-	const merged = planMerges(draft).map((indexes) => {
+	const merged = planMerges(draft).flatMap(indexes => {
+  const groups: number[][] = [];
+  for (const index of indexes) {
+   const last = groups[groups.length - 1];
+   const isPageNumber=(i:number):boolean=>draft[i]!.rect[3]<options.pageHeight*0.1 && /^\d{1,4}$/.test(draft[i]!.text.trim());
+   if (!last || isPageNumber(last[last.length-1]!) || isPageNumber(index) || semanticBoundary(draft[last[last.length - 1]!]!.text, draft[index]!.text)) groups.push([index]);
+   else last.push(index);
+  }
+  return groups;
+ }).map((indexes) => {
 		const members = indexes.map(i => draft[i]!);
 		const head = members[0]!;
 		let rect = head.rect;
@@ -1096,9 +1168,10 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 				? { translationMode: 'preserve' as const, preserveReason: 'reference' }
 				: keepReason
 					? { translationMode: 'preserve' as const, preserveReason: keepReason }
-					: {})
+					: (isIdentifierLabel(p.text) ? { translationMode: 'translate' as const } : {}))
 		});
 		order++;
 	}
+	markImageCaptions(blocks, captionRegions);
 	return { blocks, referencesStarted };
 }

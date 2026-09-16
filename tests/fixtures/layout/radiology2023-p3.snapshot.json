@@ -312,7 +312,7 @@
 		"readingIndex": 35,
 		"tableRow": 2,
 		"tableCol": 2,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "144 × 0.4 mm (SR); 120 × 0.2 mm (UHR)"
 	},
 	{
@@ -321,7 +321,7 @@
 		"readingIndex": 36,
 		"tableRow": 2,
 		"tableCol": 3,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "4 (SR); 2 (UHR)"
 	},
 	{
@@ -411,7 +411,7 @@
 		"readingIndex": 46,
 		"tableRow": 3,
 		"tableCol": 6,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "No"
 	},
 	{
@@ -474,7 +474,7 @@
 		"readingIndex": 53,
 		"tableRow": 4,
 		"tableCol": 6,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "No"
 	},
 	{
@@ -501,7 +501,7 @@
 		"readingIndex": 56,
 		"tableRow": 5,
 		"tableCol": 2,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "16 × 0.62 mm (SR); 48 × 0.21 mm (UHR)"
 	},
 	{
@@ -537,7 +537,7 @@
 		"readingIndex": 60,
 		"tableRow": 5,
 		"tableCol": 6,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "No"
 	},
 	{
@@ -663,7 +663,7 @@
 		"readingIndex": 74,
 		"tableRow": 7,
 		"tableCol": 6,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "No"
 	},
 	{

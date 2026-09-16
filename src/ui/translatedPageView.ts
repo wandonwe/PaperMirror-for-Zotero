@@ -1,3 +1,4 @@
+import { tableCellBounds } from '../ir/tableModel';
 /**
  * 整页对照 — rebuild the current page with the body text translated, keeping
  * the original's page size, column grid, figures, rules, header and footer, so
@@ -251,6 +252,11 @@ export function rectToPixels(rect: Rect, render: adapter.PageRender, pxPerViewpo
 
 /** Union of a block's line rects, in page pixels. */
 export function pixelBox(block: SourceBlock, render: adapter.PageRender, pxPerViewport: number): PixelBox {
+	// Raw PDF cell bounds survive zoom and rotation; ink rectangles remain for masks.
+	const cellBounds = tableCellBounds(block);
+	if (cellBounds) {
+		return rectToPixels(cellBounds, render, pxPerViewport);
+	}
 	let left = Infinity;
 	let top = Infinity;
 	let right = -Infinity;

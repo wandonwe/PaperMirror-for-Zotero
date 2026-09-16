@@ -99,7 +99,7 @@
 		"readingIndex": 11,
 		"tableRow": 6,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Diameter stenosis (%)"
 	},
 	{
@@ -135,7 +135,7 @@
 		"readingIndex": 15,
 		"tableRow": 8,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Plaque burden (%)"
 	},
 	{
@@ -189,7 +189,7 @@
 		"readingIndex": 21,
 		"tableRow": 11,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Noncalcified plaque volume (mm3) 41.8 (2"
 	},
 	{

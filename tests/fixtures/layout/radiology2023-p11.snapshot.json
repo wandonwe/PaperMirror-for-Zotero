@@ -318,7 +318,7 @@
 		"readingIndex": 38,
 		"tableRow": 2,
 		"tableCol": 2,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "No"
 	},
 	{
@@ -363,7 +363,7 @@
 		"readingIndex": 43,
 		"tableRow": 4,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "No"
 	},
 	{
@@ -417,7 +417,7 @@
 		"readingIndex": 49,
 		"tableRow": 6,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "No"
 	},
 	{
@@ -444,7 +444,7 @@
 		"readingIndex": 52,
 		"tableRow": 7,
 		"tableCol": 1,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "No"
 	},
 	{

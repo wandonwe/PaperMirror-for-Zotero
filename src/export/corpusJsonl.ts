@@ -30,7 +30,7 @@ import { mayAttachTranslations, type StructureCheckResult, type StructureMatch }
 export { ExportStageError, type ExportStage, type JsonlSink, type PageScopeEntry } from './jsonlWriter';
 
 /** 译文的来路 —— 内存里还在,还是从页缓存复原的。 */
-export type TranslationSource = 'live' | 'restored-from-cache';
+export type TranslationSource = 'live' | 'restored-from-cache' | 'archived';
 
 /** 缺译文的原因枚举。 */
 export type TranslationMissing =
@@ -52,7 +52,7 @@ export interface CorpusPageRecord {
 	 *   `re-extracted` —— 页已被淘汰,只能重新解析。这份是重建的近似,译文能不能贴
      *             取决于 `check`。
 	 */
-	blocksSource: 'live' | 're-extracted';
+	blocksSource: 'live' | 're-extracted' | 'archived';
 	/**
 	 * 一块都没有的原因。**空数组不许标成 `re-extracted`** —— 那等于说"重解析过了,
 	 * 这页就是没内容",而真相往往是"这页没渲染过,文本层根本不在,重解析拿不到"。
@@ -67,6 +67,9 @@ export interface CorpusPageRecord {
 	translationsMissing?: TranslationMissing;
 	/** 排版探针: 只有调试日志开着才采样。 */
 	probe?: unknown;
+ /** Placement from the same immutable page snapshot. */
+ placement?: unknown;
+ diagnostics?: Record<string, unknown>;
 	/**
 	 * spans 拿不到时的原因。**永远只能比 `re-extracted` 更差,不能更好** ——
 	 * 非当前页没渲染过就没有文本层,这时如实说拿不到,不拿重建的结构冒充 spans。
@@ -96,7 +99,7 @@ export interface CorpusExportResult {
 	/** 有译文但因结构不匹配被扣下的页数 —— 必须能数出来。 */
 	translationsWithheld: number;
 	/** 结构块的来路分布 —— 一眼看出这份语料有多少是原件、多少是重建、多少压根没有。 */
-	blocksBySource: { live: number; 're-extracted': number; missing: number };
+	blocksBySource: { live: number; 're-extracted': number; archived: number; missing: number };
 }
 
 export async function writeCorpusJsonl(sink: JsonlSink, source: CorpusExportSource): Promise<CorpusExportResult> {
@@ -115,7 +118,7 @@ export async function writeCorpusJsonl(sink: JsonlSink, source: CorpusExportSour
 		snapshotPolicy: 'page-at-a-time',
 		// spans 不留存,导出时重解析 —— 写进文件,读的人才知道这份 spans 的性质。
 		spansPolicy: 're-extracted-at-export',
-		note: 'structureMatch=matched 只说明用同样的流水线重建出了同样的结构,不等于这就是翻译当时的 spans;as-translated 才是内存里那份原结构。'
+		note: 'structureMatch=matched 只说明用同样的流水线重建出了同样的结构,不等于这就是翻译当时的 spans;as-translated 表示当次翻译使用的结构（内存或会话存档）。'
 			+ ' spans 与重解析都依赖 PDF.js 的文本层,而文本层只对当前渲染着的页存在 —— 已翻过去的页会标 missing:not-rendered。',
 		scope: {
 			pagesTotal: scope.length,
@@ -134,7 +137,7 @@ export async function writeCorpusJsonl(sink: JsonlSink, source: CorpusExportSour
 	let pageReadFailures = 0;
 	let translationsAttached = 0;
 	let translationsWithheld = 0;
-	const blocksBySource = { live: 0, 're-extracted': 0, missing: 0 };
+	const blocksBySource = { live: 0, 're-extracted': 0, archived: 0, missing: 0 };
 
 	for (const entry of scope) {
 		const read = await readPinned(entry.pageIndex, source);
@@ -190,7 +193,7 @@ export async function writeCorpusJsonl(sink: JsonlSink, source: CorpusExportSour
 					: (hasTranslations
 						? 'missing:structure-mismatch'
 						: (record.translationsMissing ?? 'missing:cache-miss')),
-				probe: record.probe === undefined ? 'missing:not-sampled' : 'live'
+				probe: record.probe === undefined ? 'missing:not-sampled' : record.blocksSource === 'archived' ? 'archived' : 'live'
 			},
 			structureMatch: record.check.structureMatch,
 			...(record.check.mismatchKinds ? { mismatchKinds: record.check.mismatchKinds } : {}),
@@ -201,7 +204,8 @@ export async function writeCorpusJsonl(sink: JsonlSink, source: CorpusExportSour
 			spans: record.spans,
 			blocks: record.blocks,
 			...(attach ? { translations: record.translations } : {}),
-			...(record.probe === undefined ? {} : { probe: record.probe })
+			...(record.probe === undefined ? {} : { probe: record.probe }),
+   ...(record.placement === undefined ? {} : { placement: record.placement })
 		});
 		pagesWritten++;
 		source.onProgress?.(pagesWritten, scope.length);

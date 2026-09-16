@@ -1,3 +1,4 @@
+import { imageCaptionRegions, withinCaption, markImageCaptions } from './imageCaption';
 /**
  * Pure logic that turns the char stream from Zotero's PDF.js fork
  * (pdfDocument.getPageData -> chars with break flags) into structured
@@ -8,7 +9,7 @@ import type { BlockType, BoundingBox, PdfChar, SourceBlock } from '../types/mode
 import { insideObstacle, obstacleBetween } from './figureBarriers';
 import { detectGlyphFormulaRuns } from './glyphFormula';
 import { detectStyleRuns } from './styleRuns';
-import { classifyContent, isPublisherBoilerplateLine } from './metaFilter';
+import { isIdentifierLabel, classifyContent, isPublisherBoilerplateLine } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -479,11 +480,12 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 	const { pageIndex, pageHeight, pageWidth } = options;
 	const obstacles = options.imageRectsPdf ?? [];
 	let lines = buildLines(chars);
+	const captionRegions=imageCaptionRegions(lines.map(l=>({text:textForRange(chars,l.start,l.end),rect:l.rect as Rect,fontSize:l.fontSize})),obstacles);
 	// 边框硬屏障 rule 1: lines INSIDE a figure are diagram labels ("X-rays",
 	// "Low keV") — they stay on the original page and never enter the
 	// translation flow, where they used to fuse with captions and body text.
 	if (obstacles.length) {
-		lines = lines.filter(l => !insideObstacle(l.rect as Rect, obstacles));
+		lines = lines.filter(l => !insideObstacle(l.rect as Rect, obstacles) || withinCaption(l.rect as Rect,captionRegions));
 	}
 	// Publisher boilerplate lines ("This copy is for personal use only…",
 	// reprint/download notices) are dropped BY CONTENT before column detection:
@@ -556,12 +558,13 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 				? { translationMode: 'preserve' as const, preserveReason: 'reference' }
 				: content.decision === 'preserve'
 					? { translationMode: 'preserve' as const, preserveReason: content.reason }
-					: {}),
+					: (isIdentifierLabel(text) ? { translationMode: 'translate' as const } : {})),
 			...(formulaRuns.length ? { formulaRuns } : {}),
 			...(styleRuns.length ? { styleRuns } : {})
 		});
 		order++;
 	}
+	markImageCaptions(blocks,captionRegions);
 	return { blocks, referencesStarted, totalParagraphs: paragraphs.length };
 }
 

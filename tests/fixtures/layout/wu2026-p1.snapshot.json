@@ -66,7 +66,7 @@
 		"readingIndex": 9,
 		"tableRow": 2,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Xiaofei Wu wxf2000811@163.com"
 	},
 	{
@@ -84,49 +84,31 @@
 		"readingIndex": 11,
 		"tableRow": 3,
 		"tableCol": 0,
-		"mode": "preserve",
-		"text": "1"
+		"mode": "translate",
+		"text": "Huiqing Gao gaohuiqin2011@163.com"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 12,
 		"tableRow": 3,
-		"tableCol": 0,
+		"tableCol": 1,
 		"mode": "preserve",
-		"text": "Huiqing Gao gaohuiqin2011@163.com"
+		"text": "2"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 13,
-		"tableRow": 3,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "2"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 14,
-		"tableRow": 5,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "2"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 15,
 		"tableRow": 4,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Yuanyuan Gao gaoyy042@163.com"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 16,
+		"readingIndex": 14,
 		"tableRow": 4,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -135,25 +117,16 @@
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 17,
-		"tableRow": 7,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "3"
-	},
-	{
-		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 18,
+		"readingIndex": 15,
 		"tableRow": 5,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Huimin Zha ZHM20250325@163.com"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 19,
+		"readingIndex": 16,
 		"tableRow": 5,
 		"tableCol": 1,
 		"mode": "preserve",
@@ -161,23 +134,14 @@
 	},
 	{
 		"type": "paragraph",
-		"column": 0,
-		"readingIndex": 20,
-		"tableRow": 9,
-		"tableCol": 0,
-		"mode": "preserve",
-		"text": "4"
-	},
-	{
-		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 21,
+		"readingIndex": 17,
 		"text": "for ≤5 mm (p<0.001) and 69 mm (p<0.001)"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 22,
+		"readingIndex": 18,
 		"tableRow": 0,
 		"tableCol": 2,
 		"mode": "translate",
@@ -186,16 +150,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 23,
-		"tableRow": 0,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "xin_13.40@126.com"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 24,
+		"readingIndex": 19,
 		"tableRow": 1,
 		"tableCol": 2,
 		"mode": "translate",
@@ -204,25 +159,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 25,
-		"tableRow": 1,
-		"tableCol": 1,
-		"mode": "translate",
-		"text": "Shudong Hu"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 26,
-		"tableRow": 2,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "hsd2001054@163.com"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 27,
+		"readingIndex": 20,
 		"tableRow": 2,
 		"tableCol": 2,
 		"mode": "translate",
@@ -231,16 +168,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 28,
-		"tableRow": 4,
-		"tableCol": 1,
-		"mode": "translate",
-		"text": "University, wuxi, China"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 29,
+		"readingIndex": 21,
 		"tableRow": 3,
 		"tableCol": 2,
 		"mode": "translate",
@@ -249,16 +177,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 30,
-		"tableRow": 6,
-		"tableCol": 1,
-		"mode": "translate",
-		"text": "Wujiang District, suzhou, China"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 31,
+		"readingIndex": 22,
 		"tableRow": 4,
 		"tableCol": 2,
 		"mode": "translate",
@@ -267,16 +186,7 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 32,
-		"tableRow": 8,
-		"tableCol": 1,
-		"mode": "translate",
-		"text": "University, wuxi, China"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 33,
+		"readingIndex": 23,
 		"tableRow": 5,
 		"tableCol": 2,
 		"mode": "translate",
@@ -285,13 +195,13 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 34,
+		"readingIndex": 24,
 		"text": "Jiangnan University, wuxi, China"
 	},
 	{
 		"type": "title",
 		"column": -1,
-		"readingIndex": 35,
+		"readingIndex": 25,
 		"text": "1 3"
 	}
 ]

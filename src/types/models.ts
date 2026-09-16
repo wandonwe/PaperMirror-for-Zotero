@@ -86,6 +86,22 @@ export interface SourceBlock {
 	/** Table-internal row index for structured table cells (0 = header row).
 	 * 与 tableCol 配对的显式字段;此前行号只活在 id 的 `r<row>` 里。 */
 	tableRow?: number;
+	tableRowSpan?: number;
+	tableColSpan?: number;
+	/** Authoritative cell bounds in raw PDF coordinates, separate from source ink. */
+	tableRectPdf?: [number, number, number, number];
+	tableGeometry?: 'border' | 'inferred';
+	/** Shared identity/provenance for every table detector, independent of cell IDs. */
+	tableId?: string;
+	tableSource?: 'border' | 'text-alignment' | 'abbreviation';
+ /** Evidence strength, not a calibrated probability of correctness. */
+ tableConfidence?: 'strong' | 'tentative';
+	/** Structural conversion was rejected; original content was retained. */
+	tableStructureIssue?: string;
+	/** Extracted caption inside a composite image; renderer must verify a text-only background. */
+	imageTextRegionPdf?: [number, number, number, number];
+	/** Safe whitespace assigned from neighbouring inferred cells, not a drawn border. */
+	tableContentRectPdf?: [number, number, number, number];
 	/** Canonical reading-order index (0-based) stamped by
 	 * orderBlocksForReading — the explicit IR field for page sequence.
 	 * `order` mirrors it after ordering, but `order` also carries stream
@@ -122,6 +138,8 @@ export interface TranslatedBlock {
 export type LanguageCode = 'en' | 'zh-CN' | 'zh-TW' | 'auto' | string;
 
 export interface TranslationRequest {
+	/** Contains bibliography entries; translate their titles while keeping bibliographic identifiers. */
+	referenceContent?: boolean;
 	/** Page this request belongs to — the provider pool shards on it. */
 	pageIndex?: number;
 	sourceLanguage: LanguageCode;

@@ -1,3 +1,5 @@
+import { RenderMeasurementCache } from './measurementCache';
+import { pageContentKey } from '../export/pageArchive';
 /**
  * 严格原位替换 — the 整页对照 renderer.
  *
@@ -31,7 +33,7 @@ import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
 import { detectTableRegions } from '../reader/tableGuard';
 import { buildTableModel, buildTextTableModel, cellPreserveEvidence, type CellMember } from '../reader/tableStructure';
-import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, planOverlapClips, type AuditBox, type AuditObstacles } from './layoutSafety';
+import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, planOverlapClips, imageSafeBox, imageSafeRegions, sourceFlowRegions, flowText, type AuditBox, type AuditObstacles } from './layoutSafety';
 import { parseStyledSegments } from '../reader/styleRuns';
 import {
 	inkFor,
@@ -109,7 +111,8 @@ const SHRINK_STEPS_ISOLATED = [0.94, 0.88, 0.82];
 /** 墙钟 (2.7.0): 浏览器窗口有 performance,单测环境退回 Date.now。 */
 const now = (): number =>
 	(typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
-const SHRINK_FLOOR_PX = 8.5;
+// PDF-point floor: screen pixels must shrink together with the page.
+const SHRINK_FLOOR_PT = 8.5;
 
 /**
  * 末位缩字是否允许作用于该块类型 (2.2.7, 计划 第三批 item7(b) · LO-3) — pure。
@@ -506,6 +509,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const BITMAP_SCALE = bitmapScaleFor(pageWidthPx, pageHeightPx);
 
 	const page = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
+ page.setAttribute('data-pm-content-key', pageContentKey(input.blocks, input.translations));
 	page.className = 'pm-repage';
 	page.setAttribute('data-pm-strict', 'true');
 	page.setAttribute('data-pm-page', String(input.pageIndex));
@@ -556,7 +560,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const geometric = selectGeometricBlocks(input.blocks);
 	// 表格几何模型的输入 —— 与改动前的 `geometric` 逐字相同(不含表题)。
 	// 表题不当区域种子、不当单元格成员: 它在表框外,进去只会污染区域范围。
-	const tabular = geometric.filter(b => b.type !== 'table');
+	const tabular = geometric.filter(b => b.type !== 'table' && !isTableCellBlock(b));
 	const translatable = geometric.filter(b => b.translationMode !== 'preserve');
 	// 页面基准字号仍只看正文侧样本(不含表题)—— bodyPt 会喂给 detectTableRegions
 	// 的 em,表题字号掺进中位数就会改变表格判定,而这一版不该动表格。
@@ -579,9 +583,18 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const fontFactor = parseFactor(getPref('fontSizeFactor', '1'));
 	const lineFactor = parseFactor(getPref('lineHeightFactor', '1'), 0.9, 1.4);
 
-	const imageBoxes: PixelBox[] = (input.imageRectsPdf ?? [])
+	let imageBoxes: PixelBox[] = (input.imageRectsPdf ?? [])
 		.map(r => rectToPixels(r, render, 1))
 		.filter(b => b.width > 8 && b.height > 8);
+	const imageTextBoxes = new Map<string, PixelBox>();
+	for (const block of geometric) {
+		if (!block.imageTextRegionPdf || block.type !== 'caption' || !ctx) continue;
+		const box=pixelBox(block,render,1);
+		const lines=((block.lineRectsPdf ?? []) as Rect[]).map(r=>rectToPixels(r,render,1));
+		if (!captionBackgroundIsClear(ctx, box, lines, BITMAP_SCALE)) continue;
+		imageTextBoxes.set(block.id,box);
+		imageBoxes=imageBoxes.flatMap(image=>imageSafeRegions(image,[box]));
+	}
 
 	const pxOf = new Map<string, PixelBox>();
 	// GEOMETRIC, not translatable (1.0.3 卡死修复): preserve table cells are in
@@ -757,25 +770,19 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			skipped.push({ id: block.id, reason: 'echo' });
 			continue;
 		}
+		// Extraction already assigned this cell. Never infer its structure again.
+		if (isTableCellBlock(block) && block.boundingBox) {
+			replaceable.push(block);
+			continue;
+		}
 		if (guard.excluded.has(block.id)) {
 			tableIntentional++;
 			skipped.push({ id: block.id, reason: 'table-structure' });
 			continue; // protected table content the cell model didn't claim
 		}
 		const box = pxOf.get(block.id)!;
-		// 表题按图注的门槛 (2.8.14): 它就是图注的一种,"Table 3." 这类短标题
-		// 的盒子天然窄,套 50px 的正文门槛会被当成噪声丢掉 —— 而它是整张表
-		// 唯一能替换的散文。
-		// 标题标签同样窄 (3.0.3, Goenka 2016 p1 实证): "Purpose:" / "Results:" 是 9pt、
-		// 33pt 宽的独立标题块,有译文、8 个字符,却因 50px 门槛被当噪声丢掉 —— 而宽
-		// 1.5pt 的 "Methods:" 在同一缩放下刚好过线被译出。短标题与表题、图注同类。
-		// 门槛按 PDF 点算,不按屏幕像素 (3.1.3, Goenka 2016 p8 实证): 面板窄一点、
-		// 页面缩小一点,7pt 的参考文献行就矮于 9px,44–46 字符的条目整条被当噪声丢掉 ——
-		// 同一页在宽面板里全部放回。"这一块值不值得放"是页面几何的性质,不能随缩放变。
-		// 28/50 px 是按 100% 缩放(1.333 px/pt)定的,折成 21/37.5pt;高度 9px → 6.75pt
-		// 会把 7pt 小字行(行盒常 7–8pt)卡在边上,取 6pt。
-		const minWidthPt = (block.type === 'caption' || block.type === 'table' || block.type === 'heading') ? 21 : 37.5;
-		if (box.width < minWidthPt * pxPerPoint || box.height < 6 * pxPerPoint || block.sourceText.trim().length < 6) {
+		// Size is a fit decision, not a content filter. Admit every nonempty box.
+		if (box.width <= 0 || box.height <= 0) {
 			tooSmall++;
 			skipped.push({ id: block.id, reason: 'too-small' });
 			continue;
@@ -868,10 +875,13 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			const lines: PixelBox[] = [];
 			for (const rect of block.lineRectsPdf as Rect[]) {
 				const box = rectToPixels(rect, render, 1);
-				lines.push({
-					left: box.left - pad, top: box.top - pad,
-					width: box.width + pad * 2, height: box.height + pad * 2
-				});
+				// A cell mask may erase source glyphs, never its border or neighbour.
+				const inset = block.tableRectPdf ? Math.min(pxPerPoint, whole.width / 4, whole.height / 4) : 0;
+				const left = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.max(box.left - pad, whole.left + inset) : box.left - pad;
+				const top = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.max(box.top - pad, whole.top + inset) : box.top - pad;
+				const right = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.min(box.left + box.width + pad, whole.left + whole.width - inset) : box.left + box.width + pad;
+				const bottom = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.min(box.top + box.height + pad, whole.top + whole.height - inset) : box.top + box.height + pad;
+				if (right > left && bottom > top) lines.push({ left, top, width: right - left, height: bottom - top });
 			}
 			lineBoxesFor.set(block.id, lines);
 		}
@@ -927,7 +937,9 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	 * textContent,绝不 innerHTML;解析失败整段回退纯文本。node.textContent
 	 * 读取值 = 去标记后的正文,budgetFor 等长度测量自然正确。
 	 */
+	const styledMarkup = new WeakMap<HTMLElement, string>();
 	const fillStyled = (node: HTMLElement, text: string): void => {
+		styledMarkup.set(node, text);
 		const segments = parseStyledSegments(text);
 		if (segments.length === 1 && segments[0]!.style === null) {
 			node.textContent = segments[0]!.text; // SAFE: text node
@@ -953,6 +965,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		/** 构建时的原始盒(几何安全复核的"新增侵入"基准;扩展只改 box)。 */
 		originalBox: PixelBox;
 		fontPx: number;
+		flowBoxes?: PixelBox[];
 		/** The block's own original line spacing, as a line-height ratio. */
 		minLineHeight: number;
 		/** Shown (mask painted + node visible) after passing measurement. */
@@ -981,12 +994,44 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	if (clippedBox.size) {
 		logger.debug(MODULE, `page ${input.pageIndex + 1}: clipped ${clippedBox.size} extraction-born box overlap(s)`);
 	}
+	// Compute source occupancy once per page, not once per neighbour per block.
+	const sourceOccupancy = new Map(geometric.map(b => {
+		const bands = !isTableCellBlock(b)
+			? sourceFlowRegions(((b.lineRectsPdf ?? []) as Rect[]).map(r => rectToPixels(r, render, 1)), (b.fontSize ?? bodyPt) * pxPerPoint)
+			: [];
+		return [b.id, bands.length > 1 ? bands : [clippedBox.get(b.id) ?? pxOf.get(b.id)!].filter(Boolean)] as const;
+	}));
 	const items: StrictItem[] = [];
 	const byId = new Map<string, StrictItem>();
 	for (const block of replaceable) {
-		const box = clippedBox.get(block.id) ?? pixelBox(block, render, 1);
+		const candidate = isTableCellBlock(block) ? pixelBox(block, render, 1)
+			: clippedBox.get(block.id) ?? pixelBox(block, render, 1);
+		const inset = block.tableRectPdf ? Math.min(pxPerPoint, candidate.width / 4, candidate.height / 4) : 0;
+		const region = { left: candidate.left + inset, top: candidate.top + inset,
+			width: candidate.width - inset * 2, height: candidate.height - inset * 2 };
+		const sourceBands = sourceFlowRegions(((block.lineRectsPdf ?? []) as Rect[]).map(r => rectToPixels(r, render, 1)), (block.fontSize ?? bodyPt) * pxPerPoint);
+		const ownerId = block.id.split('::p')[0];
+		// Reserve actual source bands instead of empty corners of a wrapped block.
+		// Final placed-box auditing still checks every rendered translation.
+		const obstacles = [...imageBoxes, ...geometric.filter(b => b.id !== ownerId).flatMap(b => sourceOccupancy.get(b.id) ?? [])];
+		// Unequal line lengths alone do not require narrow strips. A left-aligned,
+		// unobstructed block can use its complete rectangle without shrinking.
+		const rectangular = sourceBands.every(b => Math.abs(b.left - region.left) <= (block.fontSize ?? bodyPt) * pxPerPoint * 1.5)
+			&& !obstacles.some(b => intersectArea(region, b) > 0);
+		const safeRegions = (sourceBands.length > 1 && !rectangular ? sourceBands : [region])
+			.flatMap(band => imageSafeRegions(band, obstacles))
+			.filter(r => r.width >= 4 * pxPerPoint && r.height >= 4 * pxPerPoint);
+		const fullSourceBox = pixelBox(block, render, 1);
+		const flowBoxes = !isTableCellBlock(block) && safeRegions.length > 1 ? safeRegions : undefined;
+		const box = flowBoxes ? fullSourceBox : imageSafeBox(region, imageBoxes);
+		if (!box) {
+			skipped.push({ id: block.id, reason: 'image' });
+			imageExcluded++;
+			continue;
+		}
 		const node = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
 		node.className = 'pm-repage-block';
+		if (flowBoxes) { node.setAttribute('data-pm-flow', 'true'); node.style.pointerEvents = 'none'; }
 		node.setAttribute('data-pm-block', block.id);
 		node.setAttribute('data-pm-type', block.type);
 		// 表格单元格标记 (2.3.7): 整格块与逐 member 兜底块的 id 都是
@@ -1016,7 +1061,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		const rolePt = (block.type === 'paragraph' || block.type === 'list') && inBand && !isTableCellBlock(block)
 			? anchorPt
 			: ownPt;
-		const fontPx = Math.max(6, rolePt * pxPerPoint * fontFactor);
+		// Apply the readability floor in PDF points, then scale the whole page.
+		const fontPx = Math.max(6, rolePt * fontFactor) * pxPerPoint;
 		node.style.fontSize = `${fontPx.toFixed(2)}px`;
 		const bg = blockPaper.get(block.id);
 		if (bg) {
@@ -1047,7 +1093,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			naturalRatio = gaps[Math.floor(gaps.length / 2)]! / fontPx;
 		}
 		const minLineHeight = Math.max(LINE_HEIGHT_FLOOR, Math.min(1.42, naturalRatio || 1.2));
-		const item: StrictItem = { id: block.id, node, box, originalBox: { ...box }, fontPx, minLineHeight, committed: false, abandoned: false };
+		const item: StrictItem = { id: block.id, node, flowBoxes, box, originalBox: { ...box }, fontPx, minLineHeight, committed: false, abandoned: false };
 		items.push(item);
 		byId.set(block.id, item);
 	}
@@ -1062,23 +1108,60 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	 * 内容区的超出部分是空白(墨迹在 em 框内,em 框与行框重合),不是多出来的一行:
 	 * 真多一行至少多 1em,0.35em 的容差永远吸收不了它,所以不会把溢出的块放行。
 	 */
+	const measurementCache = new RenderMeasurementCache();
 	const heightSlack = (item: StrictItem): number => Math.max(1.5, item.fontPx * 0.35);
 
 	/** Ladder-fit a hidden node; true when it fits its fixed rectangle. */
 	const ladderFits = (item: StrictItem): boolean => {
 		const t0 = now();
 		try {
+			const markup = styledMarkup.get(item.node) ?? item.node.textContent ?? '';
+			const styledSegments = parseStyledSegments(markup);
+			const fullText = styledSegments.map(s => s.text).join('');
+			const fillSlice = (node: HTMLElement, start: number, length: number): void => {
+				node.replaceChildren();
+				let cursor = 0;
+				for (const seg of styledSegments) {
+					const a = Math.max(start, cursor), b = Math.min(start + length, cursor + seg.text.length);
+					if (b > a) {
+						const part = seg.text.slice(a - cursor, b - cursor);
+						if (!seg.style) node.appendChild(doc.createTextNode(part));
+						else { const el = doc.createElementNS(HTML_NS, seg.style); el.textContent = part; node.appendChild(el); }
+					}
+					cursor += seg.text.length;
+				}
+			};
 			for (const step of ladderFor(item.minLineHeight)) {
 				item.node.style.lineHeight = String(step.lineHeight);
 				item.node.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
-				if (item.node.scrollHeight <= item.box.height + heightSlack(item)
-					&& item.node.scrollWidth <= item.box.width + 1.5) {
+				if (item.flowBoxes) {
+					item.node.replaceChildren();
+					const nodes = item.flowBoxes.map(b => {
+						const child = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
+						child.className = 'pm-flow-piece';
+						child.style.pointerEvents = 'auto';
+						Object.assign(child.style, { position: 'absolute', left: `${b.left-item.box.left}px`, top: `${b.top-item.box.top}px`, width: `${b.width}px`, height: `${b.height}px`, overflow: 'hidden' });
+						item.node.appendChild(child); return child;
+					});
+					const parts = flowText(fullText, item.flowBoxes, (text, b, index, offset) => {
+						const child = nodes[index]!; fillSlice(child, offset, text.length);
+						return child.scrollHeight <= Math.round(b.height + heightSlack(item)) && child.scrollWidth <= b.width + 1.5;
+					});
+					if (parts) { let offset = 0; parts.forEach((text,i) => { fillSlice(nodes[i]!, offset, text.length); offset += text.length; }); item.lastOverflow = 'none'; return true; }
+					fillStyled(item.node, markup);
+					item.lastOverflow = 'height';
+					continue;
+				}
+    // CSSOM scroll sizes are integers; compare in the same rounded units.
+    const measured = measurementCache.measure(item.node, markup, () => ({height:item.node.scrollHeight,width:item.node.scrollWidth}));
+				if (measured.height <= Math.round(item.box.height + heightSlack(item))
+					&& measured.width <= item.box.width + 1.5) {
 					item.lastOverflow = 'none';
 					return true;
 				}
 			}
 			// 记下最后一档的溢出方向 (2.7.0): 放弃原因需要它。
-			item.lastOverflow = fitOverflow(item.node.scrollWidth, item.node.scrollHeight, item.box.width, item.box.height);
+			if (!item.flowBoxes) item.lastOverflow = fitOverflow(item.node.scrollWidth, item.node.scrollHeight, item.box.width, item.box.height);
 			return false;
 		}
 		finally {
@@ -1105,7 +1188,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		const grow = expansionAllowance(item);
 		const capW = item.box.width + grow.right;
 		const capH = item.box.height + grow.down;
-		const estimate = estimateCjkCapacity(capW, capH, item.fontPx);
+		const estimate = item.flowBoxes ? item.flowBoxes.reduce((sum,b) => sum + estimateCjkCapacity(b.width,b.height,item.fontPx),0) : estimateCjkCapacity(capW, capH, item.fontPx);
 		const textLen = (item.node.textContent ?? '').length;
 		const sh = item.node.scrollHeight;
 		// sh 在当前(较窄)盒宽下测得,对 capH 是保守高估 → 预算偏宽不偏窄,与
@@ -1169,13 +1252,16 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// 或水平向(下扩)重叠者的最近边,留 3px 边距;右扩以版心 90% 为界
 	// (BabelDOC 同),下扩以页高 95% 为界;各设温和上限防贪婪。
 	const expansionAllowance = (item: StrictItem): { right: number; down: number } =>
-		computeExpansionAllowance(item.box, [
+		(item.flowBoxes || imageTextBoxes.has(item.id)) ? { right: 0, down: 0 } : item.node.hasAttribute('data-pm-cell') ? { right: 0, down: 0 } : computeExpansionAllowance(item.box, [
 			...imageBoxes,
 			// P2-14: 参考文献/表格墨迹也是遮挡物 —— 扩展不得长进它们的原文。
 			...inkObstacles.map(o => o.box),
 			...geometric.filter(b => b.id !== item.id).map(b => pxOf.get(b.id)!).filter(Boolean)
-		], canvas.width / BITMAP_SCALE, canvas.height / BITMAP_SCALE, item.fontPx);
+		], canvas.width / BITMAP_SCALE, canvas.height / BITMAP_SCALE, item.fontPx, true);
 	const applyBox = (item: StrictItem, width: number, height: number): void => {
+		// Original horizontal extent is a hard layout constraint. Empty space
+		// next to a paragraph may be a column gutter, not expansion capacity.
+		width = Math.min(width, item.box.width);
 		item.box = { ...item.box, width, height };
 		item.node.style.width = `${width}px`;
 		item.node.style.height = `${height}px`;
@@ -1233,19 +1319,23 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		images: imageBoxes,
 		preserved: geometric
 			.filter(b => !byId.has(b.id))
+			.filter(b => !items.some(i => i.id.startsWith(`${b.id}::p`)))
 			.map(b => ({ id: b.id, box: pxOf.get(b.id)! }))
 			.filter(p => !!p.box)
-			.concat(inkObstacles)
+			.concat(inkObstacles, items.filter(i => i.abandoned).map(i => ({ id: i.id, box: i.box })))
 	});
-	const violatesGeometry = (item: StrictItem): boolean => boxNewlyViolates(
-		{ id: item.id, box: item.box, originalBox: item.originalBox },
+	const violatesGeometry = (item: StrictItem): boolean => (item.flowBoxes !== undefined
+		&& auditPlacedBoxes(item.flowBoxes.map(box => ({ id: item.id, box, originalBox: { ...box, width: 0, height: 0 } })),
+			{ images: [], preserved: [] }, canvas.width / BITMAP_SCALE, canvas.height / BITMAP_SCALE).length > 0)
+		|| (item.flowBoxes ?? [item.box]).some(box => boxNewlyViolates(
+		{ id: item.id, box, originalBox: item.flowBoxes ? { ...box, width: 0, height: 0 } : item.originalBox },
 		items
 			.filter(i => i.committed && !i.abandoned && i.id !== item.id)
-			.map(i => ({ id: i.id, box: i.box, originalBox: i.originalBox })),
+			.flatMap(i => (i.flowBoxes ?? [i.box]).map(box => ({ id: i.id, box, originalBox: i.flowBoxes ? { ...box, width: 0, height: 0 } : i.originalBox }))),
 		geometryObstacles(),
 		canvas.width / BITMAP_SCALE,
 		canvas.height / BITMAP_SCALE
-	);
+	));
 
 	// ---- 无损扩边优先 (2.2.2, 计划 第三批 item3): 在**压缩/缩字之前**,只靠邻近
 	// 安全空白(算法3,原字号、原文一字不动)把能救回的块救回 —— "图1→Figure 1"
@@ -1357,11 +1447,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 					isTableCell: item.node.hasAttribute('data-pm-cell'),
 					tinyLine
 				});
+    const floor = Math.min(SHRINK_FLOOR_PT * pxPerPoint, item.fontPx * 0.82);
 				for (const factor of steps) {
-					const px = Math.max(SHRINK_FLOOR_PX, item.fontPx * factor);
+					const px = Math.max(floor, item.fontPx * factor);
 					item.node.style.fontSize = `${px.toFixed(2)}px`;
 					fits = ladderFits(item);
-					if (fits || px <= SHRINK_FLOOR_PX) {
+					if (fits || px <= floor) {
 						break;
 					}
 				}
@@ -1523,11 +1614,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		const pageH = canvas.height / BITMAP_SCALE;
 		const preserved = geometric
 			.filter(b => !byId.has(b.id))
+			.filter(b => !items.some(i => i.id.startsWith(`${b.id}::p`)))
 			.map(b => ({ id: b.id, box: pxOf.get(b.id)! }))
 			.filter(p => !!p.box)
 			// P2-14: 审计与扩展共用同一份墨迹遮挡物 —— 压住参考文献/表格原文的
 			// 已提交块现在会被看见并回退。
-			.concat(inkObstacles);
+			.concat(inkObstacles, items.filter(i => i.abandoned).map(i => ({ id: i.id, box: i.box })));
 		let firstCount = 0;
 		let adjusted = 0;
 		let reverted = 0;
@@ -1540,7 +1632,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		for (let round = 0; round < 4; round++) {
 			const placed: AuditBox[] = items
 				.filter(i => i.committed && !i.abandoned)
-				.map(i => ({ id: i.id, box: i.box, originalBox: i.originalBox }));
+				.flatMap(i => (i.flowBoxes ?? [i.box]).map(box => ({ id: i.id, box, originalBox: i.flowBoxes ? { ...box, width: 0, height: 0 } : i.originalBox })));
 			const violations = auditPlacedBoxes(placed, { images: imageBoxes, preserved }, pageW, pageH);
 			if (!violations.length) {
 				break;
@@ -1559,7 +1651,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				// 英文。用当前盒重算该条违例,已低于容差则跳过。
 				const currentPlaced: AuditBox[] = items
 					.filter(i => i.committed && !i.abandoned)
-					.map(i => ({ id: i.id, box: i.box, originalBox: i.originalBox }));
+					.flatMap(i => (i.flowBoxes ?? [i.box]).map(box => ({ id: i.id, box, originalBox: i.flowBoxes ? { ...box, width: 0, height: 0 } : i.originalBox })));
 				if (!violationStillPresent(v, currentPlaced, { images: imageBoxes, preserved }, pageW, pageH)) {
 					continue;
 				}
@@ -1572,11 +1664,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				applyBox(item, item.originalBox.width, item.originalBox.height);
 				let fits = ladderFits(item);
 				if (!fits) {
+     const floor = Math.min(SHRINK_FLOOR_PT * pxPerPoint, item.fontPx * 0.82);
 					for (const factor of SHRINK_STEPS) {
-						const px = Math.max(SHRINK_FLOOR_PX, item.fontPx * factor);
+						const px = Math.max(floor, item.fontPx * factor);
 						item.node.style.fontSize = `${px.toFixed(2)}px`;
 						fits = ladderFits(item);
-						if (fits || px <= SHRINK_FLOOR_PX) {
+						if (fits || px <= floor) {
 							break;
 						}
 					}
@@ -1641,6 +1734,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				left: Math.round(item.box.left), top: Math.round(item.box.top),
 				width: Math.round(item.box.width), height: Math.round(item.box.height),
 				baseInk, maskOpaque,
+				...(item.flowBoxes ? { flowRegions: item.flowBoxes.map(b => ({ ...b })) } : {}),
 				...(item.node.hasAttribute('data-pm-annex') ? { annex: true } : {}),
 				...(item.abandoned ? { abandonReason: fitFailureLabel(item.abandonReason) } : {})
 			});
@@ -1740,6 +1834,8 @@ export interface StrictProbeRow {
 	height: number;
 	/** Base page bitmap still has ink under the block (original would show if unmasked). */
 	baseInk: boolean;
+	/** Actual occupied regions; the outer box can include image holes. */
+	flowRegions?: PixelBox[];
 	/** The mask is opaque over the block (original covered). */
 	maskOpaque: boolean;
 	/** LO-7 (2.4.0): 该块是「整体另置」的大标题译文(原文未遮,box 是另置位置)。 */
@@ -2066,7 +2162,8 @@ export function computeExpansionAllowance(
 	blockers: PixelBox[],
 	pageW: number,
 	pageH: number,
-	fontPx: number
+	fontPx: number,
+	strictSourceWidth = false
 ): { right: number; down: number } {
 	let right = Math.max(0, pageW * 0.9 - (box.left + box.width));
 	let down = Math.max(0, pageH * 0.95 - (box.top + box.height));
@@ -2086,7 +2183,7 @@ export function computeExpansionAllowance(
 	}
 	right = Math.max(0, Math.min(right, box.width * 0.6));
 	down = Math.max(0, Math.min(down, Math.max(fontPx * 2.8, box.height * 0.5)));
-	return { right, down };
+	return { right: strictSourceWidth ? 0 : right, down };
 }
 
 export function shrinkStrictBlocks(element: HTMLElement, ids: string[]): string[] {
@@ -2102,4 +2199,24 @@ export function shrinkStrictBlocks(element: HTMLElement, ids: string[]): string[
 export function expandStrictBlocks(element: HTMLElement, ids: string[]): string[] {
 	const expand = (element as HTMLElement & { pmExpandFit?: (ids: string[]) => string[] }).pmExpandFit;
 	return expand ? expand(ids) : ids;
+}
+
+/** Certify a caption's paper area; extraction metadata alone cannot authorize painting over a figure. */
+export function captionBackgroundIsClear(ctx: CanvasRenderingContext2D, box: PixelBox, lines: PixelBox[], scale: number): boolean {
+ if (lines.length<2 || box.width<20 || box.height<10) return false;
+ const left=Math.floor(box.left*scale),top=Math.floor(box.top*scale);
+ const width=Math.ceil(box.width*scale),height=Math.ceil(box.height*scale);
+ if(left<0 || top<0 || left+width>ctx.canvas.width || top+height>ctx.canvas.height) return false;
+ try {
+  const data=ctx.getImageData(left,top,width,height).data;
+  const step=Math.max(1,Math.floor(Math.sqrt(width*height/5000)));
+  let clean=0,total=0;
+  for(let y=0;y<height;y+=step) for(let x=0;x<width;x+=step) {
+   const px=(left+x)/scale,py=(top+y)/scale;
+   if(lines.some(l=>px>=l.left-0.5 && px<=l.left+l.width+0.5 && py>=l.top-0.5 && py<=l.top+l.height+0.5)) continue;
+   const offset=(y*width+x)*4;const r=data[offset]!,g=data[offset+1]!,b=data[offset+2]!;
+   total++;if(data[offset+3]!>250 && Math.min(r,g,b)>=235 && Math.max(r,g,b)-Math.min(r,g,b)<15) clean++;
+  }
+  return total>=20 && clean/total>=0.98;
+ } catch { return false; }
 }

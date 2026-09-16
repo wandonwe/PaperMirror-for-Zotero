@@ -85,19 +85,26 @@
 		"type": "paragraph",
 		"column": 2,
 		"readingIndex": 13,
-		"text": "Author contributions: Guarantor of integ"
+		"mode": "preserve",
+		"text": "Author contributions:"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
 		"readingIndex": 14,
+		"text": "Guarantor of integrity of entire study, "
+	},
+	{
+		"type": "paragraph",
+		"column": 2,
+		"readingIndex": 15,
 		"mode": "preserve",
 		"text": "Authors stated no financial relationship"
 	},
 	{
 		"type": "paragraph",
 		"column": 2,
-		"readingIndex": 15,
+		"readingIndex": 16,
 		"mode": "preserve",
 		"text": "713"
 	}

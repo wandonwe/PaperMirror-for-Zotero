@@ -9,10 +9,10 @@
  * (回退扩展→缩字重试→放弃)由 strictPageReplacement 的 pmGeometryAudit
  * 钩子完成。
  *
- * 关键设计:**只报"新增"的违例**。原始 PDF 几何本身就存在紧贴与轻微重叠
+ * 关键设计:文字之间报告新增违例;图片报告绝对侵入。原始 PDF 几何本身就存在紧贴与轻微重叠
  * (行矩形跨块交叠是常态),按绝对重叠报会淹没在误报里——所以每条规则都以
  * "现在的侵入面积 − 原始盒的侵入面积 > 容差"为准:排版没有让页面变得比
- * 原文更糟,就不算违例。
+ * 原文更糟,就不算文字间违例。图片不适用此豁免,原文外接矩形可能包含绕图空洞。
  *
  * Pure module — no DOM, unit-tested.
  */
@@ -81,10 +81,10 @@ export function auditPlacedBoxes(
 			}
 		}
 	}
-	// 2. 压住真实图形(硬规则的排版侧镜像:mask 永不碰图,文本盒也不该)。
+	// 2. Absolute image intersection: source union-box overlap is not permission to paint.
 	for (const p of placed) {
 		for (const img of obstacles.images) {
-			const added = inter(p.box, img) - inter(p.originalBox, img);
+			const added = inter(p.box, img);
 			if (added > tol(p.box, img)) {
 				out.push({ id: p.id, kind: 'occludes-image', area: added });
 			}
@@ -131,22 +131,23 @@ export function violationStillPresent(
 ): boolean {
 	const tol = (a: PixelBox, b: PixelBox): number =>
 		Math.max(12, 0.02 * Math.min(a.width * a.height, b.width * b.height));
-	const self = placed.find(p => p.id === v.id);
+	const selves = placed.filter(p => p.id === v.id);
+	if (v.kind === 'overlap') {
+		const others = placed.filter(p => p.id === v.otherId);
+		return selves.some(self => others.some(other => self !== other
+			&& inter(self.box, other.box) - inter(self.originalBox, other.originalBox) > tol(self.box, other.box)));
+	}
+	if (selves.length > 1) {
+		return selves.some(self => violationStillPresent(v, [self], obstacles, pageW, pageH));
+	}
+	const self = selves[0];
 	if (!self) {
 		return false; // offender 本轮已被回退/放弃
 	}
 	switch (v.kind) {
-		case 'overlap': {
-			const other = placed.find(p => p.id === v.otherId);
-			if (!other) {
-				return false;
-			}
-			const added = inter(self.box, other.box) - inter(self.originalBox, other.originalBox);
-			return added > tol(self.box, other.box);
-		}
 		case 'occludes-image':
 			return obstacles.images.some((img) => {
-				const added = inter(self.box, img) - inter(self.originalBox, img);
+				const added = inter(self.box, img);
 				return added > tol(self.box, img);
 			});
 		case 'occludes-preserved': {
@@ -198,7 +199,7 @@ export function boxNewlyViolates(
 		}
 	}
 	for (const img of obstacles.images) {
-		const added = inter(self.box, img) - inter(self.originalBox, img);
+		const added = inter(self.box, img);
 		if (added > tol(self.box, img)) {
 			return true;
 		}
@@ -276,4 +277,104 @@ export function planOverlapClips(blocks: ClipCandidate[]): Map<string, PixelBox>
 		}
 	}
 	return out;
+}
+
+/** Largest rectangular text area left after subtracting image obstacles.
+ * Conservative fixed-page fallback: keeps all text, letting the fit pipeline
+ * route overflow to the full translation view rather than painting on images.
+ */
+export function imageSafeBox(box: PixelBox, images: PixelBox[]): PixelBox | null {
+ let candidates = [box];
+ for (const img of images) {
+  candidates = candidates.flatMap(b => {
+   if (inter(b, img) === 0) return [b];
+   const right = b.left + b.width, bottom = b.top + b.height;
+   return [
+    { ...b, width: Math.max(0, img.left - b.left) },
+    { ...b, left: Math.max(b.left, img.left + img.width), width: Math.max(0, right - Math.max(b.left, img.left + img.width)) },
+    { ...b, height: Math.max(0, img.top - b.top) },
+    { ...b, top: Math.max(b.top, img.top + img.height), height: Math.max(0, bottom - Math.max(b.top, img.top + img.height)) }
+   ].filter(r => r.width > 0 && r.height > 0);
+  });
+  // Remove duplicate/contained candidates without dropping a potential optimum.
+  candidates = candidates.filter((a, i, all) => !all.some((b, j) => j !== i
+   && b.left <= a.left && b.top <= a.top
+   && b.left + b.width >= a.left + a.width && b.top + b.height >= a.top + a.height
+   && (b.width * b.height > a.width * a.height || j < i)));
+ }
+ return candidates.sort((a,b) => b.width*b.height-a.width*a.height)[0] ?? null;
+}
+
+/** Disjoint horizontal bands, in reading order, covering all image-free space. */
+export function imageSafeRegions(box: PixelBox, images: PixelBox[]): PixelBox[] {
+ const touching=images.filter(i=>inter(box,i)>0);
+ if(!touching.length) return [box];
+ const ys=[...new Set([box.top,box.top+box.height,...touching.flatMap(i=>[
+  Math.max(box.top,i.top),Math.min(box.top+box.height,i.top+i.height)])])].sort((a,b)=>a-b);
+ const result:PixelBox[]=[];
+ for(let n=0;n<ys.length-1;n++) {
+  const top=ys[n]!,bottom=ys[n+1]!;
+  let intervals:[number,number][]=[[box.left,box.left+box.width]];
+  for(const img of touching.filter(i=>i.top<bottom && i.top+i.height>top)) {
+   intervals=intervals.flatMap(([l,r]):[number,number][]=> img.left>=r || img.left+img.width<=l ? [[l,r]] :
+    [[l,Math.max(l,img.left)],[Math.min(r,img.left+img.width),r]].filter(([a,b])=>b!>a!) as [number,number][]);
+  }
+  for(const [left,right] of intervals) {
+   const previous=[...result].reverse().find(p=>p.left===left && p.width===right-left && p.top+p.height===top);
+   if(previous) previous.height+=bottom-top;
+   else result.push({left,top,width:right-left,height:bottom-top});
+  }
+ }
+ return result.sort((a,b)=>a.top-b.top || a.left-b.left);
+}
+
+/** Split without loss; measurement is provided by the actual renderer/font. */
+export function flowText<T>(text: string, regions: T[], fits: (text: string, region: T, index: number, offset: number)=>boolean): string[] | null {
+ const chars=Array.from(text),parts:string[]=[];
+ let offset=0;
+ for(let i=0;i<regions.length;i++) {
+  const start=chars.slice(0,offset).join('').length;
+  let lo=0,hi=chars.length-offset;
+  while(lo<hi) {
+   const mid=Math.ceil((lo+hi)/2);
+   if(fits(chars.slice(offset,offset+mid).join(''),regions[i]!,i,start)) lo=mid;else hi=mid-1;
+  }
+  parts.push(chars.slice(offset,offset+lo).join(''));offset+=lo;
+ }
+ return offset===chars.length ? parts : null;
+}
+
+/** Recover the available bands of an L-shaped source paragraph, including vector figures. */
+export function sourceFlowRegions(lines: PixelBox[], fontPx: number): PixelBox[] {
+ const sortedX = [...lines].sort((a,b) => a.left-b.left);
+ let right = sortedX[0] ? sortedX[0].left+sortedX[0].width : 0;
+ for (let i=1;i<sortedX.length;i++) {
+  const line=sortedX[i]!;
+  if (line.left-right > fontPx) {
+   const leftLines=sortedX.slice(0,i), rightLines=sortedX.slice(i);
+   const overlap=Math.min(Math.max(...leftLines.map(l=>l.top+l.height)), Math.max(...rightLines.map(l=>l.top+l.height)))
+    - Math.max(Math.min(...leftLines.map(l=>l.top)),Math.min(...rightLines.map(l=>l.top)));
+   if(leftLines.length>=2 && rightLines.length>=2 && overlap>fontPx) {
+    return [...sourceFlowRegions(leftLines,fontPx),...sourceFlowRegions(rightLines,fontPx)];
+   }
+  }
+  right=Math.max(right,line.left+line.width);
+ }
+ const groups:PixelBox[]=[];
+ for(const line of [...lines].sort((a,b)=>a.top-b.top || a.left-b.left)) {
+  const previous=groups[groups.length-1];
+  if(!previous || previous.left-line.left>fontPx*0.75 || Math.abs(line.left-previous.left)>fontPx*2
+   || line.left+line.width>previous.left+previous.width+fontPx*2) groups.push({...line});
+  else {
+   const right=Math.max(previous.left+previous.width,line.left+line.width);
+   const bottom=Math.max(previous.top+previous.height,line.top+line.height);
+   previous.left=Math.min(previous.left,line.left);previous.width=right-previous.left;previous.height=bottom-previous.top;
+  }
+ }
+ // A list marker can extend the previous band to a row whose text starts a
+ // new band. Give earlier bands ownership of shared space; never count or
+ // render the same area twice. Subtraction preserves the union and gutters.
+ const disjoint:PixelBox[]=[];
+ for(const group of groups) disjoint.push(...imageSafeRegions(group,disjoint));
+ return disjoint;
 }

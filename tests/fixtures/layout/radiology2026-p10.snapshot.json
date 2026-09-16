@@ -27,26 +27,33 @@
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
+		"column": 0,
 		"readingIndex": 4,
+		"mode": "preserve",
+		"text": "Radiology: Volume 319: Number 1—April 20"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 5,
 		"text": "centimeter for PCCT with a sharp kernel "
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 5,
+		"readingIndex": 6,
 		"text": "Bone Marrow Edema Evaluation"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 6,
+		"readingIndex": 7,
 		"text": "Accurate detection of bone marrow edema,"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 7,
+		"readingIndex": 8,
 		"mode": "preserve",
 		"text": "10"
 	}

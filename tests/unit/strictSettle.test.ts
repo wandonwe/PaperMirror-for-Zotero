@@ -447,7 +447,14 @@ test('3.1.5:ladderFits 的高度容差按字号算,不是固定 1.5px', () => {
 		.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 	assert.match(src, /const heightSlack = \(item: StrictItem\): number => Math\.max\(1\.5, item\.fontPx \* 0\.35\);/,
 		'容差 = max(1.5px, 0.35em)');
-	assert.match(src, /item\.node\.scrollHeight <= item\.box\.height \+ heightSlack\(item\)/,
+	assert.match(src, /measured\.height <= Math\.round\(item\.box\.height \+ heightSlack\(item\)\)/,
 		'梯子的高度判据必须用字号容差 —— 固定 1.5px 让每个单行 7–9pt 块都放弃');
 	assert.ok(!/item\.node\.scrollHeight <= item\.box\.height \+ 1\.5\b/.test(src), '固定 1.5px 的旧判据不许留在梯子里');
+});
+
+test('strict source width reserves the gutter even without a neighbouring block', () => {
+ const box={left:84,top:90,width:158,height:53};
+ const result=computeExpansionAllowance(box,[],612,783,9,true);
+ assert.equal(result.right,0);
+ assert.ok(result.down>0);
 });

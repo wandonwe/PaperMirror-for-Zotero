@@ -121,7 +121,7 @@ test('最后一个块一直不来时,前面已完成的块照样能显示 (2.8.2
 });
 test('readerSession 的半成品重建不结算、不报统计 (结构性回归闸, 2.7.10)', () => {
 	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
-	const start = src.indexOf("const partial = !!(state && state.status === 'translating'");
+	const start = src.indexOf("const partial = !!(state && (state.status === 'translating'");
 	assert.ok(start > 0, '找不到 partial 判定');
 	const body = src.slice(start, src.indexOf("return partial ? 'partial' : 'translated';", start));
 	// 半成品页对着一个还在长的页面压缩重试会白花请求,报排版统计会误报数字。

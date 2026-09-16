@@ -41,6 +41,8 @@
 export type Segment = [number, number, number, number];
 
 export interface BorderGrid {
+	/** Rectangular connected cells proven by missing local internal borders. */
+	spans?: { row: number; col: number; rowSpan: number; colSpan: number }[];
 	/** 列边界的 x 坐标,升序;n 条边界 = n-1 列。 */
 	columns: number[];
 	/** 行边界的 y 坐标(**已翻成 top-down**),升序;n 条边界 = n-1 行。 */
@@ -188,25 +190,29 @@ export function borderGrids(segments: Segment[], options: BorderGridOptions): Bo
 		}
 		return out;
 	};
-	// 竖线按 y 区间连通分组:区间重叠(或间隔不超过 joinGap)的竖线属于同一张表。
-	// 不做笛卡尔积、不延长短线 —— 只按每条线**实际覆盖的区间**判连通。
-	const byFrom = [...vs].sort((a, b) => a.from - b.from);
-	const groups: { from: number; to: number; lines: typeof vs }[] = [];
-	for (const l of byFrom) {
-		const g = groups[groups.length - 1];
-		if (g && l.from <= g.to + tol * 2) {
-			g.lines.push(l);
-			g.to = Math.max(g.to, l.to);
-		}
-		else {
-			groups.push({ from: l.from, to: l.to, lines: [l] });
+	// Connected border components in BOTH dimensions. Overlapping y ranges
+	// alone join independent left/right tables and destroy coverage thresholds.
+	const lines = [...hs, ...vs];
+	const parents = lines.map((_, i) => i);
+	const root = (i: number): number => { while (parents[i] !== i) { parents[i] = parents[parents[i]!]!; i = parents[i]!; } return i; };
+	const joinGap = Math.max(tol * 2, minCell);
+	for (let hi = 0; hi < hs.length; hi++) for (let vi = 0; vi < vs.length; vi++) {
+		const h = hs[hi]!, v = vs[vi]!;
+		if (v.pos >= h.from - joinGap && v.pos <= h.to + joinGap && h.pos >= v.from - joinGap && h.pos <= v.to + joinGap) {
+			parents[root(hi)] = root(hs.length + vi);
 		}
 	}
+	const components = new Map<number, { horizontal: Line[]; vertical: Line[] }>();
+	lines.forEach((line, i) => {
+		const key = root(i), component = components.get(key) ?? { horizontal: [], vertical: [] };
+		(i < hs.length ? component.horizontal : component.vertical).push(line);
+		components.set(key, component);
+	});
 	const out: BorderGrid[] = [];
-	for (const g of groups) {
+	for (const component of components.values()) {
+		const g = { lines: component.vertical };
+		const gh = component.horizontal;
 		if (g.lines.length < 3) { continue; }
-		// 这一组的横线:位置落在组的 y 区间内。
-		const gh = hs.filter(l => l.pos >= g.from - tol && l.pos <= g.to + tol);
 		if (gh.length < 3) { continue; }
 		const xMin = Math.min(...g.lines.map(l => l.pos), ...gh.map(l => l.from));
 		const xMax = Math.max(...g.lines.map(l => l.pos), ...gh.map(l => l.to));
@@ -228,7 +234,10 @@ export function borderGrids(segments: Segment[], options: BorderGridOptions): Bo
 		const right = cols[cols.length - 1]!;
 		const top = rows[0]!;
 		const bottom = rows[rows.length - 1]!;
-		out.push({ columns: cols, rows, region: { left, top, width: right - left, height: bottom - top } });
+		const horizontal = gh.map(l => ({ ...l, pos: options.pageHeight - l.pos }));
+		const vertical = g.lines.map(l => ({ ...l, from: options.pageHeight - l.to, to: options.pageHeight - l.from }));
+		const spans = gridSpans(cols, rows, horizontal, vertical, Math.max(tol, minCell / 2));
+		out.push({ columns: cols, rows, region: { left, top, width: right - left, height: bottom - top }, ...(spans.length ? { spans } : {}) });
 	}
 	return out.sort((a, b) => a.region.top - b.region.top);
 }
@@ -236,7 +245,7 @@ export function borderGrids(segments: Segment[], options: BorderGridOptions): Bo
 /**
  * 一页只取**一张**网格的兼容入口:格数最多的那张。推不出就返回 null。
  *
- * 结构识别目前每页只接一张网格(观测模式),多表页先拿最大的那张;
+ * 兼容单网格调用方;提取和单元格结构化使用 borderGrids 的完整列表;
  * 遥测另报 gridCount,让多表页在真机数据里看得见。
  */
 export function borderGrid(segments: Segment[], options: BorderGridOptions): BorderGrid | null {
@@ -713,4 +722,36 @@ export function segmentsFromOperatorList(
 		return out;
 	}
 	return out;
+}
+
+/** Merge only rectangular components; L-shaped gaps remain unmerged. */
+function gridSpans(xs: number[], ys: number[], hs: Line[], vs: Line[], tol: number): NonNullable<BorderGrid['spans']> {
+ const nc=xs.length-1, nr=ys.length-1;
+ const parent=Array.from({length:nc*nr},(_,i)=>i);
+ const find=(i:number):number => parent[i]===i ? i : (parent[i]=find(parent[i]!));
+ const join=(a:number,b:number):void=>{parent[find(a)]=find(b);};
+ const has=(lines:Line[],pos:number,lo:number,hi:number):boolean => {
+  const intervals=lines.filter(l=>Math.abs(l.pos-pos)<=tol).map(l=>[Math.max(lo,l.from),Math.min(hi,l.to)])
+   .filter(p=>p[1]!>p[0]!).sort((a,b)=>a[0]!-b[0]!);
+  let end=lo, covered=0;
+  for(const [a,b] of intervals) { covered+=Math.max(0,b!-Math.max(end,a!));end=Math.max(end,b!); }
+  return covered>(hi-lo)*0.5;
+ };
+ for(let row=0;row<nr;row++) for(let col=0;col<nc;col++) {
+  const i=row*nc+col;
+  if(col+1<nc && !has(vs,xs[col+1]!,ys[row]!,ys[row+1]!)) join(i,i+1);
+  if(row+1<nr && !has(hs,ys[row+1]!,xs[col]!,xs[col+1]!)) join(i,i+nc);
+ }
+ const groups=new Map<number,number[]>();
+ parent.forEach((_,i)=>{const key=find(i);const group=groups.get(key)??[];group.push(i);groups.set(key,group);});
+ const spans:NonNullable<BorderGrid['spans']>=[];
+ for(const group of groups.values()) {
+  if(group.length<2) continue;
+  const row=Math.min(...group.map(i=>Math.floor(i/nc))), col=Math.min(...group.map(i=>i%nc));
+  const rowSpan=Math.max(...group.map(i=>Math.floor(i/nc)))-row+1;
+  const colSpan=Math.max(...group.map(i=>i%nc))-col+1;
+  // Two-dimensional holes need richer evidence; do not collapse whole subtables.
+  if((rowSpan===1 || colSpan===1) && rowSpan*colSpan===group.length) spans.push({row,col,rowSpan,colSpan});
+ }
+ return spans;
 }

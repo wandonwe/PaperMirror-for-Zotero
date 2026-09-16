@@ -504,7 +504,7 @@
 		"readingIndex": 56,
 		"tableRow": 15,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Dyspnea and/or palpitation"
 	},
 	{
@@ -1029,7 +1029,7 @@
 		"readingIndex": 115,
 		"tableRow": 8,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Diameter stenosis (%)"
 	},
 	{
@@ -1065,7 +1065,7 @@
 		"readingIndex": 119,
 		"tableRow": 9,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "MLA (mm2)"
 	},
 	{
@@ -1101,7 +1101,7 @@
 		"readingIndex": 123,
 		"tableRow": 10,
 		"tableCol": 0,
-		"mode": "preserve",
+		"mode": "translate",
 		"text": "Plaque burden (%)"
 	},
 	{

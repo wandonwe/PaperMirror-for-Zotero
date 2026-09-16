@@ -26,6 +26,14 @@ export function isFormulaRun(run: string): boolean {
 	if (trimmed.length < 3) {
 		return false;
 	}
+	// A comparison sign does not make the surrounding sentence a formula.
+	// Explicit LaTeX is handled separately; heuristic matches must contain
+	// variables, operators and units, not natural-language instructions.
+	const mathWords = new Set(['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'exp', 'lim', 'max', 'min', 'det', 'mod', 'sqrt', 'mmHg', 'mol', 'mmol', 'cm', 'mm', 'mL', 'ml', 'kg', 'mg', 'ms']);
+	if (/[一-鿿]/.test(trimmed) || (trimmed.match(/[A-Za-z]+/g) ?? []).some(word =>
+		/[a-z]{3}/.test(word) && !mathWords.has(word))) {
+		return false;
+	}
 	if (MATH_SYMBOLS.test(trimmed)) {
 		return true;
 	}

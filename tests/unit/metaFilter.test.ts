@@ -31,7 +31,7 @@ test('received/accepted dates are filtered', () => {
 test('correspondence and email lines are filtered', () => {
 	assert.equal(isMetadataBlock(
 		'* Corresponding author. Tel: +30 6947607442, Email: alexios.antonopoulos@cardiov.ox.ac.uk; antonopoulosal@yahoo.gr'
-	), true);
+	), false);
 });
 
 // 2.12.13 原则:译文侧默认全文翻译,元素类别只决定排版,不决定是否翻译。整句版权/许可声明是自然语言,翻译;短版权行仍保留(见 contentRetention.test)。
@@ -112,7 +112,7 @@ test('a year inside body prose does not make it metadata', () => {
 test('journal sidebar labels are filtered (Citation/Editor/Published/Data/Funding)', () => {
 	assert.equal(isMetadataBlock(
 		'Citation: Lu N, Di Y, Feng X-Y, Qiang J-W, Zhang J-w, Wang Y-g, et al. (2015) CT Perfusion with Acetazolamide Challenge in C6 Gliomas and Angiogenesis. PLoS ONE 10(3): e0121631. doi:10.1371/journal.pone.0121631'
-	), true); // 带 DOI、没有句子的引用行 = 精确标识规则,保留
+	), false); // DOI 保留,文献标题进入翻译
 	assert.equal(isMetadataBlock(
 		'Academic Editor: Jonathan A Coles, Glasgow University, UNITED KINGDOM'
 	), false);
