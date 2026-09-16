@@ -1,112 +1,69 @@
-# Architecture
+# PaperMirror 4.0.0 架构
 
-## The one rule
+本文对应 4.0.0 的实际代码。框架围绕“保存原文结构、翻译内容、在边界内显示”组织；区域归属是约束与诊断信息，不是新的翻译过滤条件。
 
-Everything that touches Zotero's **undocumented** reader internals lives in
-`src/reader/zoteroReaderAdapter.ts`. Nothing else in the codebase reaches into
-`reader._internalReader`, `PDFViewerApplication`, page views or the event bus.
-When Zotero changes, there is exactly one file to read.
+## 主链路
 
-Official APIs (`Zotero.Reader.registerEventListener`, `Zotero.PreferencePanes`,
-`Zotero.Prefs`, `Zotero.HTTP`, `Zotero.Attachments`) are used directly.
-
-## Runtime shape
-
-The plugin is a **bootstrap extension** running inside `Cu.Sandbox`, which has a
-fixed global whitelist. Notably `AbortController` is absent — `installAbortPolyfill()`
-provides a cooperative-cancellation stand-in before anything can request one.
-
-```
-bootstrap.js
-  └── src/lifecycle/startup.ts
-        ├── toolbar controller  (per reader tab → ReaderSession)
-        ├── preferences pane
-        └── Zotero.PaperMirror  (public API, diagnostics)
+```mermaid
+flowchart TD
+    A[Zotero 阅读器适配层] --> B[文字、原始 PDF 坐标、图片和边线]
+    B --> C[行与段落构建 / 图注提前归属]
+    C --> D[阅读顺序 / 表格模型 / 续行还原]
+    D --> E[页面区域归属与 IR 检查]
+    E --> F[翻译调度 / 缓存 / 引擎 / 结果校验]
+    F --> G[严格排版 / 实测适配 / 几何审计]
+    G --> H[对照阅读与完整译文入口]
+    F --> I[页面快照与译文归档]
+    I --> H
+    E --> J[诊断与语料导出]
+    F --> J
+    G --> J
 ```
 
-A `ReaderSession` owns one reader tab: the split view, the translation pane, the
-on-page overlay, extraction, the translation manager, scroll sync and teardown.
-All three view modes (`original` / `overlay` / `split`) share one session, so
-switching never discards translations or re-hits a provider.
+## 适配与会话
 
-## Text extraction
+- `src/reader/zoteroReaderAdapter.ts` 隔离 Zotero 非公开阅读器接口。官方 Reader、Prefs、HTTP 等 API 可直接使用。
+- `src/reader/readerSession.ts` 管理一个阅读器标签页的视图、提取器、翻译管理器、滚动同步与资源释放。
+- 引导层安装沙箱所需的兼容设施。切换视图与恢复页面显示不应要求重新请求翻译接口。
 
-Three paths, tried in order, each with a timeout (`src/reader/textExtractor.ts`):
+## 提取与结构
 
-1. **`getPageData`** from Zotero's PDF.js fork — characters with break flags.
-   Richest, but the promise can fail to settle across compartments, hence the
-   8-second timeout.
-2. **Text-layer DOM** — `.textLayer span` plus `viewport.convertToPdfPoint`.
-   This is the path that runs in practice.
-3. **`Zotero.PDFWorker.getFullText`** — one string with no page delimiter, so it
-   only serves as document-level evidence that a text layer exists at all.
+`src/reader/textExtractor.ts` 按可用性尝试字符接口、PDF.js `getTextContent`、文本层；纯文本回退不具备可靠的逐块版面几何。不同路径共用段落与结构处理，但证据丰富程度不同。
 
-`NO_TEXT_LAYER` is reported only when the whole document comes back empty, never
-from a single blank page.
+`spanBlockBuilder.ts`、`blockBuilder.ts` 和 `paragraphHeuristics.ts` 将字符或跨度组成行、段落与栏位。`captionOwnership.ts` 在普通段落合并前识别有充分标签和行对齐证据的图注。`tableBorders.ts` 与 `tableStructure.ts` 提供边框/文本表格结构；`src/ir/tableModel.ts` 描述单元格及其对应关系。
 
-## From glyphs to paragraphs
+`pageRegions.ts` 在现有续行还原后分配正文栏、单元格、页眉页脚和其余图注的 `SourceRegion`。提前给临时栏位的碎片固定归属会破坏正常续行，因此正文归属晚于该还原步骤；图注的显式提前归属仍阻止跨区域合并。
 
-`src/reader/paragraphHeuristics.ts` holds the shared core; `spanBlockBuilder.ts`
-and `blockBuilder.ts` are the two front ends.
+归属包括 ID、类别、原始 PDF 坐标边界和证据来源。单元格边界来自表格模型；正文分带结合既有栏位及跨栏区域，并允许少量受其他原文边界限制的下方空白。未获得可靠坐标的块不能凭空补造几何。`documentIR.ts` 审计 ID、阅读顺序、表格及区域契约；运行期审计并不等于自动修复。
 
-- **Columns** by x-projection bands plus per-row gutter voting (60% quorum).
-- **Rotated strips** — vertical journal watermarks — dropped before rows form.
-- **Line breaks** that are merely the right margin do not end a paragraph
-  (`reachesRightMargin`), which is what stopped sentences being shredded.
-- **Merge repair** rejoins paragraphs split mid-sentence when they share a
-  column, sit within 1.2em, and the first ends dangling.
-- **Metadata filter** (`metaFilter.ts`) removes what should never be translated:
-  author rosters, affiliations, correspondence, copyright and licence text,
-  DOI/URL lines, received/accepted dates, journal sidebars (by geometry, so new
-  formats cannot slip past), running heads and page feet.
+## 翻译与状态
 
-## Rendering the translation
+`src/translation/translationManager.ts` 负责请求计划、并发、取消、重试、缓存及结果校验。结构类别不自动等于保留原文：是否请求、引擎是否完成翻译、译文是否放得下必须分别记录。
 
-Two surfaces, deliberately different:
+- `restoreForDisplay` 从已有状态恢复显示，独立于请求调度。
+- 取消未完成任务时保留已完成的译文；补译处理缺失部分。
+- 缓存命中取决于语言、引擎、模型、提示词和源内容等身份信息，结构缓存有独立版本。
+- `displayRestores`、`supplementBlocks`、`repeatedBlockSubmissions` 分别记录恢复、补译及重复提交。重复提交可能来自重试或取消后的续传，不能直接等同于浪费。
+- `src/export/pageArchive.ts` 保留页面内容与译文快照；语料和诊断用于区分提取、保留、校验拒绝与排版失败。
 
-**覆盖模式** (`src/reader/pdfOverlay.ts`) paints onto the rendered page. One mask
-per **source line** in the page's own sampled paper colour — never one rectangle
-over a paragraph, which would swallow ragged tails and anything the text wraps
-around. Text is fitted with a typographic ladder (leading → letter-spacing →
-size, floored at 8.5px); what still overflows gets an ellipsis marker and opens
-on click. Hovering a paragraph lifts its masks to show the original.
+## 排版与显示
 
-**左右对照** (`src/ui/translatedPageView.ts` + `pageFlow.ts`) rebuilds the page.
-The rendered bitmap is copied so figures and furniture survive exactly; body
-blocks are masked and re-flowed:
+对照页的核心是 `src/ui/strictPageReplacement.ts`。它在原页图像上按原文行遮罩，利用真实文字测量适配译文；绕图使用安全区域，单元格采用提取期边界。正文不横向侵入栏间距，下方适配同时受区域、图片、其他文字和底图墨迹限制。图注与单元格不使用普通正文的扩边策略。
 
-1. A block never moves **up** — its source top is a floor.
-2. A block never leaves its **column**.
-3. A block never crosses an **obstacle** — regions of original ink we are not
-   replacing, found by downsampling the bitmap to a coarse grid.
-4. A final sweep guarantees no two boxes share pixels, with untranslated
-   originals immovable.
+最终几何检查处理重叠与图片侵入。无法放置时保留完整译文和失败原因，交由完整译文入口查看；不能用截断或覆盖相邻内容伪装完成。几何通过也不能证明语义归属正确，已混合的源块仍需在提取阶段修复。
 
-The page is built at the reader's own pixel geometry and fitted to the pane with
-a CSS transform. That separation matters: geometry stays exact, so the text
-layer and the bitmap cannot drift apart, and resizing costs no re-render.
+覆盖模式通过会话提供的页面渲染器复用严格排版核心，但宿主挂载、交互与生命周期不同，不能用对照页测试宣称覆盖模式同样完成真机验证。页面同步按页与页内位置处理，显示恢复和引擎请求分别调度。
 
-## Translation
+## PDF 导出
 
-`translationManager.ts` schedules per-page work with prefetch, bounded
-concurrency, retry with backoff, cancellation on fast page flips, and a
-300-second per-page watchdog. Results are cached by file hash + page + languages
-+ provider + model + prompt version + source-text hash.
+`src/pdfgen/` 使用 pdf-lib 生成 PDF，属于独立输出路径。内置字体、字形覆盖和坐标转换有自己的约束；浏览器排版通过不代表导出逐像素一致。正式发布前的 XPI 检查验证清单、版本和资源允许列表，不能代替真实 PDF 导出验收。
 
-Providers implement one interface (`translation/providers/types.ts`). The free
-Bing and Google adapters are ported from old-immersive-translate.
+## 测试与演进顺序
 
-## Generating a translated PDF
+1. 类型检查与单元测试：结构、缓存、取消、归属和安全边界。
+2. 41 页真实跨度语料：分段快照、全文字符清单、IR 及请求计划基线。
+3. 浏览器回归：保存的真实译文在多种缩放下检查完整性、放置率和最终几何；超长受控译文单独验证边界。
+4. XPI 构建检查与 GitHub 发布资产验证。
+5. Zotero 真机：复杂表格、长文往返滚动、覆盖模式、导出与自动更新。
 
-`src/pdfgen/` writes the translation back into a real PDF with pdf-lib. One
-sharp edge is documented in the code and repeated here: **pdf-lib's runtime
-subsetting drops glyphs for this font**, verified by rendering. The plugin ships
-a build-time GB2312 subset of Noto Sans SC and embeds it with `subset: false`.
-Characters outside the subset become `〓` rather than vanishing.
-
-The full-document PDF export (`Zotero.PaperMirror.exportTranslatedPdf()`) uses
-this built-in generator exclusively. An earlier optional "service mode" that
-POSTed the whole PDF to a local BabelDOC bridge (`tools/babeldoc_server.py`) for
-layout re-flow was removed in 2.1.6: it had no UI, few users, and carried a
-local HTTP server plus a token/handshake auth surface disproportionate to its
-value. Nothing in the plugin now opens or talks to a local network service.
+下一步优先补齐上游混栏的独立结构证据、源块与单元格语义对应检查，以及真机视觉回归。当前栏位仍来自启发式推断，区域联合框不是独立正确性证明；4.0.0 不引入视觉模型、OCR 或外部排版服务，也不宣称全部复杂版式已解决。
