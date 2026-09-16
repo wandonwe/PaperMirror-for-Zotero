@@ -276,15 +276,15 @@
 		"dupBlocks": 0
 	},
 	"horst2024-p11": {
-		"blocks": 7,
-		"translatable": 4,
+		"blocks": 6,
+		"translatable": 3,
 		"tableCells": 0,
-		"modules": 4,
+		"modules": 3,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 4,
-		"payloadChars": 2534,
+		"maxBlocksPerChunk": 3,
+		"payloadChars": 2535,
 		"dupBlocks": 0
 	},
 	"horst2024-p5": {

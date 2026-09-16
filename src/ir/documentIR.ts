@@ -62,11 +62,25 @@ export interface IRViolation {
 export function validatePageIR(ir: PageIR): IRViolation[] {
 	const out: IRViolation[] = auditTableModel(ir.blocks).map(detail => ({ invariant: 'table-model', detail }));
 	const seen = new Set<string>();
+    const owners = new Map<string,string>();
 	ir.blocks.forEach((b, i) => {
 		if (seen.has(b.id)) {
 			out.push({ invariant: 'unique-id', blockId: b.id, detail: `duplicate id at index ${i}` });
 		}
 		seen.add(b.id);
+        if (b.sourceRegion) {
+            const r=b.sourceRegion.boundsPdf;
+            const signature=JSON.stringify([b.sourceRegion.kind,r,b.sourceRegion.kind==='body-column'?b.column:null]);
+            const prior=owners.get(b.sourceRegion.id);
+            if(prior && prior!==signature) out.push({invariant:'region-consistency',blockId:b.id,detail:'owner reused with different bounds, role or column'});
+            owners.set(b.sourceRegion.id,signature);
+            if(!r.every(Number.isFinite) || r[2]<=r[0] || r[3]<=r[1]) out.push({invariant:'region-boundary',blockId:b.id,detail:'invalid owner bounds'});
+            if(b.sourceRegion.kind==='table-cell' && (!b.tableId || b.tableRow===undefined || b.tableCol===undefined || JSON.stringify(r)!==JSON.stringify(b.tableRectPdf??b.tableContentRectPdf))) out.push({invariant:'region-role',blockId:b.id,detail:'cell owner does not match table model'});
+            if(b.sourceRegion.kind==='caption' && b.type!=='caption') out.push({invariant:'region-role',blockId:b.id,detail:'caption ownership changed role'});
+            for(const line of b.lineRectsPdf ?? []) if(line[0]<r[0]-.5 || line[1]<r[1]-.5 || line[2]>r[2]+.5 || line[3]>r[3]+.5) {
+                out.push({invariant:'region-boundary',blockId:b.id,detail:`source line outside ${b.sourceRegion.id}`});break;
+            }
+        }
 		if (b.pageIndex !== ir.pageIndex) {
 			out.push({ invariant: 'page-index', blockId: b.id, detail: `block.pageIndex ${b.pageIndex} ≠ page ${ir.pageIndex}` });
 		}

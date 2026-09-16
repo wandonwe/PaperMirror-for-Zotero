@@ -959,6 +959,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	};
 
 	interface StrictItem {
+        bodyRegion?: PixelBox;
 		id: string;
 		node: HTMLElement;
 		box: PixelBox;
@@ -1033,6 +1034,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		node.className = 'pm-repage-block';
 		if (flowBoxes) { node.setAttribute('data-pm-flow', 'true'); node.style.pointerEvents = 'none'; }
 		node.setAttribute('data-pm-block', block.id);
+		if(block.sourceRegion) node.setAttribute('data-pm-source-region',block.sourceRegion.id);
 		node.setAttribute('data-pm-type', block.type);
 		// 表格单元格标记 (2.3.7): 整格块与逐 member 兜底块的 id 都是
 		// `…-table-T-rR-cC` 形;单元格可末位缩字(allowsFontShrink 豁免)。
@@ -1093,7 +1095,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			naturalRatio = gaps[Math.floor(gaps.length / 2)]! / fontPx;
 		}
 		const minLineHeight = Math.max(LINE_HEIGHT_FLOOR, Math.min(1.42, naturalRatio || 1.2));
-		const item: StrictItem = { id: block.id, node, flowBoxes, box, originalBox: { ...box }, fontPx, minLineHeight, committed: false, abandoned: false };
+		const item: StrictItem = {
+            bodyRegion: block.sourceRegion?.kind === 'body-column' ? rectToPixels(block.sourceRegion.boundsPdf, render, 1) : undefined, id: block.id, node, flowBoxes, box, originalBox: { ...box }, fontPx, minLineHeight, committed: false, abandoned: false };
 		items.push(item);
 		byId.set(block.id, item);
 	}
@@ -1251,13 +1254,20 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// 空白测量:对每个未适配块,取所有几何块盒 + 图形盒中与其在垂直向(右扩)
 	// 或水平向(下扩)重叠者的最近边,留 3px 边距;右扩以版心 90% 为界
 	// (BabelDOC 同),下扩以页高 95% 为界;各设温和上限防贪婪。
-	const expansionAllowance = (item: StrictItem): { right: number; down: number } =>
-		(item.flowBoxes || imageTextBoxes.has(item.id)) ? { right: 0, down: 0 } : item.node.hasAttribute('data-pm-cell') ? { right: 0, down: 0 } : computeExpansionAllowance(item.box, [
-			...imageBoxes,
-			// P2-14: 参考文献/表格墨迹也是遮挡物 —— 扩展不得长进它们的原文。
-			...inkObstacles.map(o => o.box),
-			...geometric.filter(b => b.id !== item.id).map(b => pxOf.get(b.id)!).filter(Boolean)
-		], canvas.width / BITMAP_SCALE, canvas.height / BITMAP_SCALE, item.fontPx, true);
+	const expansionAllowance = (item: StrictItem): { right: number; down: number } => {
+        if (item.flowBoxes || imageTextBoxes.has(item.id)
+            || (item.node.hasAttribute('data-pm-source-region') && !item.bodyRegion)) return {right:0,down:0};
+        const allowance=item.node.hasAttribute('data-pm-cell') ? { right: 0, down: 0 } : computeExpansionAllowance(item.box, [
+            ...imageBoxes,
+            ...inkObstacles.map(o => o.box),
+            ...geometric.filter(b => b.id !== item.id).map(b => pxOf.get(b.id)!).filter(Boolean)
+        ], canvas.width / BITMAP_SCALE, canvas.height / BITMAP_SCALE, item.fontPx, true);
+        // Body paragraphs may use available space below, but never leave their
+        // source column band. Captions and cells retain their stricter fixed box.
+        if(item.bodyRegion) allowance.down=Math.min(allowance.down,Math.max(0,
+            item.bodyRegion.top+item.bodyRegion.height-item.box.top-item.box.height));
+        return allowance;
+    };
 	const applyBox = (item: StrictItem, width: number, height: number): void => {
 		// Original horizontal extent is a hard layout constraint. Empty space
 		// next to a paragraph may be a column gutter, not expansion capacity.

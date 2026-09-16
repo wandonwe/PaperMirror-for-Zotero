@@ -1,3 +1,4 @@
+import { captionOwnership } from './captionOwnership';
 import { semanticBoundary } from './semanticBoundary';
 import { extractAbbreviationTables } from './abbreviationTable';
 import { columnOfX, rowOfTop } from './tableBorders';
@@ -762,6 +763,8 @@ function sameGridCellStack(a: SpanLine, b: SpanLine, rows: GridRowBarriers): boo
 }
 
 export interface SpanBuildOptions {
+ /** Internal recursion guard after source-region assignment. */
+ regionsAssigned?: boolean;
 	pageIndex: number;
 	pageHeight: number;
 	/** 边框硬屏障: figure rects — in-figure labels dropped, no merges across. */
@@ -833,6 +836,24 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	const filteredItems = obstacles.length
 		? items.filter(i => !insideObstacle(i.rect, obstacles) || withinCaption(i.rect,captionRegions))
 		: items;
+	if (!options.regionsAssigned) {
+		const owned=captionOwnership(groupIntoRows(filteredItems),options.pageIndex,pageWidth);
+		if(owned.length) {
+			const claimed=new Set(owned.flatMap(c=>c.rows.flat()));
+			const rest=buildBlocksFromSpans(filteredItems.filter(i=>!claimed.has(i)),{...options,regionsAssigned:true});
+			const ownerBands=detectColumns(filteredItems.map(i=>i.rect),pageWidth,options.pageHeight);
+			const captions:SourceBlock[]=owned.map(({region,rows},index)=>{
+				const rect=region.boundsPdf;
+				const lines=rows.map(items=>({items,rect:rectOf(items),fontSize:sizeOf(items)}));
+				return {id:region.id,pageIndex:options.pageIndex,order:rest.blocks.length+index,type:'caption',
+					sourceText:joinLines(lines.map(lineText)),lineRectsPdf:lines.map(l=>l.rect),fontSize:sizeOf(rows.flat()),
+					boundingBox:{x:rect[0],y:options.pageHeight-rect[3],width:rect[2]-rect[0],height:rect[3]-rect[1]},
+					column:columnOf(rect,ownerBands,pageWidth),sourceRegion:region};
+			});
+			markImageCaptions(captions,captionRegions);
+			return {...rest,blocks:[...rest.blocks,...captions]};
+		}
+	}
 	// Grid columns separate source runs BEFORE line grouping can weld neighbouring cells.
 	const gridList=options.grids ?? (options.grid ? [options.grid] : []);
 	const buckets=new Map<string,SpanItem[]>();

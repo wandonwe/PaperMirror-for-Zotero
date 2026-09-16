@@ -21,7 +21,7 @@ import { join } from 'node:path';
 import { buildBlocksFromSpans, type SpanItem } from '../../src/reader/spanBlockBuilder';
 import { orderBlocksForReading } from '../../src/reader/readingOrder';
 import { structureTableCells } from '../../src/reader/tableStructure';
-import { coalesceRegions } from '../../src/reader/regionCoalescer';
+import { finalizePageRegions } from '../../src/reader/pageRegions';
 import { buildLayoutModules } from '../../src/reader/layoutModules';
 import { planChunks } from '../../src/translation/segmenter';
 import { isFormulaDenseRisk } from '../../src/reader/formulaGuard';
@@ -65,9 +65,7 @@ export function measurePage(dump: SpanDump): PageBaseline {
 		imageRectsPdf: []
 	});
 	const structured = structureTableCells(orderBlocksForReading(result.blocks), 0, 10);
-	const cells = structured.filter(b => b.translationMode !== undefined);
-	const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), []);
-	const blocks: SourceBlock[] = orderBlocksForReading([...prose, ...cells]);
+	const blocks = finalizePageRegions(structured, dump.pageHeight);
 
 	const tableCells = blocks.filter(b => typeof b.tableRow === 'number').length;
 	// 与 startTranslating 的可译准入近似: 非 preserve、非元数据、有文本。

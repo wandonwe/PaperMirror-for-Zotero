@@ -1,3 +1,4 @@
+import {finalizePageRegions} from '../../src/reader/pageRegions';
 import { createHash } from 'node:crypto';
 import contentInventory from '../fixtures/baseline/content-inventory.json';
 /**
@@ -19,7 +20,6 @@ import { join } from 'node:path';
 import { buildBlocksFromSpans, type SpanItem } from '../../src/reader/spanBlockBuilder';
 import { orderBlocksForReading } from '../../src/reader/readingOrder';
 import { structureTableCells } from '../../src/reader/tableStructure';
-import { coalesceRegions } from '../../src/reader/regionCoalescer';
 import { validatePageIR } from '../../src/ir/documentIR';
 import type { SourceBlock } from '../../src/types/models';
 
@@ -45,9 +45,7 @@ function pipeline(dump: SpanDump): SourceBlock[] {
 		imageRectsPdf: []
 	});
 	const structured = structureTableCells(orderBlocksForReading(result.blocks), 0, 10);
-	const cells = structured.filter(b => b.translationMode !== undefined);
-	const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), []);
-	return orderBlocksForReading([...prose, ...cells]);
+	return finalizePageRegions(structured,dump.pageHeight);
 }
 
 function summarize(blocks: SourceBlock[]): unknown[] {

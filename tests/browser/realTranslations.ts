@@ -1,15 +1,18 @@
+import {assignPageRegions} from '../../src/reader/pageRegions';
+import {checkOwnedRegions} from './ownedRegions';
 import fixtures from '../fixtures/regression/real-translations.json';
 import { buildStrictPage } from '../../src/ui/strictPageReplacement';
 import { showUnplacedTranslations } from '../../src/ui/unplacedTranslations';
 import type { SourceBlock } from '../../src/types/models';
 export async function checkRealTranslations():Promise<unknown[]> {
+ checkOwnedRegions();
  const gallery=document.createElement('div');gallery.id='real-translation-gallery';gallery.style.cssText='display:flex;flex-wrap:wrap;align-items:start;gap:16px';document.body.prepend(gallery);
  const outputs:unknown[]=[];
  for(const f of fixtures) {
   const img=new Image();await new Promise<void>((resolve,reject)=>{img.onload=()=>resolve();img.onerror=()=>reject(Error('fixture image missing'));img.src=(window as any).realTranslationImages[f.page];});
   for(const scale of [1,.75,1.0266666666666666]) {
    const canvas=document.createElement('canvas');canvas.width=f.width*scale;canvas.height=f.height*scale;canvas.getContext('2d')!.drawImage(img,0,0,canvas.width,canvas.height);
-   const blocks=f.blocks as SourceBlock[], translations=new Map(f.translations.map(t=>[t.id,t.translatedText]));
+   const blocks=assignPageRegions(f.blocks as SourceBlock[],f.height), translations=new Map(f.translations.map(t=>[t.id,t.translatedText]));
    const built=buildStrictPage(document,{pageIndex:f.page-1,blocks,translations,imageRectsPdf:(f as any).imageRectsPdf,render:{canvas,viewportWidth:canvas.width,viewportHeight:canvas.height,scale,toViewport:(x,y)=>[(x-((f as any).offsetX??0))*scale,(f.height+((f as any).offsetY??0)-y)*scale]}})!;
    gallery.append(built.element);const p=built.element as any;
    const initial=p.pmSettleStrict(true),expanded=p.pmExpandFit(initial.map((b:any)=>b.id));
