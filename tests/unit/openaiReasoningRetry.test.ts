@@ -327,11 +327,24 @@ test('两种自愈互不干扰: 剥 thinking 不连累 reasoning_effort (2.12.2)
 		: { status: 200, text: OK_TEXT });
 	try {
 		const p = createOpenAICompatibleProvider({ id: 'zhipu', displayName: 'Zhipu', defaultBaseURL: 'https://open.bigmodel.cn', defaultModel: 'glm-5' });
-		await p.complete!('explain', settings({ providerId: 'zhipu', reasoning: 'high', model: 'glm-thinking-heal-test' }), {});
+		await p.complete!('explain', settings({ providerId: 'zhipu', reasoning: 'high', model: 'glm-5.3' }), {});
 		assert.equal(http.bodies.length, 2);
-		assert.deepEqual(http.bodies[0].thinking, { type: 'enabled', reasoning_effort: 'high' });
+		assert.deepEqual(http.bodies[0].thinking, { type: 'enabled' });
 		assert.equal(http.bodies[1].thinking, undefined, 'thinking 被剥');
+		assert.equal(http.bodies[1].reasoning_effort, 'high');
 		assert.equal(http.bodies[1].temperature, 0, '温度还在 —— 只剥被拒的那一个');
 	}
 	finally { http.teardown(); }
+});
+
+test('empty selected model uses K3 defaults before constructing API parameters', async () => {
+ const http = installHTTP(() => ({status:200,text:OK_TEXT}));
+ try {
+  const p=createOpenAICompatibleProvider({id:'moonshot',displayName:'Kimi',defaultBaseURL:'https://api.moonshot.ai',defaultModel:'kimi-k3'});
+  await p.complete!('translate',settings({providerId:'moonshot',model:'',maxOutputTokens:2048}),{});
+  const body=http.bodies[0];
+  assert.equal(body.model,'kimi-k3');assert.equal(body.temperature,undefined);
+  assert.equal(body.max_completion_tokens,2048);assert.equal(body.max_tokens,undefined);
+  assert.equal(body.reasoning_effort,'low');
+ } finally { http.teardown(); }
 });

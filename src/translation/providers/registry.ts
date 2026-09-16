@@ -73,9 +73,8 @@ const presetProviders: TranslationProvider[] = [
 		id: 'zhipu',
 		displayName: '智谱 GLM',
 		defaultBaseURL: 'https://open.bigmodel.cn/api/paas/v4',
-		// glm-5 is the current flagship; the dated glm-4-* ids move to the legacy
-		// group (2026-08-10, docs.bigmodel.cn). Kept in sync w/ modelCatalog.
-		defaultModel: 'glm-5'
+		// GLM-5.3 requires thinking enabled; handled by advancedParams.
+		defaultModel: 'glm-5.3'
 	}),
 	// Gemini runs on the NATIVE generateContent API (Bob-plugin style):
 	// first-class thinkingConfig / JSON mode, proxy-friendly Base URL.
@@ -100,7 +99,7 @@ const presetProviders: TranslationProvider[] = [
 		id: 'groq',
 		displayName: 'Groq',
 		defaultBaseURL: 'https://api.groq.com/openai/v1',
-		defaultModel: 'llama-3.3-70b-versatile',
+		defaultModel: 'openai/gpt-oss-120b',
 		noV1Suffix: true
 	}),
 	createOpenAICompatibleProvider({

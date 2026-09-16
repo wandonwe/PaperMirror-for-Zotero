@@ -101,7 +101,7 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 		const temperatureIsExplicit = typeof settings.temperature === 'number'
 			&& Number.isFinite(settings.temperature);
 		const bodyNow = (): Record<string, unknown> => {
-			const extras = openaiChatExtras(settings, config.id);
+			const extras = openaiChatExtras({ ...settings, model }, config.id);
 			if (drop.reasoning) {
 				delete extras.reasoning_effort;
 			}
@@ -188,7 +188,7 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 						// keep `max_tokens` for other OpenAI-compatible servers that
 						// don't recognise the new one. Without this, a valid gpt-5.x
 						// model tests as "模型不存在" (a 400 that mentions "model").
-						...(config.id === 'openai' ? { max_completion_tokens: 32 } : { max_tokens: 32 }),
+						...(config.id === 'openai' || (config.id === 'moonshot' && /^kimi-k3(?:$|-)/i.test(settings.model || config.defaultModel)) ? { max_completion_tokens: 32 } : { max_tokens: 32 }),
 						messages: [
 							{ role: 'user', content: 'Reply with the single word: ok' }
 						]

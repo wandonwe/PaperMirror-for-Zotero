@@ -34,17 +34,25 @@ function messagesURL(settings: ProviderSettings): string {
 	return anthropicMessagesURL(settings.apiBaseURL, DEFAULT_BASE);
 }
 
-/**
- * Advanced body fields for Anthropic (opt-in). Extended thinking is enabled only
- * at reasoning 'high' (translation rarely needs it); thinking mode forbids a
- * custom temperature, so temperature is applied only when thinking is off. The
- * `thinking` blocks in the reply are ignored by extractText (text parts only).
- */
-function advancedBody(settings: ProviderSettings, defaultMax: number): Record<string, unknown> {
+/** Model-specific thinking controls: adaptive for current Claude, budget for older models. */
+export function advancedBody(settings: ProviderSettings, defaultMax: number): Record<string, unknown> {
 	const maxTokens = settings.maxOutputTokens && settings.maxOutputTokens > 0
 		? Math.floor(settings.maxOutputTokens)
 		: defaultMax;
 	const out: Record<string, unknown> = { max_tokens: maxTokens };
+    const model=settings.model || DEFAULT_MODEL;
+    const modern=/^claude-(?:(?:sonnet|opus)-5|opus-4-[78]|(?:fable|mythos)-5)/.test(model);
+    if(modern) {
+        if(typeof settings.temperature === 'number' && settings.temperature !== 1)
+            throw new PaperMirrorError('UNKNOWN', '当前 Claude 模型不支持自定义温度，请清除高级设置中的温度。');
+        const r=settings.reasoning;
+        const always=/^claude-(?:fable|mythos)-5/.test(model);
+        const enabled=always || (!!r && r !== 'disabled');
+        out.thinking={type:enabled ? 'adaptive' : 'disabled'};
+        if(enabled && r !== 'auto') out.output_config={effort:r === 'high' || r === 'xhigh' ? 'high' : r === 'medium' ? 'medium' : 'low'};
+        return out;
+    }
+
 	if (settings.reasoning === 'high' || settings.reasoning === 'xhigh') {
 		// The thinking budget is ADDED ON TOP of the output allowance — carving
 		// it out of max_tokens starved big batches (8000-char chunks need
@@ -93,7 +101,7 @@ export const anthropicProvider: TranslationProvider = {
 				headers: headers(settings),
 				body: {
 					model: settings.model || DEFAULT_MODEL,
-					max_tokens: 32,
+					...advancedBody({...settings,maxOutputTokens:256,reasoning:'disabled'},256),
 					messages: [{ role: 'user', content: 'Reply with the single word: ok' }]
 				},
 				timeoutMs: Math.min(settings.timeoutMs, 30000)
