@@ -67,6 +67,13 @@ export function validatePageIR(ir: PageIR): IRViolation[] {
 			out.push({ invariant: 'unique-id', blockId: b.id, detail: `duplicate id at index ${i}` });
 		}
 		seen.add(b.id);
+        if (b.sourceRegion) {
+            const r=b.sourceRegion.boundsPdf;
+            if(b.sourceRegion.kind==='caption' && b.type!=='caption') out.push({invariant:'region-role',blockId:b.id,detail:'caption ownership changed role'});
+            for(const line of b.lineRectsPdf ?? []) if(line[0]<r[0]-.5 || line[1]<r[1]-.5 || line[2]>r[2]+.5 || line[3]>r[3]+.5) {
+                out.push({invariant:'region-boundary',blockId:b.id,detail:`source line outside ${b.sourceRegion.id}`});break;
+            }
+        }
 		if (b.pageIndex !== ir.pageIndex) {
 			out.push({ invariant: 'page-index', blockId: b.id, detail: `block.pageIndex ${b.pageIndex} ≠ page ${ir.pageIndex}` });
 		}

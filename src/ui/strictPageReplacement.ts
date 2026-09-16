@@ -1033,6 +1033,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		node.className = 'pm-repage-block';
 		if (flowBoxes) { node.setAttribute('data-pm-flow', 'true'); node.style.pointerEvents = 'none'; }
 		node.setAttribute('data-pm-block', block.id);
+		if(block.sourceRegion) node.setAttribute('data-pm-source-region',block.sourceRegion.id);
 		node.setAttribute('data-pm-type', block.type);
 		// 表格单元格标记 (2.3.7): 整格块与逐 member 兜底块的 id 都是
 		// `…-table-T-rR-cC` 形;单元格可末位缩字(allowsFontShrink 豁免)。
@@ -1252,7 +1253,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// 或水平向(下扩)重叠者的最近边,留 3px 边距;右扩以版心 90% 为界
 	// (BabelDOC 同),下扩以页高 95% 为界;各设温和上限防贪婪。
 	const expansionAllowance = (item: StrictItem): { right: number; down: number } =>
-		(item.flowBoxes || imageTextBoxes.has(item.id)) ? { right: 0, down: 0 } : item.node.hasAttribute('data-pm-cell') ? { right: 0, down: 0 } : computeExpansionAllowance(item.box, [
+		(item.flowBoxes || imageTextBoxes.has(item.id) || item.node.hasAttribute('data-pm-source-region')) ? { right: 0, down: 0 } : item.node.hasAttribute('data-pm-cell') ? { right: 0, down: 0 } : computeExpansionAllowance(item.box, [
 			...imageBoxes,
 			// P2-14: 参考文献/表格墨迹也是遮挡物 —— 扩展不得长进它们的原文。
 			...inkObstacles.map(o => o.box),

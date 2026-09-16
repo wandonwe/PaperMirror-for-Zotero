@@ -18,7 +18,16 @@ export interface BoundingBox {
 	height: number;
 }
 
+/** Explicit ownership established before paragraph merging. Coordinates are raw PDF points. */
+export interface SourceRegion {
+ id: string;
+ kind: 'caption';
+ boundsPdf: [number,number,number,number];
+ evidence: 'label-aligned-lines';
+}
+
 export interface SourceBlock {
+ sourceRegion?: SourceRegion;
 	id: string;
 	pageIndex: number;
 	order: number;

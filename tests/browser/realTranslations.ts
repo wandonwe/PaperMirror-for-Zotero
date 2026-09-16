@@ -1,8 +1,10 @@
+import {checkOwnedRegions} from './ownedRegions';
 import fixtures from '../fixtures/regression/real-translations.json';
 import { buildStrictPage } from '../../src/ui/strictPageReplacement';
 import { showUnplacedTranslations } from '../../src/ui/unplacedTranslations';
 import type { SourceBlock } from '../../src/types/models';
 export async function checkRealTranslations():Promise<unknown[]> {
+ checkOwnedRegions();
  const gallery=document.createElement('div');gallery.id='real-translation-gallery';gallery.style.cssText='display:flex;flex-wrap:wrap;align-items:start;gap:16px';document.body.prepend(gallery);
  const outputs:unknown[]=[];
  for(const f of fixtures) {
