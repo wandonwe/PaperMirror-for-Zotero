@@ -12,7 +12,7 @@
  * OpenAI-compatible / Custom endpoints have no catalog on purpose (the backend
  * is unknown), so the picker shows only the custom input.
  *
- * Lists compiled 2026-08-10 from each provider's official docs (linked per
+ * Lists compiled 2026-09-16 from each provider's official docs (linked per
  * entry). Defaults favor low latency + stable structured output over the
  * strongest/most-expensive model.
  */
@@ -48,7 +48,7 @@ export interface ProviderCatalogEntry {
 	source: string;
 }
 
-const CHECKED = '2026-08-10';
+const CHECKED = '2026-09-16';
 
 export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 	openai: {
@@ -56,6 +56,7 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 		source: 'https://developers.openai.com/api/docs/models/all',
 		models: [
 			{ id: 'gpt-5.6-luna', group: 'recommended', recommended: true },
+			{ id: 'gpt-6-astra', group: 'quality' },
 			{ id: 'gpt-5.6-terra', group: 'quality' },
 			{ id: 'gpt-5.6-sol', group: 'quality' },
 			{ id: 'gpt-5.5', group: 'quality' },
@@ -71,13 +72,12 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 		checked: CHECKED,
 		source: 'https://ai.google.dev/gemini-api/docs/models',
 		models: [
-			// 2026-04 起 Google 收紧免费档:免费 API Key 只开放 2.5-flash / lite;
-			// 3.x 与 Pro 需付费档 — 默认必须选对所有账户都可用的。
+				// Stable existing default; account availability depends on Google tier and region.
 			{ id: 'gemini-2.5-flash', group: 'recommended', recommended: true },
 			{ id: 'gemini-2.5-flash-lite', group: 'fast' },
-			// Bob-plugin style: raw model ids only, no annotations. (2.5-flash/lite
-			// are the free-tier models; the rest need a paid-tier key — the
-			// test-connection error explains that when it applies.)
+			{ id: 'gemini-3.8-flash', group: 'quality' },
+			{ id: 'gemini-3.7-flash', group: 'quality' },
+			{ id: 'gemini-3.1-flash-lite', group: 'fast' },
 			{ id: 'gemini-3.6-flash', group: 'quality' },
 			{ id: 'gemini-3.5-flash', group: 'quality' },
 			{ id: 'gemini-2.5-pro', group: 'quality' },
@@ -90,6 +90,7 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 		source: 'https://platform.claude.com/docs/en/about-claude/models/overview',
 		models: [
 			{ id: 'claude-sonnet-5', group: 'recommended', recommended: true },
+			{ id: 'claude-fable-5-1', group: 'quality' },
 			{ id: 'claude-opus-5', group: 'quality' },
 			{ id: 'claude-fable-5', group: 'quality' },
 			{ id: 'claude-haiku-4-5', group: 'fast' },
@@ -100,20 +101,11 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 	},
 	deepseek: {
 		checked: CHECKED,
-		source: 'https://api-docs.deepseek.com/api/list-models',
-		// 2.12.1 核对官方变更日志 (api-docs.deepseek.com/updates, 2026-09-10):
-		// 当前名是 `deepseek-flash`(V4.1 Flash);`deepseek-v4-flash` 暂时路由
-		// 过去,所以老配置不会立刻坏,但它是过渡名。`deepseek-v4-pro` 在
-		// **2026-09-14 之后**也会被路由到 V4.1 Flash —— 选它已经拿不到 Pro,
-		// 因此降为 legacy,不再标 quality 误导用户。
-		//
-		// 注意:这两个型号**默认开启思考、默认强度 high**。翻译用不上思维链,
-		// advancedParams 里默认发 `thinking: {type:'disabled'}` 关掉它;
-		// 用户在高级设置里显式要了强度才开。
+		source: 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing/',
+		// Official 2026-09-16: V4 Pro remains available; Flash aliases route to V4.1.
 		models: [
 			{ id: 'deepseek-flash', group: 'recommended', recommended: true },
-			{ id: 'deepseek-v4-flash', group: 'legacy' },
-			{ id: 'deepseek-v4-pro', group: 'legacy' }
+			{ id: 'deepseek-v4-pro', group: 'quality' }
 		]
 	},
 	moonshot: {
@@ -122,64 +114,63 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 		models: [
 			// Base https://api.moonshot.ai/v1. kimi-k2.7-code is code-focused → excluded.
 			{ id: 'kimi-k3', group: 'recommended', recommended: true },
-			{ id: 'kimi-k2.6', group: 'quality' },
-			{ id: 'kimi-k2.5', group: 'legacy' }
+			{ id: 'kimi-k2.6', group: 'quality' }
 		]
 	},
 	qwen: {
 		checked: CHECKED,
 		source: 'https://help.aliyun.com/zh/model-studio/text-generation-model',
 		models: [
-			// Old aliases qwen-plus/max/turbo are retiring → excluded.
 			{ id: 'qwen3.7-plus', group: 'recommended', recommended: true },
-			{ id: 'qwen3.7-max', group: 'quality' },
-			{ id: 'qwen3.6-flash', group: 'fast' },
-			{ id: 'qwen3.8-max-preview', group: 'preview' },
-			{ id: 'qwen3.6-plus', group: 'legacy' }
+            { id: 'qwen3.8-max', group: 'quality' },
+            { id: 'qwen3.8-max-0902', group: 'quality' },
+            { id: 'qwen3.8-flash', group: 'fast' },
+            { id: 'qwen3.7-flash', group: 'fast' }
 		]
 	},
 	zhipu: {
-		checked: CHECKED,
-		source: 'https://docs.bigmodel.cn/cn/guide/models/text/glm-5',
-		models: [
-			{ id: 'glm-5', group: 'recommended', recommended: true },
-			{ id: 'glm-4.7', group: 'quality' },
-			{ id: 'glm-4.5-air', group: 'fast' },
-			{ id: 'glm-4.5-flash', group: 'fast' },
-			{ id: 'glm-4-flash-250414', group: 'legacy' },
-			{ id: 'glm-4-air-250414', group: 'legacy' },
-			{ id: 'glm-4-flashx-250414', group: 'legacy' }
-		]
-	},
+        checked: CHECKED,
+        source: 'https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3',
+        models: [
+            { id: 'glm-5.3', group: 'recommended', recommended: true },
+            { id: 'glm-5.3-flash', group: 'fast' },
+			{ id: 'glm-5.2', group: 'quality' },
+            { id: 'glm-5', group: 'legacy' },
+            { id: 'glm-4.7', group: 'legacy' },
+            { id: 'glm-4.5-air', group: 'fast' },
+            { id: 'glm-4.5-flash', group: 'fast' }
+        ]
+    },
 	groq: {
 		checked: CHECKED,
 		source: 'https://console.groq.com/docs/models',
 		models: [
-			{ id: 'llama-3.3-70b-versatile', group: 'recommended', recommended: true },
-			{ id: 'openai/gpt-oss-120b', group: 'quality' },
-			{ id: 'qwen/qwen3.6-27b', group: 'quality' },
-			{ id: 'minimaxai/minimax-m2.7', group: 'quality' },
-			{ id: 'llama-3.1-8b-instant', group: 'fast' },
-			{ id: 'openai/gpt-oss-20b', group: 'fast' }
+            { id: 'openai/gpt-oss-120b', group: 'recommended', recommended: true },
+            { id: 'openai/gpt-oss-20b', group: 'fast' },
+            { id: 'qwen/qwen3.8-27b', group: 'preview' }
 		]
 	},
 	openrouter: {
 		checked: CHECKED,
-		source: 'https://openrouter.ai/docs/guides/overview/models',
+		source: 'https://openrouter.ai/api/v1/models',
 		models: [
 			// Meta-router with 400+ models — these are common cross-vendor entries;
 			// the custom input is essential here.
 			{ id: 'openrouter/auto', group: 'recommended', recommended: true },
-			{ id: 'anthropic/claude-sonnet-5', group: 'quality' },
+			{ id: 'openai/gpt-6-astra', group: 'quality' },
+            { id: 'anthropic/claude-fable-5.1', group: 'quality' },
+            { id: 'anthropic/claude-sonnet-5', group: 'quality' },
 			{ id: 'openai/gpt-5.6-luna', group: 'quality' },
-			{ id: 'google/gemini-3.6-flash', group: 'quality' },
+			{ id: 'google/gemini-3.8-flash', group: 'quality' },
 			{ id: 'deepseek/deepseek-v4-pro', group: 'quality' },
-			{ id: 'qwen/qwen3.7-plus', group: 'quality' },
+			{ id: 'qwen/qwen3.8-max-0902', group: 'quality' },
+            { id: 'qwen/qwen3.8-flash', group: 'fast' },
+            { id: 'qwen/qwen3.7-plus', group: 'quality' },
 			{ id: 'moonshotai/kimi-k3', group: 'quality' },
 			{ id: 'openai/gpt-5.4-mini', group: 'fast' },
 			{ id: 'google/gemini-2.5-flash', group: 'fast' },
 			{ id: 'anthropic/claude-haiku-4.5', group: 'fast' },
-			{ id: 'deepseek/deepseek-v4-flash', group: 'fast' }
+			{ id: 'deepseek/deepseek-v4.1-flash', group: 'fast' }
 		]
 	},
 	siliconflow: {
@@ -189,10 +180,10 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 			// Aggregator — exact ids follow the SiliconFlow console; custom stays.
 			{ id: 'deepseek-ai/DeepSeek-V4-Flash', group: 'recommended', recommended: true },
 			{ id: 'deepseek-ai/DeepSeek-V4-Pro', group: 'quality' },
-			{ id: 'Qwen/Qwen3.7-Plus', group: 'quality' },
+			{ id: 'Qwen/Qwen3.8-2.4T-A95B', group: 'quality' },
+            { id: 'zai-org/GLM-5.3', group: 'quality' },
 			{ id: 'Qwen/Qwen3-235B-A22B-Instruct-2507', group: 'quality' },
 			{ id: 'THUDM/GLM-4.5-Air', group: 'quality' },
-			{ id: 'Qwen/Qwen3.6-Flash', group: 'fast' },
 			{ id: 'Qwen/Qwen3-30B-A3B-Instruct-2507', group: 'fast' },
 			{ id: 'moonshotai/Kimi-K2.5', group: 'fast' }
 		]
@@ -203,6 +194,9 @@ export const MODEL_CATALOG: Record<string, ProviderCatalogEntry> = {
 		models: [
 			// Local — you must `ollama pull` the model first; type whatever you have.
 			{ id: 'qwen3.5', group: 'recommended', recommended: true },
+            { id: 'qwen3.8', group: 'quality' },
+            { id: 'qwen3.6', group: 'quality' },
+            { id: 'gpt-oss', group: 'quality' },
 			{ id: 'llama3.3', group: 'quality' },
 			{ id: 'deepseek-r1', group: 'quality' },
 			{ id: 'qwen3', group: 'fast' },

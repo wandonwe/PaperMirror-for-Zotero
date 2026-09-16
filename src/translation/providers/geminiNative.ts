@@ -43,11 +43,8 @@ function headers(settings: ProviderSettings): Record<string, string> {
 	};
 }
 
-/**
- * generationConfig from the advanced settings. 深度思考: 禁用思考 → budget 0,
- * 自动思考 → budget -1 (dynamic), 默认设置 → omitted entirely. Temperature
- * defaults to 0 (translation-stable); maxOutputTokens only when user-set.
- */
+/** Gemini 3 uses thinkingLevel; Gemini 2.5 uses thinkingBudget.
+ * Models without an off mode use their documented minimum. */
 export function geminiGenerationConfig(settings: ProviderSettings, opts?: { json?: boolean }): Record<string, unknown> {
 	const config: Record<string, unknown> = {
 		temperature: typeof settings.temperature === 'number' && Number.isFinite(settings.temperature)
@@ -61,22 +58,27 @@ export function geminiGenerationConfig(settings: ProviderSettings, opts?: { json
 		config.responseMimeType = 'application/json';
 	}
 	const r = settings.reasoning;
-	if (r === 'disabled' || r === 'minimal') {
-		config.thinkingConfig = { thinkingBudget: 0 };
-	}
-	else if (r === 'auto') {
-		config.thinkingConfig = { thinkingBudget: -1 };
-	}
+    const model=(settings.model || DEFAULT_MODEL).replace(/^models\//,'');
+    if (/^gemini-3/.test(model)) {
+        if(r && r !== 'auto') {
+            const minimum=/^gemini-3\.[78]-flash/.test(model) || /pro/.test(model) ? 'low' : 'minimal';
+            config.thinkingConfig={thinkingLevel:r === 'disabled' || r === 'minimal' ? minimum : r === 'xhigh' ? 'high' : r};
+        }
+    } else if (r === 'disabled' || r === 'minimal') {
+        config.thinkingConfig = { thinkingBudget: /^gemini-2\.5-pro/.test(model) ? 128 : 0 };
+    } else if (r === 'auto') {
+        config.thinkingConfig = { thinkingBudget: -1 };
+    }
 	return config;
 }
 
 function extractText(json: unknown): string {
-	const candidates = (json as { candidates?: { content?: { parts?: { text?: string }[] } }[] })?.candidates;
+	const candidates = (json as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] })?.candidates;
 	const parts = candidates?.[0]?.content?.parts;
 	if (!Array.isArray(parts)) {
 		throw new PaperMirrorError('BAD_RESPONSE', 'Unexpected Gemini response shape.');
 	}
-	return parts.map(p => p.text ?? '').join('');
+	return parts.filter(p => !p.thought).map(p => p.text ?? '').join('');
 }
 
 /**
@@ -174,14 +176,7 @@ export const geminiNativeProvider: TranslationProvider = {
 					contents: [{ role: 'user', parts: [{ text: 'Reply with the single word: ok' }] }],
 					generationConfig: config
 				}),
-				{
-					// Thinking off keeps the probe fast and cheap; the cap is 256
-					// (not 64) so that when the heal strips thinkingConfig for a
-					// thinking-mandatory model, its thoughts don't eat the whole
-					// budget and leave an empty answer.
-					maxOutputTokens: 256,
-					thinkingConfig: { thinkingBudget: 0 }
-				},
+                geminiGenerationConfig({...settings,reasoning:'disabled',maxOutputTokens:256}),
 				Math.min(settings.timeoutMs, 30000)
 			);
 			const text = extractText(json);

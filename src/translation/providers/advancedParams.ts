@@ -63,22 +63,10 @@ const REASONING_EFFORT_PROVIDERS = new Set(['openai', 'openrouter']);
  * 翻译不需要思维链:我们只要最终译文,推理过程读都不读。默认关掉。
  * 用户在高级设置里显式要了思考强度,就按他要的发 —— 那是他的决定。
  */
-/* 真机第十三轮之后,照 deepseek 的做法把每一家预置 LLM 都对着官方文档核了一遍。
- * 结论:**四家默认开思考,而我们一个参数都没发过。** 三种关法,不能混用 ——
- * 发错词汇就是一个 400。
- *
- *   thinking 对象      deepseek (thinking.type=enabled|disabled + reasoning_effort)
- *                      zhipu    (GLM-5 默认"自适应思考",官方:必须跳过就显式
- *                                设 thinking.type=disabled)
- *   enable_thinking    qwen     (官方明写 qwen3.7-plus 系列"thinking enabled
- *                                by default";我们的默认型号正是它)
- *                      siliconflow (默认型号就是 DeepSeek-V4-Flash,同一个模型)
- *   关不掉,只能调低    moonshot (官方原话:「You can't — K3 always thinks」,
- *                                只能把 reasoning_effort 从默认的 max 降下来)
- *
- * 没有中招的:openai(reasoning_effort 本来就走我们这条路)、gemini(原生
- * thinkingConfig,另一条适配器)、anthropic(扩展思考是 opt-in,不发就不思考)、
- * groq(llama,无思考)、openrouter(按路由决定,不替它猜)。
+/* Checked 2026-09-16: controls differ by provider AND model family.
+ * DeepSeek uses thinking plus top-level reasoning_effort; GLM-5.3 and Kimi K3
+ * always think, while K2.6 and older GLM can disable it. Model-specific
+ * overrides below take precedence. Sources: docs/LLM-PROVIDERS-2026-09-16.md.
  */
 const THINKING_OBJECT_PROVIDERS = new Set(['deepseek', 'zhipu']);
 
@@ -140,15 +128,42 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
 	if (THINKING_OBJECT_PROVIDERS.has(providerId)) {
 		// 默认关闭(见上方证据):翻译只要最终译文,而它们默认就思考,
 		// 输出 token 是译文的十几倍 —— 时间和钱都白烧。
-		out.thinking = level ? { type: 'enabled', reasoning_effort: level } : { type: 'disabled' };
+		out.thinking = level ? { type: 'enabled' } : { type: 'disabled' };
+        if (providerId === 'deepseek' && level) out.reasoning_effort = level;
 	}
 	else if (ENABLE_THINKING_PROVIDERS.has(providerId)) {
 		out.enable_thinking = level !== null;
 	}
-	else if (ALWAYS_THINKS_PROVIDERS.has(providerId)) {
+	else if (providerId === 'moonshot' && /^kimi-k2\.6(?:$|-)/i.test(settings.model || '')) {
+        out.thinking = {type: level ? 'enabled' : 'disabled'};
+    }
+    else if (ALWAYS_THINKS_PROVIDERS.has(providerId)) {
 		// 关不掉就取最低档。默认是 max —— 对翻译是纯浪费。
 		out.reasoning_effort = level ?? 'low';
 	}
+    const model=(settings.model || '').trim();
+    // Hosted GLM-5.3 always reasons; do not send the generic off switch.
+    if(providerId === 'siliconflow' && model === 'zai-org/GLM-5.3') delete out.enable_thinking;
+    if(providerId === 'zhipu' && /^glm-5\.3(?:$|-)/i.test(model)) {
+        out.thinking={type:'enabled'};
+        out.reasoning_effort=level ?? 'low';
+    }
+    if(providerId === 'moonshot' && /^kimi-k(?:3|2\.6)(?:$|-)/i.test(model)) {
+        const expected=/^kimi-k3/i.test(model) || level ? 1 : .6;
+        if(typeof settings.temperature === 'number' && settings.temperature !== expected)
+            throw new PaperMirrorError('UNKNOWN', `当前 Kimi 模型温度固定为 ${expected}，请清除高级设置中的自定义温度。`);
+        delete out.temperature;
+        if(/^kimi-k3/i.test(model) && 'max_tokens' in out) {
+            out.max_completion_tokens=out.max_tokens;delete out.max_tokens;
+        }
+    }
+    if(providerId === 'openai' && /^gpt-6-astra(?:$|-)/.test(model)) {
+        if(eff === 'minimal' || eff === 'disabled') out.reasoning_effort='low';
+    }
+    if(providerId === 'groq' && /^openai\/gpt-oss-/.test(model)) {
+        out.reasoning_effort=eff === 'high' || eff === 'xhigh' ? 'high' : eff === 'medium' ? 'medium' : 'low';
+    }
+
 	return out;
 }
 
@@ -157,7 +172,7 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
 export function supportsReasoningControl(providerId: string): boolean {
 	return REASONING_EFFORT_PROVIDERS.has(providerId) || THINKING_OBJECT_PROVIDERS.has(providerId)
 		|| ENABLE_THINKING_PROVIDERS.has(providerId) || ALWAYS_THINKS_PROVIDERS.has(providerId)
-		|| providerId === 'anthropic' || providerId === 'gemini';
+		|| providerId === 'anthropic' || providerId === 'gemini' || providerId === 'groq';
 }
 
 /**

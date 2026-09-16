@@ -1,3 +1,4 @@
+import {currentOfficialModel} from './providers/modelMigrations';
 /**
  * Per-provider configuration profiles (spec 0.9.3 §A).
  *
@@ -75,6 +76,8 @@ export function parseProviderProfiles(raw: string | undefined | null): ProviderP
 			if (typeof v.temperature === 'number' && Number.isFinite(v.temperature)) {
 				profile.temperature = v.temperature;
 			}
+            if(profile.model) profile.model=currentOfficialModel(id,profile.model,profile.apiBaseUrl,profile.apiPath);
+            if(profile.customModel) profile.customModel=currentOfficialModel(id,profile.customModel,profile.apiBaseUrl,profile.apiPath);
 			out[id] = profile;
 		}
 		return out;

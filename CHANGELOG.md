@@ -7,6 +7,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.0.1] — 2026-09-16
+
+- 核对 11 个 LLM 模型目录，更新当前型号与官方接口参数；DeepSeek 使用 `deepseek-flash`，继续提供 V4 Pro 选项。
+- 修正 DeepSeek 顶层思考强度、Kimi 固定温度及输出预算、Claude adaptive thinking、Gemini 3 思考档位；增加 GLM-5.3 与 Groq GPT-OSS 参数适配。
+- 对确认停用的官方模型和兼容别名做有限迁移，保留代理、自定义接口及聚合平台配置。详见 [厂商核对记录](docs/LLM-PROVIDERS-2026-09-16.md)。
+
 ## [4.0.0] — 2026-09-16
 
 本版按新的区域归属框架整理发布。在 3.3.0 基础上新增图注提前归属、正文栏与单元格区域约束；版本号提升不代表所有 PDF 版式均已自动识别正确。

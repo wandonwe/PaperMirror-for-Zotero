@@ -86,12 +86,8 @@ test('reasoning_effort mapping: official levels for OpenAI/OpenRouter only', () 
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'low' }), 'openrouter'), { reasoning_effort: 'low' });
 	// providers not known to accept it → omitted (never risk a 400)
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'high' }), 'groq'), { temperature: 0 });
-	// DeepSeek 走的是它自己的 `thinking` 对象,不是 reasoning_effort 顶层字段
-	// (官方文档:thinking.type = enabled|disabled,effort = none|low|high|max)。
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'high' }), 'deepseek'),
-		{ temperature: 0, thinking: { type: 'enabled', reasoning_effort: 'high' } });
-	assert.ok(!('reasoning_effort' in openaiChatExtras(base({ reasoning: 'high' }), 'deepseek')),
-		'不能同时发顶层 reasoning_effort —— 那是 OpenAI 的词汇');
+		{ temperature: 0, thinking: { type: 'enabled' }, reasoning_effort: 'high' });
 });
 
 test('DeepSeek 默认关思考:翻译只要最终译文 (2.12.1)', () => {
@@ -110,8 +106,8 @@ test('DeepSeek 默认关思考:翻译只要最终译文 (2.12.1)', () => {
 	};
 	for (const [ours, theirs] of Object.entries(ladder)) {
 		assert.deepEqual(
-			openaiChatExtras(base({ reasoning: ours as never }), 'deepseek').thinking,
-			{ type: 'enabled', reasoning_effort: theirs },
+			openaiChatExtras(base({ reasoning: ours as never }), 'deepseek'),
+			{ temperature: 0, thinking: { type: 'enabled' }, reasoning_effort: theirs },
 			`${ours} 应映射到 DeepSeek 的 ${theirs}`);
 	}
 });
@@ -278,7 +274,7 @@ test('三种关法互斥,每家只发自己的那一种 (2.12.2)', () => {
 	for (const id of all) {
 		const extras = openaiChatExtras(base({ reasoning: 'high' }), id);
 		const used = ['thinking', 'enable_thinking', 'reasoning_effort'].filter(k => k in extras);
-		assert.ok(used.length <= 1,
+		assert.ok(id === 'deepseek' ? used.join(',') === 'thinking,reasoning_effort' : used.length <= 1,
 			`${id} 同时发了 ${used.join(' + ')} —— 词汇混用就是一个 400`);
 	}
 });
@@ -287,7 +283,7 @@ test('设置界面给得出思考开关的,正是会思考的那几家 (2.12.2)'
 	for (const id of ['deepseek', 'zhipu', 'qwen', 'siliconflow', 'moonshot', 'openai', 'gemini', 'anthropic']) {
 		assert.equal(supportsReasoningControl(id), true, `${id} 会思考,用户必须能改`);
 	}
-	for (const id of ['groq', 'bing-free', 'google-free', 'deepl']) {
+	for (const id of ['bing-free', 'google-free', 'deepl']) {
 		assert.equal(supportsReasoningControl(id), false, `${id} 没有思考,不该给一个空开关`);
 	}
 });

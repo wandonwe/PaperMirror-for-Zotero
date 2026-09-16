@@ -32,7 +32,7 @@ test('recommendedModelFor returns the recommended (or first) entry', () => {
 	assert.equal(recommendedModelFor('anthropic'), 'claude-sonnet-5');
 	assert.equal(recommendedModelFor('moonshot'), 'kimi-k3');
 	assert.equal(recommendedModelFor('qwen'), 'qwen3.7-plus');
-	assert.equal(recommendedModelFor('zhipu'), 'glm-5');
+	assert.equal(recommendedModelFor('zhipu'), 'glm-5.3');
 	assert.equal(recommendedModelFor('custom'), ''); // no catalog
 });
 
