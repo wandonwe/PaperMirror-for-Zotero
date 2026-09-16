@@ -1,3 +1,4 @@
+import { finalizePageRegions } from './pageRegions';
 import { StructureCache } from './structureCache';
 /**
  * Per-page text extraction.
@@ -25,7 +26,6 @@ import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
 import { buildBlocks, buildBlocksFromPlainText, medianFontSize } from './blockBuilder';
 import { buildBlocksFromSpans } from './spanBlockBuilder';
-import { coalesceRegions } from './regionCoalescer';
 import { borderGrid, borderGrids, columnOfX, rowOfTop, type BorderGrid } from './tableBorders';
 import { orderBlocksForReading } from './readingOrder';
 import { structureTableCells } from './tableStructure';
@@ -187,7 +187,7 @@ export class TextExtractor implements PageParser {
  private structureCache=new StructureCache();
  private extracting=new Map<string,Promise<SourceBlock[]>>();
  private structureKey(pageIndex:number):string {
-  return JSON.stringify(['structure-3.3.0-2',pageIndex,this.currentExtractInputs(pageIndex)]);
+  return JSON.stringify(['structure-3.3.0-3',pageIndex,this.currentExtractInputs(pageIndex)]);
  }
 
 	private reader: ReaderLike;
@@ -537,9 +537,7 @@ export class TextExtractor implements PageParser {
 				// interleave the columns, and the coalescer only merges adjacent
 				// blocks — without this, one-line shreds never rejoin.
 				const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), (await this.gridFor(pageIndex, pageHeight), this.allBorderGrids.get(pageIndex)), true, pageHeight);
-				const tableCells = structured.filter(b => b.translationMode !== undefined);
-				const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
-				result.blocks = orderBlocksForReading([...prose, ...tableCells]);
+				result.blocks = finalizePageRegions(structured, pageHeight, obstacles);
 				this.logGrouping(pageIndex, sourceBlockCount, result.blocks.length);
 				if (result.blocks.length) {
 					this.referencesStartedByPage.set(pageIndex, result.referencesStarted);
@@ -764,9 +762,7 @@ export class TextExtractor implements PageParser {
 			}
 		}
 		const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), this.allBorderGrids.get(pageIndex) ?? grid, true, page.pageHeight);
-		const tableCells = structured.filter(b => b.translationMode !== undefined);
-		const prose = coalesceRegions(structured.filter(b => b.translationMode === undefined), obstacles);
-		result.blocks = orderBlocksForReading([...prose, ...tableCells]);
+		result.blocks = finalizePageRegions(structured, page.pageHeight, obstacles);
 		// 建块是**同步 CPU 段**,与等待是两回事 —— 主线程卡不卡看这个数,
 		// 等得久不久看 textLayerWaitMs。混在一起就分不出该优化哪边。
 		if (phases) {

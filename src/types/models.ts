@@ -18,12 +18,12 @@ export interface BoundingBox {
 	height: number;
 }
 
-/** Explicit ownership established before paragraph merging. Coordinates are raw PDF points. */
+/** Explicit source ownership carried from extraction into layout. Coordinates are raw PDF points. */
 export interface SourceRegion {
  id: string;
- kind: 'caption';
+ kind: 'caption' | 'body-column' | 'table-cell' | 'page-furniture';
  boundsPdf: [number,number,number,number];
- evidence: 'label-aligned-lines';
+ evidence: 'label-aligned-lines' | 'caption-continuation' | 'column-geometry' | 'table-model' | 'page-margin';
 }
 
 export interface SourceBlock {
