@@ -44,6 +44,14 @@ export interface OverlayProgress {
 	retryable?: boolean;
 }
 
+/** Resting state must retain placement failures after an active task disappears. */
+export function idleProgressFor(currentPage: number, totalPages: number, translated: boolean,
+ placement?: { placed: number; kept: number; segTotal: number }): OverlayProgress {
+ if (placement && placement.kept > 0) return {phase:'partial',currentPage,totalPages,
+  segTotal:placement.segTotal,segTranslated:placement.segTotal,segPlaced:placement.placed,kept:placement.kept};
+ return {phase:'idle',currentPage,totalPages,segTotal:0,segTranslated:translated ? 1 : 0,segPlaced:0,kept:0};
+}
+
 export interface CapsuleAction {
 	kind: 'cancel' | 'retry' | 'view' | 'close';
 	label: string;

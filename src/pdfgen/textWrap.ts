@@ -5,6 +5,8 @@
  */
 
 export interface WrapOptions {
+	/** Actual glyph ink above/below the alphabetic baseline, in PDF units. */
+	verticalMetrics?: (text: string, size: number) => { ascent: number; descent: number };
 	/** Smallest font size before giving up and clipping. */
 	minSize?: number;
 	/** Line height as a multiple of the font size. */
@@ -12,6 +14,8 @@ export interface WrapOptions {
 }
 
 export interface WrapResult {
+	/** Baseline distances from the top; shared by fitting and drawing. */
+	baselineOffsets: number[];
 	lines: string[];
 	fontSize: number;
 	/** Line advance in the same unit as fontSize. */
@@ -122,23 +126,31 @@ export function layoutBlock(
 	const leading = options?.leading ?? 1.32;
 	const trimmed = text.replace(/\s+/g, ' ').trim();
 	if (!trimmed || boxWidth <= 1 || boxHeight <= 1) {
-		return { lines: [], fontSize: startSize, lineHeight: startSize * leading, overflow: false };
+		return { baselineOffsets: [], lines: [], fontSize: startSize, lineHeight: startSize * leading, overflow: false };
 	}
 	let size = Math.max(minSize, startSize);
 	for (;;) {
 		const lines = wrapAt(trimmed, size, boxWidth, measure) ?? [];
-		const needed = lines.length * size * leading;
-		if (needed <= boxHeight + size * 0.35) {
-			return { lines, fontSize: size, lineHeight: size * leading, overflow: false };
+		const ink = lines.map(line => options?.verticalMetrics?.(line, size)
+			?? { ascent: size * 0.86, descent: size * 0.25 });
+		const padding = size * 0.02;
+		const baselineOffsets: number[] = [];
+		for (let i = 0; i < lines.length; i++) {
+			baselineOffsets.push(i === 0 ? ink[i]!.ascent + padding
+				: baselineOffsets[i - 1]! + Math.max(size * leading, ink[i - 1]!.descent + ink[i]!.ascent + padding * 2));
+		}
+		const needed = lines.length ? baselineOffsets.at(-1)! + ink.at(-1)!.descent + padding : 0;
+		if (needed <= boxHeight) {
+			return { lines, baselineOffsets, fontSize: size, lineHeight: size * leading, overflow: false };
 		}
 		if (size <= minSize) {
-			// Clip: keep as many lines as fit, mark the loss.
-			const keep = Math.max(1, Math.floor((boxHeight + size * 0.35) / (size * leading)));
+			// Callers must retain the original block when overflow is true.
+			const keep = baselineOffsets.filter((baseline, i) => baseline + ink[i]!.descent + padding <= boxHeight).length;
 			const kept = lines.slice(0, keep);
 			if (kept.length && kept.length < lines.length) {
 				kept[kept.length - 1] = `${kept[kept.length - 1]}…`;
 			}
-			return { lines: kept, fontSize: size, lineHeight: size * leading, overflow: true };
+			return { lines: kept, baselineOffsets: baselineOffsets.slice(0, keep), fontSize: size, lineHeight: size * leading, overflow: true };
 		}
 		size = Math.max(minSize, size * 0.92);
 	}

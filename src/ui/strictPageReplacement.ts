@@ -1,3 +1,5 @@
+import { preserveCollapsedPlotPanels } from '../reader/compositePlotGuard';
+import { createTextInkGuard } from './textInkBounds';
 import { RenderMeasurementCache } from './measurementCache';
 import { pageContentKey } from '../export/pageArchive';
 /**
@@ -557,7 +559,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	//
 	// 表格的几何模型(区域探测、单元格成员)输入**维持原样**,见下面的 `tabular`:
 	// 这一版只放表题进排版,不动表格判定,免得把两个变化搅在一起。
-	const geometric = selectGeometricBlocks(input.blocks);
+	const geometric = selectGeometricBlocks(preserveCollapsedPlotPanels(input.blocks));
 	// 表格几何模型的输入 —— 与改动前的 `geometric` 逐字相同(不含表题)。
 	// 表题不当区域种子、不当单元格成员: 它在表框外,进去只会污染区域范围。
 	const tabular = geometric.filter(b => b.type !== 'table' && !isTableCellBlock(b));
@@ -1101,17 +1103,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		byId.set(block.id, item);
 	}
 
-	/**
-	 * 高度容差按字号算 (3.1.5, CAD-RADS 2022 真机实证): 单行块的盒高就是原文行高
-	 * (≈1em),而 CJK 字体的内容区(ascent+descent)比 1em 高得多 —— PingFang SC
-	 * ≈1.32em、Noto Sans CJK ≈1.45em —— line-height 已经压到 1.0,scrollHeight 仍比
-	 * 盒高多出 0.2–0.45em。固定 1.5px 的容差让**每一个**单行小字块(7pt 脚注、
-	 * 8.5pt 表题、"No change" 这样的 3 字格)都以 shrink-floor/height 放弃:p1 两条、
-	 * p4 三条、p12/15/18/20 的四条表题、多个表格格,全是同一个原因。
-	 * 内容区的超出部分是空白(墨迹在 em 框内,em 框与行框重合),不是多出来的一行:
-	 * 真多一行至少多 1em,0.35em 的容差永远吸收不了它,所以不会把溢出的块放行。
+	/** Font whitespace may exceed the source box, but visible glyphs may not.
+	 * Keep the cheap scroll-size prefilter; the ink guard below rejects clipped
+	 * CJK strokes/Latin descenders and lets the existing expansion ladder retry.
 	 */
 	const measurementCache = new RenderMeasurementCache();
+	const textInkFits = createTextInkGuard(doc);
 	const heightSlack = (item: StrictItem): number => Math.max(1.5, item.fontPx * 0.35);
 
 	/** Ladder-fit a hidden node; true when it fits its fixed rectangle. */
@@ -1148,7 +1145,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 					});
 					const parts = flowText(fullText, item.flowBoxes, (text, b, index, offset) => {
 						const child = nodes[index]!; fillSlice(child, offset, text.length);
-						return child.scrollHeight <= Math.round(b.height + heightSlack(item)) && child.scrollWidth <= b.width + 1.5;
+						return child.scrollHeight <= Math.round(b.height + heightSlack(item)) && child.scrollWidth <= b.width + 1.5 && textInkFits(child);
 					});
 					if (parts) { let offset = 0; parts.forEach((text,i) => { fillSlice(nodes[i]!, offset, text.length); offset += text.length; }); item.lastOverflow = 'none'; return true; }
 					fillStyled(item.node, markup);
@@ -1158,13 +1155,16 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
     // CSSOM scroll sizes are integers; compare in the same rounded units.
     const measured = measurementCache.measure(item.node, markup, () => ({height:item.node.scrollHeight,width:item.node.scrollWidth}));
 				if (measured.height <= Math.round(item.box.height + heightSlack(item))
-					&& measured.width <= item.box.width + 1.5) {
+					&& measured.width <= item.box.width + 1.5 && textInkFits(item.node)) {
 					item.lastOverflow = 'none';
 					return true;
 				}
 			}
 			// 记下最后一档的溢出方向 (2.7.0): 放弃原因需要它。
-			if (!item.flowBoxes) item.lastOverflow = fitOverflow(item.node.scrollWidth, item.node.scrollHeight, item.box.width, item.box.height);
+			if (!item.flowBoxes) {
+				item.lastOverflow = fitOverflow(item.node.scrollWidth, item.node.scrollHeight, item.box.width, item.box.height);
+				if (item.lastOverflow === 'none' && !textInkFits(item.node)) item.lastOverflow = 'height';
+			}
 			return false;
 		}
 		finally {

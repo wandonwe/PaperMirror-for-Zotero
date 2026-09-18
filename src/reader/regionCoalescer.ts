@@ -31,6 +31,7 @@ const MAX_REGION_CHARS = 2600;
 /** Body types that may merge. Headings/titles/captions/tables never do. */
 function isBodyBlock(block: SourceBlock): boolean {
 	return (block.type === 'paragraph' || block.type === 'list')
+		&& block.translationMode !== 'preserve'
 		&& !block.isReference
 		&& !!block.lineRectsPdf?.length;
 }

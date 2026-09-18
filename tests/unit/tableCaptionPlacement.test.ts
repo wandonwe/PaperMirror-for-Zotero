@@ -55,7 +55,7 @@ test('geometric 过滤不再排除表题 (结构性回归闸, 2.8.14)', () => {
 	const src = read('src/ui/strictPageReplacement.ts');
 	// 2.12.12: 准入收进 selectGeometricBlocks —— "不是**仍保留原文的**参考文献、有可用行矩形"。
 	// 允许翻译的参考文献必须进排版(审核第 3 条),否则请求花了钱页面仍是英文。
-	const line = src.slice(src.indexOf('const geometric = selectGeometricBlocks(input.blocks)'));
+	const line = src.slice(src.indexOf('const geometric = selectGeometricBlocks(preserveCollapsedPlotPanels(input.blocks))'));
 	const decl = line.slice(0, line.indexOf('\n'));
 	assert.ok(decl.length > 0, '替换流水线的准入必须走 selectGeometricBlocks');
 	const fn = src.slice(src.indexOf('export function selectGeometricBlocks'));

@@ -1,3 +1,4 @@
+import {checkDisplayFormula} from './displayFormula';
 import {checkToolbar} from './toolbar';
 import { checkRealTranslations } from './realTranslations';
 import { checkRecommendationTables } from './recommendationTables';
@@ -9,6 +10,7 @@ import { buildStrictPage } from '../../src/ui/strictPageReplacement';
 const result=document.createElement('pre');result.id='result';document.body.append(result);
 async function run() {
 try {
+ checkDisplayFormula();
  checkToolbar();
  await checkImageCaption();
  checkScroll();

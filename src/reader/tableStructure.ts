@@ -1,3 +1,4 @@
+import { preserveCollapsedPlotPanels } from './compositePlotGuard';
 import { auditTableModel, tableCellBounds } from '../ir/tableModel';
 import { auditTableOwnership } from './tableOwnership';
 /**
@@ -699,7 +700,7 @@ function contained(box: Box, region: Box): number {
 export function structureTableCells(...args: Parameters<typeof structureTableCellsUnchecked>): SourceBlock[] {
  const result=structureTableCellsUnchecked(...args);
  const issues=[...auditTableOwnership(args[0],result), ...auditTableModel(result.filter(b => tableCellBounds(b)))];
- return issues.length ? args[0].map(b=>({...b,tableStructureIssue:issues.slice(0,8).join(';')})) : result;
+ return preserveCollapsedPlotPanels(issues.length ? args[0].map(b=>({...b,tableStructureIssue:issues.slice(0,8).join(';')})) : result);
 }
 
 function structureTableCellsUnchecked(
@@ -743,7 +744,7 @@ function structureTableCellsUnchecked(
 	// 不参与区域探测与建格。参考文献 preserve 块照旧参与(2.0.8 起就是这样)。
 	// 'marks'(孤立数字)例外:表里的年份格 "2018" 在提取阶段看就是一串孤立数字,
 	// 它得进表当数据格 —— Powers p4 那两个丢了几版的年份就是它们。
-	const FURNITURE = new Set(['running-head', 'watermark', 'sliver', 'banner', 'boilerplate', 'names', 'dates', 'bibliographic', 'identifier']);
+	const FURNITURE = new Set(['display-formula', 'running-head', 'watermark', 'sliver', 'banner', 'boilerplate', 'names', 'dates', 'bibliographic', 'identifier']);
 	const isFurniture = (b: SourceBlock): boolean =>
 		b.translationMode === 'preserve' && !!b.preserveReason && FURNITURE.has(b.preserveReason);
 	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox && !isFurniture(b));

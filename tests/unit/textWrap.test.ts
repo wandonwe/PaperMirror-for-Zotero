@@ -140,3 +140,22 @@ test('导出 sanitize 对空白不查字形,换行交给 layoutBlock 折叠 (3.0
 	const out = layoutBlock('目的:甲。\n\n方法:乙。', 1000, 100, 10, measure);
 	assert.deepEqual(out.lines, ['目的:甲。 方法:乙。']);
 });
+
+
+test('PDF glyph descenders must fit without height slack', () => {
+ const fitted = layoutBlock('gypq', 100, 9.8, 10, measure, { minSize: 10 });
+ assert.equal(fitted.overflow, true, 'a 0.25em descender cannot fit below a 0.86em baseline');
+});
+
+test('PDF uses measured ink for baselines and protects every line', () => {
+ const fitted = layoutBlock('一二三四五六七八九十', 30, 60, 10, measure, {
+  minSize: 10,
+  verticalMetrics: () => ({ ascent: 9, descent: 3 })
+ });
+ assert.equal(fitted.overflow, false);
+ assert.equal(fitted.baselineOffsets.length, fitted.lines.length);
+ for (const baseline of fitted.baselineOffsets) {
+  assert.ok(baseline >= 9);
+  assert.ok(baseline + 3 <= 60);
+ }
+});
