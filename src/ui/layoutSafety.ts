@@ -334,6 +334,14 @@ export function flowText<T>(text: string, regions: T[], fits: (text: string, reg
  let offset=0;
  for(let i=0;i<regions.length;i++) {
   const start=chars.slice(0,offset).join('').length;
+  const remaining=chars.slice(offset).join('');
+  // Try the complete remaining paragraph before binary searching prefixes.
+  // This avoids unnecessary fragmentation when the main band already fits.
+  if (remaining && fits(remaining,regions[i]!,i,start)) {
+   parts.push(remaining);offset=chars.length;
+   while(parts.length<regions.length) parts.push('');
+   break;
+  }
   let lo=0,hi=chars.length-offset;
   while(lo<hi) {
    const mid=Math.ceil((lo+hi)/2);

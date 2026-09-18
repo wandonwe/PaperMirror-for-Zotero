@@ -54,6 +54,7 @@ export function finalizePageRegions(blocks:SourceBlock[],pageHeight:number,obsta
  // Keep the established line/shard reconstruction before assigning body owners.
  // Premature column ownership freezes provisional column=-1 fragments and breaks
  // legitimate full-width paragraphs. Explicit parser caption owners remain guarded.
- const prose=coalesceRegions(blocks.filter(b=>b.translationMode===undefined),obstacles);
+ const formulas=protectedBlocks.filter(b=>b.preserveReason==='display-formula').flatMap(b=>b.lineRectsPdf ?? []);
+ const prose=coalesceRegions(blocks.filter(b=>b.translationMode===undefined),[...obstacles,...formulas]);
  return assignPageRegions(orderBlocksForReading([...prose,...protectedBlocks]),pageHeight);
 }

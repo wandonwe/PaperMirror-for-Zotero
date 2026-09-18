@@ -1,3 +1,4 @@
+import { idleProgressFor } from '../ui/statusCapsule';
 import { temporaryPageArchive, pageContentKey } from '../export/pageArchive';
 import { showUnplacedTranslations } from '../ui/unplacedTranslations';
 /**
@@ -1266,16 +1267,9 @@ export class ReaderSession {
 	/** The persistent resting model: reflects whether THIS page is translated. */
 	private idleCapsuleState(): OverlayProgress {
 		const pageIndex = adapter.getCurrentPageIndex(this.reader);
-		const translated = this.translatedPages.has(pageIndex);
-		return {
-			phase: 'idle',
-			currentPage: pageIndex + 1,
-			totalPages: adapter.getPageCount(this.reader),
-			segTotal: 0,
-			segTranslated: translated ? 1 : 0, // 0/1 flag → ✓ vs ↻ in the capsule
-			segPlaced: 0,
-			kept: 0
-		};
+		const stats = this.placementStats.get(pageIndex);
+		return idleProgressFor(pageIndex + 1, adapter.getPageCount(this.reader),
+			this.translatedPages.has(pageIndex), stats ? placementTally(stats) : undefined);
 	}
 
 	/** Shared collapsed state → mirror onto BOTH surfaces' capsules. */
@@ -1309,8 +1303,7 @@ export class ReaderSession {
 		const topPage = this.topTaskId
 			? this.tasks.get(this.topTaskId)?.currentPage
 			: undefined;
-		const pageIndex = target?.pageIndex
-			?? (topPage ? topPage - 1 : adapter.getCurrentPageIndex(this.reader));
+		const pageIndex = topPage ? topPage - 1 : adapter.getCurrentPageIndex(this.reader);
 		const state = this.manager?.getPageState(pageIndex);
   const failures = this.abandonedBlocks.get(pageIndex) ?? [];
   const rows = failures.flatMap(f => {
@@ -1322,7 +1315,7 @@ export class ReaderSession {
   if (doc && showUnplacedTranslations(doc, rows, pageIndex + 1)) return;
   // Bring the PDF (and thus any on-page overlay) to the right page first.
 		adapter.navigateToPage(this.reader, pageIndex);
-		if (target && target.element.isConnected) {
+		if (target?.pageIndex === pageIndex && target.element.isConnected) {
 			const boxes = Array.from(
 				target.element.querySelectorAll('[data-pm-unfit="true"]')
 			) as HTMLElement[];

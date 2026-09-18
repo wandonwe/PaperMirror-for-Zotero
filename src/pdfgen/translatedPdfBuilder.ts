@@ -1,3 +1,4 @@
+import { preserveCollapsedPlotPanels } from '../reader/compositePlotGuard';
 /**
  * In-plugin translated-PDF builder — no external service, no Python.
  *
@@ -31,6 +32,7 @@ import { isMetadataBlock } from '../reader/metaFilter';
 import * as logger from '../utils/logger';
 import { layoutBlock } from './textWrap';
 import { stripStyleMarkers } from '../reader/styleRuns';
+import { hasLegacyStatSymbols, repairLegacyStatSymbols } from './legacyPdfSymbols';
 
 const MODULE = 'translatedPdfBuilder';
 
@@ -193,7 +195,13 @@ export async function buildTranslatedPdf(
 	doc.registerFontkit(fontkit as never);
 	// subset:false is LOAD-BEARING — see the header comment.
 	const font = await doc.embedFont(fontBytes, { subset: false });
-	const glyphCheck = (fontkit as unknown as { create(b: Uint8Array): { hasGlyphForCodePoint(cp: number): boolean } }).create(fontBytes);
+	const glyphCheck = (fontkit as unknown as { create(b: Uint8Array): { hasGlyphForCodePoint(cp: number): boolean;
+		unitsPerEm: number;
+		layout(text: string): {
+			glyphs: { bbox: { minY: number; maxY: number } }[];
+			positions: { yOffset: number }[];
+		}
+	} }).create(fontBytes);
 	const sanitize = (text: string): string => {
 		let out = '';
 		for (const ch of text) {
@@ -206,6 +214,16 @@ export async function buildTranslatedPdf(
 	};
 
 	const measure = (text: string, size: number): number => font.widthOfTextAtSize(text, size);
+	const verticalMetrics = (text: string, size: number): { ascent: number; descent: number } => {
+		const run = glyphCheck.layout(text);
+		let top = 0, bottom = 0;
+		run.glyphs.forEach((glyph, i) => {
+			const offset = run.positions[i]?.yOffset ?? 0;
+			top = Math.max(top, glyph.bbox.maxY + offset);
+			bottom = Math.min(bottom, glyph.bbox.minY + offset);
+		});
+		return { ascent: top * size / glyphCheck.unitsPerEm, descent: -bottom * size / glyphCheck.unitsPerEm };
+	};
 	const pageList = doc.getPages();
 	let keptOriginal = 0;
 	let done = 0;
@@ -216,6 +234,7 @@ export async function buildTranslatedPdf(
 			continue;
 		}
 		const pageSize = page.getSize();
+		const legacyStatSymbols = hasLegacyStatSymbols(page);
 		// 扩边阶梯的遮挡物 (LO-6): 本页所有**其它**有几何的块的 union 盒(参考
 		// 文献/表格/元数据也算 —— 它们的墨迹留在页面上,不得压)。
 		const blockerOf = new Map<string, [number, number, number, number]>();
@@ -224,10 +243,22 @@ export async function buildTranslatedPdf(
 				blockerOf.set(b.id, unionOfRects(b.lineRectsPdf));
 			}
 		}
-		for (const block of data.blocks) {
-			const translation = data.translations.get(block.id);
+		const masks: (() => void)[] = [];
+		const textDraws: (() => void)[] = [];
+		for (const block of preserveCollapsedPlotPanels(data.blocks)) {
+			const cachedTranslation = data.translations.get(block.id);
+			const translation = cachedTranslation === undefined ? undefined
+				: repairLegacyStatSymbols(cachedTranslation, block.sourceText, legacyStatSymbols);
+			if (block.preserveReason === 'composite-plot-collapsed-rows') {
+				if (translation?.trim()) keptOriginal++;
+				continue;
+			}
 			if (!isReplaceable(block, translation)) {
 				continue;
+			}
+			if (/⟦PM\d+⟧|[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(translation!)) {
+				keptOriginal++;
+				continue; // Do not paint unresolved placeholders/control glyphs over valid source content.
 			}
 			const rects = block.lineRectsPdf!;
 			// 1. typeset FIRST — the mask is painted only after the translation is
@@ -260,13 +291,19 @@ export async function buildTranslatedPdf(
 			}
 			steps.push({ w: boxWidth + Math.max(0, grow.right), h: boxHeight + Math.max(0, grow.down), shrink: true });
 			let layout: ReturnType<typeof layoutBlock> | null = null;
-			let drawH = boxHeight;
 			for (const step of steps) {
 				const attempt = layoutBlock(text, step.w, step.h, sourceSize, measure,
-					step.shrink ? undefined : { minSize: sourceSize });
-				if (!attempt.overflow) {
+					{ verticalMetrics, ...(step.shrink ? {} : { minSize: sourceSize }) });
+				const clearOfSource = !attempt.overflow && attempt.lines.every((line, index) => {
+					const baseline = union[3] - attempt.baselineOffsets[index]!;
+					const ink = verticalMetrics(line, attempt.fontSize);
+					const right = union[0] + measure(line, attempt.fontSize);
+					return data.blocks.every(other => other.id === block.id || !(other.lineRectsPdf ?? []).some(r =>
+						Math.min(right, r[2]) - Math.max(union[0], r[0]) > 0.01
+						&& Math.min(baseline + ink.ascent, r[3]) - Math.max(baseline - ink.descent, r[1]) > 0.01));
+				});
+				if (clearOfSource) {
 					layout = attempt;
-					drawH = step.h;
 					break;
 				}
 			}
@@ -274,40 +311,40 @@ export async function buildTranslatedPdf(
 				keptOriginal++;
 				continue; // 最大扩展+缩字仍放不下 → 保留原文,绝不涂白截断 (LO-1)
 			}
-			// 2. the translation fits — NOW paint out the original lines.
-			for (const [x1, y1, x2, y2] of rects) {
-				page.drawRectangle({
-					x: x1 - MASK_PAD,
-					y: y1 - MASK_PAD,
-					width: (x2 - x1) + MASK_PAD * 2,
-					height: (y2 - y1) + MASK_PAD * 2,
-					color: WHITE
-				});
-			}
-			// First baseline: ascent ≈ 0.86 em below the box top. 底界用(可能已
-			// 扩展的)绘制盒: bottom = top − drawH (LO-6 下扩即压低底界)。
-			const drawBottom = union[3] - drawH;
-			let baseline = union[3] - layout.fontSize * 0.86;
-			for (const line of layout.lines) {
-				if (baseline < drawBottom - layout.fontSize * 0.2) {
-					break;
-				}
-				try {
-					page.drawText(line, {
-						x: union[0]!,
-						y: baseline,
-						size: layout.fontSize,
-						font,
-						color: INK
+			// Defer painting: a later block mask must never erase earlier glyphs.
+			const fitted = layout;
+			masks.push(() => {
+				for (const [x1, y1, x2, y2] of rects) {
+					page.drawRectangle({
+						x: x1 - MASK_PAD,
+						y: y1 - MASK_PAD,
+						width: (x2 - x1) + MASK_PAD * 2,
+						height: (y2 - y1) + MASK_PAD * 2,
+						color: WHITE
 					});
 				}
-				catch (e) {
-					// A glyph outside the font (rare symbol): drop it, keep going.
-					logger.debug(MODULE, 'drawText failed for one line', e);
+			});
+			textDraws.push(() => {
+				for (const [index, line] of fitted.lines.entries()) {
+					const baseline = union[3] - fitted.baselineOffsets[index]!;
+					try {
+						page.drawText(line, {
+							x: union[0]!,
+							y: baseline,
+							size: fitted.fontSize,
+							font,
+							color: INK
+						});
+					}
+					catch (e) {
+						// A glyph outside the font (rare symbol): drop it, keep going.
+						logger.debug(MODULE, 'drawText failed for one line', e);
+					}
 				}
-				baseline -= layout.lineHeight;
-			}
+			});
 		}
+		for (const paint of masks) paint();
+		for (const draw of textDraws) draw();
 		done++;
 		options.onProgress?.(done, pages.size);
 	}

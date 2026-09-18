@@ -1,3 +1,4 @@
+import { separateDisplayFormulas } from './displayFormula';
 import { captionOwnership } from './captionOwnership';
 import { semanticBoundary } from './semanticBoundary';
 import { extractAbbreviationTables } from './abbreviationTable';
@@ -825,6 +826,11 @@ export function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em
 }
 
 export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOptions): SpanBuildResult {
+	const formulas = separateDisplayFormulas(items, options.pageIndex, options.pageHeight);
+	if (formulas.blocks.length) {
+		const rest = buildBlocksFromSpans(formulas.rest, options);
+		return { ...rest, blocks: [...rest.blocks, ...formulas.blocks] };
+	}
 	const pageWidth = options.pageWidth && options.pageWidth > 0 ? options.pageWidth : 612;
 	const glossary = extractAbbreviationTables(items, options.pageIndex, pageWidth, options.pageHeight);
 	if (glossary.cells.length) {

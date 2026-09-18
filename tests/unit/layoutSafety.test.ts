@@ -204,3 +204,11 @@ test('planOverlapClips: 轻微重叠 (渲染噪声级) 不裁', () => {
 	};
 	assert.equal(planOverlapClips([a, b]).size, 0);
 });
+
+test('flowText puts a complete paragraph in the main band before considering tiny formula fragments',async()=>{
+ const {flowText}=await import('../../src/ui/layoutSafety');
+ let measured=0;
+ const text='完整的真实译文😀';
+ const parts=flowText(text,[1000,1,1],(s,capacity)=>{measured++;return s.length<=capacity;});
+ assert.deepEqual(parts,[text,'','']);assert.equal(measured,1);
+});

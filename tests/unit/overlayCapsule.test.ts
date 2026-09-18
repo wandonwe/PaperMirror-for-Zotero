@@ -150,3 +150,13 @@ test('task priority: an active translation outranks a finished (done) task', () 
 	const done: OverlayProgress = { ...base, phase: 'done' };
 	assert.ok(taskPriority(activeTranslate) > taskPriority(done));
 });
+
+ test('resting capsule retains unplaced status and view action after task expiry',async()=>{
+ const {idleProgressFor}=await import('../../src/ui/statusCapsule');
+ const partial=idleProgressFor(3,9,true,{placed:5,kept:2,segTotal:7});
+ assert.equal(partial.phase,'partial');
+ assert.equal(capsuleStateFor(partial).action?.kind,'view');
+ assert.notEqual(capsuleStateFor(partial).main,'本页翻译已完成');
+ assert.equal(idleProgressFor(4,9,false).phase,'idle');
+ assert.equal(capsuleStateFor(idleProgressFor(3,9,true,{placed:7,kept:0,segTotal:7})).main,'本页翻译已完成');
+ });
