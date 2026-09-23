@@ -1,5 +1,5 @@
 import { preserveCollapsedPlotPanels } from '../reader/compositePlotGuard';
-import { createTextInkGuard } from './textInkBounds';
+import { createTextInkGuard, insetTextInk, type InkFailure } from './textInkBounds';
 import { RenderMeasurementCache } from './measurementCache';
 import { pageContentKey } from '../export/pageArchive';
 /**
@@ -139,7 +139,7 @@ const SHRINK_FLOOR_PT = 8.5;
  */
 export interface FitFailure {
 	stage: 'expand-ink' | 'expand-geometry' | 'no-room' | 'shrink-floor' | 'compress' | 'audit';
-	overflow?: 'width' | 'height' | 'both' | 'none';
+	overflow?: 'width' | 'height' | 'both' | 'none' | 'glyph-bounds';
 	/**
 	 * 缩字梯走到底时扩边曾被谁否决 (2.7.3): 'shrink-floor/none' 意味着地板
 	 * 字号 + 扩边在几何上放得下、却被墨迹闸或几何预校验拦下 —— 没有这一位,
@@ -866,6 +866,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const maskCtx = mask.getContext('2d', { willReadFrequently: true }); // 2.1.7 PF-1: pmProbe 采样
 	const blockPaper = new Map<string, string>();
 	const lineBoxesFor = new Map<string, PixelBox[]>();
+ const lineColours = new WeakMap<PixelBox,string>();
 	if (ctx) {
 		for (const block of replaceable) {
 			const whole = pixelBox(block, render, 1);
@@ -883,7 +884,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				const top = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.max(box.top - pad, whole.top + inset) : box.top - pad;
 				const right = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.min(box.left + box.width + pad, whole.left + whole.width - inset) : box.left + box.width + pad;
 				const bottom = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.min(box.top + box.height + pad, whole.top + whole.height - inset) : box.top + box.height + pad;
-				if (right > left && bottom > top) lines.push({ left, top, width: right - left, height: bottom - top });
+				if (right > left && bottom > top) {
+                 const line={left,top,width:right-left,height:bottom-top};lines.push(line);
+                 lineColours.set(line,block.tableId ? localPaper(ctx,line,BITMAP_SCALE,colour,true) : colour);
+                }
 			}
 			lineBoxesFor.set(block.id, lines);
 		}
@@ -902,6 +906,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		const colour = blockPaper.get(id) ?? paper;
 		maskCtx.fillStyle = colour;
 		for (const line of lineBoxesFor.get(id) ?? []) {
+            maskCtx.fillStyle=lineColours.get(line) ?? colour;
 			maskCtx.fillRect(
 				line.left * BITMAP_SCALE, line.top * BITMAP_SCALE,
 				line.width * BITMAP_SCALE, line.height * BITMAP_SCALE
@@ -977,6 +982,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		abandoned: boolean;
 		/** 最近一次量测的溢出方向 (2.7.0)。 */
 		lastOverflow?: NonNullable<FitFailure['overflow']>;
+		inkFailure?: InkFailure & {flowIndex?:number};
 		/** 最近一次末位适配失败的阶段 (2.7.0),pmRevert 据此定放弃原因。 */
 		fitFailure?: FitFailure;
 		/** 放弃原因 (2.7.0),仅放弃后有值。 */
@@ -1143,13 +1149,31 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 						Object.assign(child.style, { position: 'absolute', left: `${b.left-item.box.left}px`, top: `${b.top-item.box.top}px`, width: `${b.width}px`, height: `${b.height}px`, overflow: 'hidden' });
 						item.node.appendChild(child); return child;
 					});
-					const parts = flowText(fullText, item.flowBoxes, (text, b, index, offset) => {
+					let glyphRejected = false;
+					const fitPiece = (text: string, b: PixelBox, index: number, offset: number): boolean => {
 						const child = nodes[index]!; fillSlice(child, offset, text.length);
-						return child.scrollHeight <= Math.round(b.height + heightSlack(item)) && child.scrollWidth <= b.width + 1.5 && textInkFits(child);
-					});
-					if (parts) { let offset = 0; parts.forEach((text,i) => { fillSlice(nodes[i]!, offset, text.length); offset += text.length; }); item.lastOverflow = 'none'; return true; }
+						child.style.paddingTop = ''; child.style.boxSizing = 'border-box';
+                        const sizeFitsNow = () => child.scrollHeight <= Math.round(b.height + heightSlack(item)) && child.scrollWidth <= b.width + 1.5;
+                        const sizeFits = sizeFitsNow();
+                        let inkFits = sizeFits && textInkFits(child);
+                        if (sizeFits && !inkFits) {
+                         const failure = textInkFits.failure(child);
+                         if (failure) item.inkFailure = {...failure,flowIndex:index};
+                         inkFits = insetTextInk(child,textInkFits,item.fontPx * 0.5,sizeFitsNow);
+                        }
+						if (sizeFits && !inkFits) glyphRejected = true;
+						return inkFits;
+                    };
+                    const parts = flowText(fullText,item.flowBoxes,fitPiece);
+                    // Binary search can finish on a rejected candidate. Re-measure
+                    // the exact final slices and retain only their tested inset.
+                    if (parts) {
+                     let offset = 0;
+                     const valid = parts.every((text,i) => {const ok=fitPiece(text,item.flowBoxes![i]!,i,offset);offset+=text.length;return ok;});
+                     if (valid) {item.lastOverflow='none';return true;}
+                    }
 					fillStyled(item.node, markup);
-					item.lastOverflow = 'height';
+					item.lastOverflow = glyphRejected ? 'glyph-bounds' : 'height';
 					continue;
 				}
     // CSSOM scroll sizes are integers; compare in the same rounded units.
@@ -1159,11 +1183,13 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 					item.lastOverflow = 'none';
 					return true;
 				}
+				const inkFailure = textInkFits.failure(item.node);
+				if (inkFailure) item.inkFailure = inkFailure;
 			}
 			// 记下最后一档的溢出方向 (2.7.0): 放弃原因需要它。
 			if (!item.flowBoxes) {
 				item.lastOverflow = fitOverflow(item.node.scrollWidth, item.node.scrollHeight, item.box.width, item.box.height);
-				if (item.lastOverflow === 'none' && !textInkFits(item.node)) item.lastOverflow = 'height';
+				if (item.lastOverflow === 'none' && !textInkFits(item.node)) item.lastOverflow = 'glyph-bounds';
 			}
 			return false;
 		}
@@ -1744,6 +1770,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				left: Math.round(item.box.left), top: Math.round(item.box.top),
 				width: Math.round(item.box.width), height: Math.round(item.box.height),
 				baseInk, maskOpaque,
+				measurement: {fontPx: item.fontPx, lineHeight: item.node.style.lineHeight, scrollWidth:item.node.scrollWidth, scrollHeight:item.node.scrollHeight, overflow:item.lastOverflow},
+				...(item.inkFailure ? {inkFailure:item.inkFailure} : {}),
 				...(item.flowBoxes ? { flowRegions: item.flowBoxes.map(b => ({ ...b })) } : {}),
 				...(item.node.hasAttribute('data-pm-annex') ? { annex: true } : {}),
 				...(item.abandoned ? { abandonReason: fitFailureLabel(item.abandonReason) } : {})
@@ -1835,6 +1863,7 @@ export function strictPageStats(element: HTMLElement): StrictPageStats | null {
  * Geometry + booleans only, never text. Returns null on a non-strict element.
  */
 export interface StrictProbeRow {
+ measurement?: {fontPx:number;lineHeight:string;scrollWidth:number;scrollHeight:number;overflow?:FitFailure['overflow']};
 	id: string;
 	type: string;
 	state: 'committed' | 'abandoned' | 'pending';
@@ -1846,6 +1875,7 @@ export interface StrictProbeRow {
 	baseInk: boolean;
 	/** Actual occupied regions; the outer box can include image holes. */
 	flowRegions?: PixelBox[];
+ inkFailure?: InkFailure & {flowIndex?:number};
 	/** The mask is opaque over the block (original covered). */
 	maskOpaque: boolean;
 	/** LO-7 (2.4.0): 该块是「整体另置」的大标题译文(原文未遮,box 是另置位置)。 */

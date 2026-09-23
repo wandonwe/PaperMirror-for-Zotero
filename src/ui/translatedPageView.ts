@@ -119,7 +119,7 @@ export function samplePaper(ctx: CanvasRenderingContext2D, width: number, height
  * Sampling the block's own corners and edge midpoints (text rarely touches
  * them) yields the colour that makes the mask invisible.
  */
-export function localPaper(ctx: CanvasRenderingContext2D, box: { left: number; top: number; width: number; height: number }, scaleFactor: number, fallback: string): string {
+export function localPaper(ctx: CanvasRenderingContext2D, box: { left: number; top: number; width: number; height: number }, scaleFactor: number, fallback: string, insideOnly = false): string {
 	try {
 		// Twelve probes: the four inside corners, plus points 3px OUTSIDE each
 		// edge (margins and line gaps are text-free far more reliably than
@@ -140,6 +140,9 @@ export function localPaper(ctx: CanvasRenderingContext2D, box: { left: number; t
 			}
 		};
 		const { left, top, width, height } = box;
+        if(insideOnly) {
+         for(let y=0;y<5;y++)for(let x=0;x<9;x++)push(left+width*(x+.5)/9,top+height*(y+.5)/5);
+        } else {
 		push(left + 2, top + 2);
 		push(left + width - 2, top + 2);
 		push(left + 2, top + height - 2);
@@ -153,6 +156,7 @@ export function localPaper(ctx: CanvasRenderingContext2D, box: { left: number; t
 		push(left - 3, top + height - 2);
 		push(left + width + 3, top + height - 2);
 
+        }
 		const buckets = new Map<string, { count: number; r: number; g: number; b: number }>();
 		for (const [x, y] of pts) {
 			const d = ctx.getImageData(x, y, 1, 1).data;

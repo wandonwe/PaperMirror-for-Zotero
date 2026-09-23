@@ -2752,3 +2752,16 @@ test('repeat submission counter records repeated block payloads, not page render
  assert.equal((manager.exportDiagnostics() as any).usage.repeatedBlockSubmissions,2);
  manager.dispose();
 });
+
+test('wrong reference identity is rejected from both page and segment caches and repaired locally', async()=>{
+ const block:SourceBlock={id:'ref-8',pageIndex:0,order:0,type:'list',sourceText:'8. Katsuragawa M, Fujiwara H, et al. Histologic studies in coronary arteries.'};
+ const bad='10. Opolski MP, Achenbach S. 用于CTO血运重建的CT血管造影：';
+ const good='8. Katsuragawa M, Fujiwara H, 等。冠状动脉组织学研究。';
+ let requests=0;
+ const {deps}=makeDeps({extractPage:async()=>[block],readCache:async()=>[{id:block.id,translatedText:bad}],
+ readSegments:async(_page,hashes)=>new Map(hashes.map(h=>[h,bad])),
+ translateRequest:async request=>{requests++;return {translations:request.blocks.map(b=>({id:b.id,translatedText:good}))};}});
+ const manager=new TranslationManager(deps,{onPageUpdate:()=>{}},{prefetch:false,delayFn:()=>Promise.resolve()});
+ try {await manager.ensurePage(0,10);assert.ok(requests>0);assert.equal(manager.getPageState(0)!.translations.get(block.id),good);}
+ finally {manager.dispose();}
+});

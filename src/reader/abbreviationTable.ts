@@ -6,6 +6,8 @@ type Rect = [number, number, number, number];
 /** Explicit paired headers plus repeated aligned short keys identify a glossary,
  * including two independent tables on the same page. Run before prose merging. */
 export function extractAbbreviationTables(items: SpanItem[], pageIndex: number, pageWidth: number, pageHeight: number): { cells: SourceBlock[]; rest: SpanItem[] } {
+ const continuation=items.some(i=>/^Abbreviation$/i.test(i.text.trim())) ? {cells:[],rest:items} : extractContinuation(items,pageIndex,pageWidth,pageHeight);
+ if(continuation.cells.length) return continuation;
  const headers=items.filter(i=>/^Abbreviation$/i.test(i.text.trim())).sort((a,b)=>a.rect[0]-b.rect[0]);
  const spanIds=new Map(items.map((item,i)=>[item,`page-${pageIndex}-span-${i}`]));
  const used=new Set<SpanItem>(),cells:SourceBlock[]=[];
@@ -52,4 +54,35 @@ export function extractAbbreviationTables(items: SpanItem[], pageIndex: number, 
  const source=(i:SpanItem)=>({id:spanIds.get(i)!,sourceText:i.text});
  if(auditTableOwnership(items.map(source),[...cells,...rest.map(source)]).length) return {cells:[],rest:items};
  return {cells,rest};
+}
+
+/** A headerless continuation needs six aligned acronym/value pairs near the
+ * page top, with a persistent gutter and no missing definitions. */
+function extractContinuation(items:SpanItem[],pageIndex:number,pageWidth:number,pageHeight:number):{cells:SourceBlock[];rest:SpanItem[]} {
+ const keys=items.filter(i=>i.rect[0]<pageWidth*.4 && i.rect[3]>pageHeight*.72 && /^[a-z]?[A-Z][A-Z0-9/-]{1,14}$/.test(i.text.trim()));
+ for(const seed of keys) {
+  const font=seed.fontSize||9;
+  const group=keys.filter(i=>Math.abs(i.rect[0]-seed.rect[0])<font*.4).sort((a,b)=>b.rect[3]-a.rect[3]);
+  if(group.length<6 || group.some((i,n)=>n>0 && group[n-1]!.rect[1]-i.rect[3]>font*4))continue;
+  const keyRight=Math.max(...group.map(i=>i.rect[2]));
+  const first=items.filter(i=>i.rect[0]>keyRight+font*2 && i.rect[0]<pageWidth*.5 && Math.abs(i.rect[3]-group[0]!.rect[3])<font*.5).sort((a,b)=>a.rect[0]-b.rect[0])[0];
+  if(!first)continue;
+  const rows=group.map((key,n)=>{
+   const bottom=group[n+1]?.rect[3] ?? key.rect[1]-font*.5;
+   const value=items.filter(i=>i.rect[0]>=first.rect[0]-font*.3 && i.rect[2]<pageWidth*.5 && i.rect[3]<=key.rect[3]+font*.3 && i.rect[3]>bottom+font*.3 && Math.abs((i.fontSize||font)-font)<font*.2).sort((a,b)=>b.rect[3]-a.rect[3]||a.rect[0]-b.rect[0]);
+   return {key,value};
+  });
+  if(rows.some(r=>!r.value.length || Math.abs(r.value[0]!.rect[3]-r.key.rect[3])>font*.5))continue;
+  const used=new Set<SpanItem>(),cells:SourceBlock[]=[];
+  rows.forEach((entry,row)=>{for(let col=0;col<2;col++) {
+   const parts=col===0?[entry.key]:entry.value;parts.forEach(i=>used.add(i));
+   const rect:[number,number,number,number]=[Math.min(...parts.map(i=>i.rect[0])),Math.min(...parts.map(i=>i.rect[1])),Math.max(...parts.map(i=>i.rect[2])),Math.max(...parts.map(i=>i.rect[3]))];
+   cells.push({id:`page-${pageIndex}-continuation-r${row}-c${col}`,pageIndex,order:cells.length,type:'paragraph',sourceText:parts.map(i=>i.text.trim()).join(' '),fontSize:font,
+    boundingBox:{x:rect[0],y:pageHeight-rect[3],width:rect[2]-rect[0],height:rect[3]-rect[1]},lineRectsPdf:parts.map(i=>i.rect),
+    tableId:`page-${pageIndex}-continuation`,tableRow:row,tableCol:col,tableSource:'abbreviation',tableConfidence:'tentative',tableGeometry:'inferred',
+    tableContentRectPdf:[rect[0],rect[1]-font*.1,col===0?first.rect[0]-font:pageWidth*.5-font,rect[3]+font*.1],translationMode:'translate'});
+  }});
+  return {cells,rest:items.filter(i=>!used.has(i))};
+ }
+ return {cells:[],rest:items};
 }
