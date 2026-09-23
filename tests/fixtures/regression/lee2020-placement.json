@@ -1,0 +1,4492 @@
+[
+  {
+    "page": 3,
+    "blocks": [
+      {
+        "id": "page-2-region-0",
+        "pageIndex": 2,
+        "order": 0,
+        "type": "caption",
+        "sourceText": "Figure 2: High-risk findings of coronary CT angiography related to failed percutaneous coronary intervention for chronic total occlusion (CTO). (a) On a curved multiplanar reformatted (MPR) image from coronary CT angiography, the CTO length between the proximal (A) and distal (B) CTO margins is measured along the vessel axis. A CTO length greater than 2 cm is defined as a long CTO. (b) On a curved MPR image from coronary CT angiography, the CTO entry site without tapering (arrow) is categorized as a blunted stump (arrowhead). (c) On a cross-sectional image of the CTO entry site, severe calcification (arrow) is defined on the basis of calcifications greater than or equal to 50% of the vessel cross-sectional area. (d) On a curved MR image, the angle at the occlusion site is 54.34°. CTO bending is defined as an angle greater than or equal to 45° at the occluded segment.",
+        "boundingBox": {
+          "x": 48,
+          "y": 390.9754,
+          "width": 324.06020000000007,
+          "height": 85.19000000000017
+        },
+        "lineRectsPdf": [
+          [
+            48,
+            383.5246,
+            371.9842000000001,
+            392.0246
+          ],
+          [
+            48.00019999999999,
+            374.0346,
+            372.0282000000002,
+            382.0346
+          ],
+          [
+            48.00019999999999,
+            364.4346,
+            371.9762000000002,
+            372.4346
+          ],
+          [
+            48.00019999999999,
+            354.83459999999997,
+            371.9362000000002,
+            362.83459999999997
+          ],
+          [
+            48.00019999999999,
+            345.23459999999994,
+            372.04420000000005,
+            353.23459999999994
+          ],
+          [
+            48.00019999999999,
+            335.6345999999999,
+            371.9522000000003,
+            343.6345999999999
+          ],
+          [
+            48.00019999999999,
+            326.0345999999999,
+            372.06020000000007,
+            334.0345999999999
+          ],
+          [
+            48.00019999999999,
+            316.4345999999999,
+            372.01620000000037,
+            324.4345999999999
+          ],
+          [
+            48.00019999999999,
+            306.83459999999985,
+            103.39220000000003,
+            314.83459999999985
+          ]
+        ],
+        "fontSize": 8,
+        "column": 0,
+        "isReference": false,
+        "readingIndex": 0,
+        "sourceRegion": {
+          "id": "page-2-caption-page-2-region-0",
+          "kind": "caption",
+          "boundsPdf": [
+            48,
+            306.83459999999985,
+            372.06020000000007,
+            392.0246
+          ],
+          "evidence": "caption-continuation"
+        }
+      },
+      {
+        "id": "page-2-region-1",
+        "pageIndex": 2,
+        "order": 1,
+        "type": "paragraph",
+        "sourceText": "CT Image Reconstruction and Analysis Coronary CT angiography data were transferred to an offline workstation (IntelliSpace Portal, version 9.0; Philips Medical Systems, Best, the Netherlands) for image analysis. The coro-",
+        "boundingBox": {
+          "x": 48,
+          "y": 494.98990000000003,
+          "width": 240.0200000000001,
+          "height": 48
+        },
+        "lineRectsPdf": [
+          [
+            48,
+            278.01009999999997,
+            198.95799999999994,
+            288.01009999999997
+          ],
+          [
+            48,
+            264.01009999999997,
+            288.01800000000014,
+            274.01009999999997
+          ],
+          [
+            48,
+            252.01009999999997,
+            288.0200000000001,
+            262.01009999999997
+          ],
+          [
+            48,
+            240.01009999999997,
+            287.9700000000001,
+            250.01009999999997
+          ]
+        ],
+        "fontSize": 10,
+        "column": 0,
+        "isReference": false,
+        "readingIndex": 1,
+        "sourceRegion": {
+          "id": "page-2-column-0-band-0",
+          "kind": "body-column",
+          "boundsPdf": [
+            48,
+            36.01009999999995,
+            288.0200000000001,
+            288.01009999999997
+          ],
+          "evidence": "column-geometry"
+        }
+      },
+      {
+        "id": "page-2-region-2",
+        "pageIndex": 2,
+        "order": 2,
+        "type": "heading",
+        "sourceText": "PCI Procedure",
+        "boundingBox": {
+          "x": 306,
+          "y": 542.4499000000001,
+          "width": 56.15900000000005,
+          "height": 10
+        },
+        "lineRectsPdf": [
+          [
+            306,
+            230.5501,
+            362.15900000000005,
+            240.5501
+          ]
+        ],
+        "fontSize": 10,
+        "column": 0,
+        "isReference": false,
+        "readingIndex": 2
+      },
+      {
+        "id": "page-2-region-3",
+        "pageIndex": 2,
+        "order": 3,
+        "type": "paragraph",
+        "sourceText": "nary CT angiography data were analyzed by two experienced radiologists (S.H.H. and J.Y.L.) with 15 years and 4 years, respectively, of experience in cardiac imaging. The reviewers were independently blinded to the clinical histories and outcomes of PCI. Any disagreement between the two reviewers was resolved by consensus. At coronary CT angiography, the CTO lesion was defined by the complete absence of luminal enhancement in the coronary artery. Furthermore, the anatomic characteristics of whole CTO lesions were assessed using the cross-sectional curved multiplanar reformatted images from coronary CT angiography. The reviewers recorded the presence or absence of high-risk coronary CT angiographic findings related to failed PCI in every CTO lesion. The high-risk coronary CT angiography manifestations of CTO consisted of (a) long CTO (with a total lesion length  2 cm),",
+        "boundingBox": {
+          "x": 48,
+          "y": 544.9899,
+          "width": 240.019,
+          "height": 178
+        },
+        "lineRectsPdf": [
+          [
+            48,
+            228.01009999999997,
+            288.019,
+            238.01009999999997
+          ],
+          [
+            48,
+            216.01009999999997,
+            287.968,
+            226.01009999999997
+          ],
+          [
+            48,
+            204.01009999999997,
+            287.99700000000007,
+            214.01009999999997
+          ],
+          [
+            48,
+            192.01009999999997,
+            287.9900000000002,
+            202.01009999999997
+          ],
+          [
+            48,
+            180.01009999999997,
+            288.0170000000002,
+            190.01009999999997
+          ],
+          [
+            48,
+            168.01009999999997,
+            100.44999999999999,
+            178.01009999999997
+          ],
+          [
+            60,
+            156.01009999999997,
+            287.97000000000014,
+            166.01009999999997
+          ],
+          [
+            48,
+            144.01009999999997,
+            287.9790000000002,
+            154.01009999999997
+          ],
+          [
+            48,
+            132.01009999999997,
+            287.9890000000003,
+            142.01009999999997
+          ],
+          [
+            48,
+            120.01009999999995,
+            287.9790000000002,
+            130.01009999999997
+          ],
+          [
+            48,
+            108.01009999999995,
+            287.99900000000036,
+            118.01009999999995
+          ],
+          [
+            48,
+            96.01009999999995,
+            288.00000000000034,
+            106.01009999999995
+          ],
+          [
+            48,
+            84.01009999999995,
+            288.00300000000016,
+            94.01009999999995
+          ],
+          [
+            48,
+            72.01009999999995,
+            288.00000000000034,
+            82.01009999999995
+          ],
+          [
+            48,
+            60.01009999999995,
+            288.0099999999999,
+            70.01009999999995
+          ]
+        ],
+        "fontSize": 10,
+        "column": 0,
+        "isReference": false,
+        "readingIndex": 3,
+        "regionParagraphs": [
+          {
+            "lineRectsPdf": [
+              [
+                48,
+                228.01009999999997,
+                288.019,
+                238.01009999999997
+              ],
+              [
+                48,
+                216.01009999999997,
+                287.968,
+                226.01009999999997
+              ],
+              [
+                48,
+                204.01009999999997,
+                287.99700000000007,
+                214.01009999999997
+              ],
+              [
+                48,
+                192.01009999999997,
+                287.9900000000002,
+                202.01009999999997
+              ],
+              [
+                48,
+                180.01009999999997,
+                288.0170000000002,
+                190.01009999999997
+              ],
+              [
+                48,
+                168.01009999999997,
+                100.44999999999999,
+                178.01009999999997
+              ],
+              [
+                60,
+                156.01009999999997,
+                287.97000000000014,
+                166.01009999999997
+              ],
+              [
+                48,
+                144.01009999999997,
+                287.9790000000002,
+                154.01009999999997
+              ],
+              [
+                48,
+                132.01009999999997,
+                287.9890000000003,
+                142.01009999999997
+              ],
+              [
+                48,
+                120.01009999999995,
+                287.9790000000002,
+                130.01009999999997
+              ],
+              [
+                48,
+                108.01009999999995,
+                287.99900000000036,
+                118.01009999999995
+              ],
+              [
+                48,
+                96.01009999999995,
+                288.00000000000034,
+                106.01009999999995
+              ],
+              [
+                48,
+                84.01009999999995,
+                288.00300000000016,
+                94.01009999999995
+              ],
+              [
+                48,
+                72.01009999999995,
+                288.00000000000034,
+                82.01009999999995
+              ],
+              [
+                48,
+                60.01009999999995,
+                288.0099999999999,
+                70.01009999999995
+              ]
+            ],
+            "fontSize": 10
+          }
+        ],
+        "memberIds": [
+          "page-2-block-3",
+          "page-2-block-4"
+        ],
+        "sourceRegion": {
+          "id": "page-2-column-0-band-0",
+          "kind": "body-column",
+          "boundsPdf": [
+            48,
+            36.01009999999995,
+            288.0200000000001,
+            288.01009999999997
+          ],
+          "evidence": "column-geometry"
+        }
+      },
+      {
+        "id": "page-2-block-5",
+        "pageIndex": 2,
+        "order": 4,
+        "type": "paragraph",
+        "sourceText": "Radiology: Cardiothoracic Imaging Volume 2: Number 4—2020 n rcti.rsna.org",
+        "boundingBox": {
+          "x": 48,
+          "y": 754.1579,
+          "width": 210.78049999999996,
+          "height": 7
+        },
+        "lineRectsPdf": [
+          [
+            48,
+            21.842100000000002,
+            258.78049999999996,
+            28.842100000000002
+          ]
+        ],
+        "fontSize": 7,
+        "column": 0,
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "running-head",
+        "readingIndex": 4,
+        "sourceRegion": {
+          "id": "page-2-furniture-page-2-block-5",
+          "kind": "page-furniture",
+          "boundsPdf": [
+            48,
+            21.842100000000002,
+            258.78049999999996,
+            28.842100000000002
+          ],
+          "evidence": "page-margin"
+        }
+      },
+      {
+        "id": "page-2-block-6",
+        "pageIndex": 2,
+        "order": 5,
+        "type": "paragraph",
+        "sourceText": "Lee et al",
+        "boundingBox": {
+          "x": 519.6006,
+          "y": 30.285799999999995,
+          "width": 26.40000000000009,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            519.6006,
+            744.7142,
+            546.0006000000001,
+            752.7142
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "running-head",
+        "readingIndex": 5,
+        "sourceRegion": {
+          "id": "page-2-furniture-page-2-block-6",
+          "kind": "page-furniture",
+          "boundsPdf": [
+            519.6006,
+            744.7142,
+            546.0006000000001,
+            752.7142
+          ],
+          "evidence": "page-margin"
+        }
+      },
+      {
+        "id": "page-2-region-4",
+        "pageIndex": 2,
+        "order": 6,
+        "type": "paragraph",
+        "sourceText": "(b) severe calcification (with calcifications  50% of the vessel cross-sectional area), (c) CTO bending (with an angle  45° at the occlusion site), and (d) blunt stump (without any tapered stump at the entry of the CTO) (Fig 2) (9). For evaluating the CIC (Fig 3), the cross-sectional virtual monoenergetic image obtained at 60 keV and the iodine-no-water map obtained perpendicular to the coronary artery centerline were reconstructed for each CTO lesion. On the virtual monoenergetic image obtained at 60 keV, the regions of interest (ROIs) were manually drawn at the proximal CTO (at 2 mm from the entry of the CTO, excluding the calcification) and the reference vessel (at the unaffected vessel immediately proximal to the CTO within a 1-cm interval). The ROI at the reference vessel covered the entire vessel lumen. The ROI at the proximal CTO represented the largest noncalcified area in the occluded segment of the CTO. The ROI area of the reference segment (reference ROI area, in millimeters squared) and the ROI area of the proximal CTO (CTOROI area, in millimeters squared) were recorded. Thereafter, the CICs of the reference vessel (reference CIC, in milligrams per milliliter) and the proximal CTO (CTO-CIC, in milligrams per milliliter) were measured by applying the ROIs to the iodine-no-water maps. Eventually, the reviewers measured the reference areas, CTO area, reference CIC, and CTO-CIC by using the virtual monoenergetic image obtained at 60 keV and iodine-nowater map from coronary CT angiography (Fig 3).",
+        "boundingBox": {
+          "x": 306,
+          "y": 50.44990000000007,
+          "width": 240.02000000000066,
+          "height": 478
+        },
+        "lineRectsPdf": [
+          [
+            390,
+            722.5500999999999,
+            546.0099999999993,
+            732.5500999999999
+          ],
+          [
+            390,
+            710.5500999999999,
+            545.9899999999993,
+            720.5500999999999
+          ],
+          [
+            390,
+            698.5500999999999,
+            545.9999999999999,
+            708.5500999999999
+          ],
+          [
+            390,
+            686.5500999999999,
+            545.9799999999992,
+            696.5500999999999
+          ],
+          [
+            390,
+            674.5500999999999,
+            546.0099999999993,
+            684.5500999999999
+          ],
+          [
+            390,
+            662.5500999999999,
+            481.8999999999995,
+            672.5500999999999
+          ],
+          [
+            402,
+            650.5500999999999,
+            545.9900000000005,
+            660.5500999999999
+          ],
+          [
+            390,
+            638.5500999999999,
+            546.0100000000009,
+            648.5500999999999
+          ],
+          [
+            390,
+            626.5500999999999,
+            545.9800000000006,
+            636.5500999999999
+          ],
+          [
+            390,
+            614.5500999999999,
+            545.9900000000007,
+            624.5500999999999
+          ],
+          [
+            390,
+            602.5500999999999,
+            546.0020000000006,
+            612.5500999999999
+          ],
+          [
+            390,
+            590.5500999999999,
+            546.0100000000006,
+            600.5500999999999
+          ],
+          [
+            390,
+            578.5500999999999,
+            546.0010000000008,
+            588.5500999999999
+          ],
+          [
+            390,
+            566.5500999999999,
+            546.0110000000008,
+            576.5500999999999
+          ],
+          [
+            390,
+            554.5500999999999,
+            546.0020000000006,
+            564.5500999999999
+          ],
+          [
+            390,
+            542.5500999999999,
+            546.0100000000006,
+            552.5500999999999
+          ],
+          [
+            390,
+            530.5500999999999,
+            546.0150000000006,
+            540.5500999999999
+          ],
+          [
+            390,
+            518.5500999999999,
+            545.9800000000007,
+            528.5500999999999
+          ],
+          [
+            390,
+            506.5501,
+            546.0000000000006,
+            516.5500999999999
+          ],
+          [
+            390,
+            494.5501,
+            546.0200000000004,
+            504.5501
+          ],
+          [
+            390,
+            482.5501,
+            546.0090000000005,
+            492.5501
+          ],
+          [
+            390,
+            470.5501,
+            545.9900000000007,
+            480.5501
+          ],
+          [
+            390,
+            458.5501,
+            546.0100000000004,
+            468.5501
+          ],
+          [
+            390,
+            446.5501,
+            546.0100000000007,
+            456.5501
+          ],
+          [
+            390,
+            434.5501,
+            545.9900000000005,
+            444.5501
+          ],
+          [
+            390,
+            422.5501,
+            546.0000000000007,
+            432.5501
+          ],
+          [
+            390,
+            410.5501,
+            546.0020000000006,
+            420.5501
+          ],
+          [
+            390,
+            398.5501,
+            546.0200000000004,
+            408.5501
+          ],
+          [
+            390,
+            386.5501,
+            546.0200000000007,
+            396.5501
+          ],
+          [
+            390,
+            374.5501,
+            545.9900000000006,
+            384.5501
+          ],
+          [
+            390,
+            362.5501,
+            546.0000000000006,
+            372.5501
+          ],
+          [
+            390,
+            350.5501,
+            546.0090000000006,
+            360.5501
+          ],
+          [
+            390,
+            338.5501,
+            546.0040000000005,
+            348.5501
+          ],
+          [
+            390,
+            326.5501,
+            546.0100000000006,
+            336.5501
+          ],
+          [
+            390,
+            314.5501,
+            546.0200000000007,
+            324.5501
+          ],
+          [
+            390,
+            302.5501,
+            546.0100000000007,
+            312.5501
+          ],
+          [
+            390,
+            290.5501,
+            546.0150000000003,
+            300.5501
+          ],
+          [
+            390,
+            278.5501,
+            546.0100000000004,
+            288.5501
+          ],
+          [
+            306,
+            266.5501,
+            545.970000000001,
+            276.5501
+          ],
+          [
+            306,
+            254.5501,
+            506.2390000000009,
+            264.5501
+          ]
+        ],
+        "fontSize": 10,
+        "column": 1,
+        "isReference": false,
+        "readingIndex": 6,
+        "regionParagraphs": [
+          {
+            "lineRectsPdf": [
+              [
+                390,
+                722.5500999999999,
+                546.0099999999993,
+                732.5500999999999
+              ],
+              [
+                390,
+                710.5500999999999,
+                545.9899999999993,
+                720.5500999999999
+              ],
+              [
+                390,
+                698.5500999999999,
+                545.9999999999999,
+                708.5500999999999
+              ],
+              [
+                390,
+                686.5500999999999,
+                545.9799999999992,
+                696.5500999999999
+              ],
+              [
+                390,
+                674.5500999999999,
+                546.0099999999993,
+                684.5500999999999
+              ],
+              [
+                390,
+                662.5500999999999,
+                481.8999999999995,
+                672.5500999999999
+              ],
+              [
+                402,
+                650.5500999999999,
+                545.9900000000005,
+                660.5500999999999
+              ],
+              [
+                390,
+                638.5500999999999,
+                546.0100000000009,
+                648.5500999999999
+              ],
+              [
+                390,
+                626.5500999999999,
+                545.9800000000006,
+                636.5500999999999
+              ],
+              [
+                390,
+                614.5500999999999,
+                545.9900000000007,
+                624.5500999999999
+              ],
+              [
+                390,
+                602.5500999999999,
+                546.0020000000006,
+                612.5500999999999
+              ],
+              [
+                390,
+                590.5500999999999,
+                546.0100000000006,
+                600.5500999999999
+              ],
+              [
+                390,
+                578.5500999999999,
+                546.0010000000008,
+                588.5500999999999
+              ],
+              [
+                390,
+                566.5500999999999,
+                546.0110000000008,
+                576.5500999999999
+              ],
+              [
+                390,
+                554.5500999999999,
+                546.0020000000006,
+                564.5500999999999
+              ],
+              [
+                390,
+                542.5500999999999,
+                546.0100000000006,
+                552.5500999999999
+              ],
+              [
+                390,
+                530.5500999999999,
+                546.0150000000006,
+                540.5500999999999
+              ],
+              [
+                390,
+                518.5500999999999,
+                545.9800000000007,
+                528.5500999999999
+              ],
+              [
+                390,
+                506.5501,
+                546.0000000000006,
+                516.5500999999999
+              ],
+              [
+                390,
+                494.5501,
+                546.0200000000004,
+                504.5501
+              ],
+              [
+                390,
+                482.5501,
+                546.0090000000005,
+                492.5501
+              ],
+              [
+                390,
+                470.5501,
+                545.9900000000007,
+                480.5501
+              ],
+              [
+                390,
+                458.5501,
+                546.0100000000004,
+                468.5501
+              ],
+              [
+                390,
+                446.5501,
+                546.0100000000007,
+                456.5501
+              ],
+              [
+                390,
+                434.5501,
+                545.9900000000005,
+                444.5501
+              ],
+              [
+                390,
+                422.5501,
+                546.0000000000007,
+                432.5501
+              ],
+              [
+                390,
+                410.5501,
+                546.0020000000006,
+                420.5501
+              ],
+              [
+                390,
+                398.5501,
+                546.0200000000004,
+                408.5501
+              ],
+              [
+                390,
+                386.5501,
+                546.0200000000007,
+                396.5501
+              ],
+              [
+                390,
+                374.5501,
+                545.9900000000006,
+                384.5501
+              ],
+              [
+                390,
+                362.5501,
+                546.0000000000006,
+                372.5501
+              ],
+              [
+                390,
+                350.5501,
+                546.0090000000006,
+                360.5501
+              ],
+              [
+                390,
+                338.5501,
+                546.0040000000005,
+                348.5501
+              ],
+              [
+                390,
+                326.5501,
+                546.0100000000006,
+                336.5501
+              ],
+              [
+                390,
+                314.5501,
+                546.0200000000007,
+                324.5501
+              ],
+              [
+                390,
+                302.5501,
+                546.0100000000007,
+                312.5501
+              ],
+              [
+                390,
+                290.5501,
+                546.0150000000003,
+                300.5501
+              ],
+              [
+                390,
+                278.5501,
+                546.0100000000004,
+                288.5501
+              ],
+              [
+                306,
+                266.5501,
+                545.970000000001,
+                276.5501
+              ],
+              [
+                306,
+                254.5501,
+                506.2390000000009,
+                264.5501
+              ]
+            ],
+            "fontSize": 10
+          }
+        ],
+        "memberIds": [
+          "page-2-block-7",
+          "page-2-block-8"
+        ],
+        "sourceRegion": {
+          "id": "page-2-column-1-band-top",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            243.5501,
+            546.0200000000007,
+            732.5500999999999
+          ],
+          "evidence": "column-geometry"
+        }
+      },
+      {
+        "id": "page-2-region-5",
+        "pageIndex": 2,
+        "order": 7,
+        "type": "paragraph",
+        "sourceText": "All PCIs were performed by two interventional cardiologists (C.W.Y. and J.H.P.) with 20 years and 15 years, respectively, of experience in coronary intervention. CTO lesions were defined as the obstruction of the native coronary artery with no luminal continuity and interruption of antegrade blood flow at conventional coronary angiography. PCI with an initial antegrade approach of the angioplasty guidewire for CTO could be defined as failed PCI if (a) the antegrade progress of the guidewire failed; (b) complications such as coronary dissection, perforation, or hemodynamic instability occurred; or (c) the PCI operator believed that the prolongation of the procedure would not benefit the patient (12). However, successful opening of the CTO and restoration of flow with PCI were defined as successful PCI.",
+        "boundingBox": {
+          "x": 306,
+          "y": 556.4499000000001,
+          "width": 240.03100000000086,
+          "height": 166
+        },
+        "lineRectsPdf": [
+          [
+            306,
+            216.5501,
+            546.0290000000007,
+            226.5501
+          ],
+          [
+            306,
+            204.5501,
+            546.020000000001,
+            214.5501
+          ],
+          [
+            306,
+            192.5501,
+            546.0190000000009,
+            202.5501
+          ],
+          [
+            306,
+            180.5501,
+            546.0100000000009,
+            190.5501
+          ],
+          [
+            306,
+            168.5501,
+            546.0300000000009,
+            178.5501
+          ],
+          [
+            306,
+            156.5501,
+            545.9890000000009,
+            166.5501
+          ],
+          [
+            306,
+            144.5501,
+            545.9900000000014,
+            154.5501
+          ],
+          [
+            306,
+            132.5501,
+            545.969000000001,
+            142.5501
+          ],
+          [
+            306,
+            120.55009999999997,
+            545.9990000000008,
+            130.5501
+          ],
+          [
+            306,
+            108.55009999999997,
+            545.9900000000011,
+            118.55009999999997
+          ],
+          [
+            306,
+            96.55009999999997,
+            546.0100000000008,
+            106.55009999999997
+          ],
+          [
+            306,
+            84.55009999999997,
+            545.9990000000009,
+            94.55009999999997
+          ],
+          [
+            306,
+            72.55009999999997,
+            546.0310000000009,
+            82.55009999999997
+          ],
+          [
+            306,
+            60.55009999999997,
+            428.0100000000006,
+            70.55009999999997
+          ]
+        ],
+        "fontSize": 10,
+        "column": 1,
+        "isReference": false,
+        "readingIndex": 7,
+        "sourceRegion": {
+          "id": "page-2-column-1-band-0",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            36.55009999999997,
+            546.0310000000009,
+            226.5501
+          ],
+          "evidence": "column-geometry"
+        }
+      }
+    ],
+    "translations": [
+      {
+        "id": "page-2-region-0",
+        "translatedText": "图2：与慢性完全闭塞（CTO）支架置入（经皮冠状动脉介入，PCI）失败相关的冠状动脉CT血管造影高危征象。（a）在冠状动脉CT血管造影的弯曲多平面重建（MPR）图像上，测量CTO近端（A）与远端（B）CTO边界之间沿血管轴线的CTO长度。将长度大于2 cm的CTO定义为长CTO。（b）在冠状动脉CT血管造影的弯曲MPR图像上，入口处不呈锥形（箭头）的CTO被分为圆钝断端（箭头尖）。（c）在CTO入口处的横断面图像上，当钙化灶占血管横截面积≥50%时（箭头），定义为严重钙化。（d）在弯曲MR图像上，闭塞处的角度为54.34°。CTO弯曲定义为闭塞段的角度≥45°。"
+      },
+      {
+        "id": "page-2-region-1",
+        "translatedText": "CT图像重建与分析 将冠状动脉CT血管造影数据传输至离线工作站（IntelliSpace Portal，9.0版；飞利浦医疗系统，Best，荷兰）进行图像分析。coro-"
+      },
+      {
+        "id": "page-2-region-2",
+        "translatedText": "PCI操作"
+      },
+      {
+        "id": "page-2-region-3",
+        "translatedText": "nary CT血管造影数据由两位经验丰富的放射科医师（S.H.H.与J.Y.L.）分析，其分别具有15年和4年的心脏影像经验。两位阅片者对PCI的临床病史与结局均独立进行盲法处理。两位阅片者之间的任何分歧均通过共识解决。在冠状动脉CT血管造影中，CTO病灶定义为冠状动脉管腔增强的完全缺失。此外，采用冠状动脉CT血管造影的横断面弯曲多平面重建图像评估整个CTO病灶的解剖学特征。阅片者记录每一处CTO病灶中与PCI失败相关的冠状动脉CT血管造影高危征象的有无。CTO的冠状动脉CT血管造影高危表现包括：（a）长CTO（总病变长度  2 cm），"
+      },
+      {
+        "id": "page-2-region-4",
+        "translatedText": "（b）严重钙化（钙化  50%血管横截面积），（c）CTO弯曲（闭塞处角度  45°），以及（d）圆钝断端（CTO入口处无任何锥形断端）（图2）(9)。为评估CIC（图3），对每一处CTO病灶分别重建60 keV获得的横断面虚拟单能图像，并重建与冠状动脉中心线垂直获得的碘-水图。 在60 keV虚拟单能图像上，将感兴趣区（ROIs）手动绘制于CTO近端（距CTO入口2 mm，排除钙化）及参考血管（在CTO近端1 cm区间内紧邻未受影响的血管）。参考血管的ROI覆盖整个血管腔。近端CTO的ROI代表闭塞段中最大的非钙化区域。记录参考段的ROI面积（参考ROI面积，单位：mm²）以及近端CTO的ROI面积（CTOROI面积，单位：mm²）。随后，通过将ROIs应用于碘-水图测量参考血管的CIC（参考CIC，单位：mg/mL）与近端CTO的CTO-CIC（单位：mg/mL）。最终，阅片者使用60 keV获得的虚拟单能图像及冠状动脉CT血管造影得到的碘-水图（图3）测量参考面积、CTO面积、参考CIC以及CTO-CIC。"
+      },
+      {
+        "id": "page-2-region-5",
+        "translatedText": "所有PCI均由两位介入心脏科医师（C.W.Y.与J.H.P.）实施，其分别具有20年和15年的冠状动脉介入经验。CTO病灶定义为在常规冠状动脉造影中，原生冠状动脉发生阻塞且无管腔连续性，并伴有前向血流中断。若在PCI中采用以血管成形导丝为前向进入初始策略，当出现以下情况时可定义为失败PCI：（a）导丝的前向推进失败；（b）发生如冠状动脉夹层、穿孔或血流动力学不稳定等并发症；或（c）PCI操作者认为延长手术过程将不会使患者获益(12)。然而，将成功打开CTO并通过PCI恢复血流定义为成功PCI。"
+      }
+    ]
+  },
+  {
+    "page": 7,
+    "blocks": [
+      {
+        "id": "page-6-region-0",
+        "pageIndex": 6,
+        "order": 0,
+        "type": "table",
+        "sourceText": "Table 4: Multivariable Predictors of Failed PCI for CTO",
+        "boundingBox": {
+          "x": 100.5,
+          "y": 57.35540000000003,
+          "width": 215.28035,
+          "height": 8.5
+        },
+        "lineRectsPdf": [
+          [
+            100.5,
+            717.1446,
+            315.78035,
+            725.6446
+          ]
+        ],
+        "fontSize": 8.5,
+        "column": 0,
+        "isReference": false,
+        "readingIndex": 0,
+        "moduleId": "page-6-mod-0"
+      },
+      {
+        "id": "page-6-table-0-r0-c0",
+        "pageIndex": 6,
+        "order": 1,
+        "type": "paragraph",
+        "sourceText": "Coronary CT Angiographic",
+        "boundingBox": {
+          "x": 100.5,
+          "y": 75.49030000000005,
+          "width": 96.88409999999999,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          100.5,
+          697.711234156577,
+          229.4134658434229,
+          707.5097
+        ],
+        "lineRectsPdf": [
+          [
+            100.5,
+            698.5097,
+            197.3841,
+            707.5097
+          ]
+        ],
+        "fontSize": 9,
+        "column": 0,
+        "tableCol": 0,
+        "tableRow": 0,
+        "memberIds": [
+          "page-6-block-40"
+        ],
+        "isReference": false,
+        "translationMode": "translate",
+        "readingIndex": 1,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-0-0",
+          "kind": "table-cell",
+          "boundsPdf": [
+            100.5,
+            697.711234156577,
+            229.4134658434229,
+            707.5097
+          ],
+          "evidence": "table-model"
+        },
+        "moduleId": "page-6-mod-0"
+      },
+      {
+        "id": "page-6-table-0-r0-c1",
+        "pageIndex": 6,
+        "order": 2,
+        "type": "paragraph",
+        "sourceText": "Univariable Analysis",
+        "boundingBox": {
+          "x": 230.613,
+          "y": 75.49030000000005,
+          "width": 70.632,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          230.613,
+          697.711234156577,
+          360.06646584342286,
+          707.5097
+        ],
+        "lineRectsPdf": [
+          [
+            230.613,
+            698.5097,
+            301.245,
+            707.5097
+          ]
+        ],
+        "fontSize": 9,
+        "column": 0,
+        "tableCol": 1,
+        "tableRow": 0,
+        "memberIds": [
+          "page-6-block-41"
+        ],
+        "isReference": false,
+        "translationMode": "translate",
+        "readingIndex": 2,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-0-1",
+          "kind": "table-cell",
+          "boundsPdf": [
+            230.613,
+            697.711234156577,
+            360.06646584342286,
+            707.5097
+          ],
+          "evidence": "table-model"
+        },
+        "moduleId": "page-6-mod-0"
+      },
+      {
+        "id": "page-6-table-0-r1-c0",
+        "pageIndex": 6,
+        "order": 3,
+        "type": "paragraph",
+        "sourceText": "Finding at CTO Proximal Entry",
+        "boundingBox": {
+          "x": 100.5,
+          "y": 86.4883000000001,
+          "width": 112.52519999999998,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          100.5,
+          681.682234156577,
+          229.4134658434229,
+          696.5116999999999
+        ],
+        "lineRectsPdf": [
+          [
+            100.5,
+            687.5116999999999,
+            213.02519999999998,
+            696.5116999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 0,
+        "tableCol": 0,
+        "tableRow": 1,
+        "memberIds": [
+          "page-6-block-42"
+        ],
+        "isReference": false,
+        "translationMode": "translate",
+        "readingIndex": 3,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-1-0",
+          "kind": "table-cell",
+          "boundsPdf": [
+            100.5,
+            681.682234156577,
+            229.4134658434229,
+            696.5116999999999
+          ],
+          "evidence": "table-model"
+        },
+        "moduleId": "page-6-mod-0"
+      },
+      {
+        "id": "page-6-table-0-r1-c1",
+        "pageIndex": 6,
+        "order": 4,
+        "type": "paragraph",
+        "sourceText": "OR",
+        "boundingBox": {
+          "x": 230.613,
+          "y": 86.4883000000001,
+          "width": 12.960000000000008,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          230.613,
+          681.682234156577,
+          322.03246584342287,
+          696.5116999999999
+        ],
+        "lineRectsPdf": [
+          [
+            230.613,
+            687.5116999999999,
+            243.573,
+            696.5116999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 0,
+        "tableCol": 1,
+        "tableRow": 1,
+        "memberIds": [
+          "page-6-block-43"
+        ],
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "defined-abbreviation",
+        "readingIndex": 4,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-1-1",
+          "kind": "table-cell",
+          "boundsPdf": [
+            230.613,
+            681.682234156577,
+            322.03246584342287,
+            696.5116999999999
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-table-0-r2-c0",
+        "pageIndex": 6,
+        "order": 5,
+        "type": "paragraph",
+        "sourceText": "Severe calcification",
+        "boundingBox": {
+          "x": 103.49699999999996,
+          "y": 102.51730000000009,
+          "width": 65.44799999999998,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          103.49699999999996,
+          670.153234156577,
+          233.40946584342285,
+          680.4826999999999
+        ],
+        "lineRectsPdf": [
+          [
+            103.49699999999996,
+            671.4826999999999,
+            168.94499999999994,
+            680.4826999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 0,
+        "tableCol": 0,
+        "tableRow": 2,
+        "memberIds": [
+          "page-6-block-44"
+        ],
+        "isReference": false,
+        "translationMode": "translate",
+        "readingIndex": 5,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-2-0",
+          "kind": "table-cell",
+          "boundsPdf": [
+            103.49699999999996,
+            670.153234156577,
+            233.40946584342285,
+            680.4826999999999
+          ],
+          "evidence": "table-model"
+        },
+        "moduleId": "page-6-mod-0"
+      },
+      {
+        "id": "page-6-table-0-r2-c1",
+        "pageIndex": 6,
+        "order": 6,
+        "type": "paragraph",
+        "sourceText": "4.0 (1.1, 14.3)",
+        "boundingBox": {
+          "x": 234.60899999999995,
+          "y": 102.51730000000009,
+          "width": 50.76000000000002,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          234.60899999999995,
+          670.153234156577,
+          326.02846584342285,
+          680.4826999999999
+        ],
+        "lineRectsPdf": [
+          [
+            234.60899999999995,
+            671.4826999999999,
+            285.36899999999997,
+            680.4826999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 0,
+        "tableCol": 1,
+        "tableRow": 2,
+        "memberIds": [
+          "page-6-block-45"
+        ],
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "data",
+        "readingIndex": 6,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-2-1",
+          "kind": "table-cell",
+          "boundsPdf": [
+            234.60899999999995,
+            670.153234156577,
+            326.02846584342285,
+            680.4826999999999
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-table-0-r3-c0",
+        "pageIndex": 6,
+        "order": 7,
+        "type": "paragraph",
+        "sourceText": "Blunt stump",
+        "boundingBox": {
+          "x": 103.49699999999996,
+          "y": 114.04630000000009,
+          "width": 43.829999999999984,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          103.49699999999996,
+          658.156234156577,
+          233.40946584342285,
+          668.9536999999999
+        ],
+        "lineRectsPdf": [
+          [
+            103.49699999999996,
+            659.9536999999999,
+            147.32699999999994,
+            668.9536999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 0,
+        "tableCol": 0,
+        "tableRow": 3,
+        "memberIds": [
+          "page-6-block-46"
+        ],
+        "isReference": false,
+        "translationMode": "translate",
+        "readingIndex": 7,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-3-0",
+          "kind": "table-cell",
+          "boundsPdf": [
+            103.49699999999996,
+            658.156234156577,
+            233.40946584342285,
+            668.9536999999999
+          ],
+          "evidence": "table-model"
+        },
+        "moduleId": "page-6-mod-0"
+      },
+      {
+        "id": "page-6-table-0-r3-c1",
+        "pageIndex": 6,
+        "order": 8,
+        "type": "paragraph",
+        "sourceText": "7.7 (2.0, 29.7)",
+        "boundingBox": {
+          "x": 234.60899999999995,
+          "y": 114.04630000000009,
+          "width": 50.76000000000002,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          234.60899999999995,
+          658.156234156577,
+          326.02846584342285,
+          668.9536999999999
+        ],
+        "lineRectsPdf": [
+          [
+            234.60899999999995,
+            659.9536999999999,
+            285.36899999999997,
+            668.9536999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 0,
+        "tableCol": 1,
+        "tableRow": 3,
+        "memberIds": [
+          "page-6-block-47"
+        ],
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "data",
+        "readingIndex": 8,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-3-1",
+          "kind": "table-cell",
+          "boundsPdf": [
+            234.60899999999995,
+            658.156234156577,
+            326.02846584342285,
+            668.9536999999999
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-table-0-r4-c1",
+        "pageIndex": 6,
+        "order": 9,
+        "type": "paragraph",
+        "sourceText": "16.7 (3.7, 75.3)",
+        "boundingBox": {
+          "x": 234.60899999999995,
+          "y": 126.04330000000004,
+          "width": 55.26000000000002,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          234.60899999999995,
+          647.4707,
+          326.02846584342285,
+          656.9567
+        ],
+        "lineRectsPdf": [
+          [
+            234.60899999999995,
+            647.9567,
+            289.86899999999997,
+            656.9567
+          ]
+        ],
+        "fontSize": 9,
+        "column": 0,
+        "tableCol": 1,
+        "tableRow": 4,
+        "memberIds": [
+          "page-6-block-48"
+        ],
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "data",
+        "readingIndex": 9,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-4-1",
+          "kind": "table-cell",
+          "boundsPdf": [
+            234.60899999999995,
+            647.4707,
+            326.02846584342285,
+            656.9567
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-table-0-r4-c0",
+        "pageIndex": 6,
+        "order": 10,
+        "type": "paragraph",
+        "sourceText": "Low CTO-CIC ( 2.5 mg/mL)",
+        "boundingBox": {
+          "x": 103.49699999999996,
+          "y": 126.52930000000003,
+          "width": 112.31100000000004,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          103.49699999999996,
+          647.4707,
+          233.40946584342285,
+          656.4707
+        ],
+        "lineRectsPdf": [
+          [
+            103.49699999999996,
+            647.4707,
+            215.808,
+            656.4707
+          ]
+        ],
+        "fontSize": 9,
+        "column": 0,
+        "tableCol": 0,
+        "tableRow": 4,
+        "memberIds": [
+          "page-6-block-49"
+        ],
+        "isReference": false,
+        "translationMode": "translate",
+        "readingIndex": 10,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-4-0",
+          "kind": "table-cell",
+          "boundsPdf": [
+            103.49699999999996,
+            647.4707,
+            233.40946584342285,
+            656.4707
+          ],
+          "evidence": "table-model"
+        },
+        "moduleId": "page-6-mod-0"
+      },
+      {
+        "id": "page-6-block-8",
+        "pageIndex": 6,
+        "order": 11,
+        "type": "paragraph",
+        "sourceText": "Lee et al",
+        "boundingBox": {
+          "x": 519.6006,
+          "y": 30.285799999999995,
+          "width": 26.40000000000009,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            519.6006,
+            744.7142,
+            546.0006000000001,
+            752.7142
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "running-head",
+        "readingIndex": 11,
+        "sourceRegion": {
+          "id": "page-6-furniture-page-6-block-8",
+          "kind": "page-furniture",
+          "boundsPdf": [
+            519.6006,
+            744.7142,
+            546.0006000000001,
+            752.7142
+          ],
+          "evidence": "page-margin"
+        }
+      },
+      {
+        "id": "page-6-table-0-r0-c3",
+        "pageIndex": 6,
+        "order": 12,
+        "type": "paragraph",
+        "sourceText": "Multivariable Analysis",
+        "boundingBox": {
+          "x": 361.26599999999996,
+          "y": 75.49030000000005,
+          "width": 76.995,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          361.26599999999996,
+          697.711234156577,
+          480.36299999999994,
+          707.5097
+        ],
+        "lineRectsPdf": [
+          [
+            361.26599999999996,
+            698.5097,
+            438.26099999999997,
+            707.5097
+          ]
+        ],
+        "fontSize": 9,
+        "column": 1,
+        "tableCol": 3,
+        "tableRow": 0,
+        "memberIds": [
+          "page-6-block-50"
+        ],
+        "isReference": false,
+        "translationMode": "translate",
+        "readingIndex": 12,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-0-3",
+          "kind": "table-cell",
+          "boundsPdf": [
+            361.26599999999996,
+            697.711234156577,
+            480.36299999999994,
+            707.5097
+          ],
+          "evidence": "table-model"
+        },
+        "moduleId": "page-6-mod-0"
+      },
+      {
+        "id": "page-6-table-0-r1-c3",
+        "pageIndex": 6,
+        "order": 13,
+        "type": "paragraph",
+        "sourceText": "P Value Adjusted OR",
+        "boundingBox": {
+          "x": 323.23199999999997,
+          "y": 86.4883000000001,
+          "width": 84.024,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          323.23199999999997,
+          681.682234156577,
+          447.42046584342285,
+          696.5116999999999
+        ],
+        "lineRectsPdf": [
+          [
+            323.23199999999997,
+            687.5116999999999,
+            407.256,
+            696.5116999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 1,
+        "tableCol": 3,
+        "tableRow": 1,
+        "memberIds": [
+          "page-6-block-51"
+        ],
+        "isReference": false,
+        "translationMode": "translate",
+        "readingIndex": 13,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-1-3",
+          "kind": "table-cell",
+          "boundsPdf": [
+            323.23199999999997,
+            681.682234156577,
+            447.42046584342285,
+            696.5116999999999
+          ],
+          "evidence": "table-model"
+        },
+        "moduleId": "page-6-mod-0"
+      },
+      {
+        "id": "page-6-table-0-r1-c4",
+        "pageIndex": 6,
+        "order": 14,
+        "type": "paragraph",
+        "sourceText": "P Value",
+        "boundingBox": {
+          "x": 448.61999999999995,
+          "y": 86.4883000000001,
+          "width": 26.541000000000054,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          448.61999999999995,
+          681.682234156577,
+          480.36299999999994,
+          696.5116999999999
+        ],
+        "lineRectsPdf": [
+          [
+            448.61999999999995,
+            687.5116999999999,
+            475.161,
+            696.5116999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 1,
+        "tableCol": 4,
+        "tableRow": 1,
+        "memberIds": [
+          "page-6-block-52"
+        ],
+        "isReference": false,
+        "translationMode": "translate",
+        "readingIndex": 14,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-1-4",
+          "kind": "table-cell",
+          "boundsPdf": [
+            448.61999999999995,
+            681.682234156577,
+            480.36299999999994,
+            696.5116999999999
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-table-0-r2-c2",
+        "pageIndex": 6,
+        "order": 15,
+        "type": "paragraph",
+        "sourceText": ".02",
+        "boundingBox": {
+          "x": 327.22799999999995,
+          "y": 102.51730000000009,
+          "width": 11.25,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          327.22799999999995,
+          670.153234156577,
+          364.06246584342284,
+          680.4826999999999
+        ],
+        "lineRectsPdf": [
+          [
+            327.22799999999995,
+            671.4826999999999,
+            338.47799999999995,
+            680.4826999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 1,
+        "tableCol": 2,
+        "tableRow": 2,
+        "memberIds": [
+          "page-6-block-53"
+        ],
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "symbol",
+        "readingIndex": 15,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-2-2",
+          "kind": "table-cell",
+          "boundsPdf": [
+            327.22799999999995,
+            670.153234156577,
+            364.06246584342284,
+            680.4826999999999
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-table-0-r2-c3",
+        "pageIndex": 6,
+        "order": 16,
+        "type": "paragraph",
+        "sourceText": "NA",
+        "boundingBox": {
+          "x": 365.26199999999994,
+          "y": 102.51730000000009,
+          "width": 12.653999999999996,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          365.26199999999994,
+          670.153234156577,
+          451.4164658434228,
+          680.4826999999999
+        ],
+        "lineRectsPdf": [
+          [
+            365.26199999999994,
+            671.4826999999999,
+            377.91599999999994,
+            680.4826999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 1,
+        "tableCol": 3,
+        "tableRow": 2,
+        "memberIds": [
+          "page-6-block-54"
+        ],
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "defined-abbreviation",
+        "readingIndex": 16,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-2-3",
+          "kind": "table-cell",
+          "boundsPdf": [
+            365.26199999999994,
+            670.153234156577,
+            451.4164658434228,
+            680.4826999999999
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-table-0-r2-c4",
+        "pageIndex": 6,
+        "order": 17,
+        "type": "paragraph",
+        "sourceText": "NA",
+        "boundingBox": {
+          "x": 452.61599999999993,
+          "y": 102.51730000000009,
+          "width": 12.653999999999996,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          452.61599999999993,
+          670.153234156577,
+          480.36299999999994,
+          680.4826999999999
+        ],
+        "lineRectsPdf": [
+          [
+            452.61599999999993,
+            671.4826999999999,
+            465.2699999999999,
+            680.4826999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 1,
+        "tableCol": 4,
+        "tableRow": 2,
+        "memberIds": [
+          "page-6-block-55"
+        ],
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "defined-abbreviation",
+        "readingIndex": 17,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-2-4",
+          "kind": "table-cell",
+          "boundsPdf": [
+            452.61599999999993,
+            670.153234156577,
+            480.36299999999994,
+            680.4826999999999
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-table-0-r3-c2",
+        "pageIndex": 6,
+        "order": 18,
+        "type": "paragraph",
+        "sourceText": ".001",
+        "boundingBox": {
+          "x": 327.22799999999995,
+          "y": 114.04630000000009,
+          "width": 15.75,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          327.22799999999995,
+          658.156234156577,
+          364.06246584342284,
+          668.9536999999999
+        ],
+        "lineRectsPdf": [
+          [
+            327.22799999999995,
+            659.9536999999999,
+            342.97799999999995,
+            668.9536999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 1,
+        "tableCol": 2,
+        "tableRow": 3,
+        "memberIds": [
+          "page-6-block-56"
+        ],
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "symbol",
+        "readingIndex": 18,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-3-2",
+          "kind": "table-cell",
+          "boundsPdf": [
+            327.22799999999995,
+            658.156234156577,
+            364.06246584342284,
+            668.9536999999999
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-table-0-r3-c3",
+        "pageIndex": 6,
+        "order": 19,
+        "type": "paragraph",
+        "sourceText": "NA",
+        "boundingBox": {
+          "x": 365.26199999999994,
+          "y": 114.04630000000009,
+          "width": 12.653999999999996,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          365.26199999999994,
+          658.156234156577,
+          451.4164658434228,
+          668.9536999999999
+        ],
+        "lineRectsPdf": [
+          [
+            365.26199999999994,
+            659.9536999999999,
+            377.91599999999994,
+            668.9536999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 1,
+        "tableCol": 3,
+        "tableRow": 3,
+        "memberIds": [
+          "page-6-block-57"
+        ],
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "defined-abbreviation",
+        "readingIndex": 19,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-3-3",
+          "kind": "table-cell",
+          "boundsPdf": [
+            365.26199999999994,
+            658.156234156577,
+            451.4164658434228,
+            668.9536999999999
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-table-0-r3-c4",
+        "pageIndex": 6,
+        "order": 20,
+        "type": "paragraph",
+        "sourceText": "NA",
+        "boundingBox": {
+          "x": 452.61599999999993,
+          "y": 114.04630000000009,
+          "width": 12.653999999999996,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          452.61599999999993,
+          658.156234156577,
+          480.36299999999994,
+          668.9536999999999
+        ],
+        "lineRectsPdf": [
+          [
+            452.61599999999993,
+            659.9536999999999,
+            465.2699999999999,
+            668.9536999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 1,
+        "tableCol": 4,
+        "tableRow": 3,
+        "memberIds": [
+          "page-6-block-58"
+        ],
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "defined-abbreviation",
+        "readingIndex": 20,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-3-4",
+          "kind": "table-cell",
+          "boundsPdf": [
+            452.61599999999993,
+            658.156234156577,
+            480.36299999999994,
+            668.9536999999999
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-table-0-r4-c3",
+        "pageIndex": 6,
+        "order": 21,
+        "type": "paragraph",
+        "sourceText": "27.0 (4.9, 147.6)",
+        "boundingBox": {
+          "x": 365.26199999999994,
+          "y": 126.04330000000004,
+          "width": 59.75999999999999,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          365.26199999999994,
+          647.4707,
+          451.4164658434228,
+          656.9567
+        ],
+        "lineRectsPdf": [
+          [
+            365.26199999999994,
+            647.9567,
+            425.02199999999993,
+            656.9567
+          ]
+        ],
+        "fontSize": 9,
+        "column": 1,
+        "tableCol": 3,
+        "tableRow": 4,
+        "memberIds": [
+          "page-6-block-59"
+        ],
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "data",
+        "readingIndex": 21,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-4-3",
+          "kind": "table-cell",
+          "boundsPdf": [
+            365.26199999999994,
+            647.4707,
+            451.4164658434228,
+            656.9567
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-table-0-r4-c2",
+        "pageIndex": 6,
+        "order": 22,
+        "type": "paragraph",
+        "sourceText": ",.001",
+        "boundingBox": {
+          "x": 327.22799999999995,
+          "y": 126.3583000000001,
+          "width": 23.247000000000014,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          327.22799999999995,
+          647.4707,
+          364.06246584342284,
+          656.6416999999999
+        ],
+        "lineRectsPdf": [
+          [
+            327.22799999999995,
+            647.6416999999999,
+            350.47499999999997,
+            656.6416999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 1,
+        "tableCol": 2,
+        "tableRow": 4,
+        "memberIds": [
+          "page-6-block-60"
+        ],
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "data",
+        "readingIndex": 22,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-4-2",
+          "kind": "table-cell",
+          "boundsPdf": [
+            327.22799999999995,
+            647.4707,
+            364.06246584342284,
+            656.6416999999999
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-table-0-r4-c4",
+        "pageIndex": 6,
+        "order": 23,
+        "type": "paragraph",
+        "sourceText": ",.0001",
+        "boundingBox": {
+          "x": 452.61599999999993,
+          "y": 126.3583000000001,
+          "width": 27.747000000000014,
+          "height": 9
+        },
+        "tableGeometry": "inferred",
+        "tableId": "page-6-inferred-0",
+        "tableSource": "text-alignment",
+        "tableConfidence": "tentative",
+        "tableContentRectPdf": [
+          452.61599999999993,
+          647.4707,
+          480.36299999999994,
+          656.6416999999999
+        ],
+        "lineRectsPdf": [
+          [
+            452.61599999999993,
+            647.6416999999999,
+            480.36299999999994,
+            656.6416999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": 1,
+        "tableCol": 4,
+        "tableRow": 4,
+        "memberIds": [
+          "page-6-block-61"
+        ],
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "data",
+        "readingIndex": 23,
+        "sourceRegion": {
+          "id": "page-6-cell-page-6-inferred-0-4-4",
+          "kind": "table-cell",
+          "boundsPdf": [
+            452.61599999999993,
+            647.4707,
+            480.36299999999994,
+            656.6416999999999
+          ],
+          "evidence": "table-model"
+        }
+      },
+      {
+        "id": "page-6-region-1",
+        "pageIndex": 6,
+        "order": 24,
+        "type": "paragraph",
+        "sourceText": "Note.—Data in parentheses are 95% confidence intervals. CIC = coronary iodine concentration, CTO = chronic total occlusion, OR = odds ratio, NA = not applicable, PCI = percutaneous coronary intervention.",
+        "boundingBox": {
+          "x": 100.49099999999993,
+          "y": 143.55730000000005,
+          "width": 392.30639999999994,
+          "height": 18.999000000000024
+        },
+        "lineRectsPdf": [
+          [
+            100.49099999999993,
+            630.4427,
+            492.79739999999987,
+            639.4427
+          ],
+          [
+            100.49099999999993,
+            620.4436999999999,
+            441.4245000000001,
+            629.4436999999999
+          ]
+        ],
+        "fontSize": 9,
+        "column": -1,
+        "isReference": false,
+        "readingIndex": 24,
+        "regionParagraphs": [
+          {
+            "lineRectsPdf": [
+              [
+                100.49099999999993,
+                630.4427,
+                492.79739999999987,
+                639.4427
+              ],
+              [
+                100.49099999999993,
+                620.4436999999999,
+                441.4245000000001,
+                629.4436999999999
+              ]
+            ],
+            "fontSize": 9
+          }
+        ],
+        "memberIds": [
+          "page-6-block-0",
+          "page-6-block-2"
+        ],
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-2",
+        "pageIndex": 6,
+        "order": 25,
+        "type": "paragraph",
+        "sourceText": "lesion. Coronary CT angiography can also be used to help identify features that may be overlooked at invasive angiography. Li et al (12) suggested that visible intrathrombus contrast enhancement on coronary CT angiograms could help predict better PCI outcomes for CTO. We hypothesize that the low iodine concentration as found in our study may represent a lack of tissue composition amenable to PCI. Dual-energy CT can help improve material differentiation by using two different x-ray energy spectra (22). Spectral CT allows dual-energy data acquisition with the use of unique dual-layer energy-resolving detectors (14). More importantly, dual-energy evaluation can be performed retrospectively after spectral CT in all clinical cases. Recently, authors of spectral CT studies have assessed the incremental diagnostic value of iodine quantification (22). When using spectral CT, the iodine-no-water map showing iodine density can be generated using known attenuation properties at high and low energies, which represents the iodine concentration in each voxel (13). The iodine-no-water map reconstructed by using dual-energy techniques also provides excellent resolution of images, with improved iodine contrast-to-noise ratio. In fact, a previous study reported that the use of an iodine map increased the readers’ confidence in detecting the abnormal presence of contrast media, particularly from endoleaks in patients in whom aortic stent graft had been placed (23). This study showed that the quantification of iodine concentration even in small vessels, such as the coronary artery, had the potential to predict failed PCI in patients with CTO. Our study had several limitations. First, this retrospective study had biases caused by case selection, operator expertise, resources, and image quality of the coronary CT angiograms. Second, a small number of patients and a relatively low portion of failed antegrade PCI could be critical limitations in the generalization of the results of this study. Another limitation of this study was the lack of pathologic correlation. Further validation of the iodine concentration with the histologic morphology of the CTO lesion is desirable. Therefore, further experimental and clinical studies with larger data sets are warranted to define the exact nature of iodine concentration at the site of coronary occlusion and to assess its clinical significance. In conclusion, by using spectral CT for coronary angiography before PCI for CTO, a low CIC ( 2.5 mg/mL) at the entry of the CTO lesion is associated with failure of successful antegrade PCI for the management of CTO.",
+        "boundingBox": {
+          "x": 48,
+          "y": 191.94990000000007,
+          "width": 240.0399999999999,
+          "height": 538
+        },
+        "lineRectsPdf": [
+          [
+            48,
+            581.0500999999999,
+            288.0090000000002,
+            591.0500999999999
+          ],
+          [
+            48,
+            569.0500999999999,
+            287.9690000000004,
+            579.0500999999999
+          ],
+          [
+            48,
+            557.0500999999999,
+            287.99000000000024,
+            567.0500999999999
+          ],
+          [
+            48,
+            545.0500999999999,
+            287.97900000000016,
+            555.0500999999999
+          ],
+          [
+            48,
+            533.0500999999999,
+            288.0170000000002,
+            543.0500999999999
+          ],
+          [
+            48,
+            521.0500999999999,
+            287.99000000000024,
+            531.0500999999999
+          ],
+          [
+            48,
+            509.0501,
+            163.86000000000013,
+            519.0500999999999
+          ],
+          [
+            60,
+            497.0501,
+            288.00500000000005,
+            507.0501
+          ],
+          [
+            48,
+            485.0501,
+            288.03100000000006,
+            495.0501
+          ],
+          [
+            48,
+            473.0501,
+            288,
+            483.0501
+          ],
+          [
+            48,
+            461.0501,
+            288,
+            471.0501
+          ],
+          [
+            48,
+            449.0501,
+            287.9990000000002,
+            459.0501
+          ],
+          [
+            48,
+            437.0501,
+            288.025,
+            447.0501
+          ],
+          [
+            48,
+            425.0501,
+            288.00400000000013,
+            435.0501
+          ],
+          [
+            48,
+            413.0501,
+            288.01800000000003,
+            423.0501
+          ],
+          [
+            48,
+            401.0501,
+            288.00199999999995,
+            411.0501
+          ],
+          [
+            48,
+            389.0501,
+            288.004,
+            399.0501
+          ],
+          [
+            48,
+            377.0501,
+            287.97800000000007,
+            387.0501
+          ],
+          [
+            48,
+            365.0501,
+            288.0190000000001,
+            375.0501
+          ],
+          [
+            48,
+            353.0501,
+            287.98900000000015,
+            363.0501
+          ],
+          [
+            48,
+            341.0501,
+            287.998,
+            351.0501
+          ],
+          [
+            48,
+            329.0501,
+            287.96900000000016,
+            339.0501
+          ],
+          [
+            48,
+            317.0501,
+            288.0050000000001,
+            327.0501
+          ],
+          [
+            48,
+            305.0501,
+            287.98,
+            315.0501
+          ],
+          [
+            48,
+            293.0501,
+            287.9690000000001,
+            303.0501
+          ],
+          [
+            48,
+            281.0501,
+            288.0200000000001,
+            291.0501
+          ],
+          [
+            48,
+            269.0501,
+            287.9590000000001,
+            279.0501
+          ],
+          [
+            48,
+            257.0501,
+            152.98900000000003,
+            267.0501
+          ],
+          [
+            60,
+            245.0501,
+            287.9899999999999,
+            255.0501
+          ],
+          [
+            48,
+            233.0501,
+            288.0209999999999,
+            243.0501
+          ],
+          [
+            48,
+            221.0501,
+            288.0079999999999,
+            231.0501
+          ],
+          [
+            48,
+            209.0501,
+            287.9689999999998,
+            219.0501
+          ],
+          [
+            48,
+            197.0501,
+            287.9999999999999,
+            207.0501
+          ],
+          [
+            48,
+            185.0501,
+            288.0199999999999,
+            195.0501
+          ],
+          [
+            48,
+            173.0501,
+            287.9799999999999,
+            183.0501
+          ],
+          [
+            48,
+            161.0501,
+            287.98999999999995,
+            171.0501
+          ],
+          [
+            48,
+            149.0501,
+            287.9999999999999,
+            159.0501
+          ],
+          [
+            48,
+            137.0501,
+            288.00999999999976,
+            147.0501
+          ],
+          [
+            48,
+            125.05009999999997,
+            288.0399999999999,
+            135.0501
+          ],
+          [
+            48,
+            113.05009999999997,
+            288.0029999999999,
+            123.05009999999997
+          ],
+          [
+            48,
+            101.05009999999997,
+            96.14999999999998,
+            111.05009999999997
+          ],
+          [
+            60,
+            89.05009999999997,
+            287.98000000000025,
+            99.05009999999997
+          ],
+          [
+            48,
+            77.05009999999997,
+            287.9799999999999,
+            87.05009999999997
+          ],
+          [
+            48,
+            65.05009999999997,
+            288.00800000000027,
+            75.05009999999997
+          ],
+          [
+            48,
+            53.05009999999997,
+            216.60000000000016,
+            63.05009999999997
+          ]
+        ],
+        "fontSize": 10,
+        "column": 0,
+        "isReference": false,
+        "readingIndex": 25,
+        "regionParagraphs": [
+          {
+            "lineRectsPdf": [
+              [
+                48,
+                581.0500999999999,
+                288.0090000000002,
+                591.0500999999999
+              ],
+              [
+                48,
+                569.0500999999999,
+                287.9690000000004,
+                579.0500999999999
+              ],
+              [
+                48,
+                557.0500999999999,
+                287.99000000000024,
+                567.0500999999999
+              ],
+              [
+                48,
+                545.0500999999999,
+                287.97900000000016,
+                555.0500999999999
+              ],
+              [
+                48,
+                533.0500999999999,
+                288.0170000000002,
+                543.0500999999999
+              ],
+              [
+                48,
+                521.0500999999999,
+                287.99000000000024,
+                531.0500999999999
+              ],
+              [
+                48,
+                509.0501,
+                163.86000000000013,
+                519.0500999999999
+              ],
+              [
+                60,
+                497.0501,
+                288.00500000000005,
+                507.0501
+              ],
+              [
+                48,
+                485.0501,
+                288.03100000000006,
+                495.0501
+              ],
+              [
+                48,
+                473.0501,
+                288,
+                483.0501
+              ],
+              [
+                48,
+                461.0501,
+                288,
+                471.0501
+              ],
+              [
+                48,
+                449.0501,
+                287.9990000000002,
+                459.0501
+              ],
+              [
+                48,
+                437.0501,
+                288.025,
+                447.0501
+              ],
+              [
+                48,
+                425.0501,
+                288.00400000000013,
+                435.0501
+              ],
+              [
+                48,
+                413.0501,
+                288.01800000000003,
+                423.0501
+              ],
+              [
+                48,
+                401.0501,
+                288.00199999999995,
+                411.0501
+              ],
+              [
+                48,
+                389.0501,
+                288.004,
+                399.0501
+              ],
+              [
+                48,
+                377.0501,
+                287.97800000000007,
+                387.0501
+              ],
+              [
+                48,
+                365.0501,
+                288.0190000000001,
+                375.0501
+              ],
+              [
+                48,
+                353.0501,
+                287.98900000000015,
+                363.0501
+              ],
+              [
+                48,
+                341.0501,
+                287.998,
+                351.0501
+              ],
+              [
+                48,
+                329.0501,
+                287.96900000000016,
+                339.0501
+              ],
+              [
+                48,
+                317.0501,
+                288.0050000000001,
+                327.0501
+              ],
+              [
+                48,
+                305.0501,
+                287.98,
+                315.0501
+              ],
+              [
+                48,
+                293.0501,
+                287.9690000000001,
+                303.0501
+              ],
+              [
+                48,
+                281.0501,
+                288.0200000000001,
+                291.0501
+              ],
+              [
+                48,
+                269.0501,
+                287.9590000000001,
+                279.0501
+              ],
+              [
+                48,
+                257.0501,
+                152.98900000000003,
+                267.0501
+              ],
+              [
+                60,
+                245.0501,
+                287.9899999999999,
+                255.0501
+              ],
+              [
+                48,
+                233.0501,
+                288.0209999999999,
+                243.0501
+              ],
+              [
+                48,
+                221.0501,
+                288.0079999999999,
+                231.0501
+              ],
+              [
+                48,
+                209.0501,
+                287.9689999999998,
+                219.0501
+              ],
+              [
+                48,
+                197.0501,
+                287.9999999999999,
+                207.0501
+              ],
+              [
+                48,
+                185.0501,
+                288.0199999999999,
+                195.0501
+              ],
+              [
+                48,
+                173.0501,
+                287.9799999999999,
+                183.0501
+              ],
+              [
+                48,
+                161.0501,
+                287.98999999999995,
+                171.0501
+              ],
+              [
+                48,
+                149.0501,
+                287.9999999999999,
+                159.0501
+              ],
+              [
+                48,
+                137.0501,
+                288.00999999999976,
+                147.0501
+              ],
+              [
+                48,
+                125.05009999999997,
+                288.0399999999999,
+                135.0501
+              ],
+              [
+                48,
+                113.05009999999997,
+                288.0029999999999,
+                123.05009999999997
+              ],
+              [
+                48,
+                101.05009999999997,
+                96.14999999999998,
+                111.05009999999997
+              ],
+              [
+                60,
+                89.05009999999997,
+                287.98000000000025,
+                99.05009999999997
+              ],
+              [
+                48,
+                77.05009999999997,
+                287.9799999999999,
+                87.05009999999997
+              ],
+              [
+                48,
+                65.05009999999997,
+                288.00800000000027,
+                75.05009999999997
+              ],
+              [
+                48,
+                53.05009999999997,
+                216.60000000000016,
+                63.05009999999997
+              ]
+            ],
+            "fontSize": 10
+          }
+        ],
+        "memberIds": [
+          "page-6-block-3",
+          "page-6-block-4",
+          "page-6-block-5",
+          "page-6-block-6"
+        ],
+        "sourceRegion": {
+          "id": "page-6-column-0-band-0.1.2.3.4.5.6.7.8.9.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            48,
+            31.842100000000002,
+            288.0399999999999,
+            591.0500999999999
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-block-7",
+        "pageIndex": 6,
+        "order": 26,
+        "type": "paragraph",
+        "sourceText": "Radiology: Cardiothoracic Imaging Volume 2: Number 4—2020 n rcti.rsna.org",
+        "boundingBox": {
+          "x": 48,
+          "y": 754.1579,
+          "width": 210.78049999999996,
+          "height": 7
+        },
+        "lineRectsPdf": [
+          [
+            48,
+            21.842100000000002,
+            258.78049999999996,
+            28.842100000000002
+          ]
+        ],
+        "fontSize": 7,
+        "column": 0,
+        "isReference": false,
+        "translationMode": "preserve",
+        "preserveReason": "running-head",
+        "readingIndex": 26,
+        "sourceRegion": {
+          "id": "page-6-furniture-page-6-block-7",
+          "kind": "page-furniture",
+          "boundsPdf": [
+            48,
+            21.842100000000002,
+            258.78049999999996,
+            28.842100000000002
+          ],
+          "evidence": "page-margin"
+        }
+      },
+      {
+        "id": "page-6-region-3",
+        "pageIndex": 6,
+        "order": 27,
+        "type": "paragraph",
+        "sourceText": "Author contributions: Guarantors of integrity of entire study, D.S.L., C.W.Y., H.S.Y., S.H.H.; study concepts/study design or data acquisition or data analysis/interpretation, all authors; manuscript drafting or manuscript revision for important intellectual content, all authors; approval of final version of submitted manuscript, all authors; agrees to ensure any questions related to the work are appropriately resolved, all authors; literature research, J.Y.L., D.S.L., C.W.Y., J.H.P., E.Y.K., C.K., K.Y.L., S.H.H.; clinical studies, J.Y.L., Y.W.O., D.S.L., C.W.Y., J.H.P., H.J.J., H.S.Y., C.K., K.Y.L., S.H.H.; experimental studies, D.S.L., J.H.P.; statistical analysis, J.Y.L., Y.W.O., D.S.L., J.H.P., S.H.H.; and manuscript editing, J.Y.L., Y.W.O., D.S.L., C.W.Y., J.H.P., H.S.Y., E.Y.K., C.K., K.Y.L., S.H.H.",
+        "boundingBox": {
+          "x": 306,
+          "y": 192.0874,
+          "width": 240.03009999999995,
+          "height": 88.5
+        },
+        "lineRectsPdf": [
+          [
+            306,
+            583.4126,
+            546.0143499999999,
+            590.9126
+          ],
+          [
+            306.0001,
+            574.4126,
+            546.0301,
+            581.9126
+          ],
+          [
+            306.0001,
+            565.4126,
+            546.00685,
+            572.9126
+          ],
+          [
+            306.0001,
+            556.4126,
+            546.0030999999998,
+            563.9126
+          ],
+          [
+            306.0001,
+            547.4126,
+            546.0301,
+            554.9126
+          ],
+          [
+            306.0001,
+            538.4126,
+            546.0151000000001,
+            545.9126
+          ],
+          [
+            306.0001,
+            529.4126,
+            546.00085,
+            536.9126
+          ],
+          [
+            306.0001,
+            520.4126,
+            545.9925999999998,
+            527.9126
+          ],
+          [
+            306.0001,
+            511.4126,
+            545.9821000000001,
+            518.9126
+          ],
+          [
+            306.0001,
+            502.4126,
+            481.18435,
+            509.9126
+          ]
+        ],
+        "fontSize": 7.5,
+        "column": 1,
+        "isReference": false,
+        "readingIndex": 27,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-4",
+        "pageIndex": 6,
+        "order": 28,
+        "type": "paragraph",
+        "sourceText": "Disclosures of Conflicts of Interest: J.Y.L. disclosed no relevant relationships. Y.W.O. disclosed no relevant relationships. D.S.L. disclosed no relevant relationships. C.W.Y. disclosed no relevant relationships. J.H.P. disclosed no relevant relationships. H.J.J. disclosed no relevant relationships. H.S.Y. disclosed no relevant relationships. E.Y.K. disclosed no relevant relationships. C.K. disclosed no relevant relationships. K.Y.L. disclosed no relevant relationships. S.H.H. disclosed no relevant relationships.",
+        "boundingBox": {
+          "x": 306,
+          "y": 294.0874,
+          "width": 240.0091000000001,
+          "height": 61.5
+        },
+        "lineRectsPdf": [
+          [
+            306,
+            481.4126,
+            546.0091,
+            488.9126
+          ],
+          [
+            306.00160000000005,
+            472.4126,
+            546.0008500000001,
+            479.9126
+          ],
+          [
+            306.00160000000005,
+            463.4126,
+            546.0015999999999,
+            470.9126
+          ],
+          [
+            306.00160000000005,
+            454.4126,
+            545.9941000000001,
+            461.9126
+          ],
+          [
+            306.0016,
+            445.4126,
+            545.9940999999999,
+            452.9126
+          ],
+          [
+            306.0016,
+            436.4126,
+            546.0091000000001,
+            443.9126
+          ],
+          [
+            306.0016,
+            427.4126,
+            361.70334999999994,
+            434.9126
+          ]
+        ],
+        "fontSize": 7.5,
+        "column": 1,
+        "isReference": false,
+        "readingIndex": 28,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-5",
+        "pageIndex": 6,
+        "order": 29,
+        "type": "heading",
+        "sourceText": "References",
+        "boundingBox": {
+          "x": 306,
+          "y": 370.1374,
+          "width": 42.98000000000002,
+          "height": 10
+        },
+        "lineRectsPdf": [
+          [
+            306,
+            402.8626,
+            348.98,
+            412.8626
+          ]
+        ],
+        "fontSize": 10,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 29
+      },
+      {
+        "id": "page-6-region-6",
+        "pageIndex": 6,
+        "order": 30,
+        "type": "list",
+        "sourceText": "1. Stone GW, Reifart NJ, Moussa I, et al. Percutaneous recanalization of chronically occluded coronary arteries: a consensus document—part II. Circulation",
+        "boundingBox": {
+          "x": 312.16,
+          "y": 382.6974,
+          "width": 233.8416000000007,
+          "height": 17
+        },
+        "lineRectsPdf": [
+          [
+            312.16,
+            392.3026,
+            546.0016000000007,
+            400.3026
+          ],
+          [
+            321,
+            383.3026,
+            546.0000000000005,
+            391.3026
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 30,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-block-13",
+        "pageIndex": 6,
+        "order": 31,
+        "type": "paragraph",
+        "sourceText": "2005;112(16):2530–2537.",
+        "boundingBox": {
+          "x": 321,
+          "y": 400.6974,
+          "width": 81.36000000000035,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            374.3026,
+            402.36000000000035,
+            382.3026
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "translationMode": "preserve",
+        "preserveReason": "marks",
+        "readingIndex": 31,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.13.14.16.17.19.20.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            321,
+            95.30259999999997,
+            411.4880000000004,
+            382.3026
+          ],
+          "evidence": "column-geometry"
+        }
+      },
+      {
+        "id": "page-6-region-7",
+        "pageIndex": 6,
+        "order": 32,
+        "type": "list",
+        "sourceText": "2. Werner GS, Gitt AK, Zeymer U, et al. Chronic total coronary occlusions",
+        "boundingBox": {
+          "x": 312.16,
+          "y": 409.6974,
+          "width": 233.8640000000001,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            312.16,
+            365.3026,
+            546.0240000000001,
+            373.3026
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 32,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-8",
+        "pageIndex": 6,
+        "order": 33,
+        "type": "paragraph",
+        "sourceText": "in patients with stable angina pectoris: impact on therapy and outcome in present day clinical practice. Clin Res Cardiol 2009;98(7):435–441.",
+        "boundingBox": {
+          "x": 321,
+          "y": 418.6974,
+          "width": 224.99200000000042,
+          "height": 17
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            356.3026,
+            545.9920000000004,
+            364.3026
+          ],
+          [
+            321,
+            347.3026,
+            526.0160000000009,
+            355.3026
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 33,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-9",
+        "pageIndex": 6,
+        "order": 34,
+        "type": "list",
+        "sourceText": "3. Prasad A, Rihal CS, Lennon RJ, Wiste HJ, Singh M, Holmes DR Jr. Trends",
+        "boundingBox": {
+          "x": 312.16,
+          "y": 436.6974,
+          "width": 233.80000000000013,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            312.16,
+            338.3026,
+            545.9600000000002,
+            346.3026
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 34,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-10",
+        "pageIndex": 6,
+        "order": 35,
+        "type": "paragraph",
+        "sourceText": "in outcomes after percutaneous coronary intervention for chronic total occlusions: a 25-year experience from the Mayo Clinic. J Am Coll Cardiol",
+        "boundingBox": {
+          "x": 321,
+          "y": 445.6974,
+          "width": 225.0240000000008,
+          "height": 17
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            329.3026,
+            546.0160000000005,
+            337.3026
+          ],
+          [
+            321,
+            320.3026,
+            546.0240000000008,
+            328.3026
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 35,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-block-18",
+        "pageIndex": 6,
+        "order": 36,
+        "type": "paragraph",
+        "sourceText": "2007;49(15):1611–1618.",
+        "boundingBox": {
+          "x": 321,
+          "y": 463.6974,
+          "width": 77.44000000000034,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            311.3026,
+            398.44000000000034,
+            319.3026
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "translationMode": "preserve",
+        "preserveReason": "marks",
+        "readingIndex": 36,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.13.14.16.17.19.20.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            321,
+            95.30259999999997,
+            411.4880000000004,
+            382.3026
+          ],
+          "evidence": "column-geometry"
+        }
+      },
+      {
+        "id": "page-6-region-11",
+        "pageIndex": 6,
+        "order": 37,
+        "type": "list",
+        "sourceText": "4. Fefer P, Knudtson ML, Cheema AN, et al. Current perspectives on coronary",
+        "boundingBox": {
+          "x": 312.16,
+          "y": 472.6974,
+          "width": 233.84400000000056,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            312.16,
+            302.3026,
+            546.0040000000006,
+            310.3026
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 37,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-12",
+        "pageIndex": 6,
+        "order": 38,
+        "type": "paragraph",
+        "sourceText": "chronictotalocclusions:theCanadianMulticenterChronicTotalOcclusions",
+        "boundingBox": {
+          "x": 321,
+          "y": 481.6974,
+          "width": 224.82399999999961,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            293.3026,
+            545.8239999999996,
+            301.3026
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 38,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-13",
+        "pageIndex": 6,
+        "order": 39,
+        "type": "paragraph",
+        "sourceText": "Registry. J Am Coll Cardiol 2012;59(11):991–997.",
+        "boundingBox": {
+          "x": 321,
+          "y": 490.6974,
+          "width": 155.40800000000075,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            284.3026,
+            476.40800000000075,
+            292.3026
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 39,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-14",
+        "pageIndex": 6,
+        "order": 40,
+        "type": "list",
+        "sourceText": "5. Galassi AR, Ganyukov V, Tomasello SD, Haes B, Leonid B. Successful",
+        "boundingBox": {
+          "x": 312.16,
+          "y": 499.6974,
+          "width": 233.85600000000028,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            312.16,
+            275.3026,
+            546.0160000000003,
+            283.3026
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 40,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-15",
+        "pageIndex": 6,
+        "order": 41,
+        "type": "paragraph",
+        "sourceText": "antegrade revascularization by the innovation of composite core dual coil in a three-vessel total occlusive disease for cardiac arrest patient using extracorporeal membrane oxygenation. Eur Heart J 2014;35(30):2009.",
+        "boundingBox": {
+          "x": 321,
+          "y": 508.6974,
+          "width": 225.01600000000087,
+          "height": 26
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            266.3026,
+            546.0160000000009,
+            274.3026
+          ],
+          [
+            321,
+            257.3026,
+            545.9760000000005,
+            265.3026
+          ],
+          [
+            321,
+            248.30259999999998,
+            511.3120000000009,
+            256.3026
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 41,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-16",
+        "pageIndex": 6,
+        "order": 42,
+        "type": "list",
+        "sourceText": "6. Sakakura K, Nakano M, Otsuka F, et al. Comparison of pathology of chronic",
+        "boundingBox": {
+          "x": 312.16,
+          "y": 535.6974,
+          "width": 233.87200000000047,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            312.16,
+            239.30259999999998,
+            546.0320000000005,
+            247.30259999999998
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 42,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-17",
+        "pageIndex": 6,
+        "order": 43,
+        "type": "paragraph",
+        "sourceText": "total occlusion with and without coronary artery bypass graft. Eur Heart J",
+        "boundingBox": {
+          "x": 321,
+          "y": 544.6974,
+          "width": 224.9840000000006,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            230.30259999999998,
+            545.9840000000006,
+            238.30259999999998
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 43,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-block-26",
+        "pageIndex": 6,
+        "order": 44,
+        "type": "paragraph",
+        "sourceText": "2014;35(25):1683–1693.",
+        "boundingBox": {
+          "x": 321,
+          "y": 553.6974,
+          "width": 77.44000000000034,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            221.30259999999998,
+            398.44000000000034,
+            229.30259999999998
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "translationMode": "preserve",
+        "preserveReason": "marks",
+        "readingIndex": 44,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.13.14.16.17.19.20.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            321,
+            95.30259999999997,
+            411.4880000000004,
+            382.3026
+          ],
+          "evidence": "column-geometry"
+        }
+      },
+      {
+        "id": "page-6-region-18",
+        "pageIndex": 6,
+        "order": 45,
+        "type": "list",
+        "sourceText": "7. SrivatsaSS,EdwardsWD,BoosCM,etal.Histologiccorrelatesofangiographic",
+        "boundingBox": {
+          "x": 312.16,
+          "y": 562.6974,
+          "width": 234.0720000000004,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            312.16,
+            212.30259999999998,
+            546.2320000000004,
+            220.30259999999998
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 45,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-19",
+        "pageIndex": 6,
+        "order": 46,
+        "type": "paragraph",
+        "sourceText": "chronic total coronary artery occlusions: influence of occlusion duration on neovascular channel patterns and intimal plaque composition. J Am Coll",
+        "boundingBox": {
+          "x": 321,
+          "y": 571.6974,
+          "width": 224.9840000000006,
+          "height": 17
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            203.30259999999998,
+            545.9840000000006,
+            211.30259999999998
+          ],
+          [
+            321,
+            194.30259999999998,
+            545.9840000000006,
+            202.30259999999998
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 46,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-20",
+        "pageIndex": 6,
+        "order": 47,
+        "type": "paragraph",
+        "sourceText": "Cardiol 1997;29(5):955–963.",
+        "boundingBox": {
+          "x": 321,
+          "y": 589.6974,
+          "width": 90.4880000000004,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            185.30259999999998,
+            411.4880000000004,
+            193.30259999999998
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 47,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.13.14.16.17.19.20.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            321,
+            95.30259999999997,
+            411.4880000000004,
+            382.3026
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-21",
+        "pageIndex": 6,
+        "order": 48,
+        "type": "list",
+        "sourceText": "8. Katsuragawa M, Fujiwara H, Miyamae M, Sasayama S. Histologic studies in",
+        "boundingBox": {
+          "x": 312.16,
+          "y": 598.6974,
+          "width": 233.84000000000054,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            312.16,
+            176.30259999999998,
+            546.0000000000006,
+            184.30259999999998
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 48,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-22",
+        "pageIndex": 6,
+        "order": 49,
+        "type": "paragraph",
+        "sourceText": "percutaneous transluminal coronary angioplasty for chronic total occlusion: comparison of tapering and abrupt types of occlusion and short and long occluded segments. J Am Coll Cardiol 1993;21(3):604–611.",
+        "boundingBox": {
+          "x": 321,
+          "y": 607.6974,
+          "width": 225.02400000000057,
+          "height": 26
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            167.30259999999998,
+            546.0240000000006,
+            175.30259999999998
+          ],
+          [
+            321,
+            158.30259999999998,
+            546.0080000000003,
+            166.30259999999998
+          ],
+          [
+            321,
+            149.30259999999998,
+            504.3120000000009,
+            157.30259999999998
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 49,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-23",
+        "pageIndex": 6,
+        "order": 50,
+        "type": "list",
+        "sourceText": "9. Li Y, Xu N, Zhang J, et al. Procedural success of CTO recanalization:",
+        "boundingBox": {
+          "x": 312.16,
+          "y": 634.6974,
+          "width": 233.81600000000032,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            312.16,
+            140.30259999999998,
+            545.9760000000003,
+            148.30259999999998
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 50,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-24",
+        "pageIndex": 6,
+        "order": 51,
+        "type": "paragraph",
+        "sourceText": "Comparison of the J-CTO score determined by coronary CT angiography to invasive angiography. J Cardiovasc Comput Tomogr 2015;9(6):578–584.",
+        "boundingBox": {
+          "x": 321,
+          "y": 643.6974,
+          "width": 225.02400000000046,
+          "height": 17.000000000000014
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            131.30259999999998,
+            546.0240000000005,
+            139.30259999999998
+          ],
+          [
+            321,
+            122.30259999999997,
+            545.9920000000004,
+            130.30259999999998
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 51,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-25",
+        "pageIndex": 6,
+        "order": 52,
+        "type": "list",
+        "sourceText": "10. Opolski MP, Achenbach S. CT angiography for revascularization of CTO:",
+        "boundingBox": {
+          "x": 308.24,
+          "y": 661.6974,
+          "width": 237.78400000000045,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            308.24,
+            113.30259999999997,
+            546.0240000000005,
+            121.30259999999997
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 52,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-26",
+        "pageIndex": 6,
+        "order": 53,
+        "type": "paragraph",
+        "sourceText": "Crossing the borders of diagnosis and treatment. JACC Cardiovasc Imaging",
+        "boundingBox": {
+          "x": 321,
+          "y": 670.6974,
+          "width": 225.0080000000005,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            104.30259999999997,
+            546.0080000000005,
+            112.30259999999997
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 53,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-block-36",
+        "pageIndex": 6,
+        "order": 54,
+        "type": "paragraph",
+        "sourceText": "2015;8(7):846–858.",
+        "boundingBox": {
+          "x": 321,
+          "y": 679.6974,
+          "width": 61.760000000000275,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            95.30259999999997,
+            382.7600000000003,
+            103.30259999999997
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "translationMode": "preserve",
+        "preserveReason": "marks",
+        "readingIndex": 54,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.13.14.16.17.19.20.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            321,
+            95.30259999999997,
+            411.4880000000004,
+            382.3026
+          ],
+          "evidence": "column-geometry"
+        }
+      },
+      {
+        "id": "page-6-region-27",
+        "pageIndex": 6,
+        "order": 55,
+        "type": "list",
+        "sourceText": "11. Opolski MP. Cardiac computed tomography for planning revascularization",
+        "boundingBox": {
+          "x": 308.24,
+          "y": 688.6974,
+          "width": 237.7760000000004,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            308.24,
+            86.30259999999997,
+            546.0160000000004,
+            94.30259999999997
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 55,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-28",
+        "pageIndex": 6,
+        "order": 56,
+        "type": "paragraph",
+        "sourceText": "procedures. J Thorac Imaging 2018;33(1):35–54.",
+        "boundingBox": {
+          "x": 321,
+          "y": 697.6974,
+          "width": 149.02400000000068,
+          "height": 8
+        },
+        "lineRectsPdf": [
+          [
+            321,
+            77.30259999999997,
+            470.0240000000007,
+            85.30259999999997
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 56,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      },
+      {
+        "id": "page-6-region-29",
+        "pageIndex": 6,
+        "order": 57,
+        "type": "list",
+        "sourceText": "12. Li M, Zhang J, Pan J, Lu Z. Coronary total occlusion lesions: linear intrathrombus enhancement at CT predicts better outcome of percutaneous coronary intervention. Radiology 2013;266(2):443–451.",
+        "boundingBox": {
+          "x": 308.24,
+          "y": 706.6974,
+          "width": 237.77600000000064,
+          "height": 25.999999999999993
+        },
+        "lineRectsPdf": [
+          [
+            308.24,
+            68.30259999999997,
+            545.9840000000008,
+            76.30259999999997
+          ],
+          [
+            321,
+            59.30259999999998,
+            546.0160000000006,
+            67.30259999999998
+          ],
+          [
+            321,
+            50.30259999999998,
+            492.48800000000085,
+            58.30259999999998
+          ]
+        ],
+        "fontSize": 8,
+        "column": 1,
+        "isReference": true,
+        "readingIndex": 57,
+        "sourceRegion": {
+          "id": "page-6-column-1-band-10.11.12.13.14.15.16.17.18.19.20.21.22",
+          "kind": "body-column",
+          "boundsPdf": [
+            306,
+            26.302599999999977,
+            546.2320000000004,
+            590.9126
+          ],
+          "evidence": "column-geometry"
+        },
+        "moduleId": "page-6-mod-1"
+      }
+    ],
+    "translations": [
+      {
+        "id": "page-6-table-0-r1-c4",
+        "translatedText": "P值"
+      },
+      {
+        "id": "page-6-region-5",
+        "translatedText": "参考文献"
+      },
+      {
+        "id": "page-6-region-27",
+        "translatedText": "11. Opolski MP. 用于计划血运重建的心脏计算机断层扫描"
+      },
+      {
+        "id": "page-6-region-28",
+        "translatedText": "操作。J Thorac Imaging 2018;33(1):35–54。"
+      },
+      {
+        "id": "page-6-region-29",
+        "translatedText": "12. Li M, Zhang J, Pan J, Lu Z. 冠状动脉总闭塞病灶：CT上线性血栓内强化可预测经皮冠状动脉介入治疗（PCI）结局更佳。Radiology 2013;266(2):443–451。"
+      },
+      {
+        "id": "page-6-table-0-r0-c0",
+        "translatedText": "冠状动脉CT血管造影"
+      },
+      {
+        "id": "page-6-table-0-r0-c1",
+        "translatedText": "单变量分析"
+      },
+      {
+        "id": "page-6-table-0-r1-c0",
+        "translatedText": "在CTO近端进入部位的发现"
+      },
+      {
+        "id": "page-6-table-0-r2-c0",
+        "translatedText": "严重钙化"
+      },
+      {
+        "id": "page-6-table-0-r3-c0",
+        "translatedText": "钝性残端"
+      },
+      {
+        "id": "page-6-table-0-r4-c0",
+        "translatedText": "低CTO-CIC（ 2.5 mg/mL）"
+      },
+      {
+        "id": "page-6-table-0-r0-c3",
+        "translatedText": "多变量分析"
+      },
+      {
+        "id": "page-6-table-0-r1-c3",
+        "translatedText": "P值校正的OR"
+      },
+      {
+        "id": "page-6-region-0",
+        "translatedText": "表4：CTO转诊接受经皮冠状动脉介入治疗失败的多变量预测因子"
+      },
+      {
+        "id": "page-6-region-2",
+        "translatedText": "病变。冠状动脉CT血管造影也可用于帮助识别在侵入性造影中可能被忽略的特征。Li等(12)提出，冠状动脉CT血管造影上可见的血栓内对比剂增强可能有助于预测CTO转诊接受经皮冠状动脉介入治疗（PCI）的更佳结局。我们假设，我们研究中观察到的低碘浓度可能反映了缺乏适于PCI的组织成分。双能CT可通过使用两种不同的X射线能量谱来改善材料分辨。光谱CT允许使用特定的双层能量分辨探测器进行双能数据采集。更重要的是，可在所有临床病例中于光谱CT之后进行回顾性双能评估。近期，光谱CT研究的作者已评估碘定量(22)的增量诊断价值。使用光谱CT时，可利用已知的高能与低能衰减特性生成显示碘密度的碘-水图，其表征每个体素中的碘浓度(13)。采用双能技术重建的碘-水图亦能提供出色的图像分辨率，并改善碘对比噪声比。事实上，先前一项研究报道，使用碘图可提高读者对异常存在对比剂（尤其是主动脉支架移植物置入患者中的内漏）的检出信心(23)。本研究表明，即便在诸如冠状动脉这类小血管中，对碘浓度的定量也可能用于预测CTO患者的PCI失败。我们的研究存在若干局限性。首先，这项回顾性研究存在由病例选择、操作医师的专业经验、资源以及冠状动脉CT血管造影的图像质量所致的偏倚。其次，患者数量较少且成功顺行PCI失败的比例相对较低，可能是对本研究结果推广的关键限制。本研究的另一局限在于缺乏病理学对应。进一步以CTO病灶的组织学形态对碘浓度进行验证是值得的。因此，有必要使用更大样本数据开展进一步的实验与临床研究，以明确冠状动脉闭塞部位碘浓度的确切性质并评估其临床意义。结论：在CTO转诊接受经皮冠状动脉介入治疗（PCI）之前应用光谱CT进行冠状动脉造影时，CTO病变入口处低CIC（ 2.5 mg/mL）与成功顺行PCI失败相关。"
+      },
+      {
+        "id": "page-6-region-1",
+        "translatedText": "注意.—括号内数据为95%置信区间。CIC=冠状动脉碘浓度，CTO=慢性完全闭塞，OR=优势比，NA=不适用，PCI=经皮冠状动脉介入治疗。"
+      },
+      {
+        "id": "page-6-region-3",
+        "translatedText": "作者贡献：研究整体完整性的担保人，D.S.L.、C.W.Y.、H.S.Y.、S.H.H.；研究概念/研究设计或数据获取或数据分析/解释，所有作者；为重要的智力内容起草手稿或修改手稿，所有作者；批准已提交手稿的最终版本，所有作者；同意确保与本研究相关的任何问题得到适当解决，所有作者；文献检索，J.Y.L.、D.S.L.、C.W.Y.、J.H.P.、E.Y.K.、C.K.、K.Y.L.、S.H.H.；临床研究，J.Y.L.、Y.W.O.、D.S.L.、C.W.Y.、J.H.P.、H.J.J.、H.S.Y.、C.K.、K.Y.L.、S.H.H.；实验研究，D.S.L.、J.H.P.；统计分析，J.Y.L.、Y.W.O.、D.S.L.、J.H.P.、S.H.H.；以及手稿编辑，J.Y.L.、Y.W.O.、D.S.L.、C.W.Y.、J.H.P.、H.S.Y.、E.Y.K.、C.K.、K.Y.L.、S.H.H.。"
+      },
+      {
+        "id": "page-6-region-4",
+        "translatedText": "利益冲突披露：J.Y.L.披露无相关关系。Y.W.O.披露无相关关系。D.S.L.披露无相关关系。C.W.Y.披露无相关关系。J.H.P.披露无相关关系。H.J.J.披露无相关关系。H.S.Y.披露无相关关系。E.Y.K.披露无相关关系。C.K.披露无相关关系。K.Y.L.披露无相关关系。S.H.H.披露无相关关系。"
+      },
+      {
+        "id": "page-6-region-6",
+        "translatedText": "1. Stone GW, Reifart NJ, Moussa I, 等。慢性闭塞冠状动脉的经皮再通：共识文件—第二部分。Circulation"
+      },
+      {
+        "id": "page-6-region-7",
+        "translatedText": "2. Werner GS, Gitt AK, Zeymer U, 等。慢性完全性冠状动脉闭塞"
+      },
+      {
+        "id": "page-6-region-8",
+        "translatedText": "稳定型心绞痛患者中的影响：当代临床实践中的治疗与结局。Clin Res Cardiol 2009；98(7)：435–441。"
+      },
+      {
+        "id": "page-6-region-9",
+        "translatedText": "3. Prasad A，Rihal CS，Lennon RJ，Wiste HJ，Singh M，Holmes DR Jr. 趋势"
+      },
+      {
+        "id": "page-6-region-10",
+        "translatedText": "经皮冠状动脉介入治疗用于慢性完全闭塞后结局的变化：来自梅奥诊所的25年经验。J Am Coll Cardiol"
+      },
+      {
+        "id": "page-6-region-11",
+        "translatedText": "4. Fefer P, Knudtson ML, Cheema AN, 等。关于冠状动脉的当前观点"
+      },
+      {
+        "id": "page-6-region-12",
+        "translatedText": "慢性总闭塞：加拿大多中心慢性总闭塞登记"
+      },
+      {
+        "id": "page-6-region-13",
+        "translatedText": "登记。J Am Coll Cardiol 2012；59(11)：991–997。"
+      },
+      {
+        "id": "page-6-region-14",
+        "translatedText": "5. Galassi AR，Ganyukov V，Tomasello SD，Haes B，Leonid B。成功"
+      },
+      {
+        "id": "page-6-region-15",
+        "translatedText": "6. Sakakura K, Nakano M, Otsuka F, 等。比较伴或不伴冠状动脉旁路移植术的慢性完全闭塞病理。Eur Heart J"
+      },
+      {
+        "id": "page-6-region-16",
+        "translatedText": "6. Sakakura K, Nakano M, Otsuka F，等。慢性"
+      },
+      {
+        "id": "page-6-region-17",
+        "translatedText": "与冠状动脉搭桥手术。Eur Heart J"
+      },
+      {
+        "id": "page-6-region-18",
+        "translatedText": "7. SrivatsaSS,EdwardsWD,BoosCM,等。血管造影对应的组织学相关性"
+      },
+      {
+        "id": "page-6-region-19",
+        "translatedText": "9. Li Y, Xu N, Zhang J, 等。CTO再通的操作成功率："
+      },
+      {
+        "id": "page-6-region-20",
+        "translatedText": "Cardiol 1997;29(5):955–963。"
+      },
+      {
+        "id": "page-6-region-21",
+        "translatedText": "10. Opolski MP, Achenbach S. 用于CTO血运重建的CT血管造影："
+      },
+      {
+        "id": "page-6-region-22",
+        "translatedText": "跨越诊断与治疗的边界。JACC Cardiovasc Imaging"
+      },
+      {
+        "id": "page-6-region-23",
+        "translatedText": "9. Li Y, Xu N, Zhang J, 等。CTO再通的操作成功："
+      },
+      {
+        "id": "page-6-region-24",
+        "translatedText": "将经冠状动脉CT血管造影确定的J-CTO评分与侵入性造影进行比较。J Cardiovasc Comput Tomogr 2015;9(6):578–584。"
+      },
+      {
+        "id": "page-6-region-25",
+        "translatedText": "10. Opolski MP, Achenbach S. 用于CTO血运重建的CT血管造影："
+      },
+      {
+        "id": "page-6-region-26",
+        "translatedText": "跨越诊断与治疗的边界。JACC Cardiovasc Imaging"
+      }
+    ]
+  }
+]

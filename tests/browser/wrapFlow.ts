@@ -1,3 +1,6 @@
+import {checkEscPanels} from './escPanels';
+import {checkDescriptiveTable} from './descriptiveTable';
+import {checkLeeTypography} from './leeTypography';
 import {checkDisplayFormula} from './displayFormula';
 import {checkToolbar} from './toolbar';
 import { checkRealTranslations } from './realTranslations';
@@ -10,6 +13,9 @@ import { buildStrictPage } from '../../src/ui/strictPageReplacement';
 const result=document.createElement('pre');result.id='result';document.body.append(result);
 async function run() {
 try {
+ await checkEscPanels((window as any).escPanelImage);
+ checkDescriptiveTable();
+ checkLeeTypography();
  checkDisplayFormula();
  checkToolbar();
  await checkImageCaption();

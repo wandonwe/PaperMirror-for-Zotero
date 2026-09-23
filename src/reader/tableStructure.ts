@@ -780,8 +780,31 @@ function structureTableCellsUnchecked(
 				text: b.sourceText,
 				fontSize: b.fontSize
 			})), ev);
-			if (model) {
-				for (const cell of model.cells) {
+            if (model) {
+                // A coarse outer frame is not a cell when its members contain
+                // separate text columns on the same baseline. Retain each
+                // original text box instead of welding the coloured panels.
+                const contradictory=model.cells.some(cell=>{
+                 const xs=cell.memberIds.map(id=>originalById.get(id)!).filter(b=>b?.boundingBox);
+                 return xs.some((a,i)=>xs.slice(i+1).some(b=>{
+                  const x=a.boundingBox!,y=b.boundingBox!,f=Math.min(a.fontSize||em,b.fontSize||em);
+                  return Math.abs(x.y-y.y)<f*.6 && Math.max(x.x,y.x)-Math.min(x.x+x.width,y.x+y.width)>f;
+                 }));
+                });
+                if(contradictory) {
+                 const originals=inGrid.slice().sort((a,b)=>a.boundingBox.y-b.boundingBox.y||a.boundingBox.x-b.boundingBox.x);
+                 originals.forEach((b,row)=>{
+                  gridConsumed.add(b.id);
+                  // Independent source regions are a conservative fallback,
+                  // not invented grid lines. No expansion into adjacent panels.
+                  gridCells.push({...b,id:`page-${pageIndex}-gridparts-${tableIndex}-${row}`,tableId:`page-${pageIndex}-gridparts-${tableIndex}`,tableRow:row,tableCol:0,
+                   tableGeometry:'inferred',tableSource:'text-alignment',tableConfidence:'tentative',
+                   tableContentRectPdf:cellPdfBounds({left:b.boundingBox.x,top:b.boundingBox.y,width:b.boundingBox.width,height:b.boundingBox.height},[b],pageHeight).tableRectPdf,
+                   memberIds:[b.id]});
+                 });
+                 continue;
+                }
+                for (const cell of model.cells) {
 					const originals = cell.memberIds.map(id => originalById.get(id)).filter((b): b is SourceBlock => !!b);
 					if (!originals.length) {
 						continue;

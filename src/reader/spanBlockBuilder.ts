@@ -1,3 +1,4 @@
+import {extractDescriptiveTables} from './descriptiveTable';
 import { separateDisplayFormulas } from './displayFormula';
 import { captionOwnership } from './captionOwnership';
 import { semanticBoundary } from './semanticBoundary';
@@ -837,6 +838,11 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		const rest = buildBlocksFromSpans(glossary.rest, options);
 		return { ...rest, blocks: [...rest.blocks, ...glossary.cells] };
 	}
+	const descriptive=extractDescriptiveTables(groupIntoLines(items,pageWidth,options.pageHeight),options.pageIndex,options.pageHeight);
+ if(descriptive.blocks.length) {
+  const rest=buildBlocksFromSpans(items.filter(i=>!descriptive.used.has(i)),options);
+  return {...rest,blocks:[...rest.blocks,...descriptive.blocks]};
+ }
 	const obstacles = options.imageRectsPdf ?? [];
 	const captionRegions = obstacles.length ? imageCaptionRegions(groupIntoLines(items,pageWidth,options.pageHeight).map(l=>({text:lineText(l),rect:l.rect,fontSize:l.fontSize})),obstacles) : [];
 	const filteredItems = obstacles.length
@@ -1009,7 +1015,18 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 				const gap = prev.rect[1] - next.rect[3];
 				const sizeClose = Math.abs(prev.fontSize - next.fontSize)
 					<= Math.max(prev.fontSize, next.fontSize) * 0.1;
-				if (gap >= -em * 1.2 && gap <= em * 1.3 && sizeClose) {
+				// Wrapped titles need vertical stacking or adjacent fragments of one line.
+				// Larger table labels are also classified as titles: allowing a
+				// negative full-line gap welded adjacent cells on the same row.
+				const horizontalOverlap = Math.min(prev.rect[2], next.rect[2])
+					- Math.max(prev.rect[0], next.rect[0]);
+				const stacked = next.rect[3] <= (prev.rect[1] + prev.rect[3]) / 2;
+				const nextFirstLine = next.group.reduce((a, b) => a.rect[3] >= b.rect[3] ? a : b).rect;
+				const sameLineAdjacent = prev.group.length === 1
+					&& Math.abs(prev.rect[3] - nextFirstLine[3]) <= em * 0.2
+					&& nextFirstLine[0] >= prev.rect[2] && nextFirstLine[0] - prev.rect[2] <= em * 0.75;
+				if (sizeClose && (sameLineAdjacent
+					|| (stacked && horizontalOverlap > 0 && gap >= -em * 0.25 && gap <= em * 1.3))) {
 					chain.push(sorted[k]!);
 				}
 				else {

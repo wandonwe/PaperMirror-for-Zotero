@@ -1,3 +1,4 @@
+import { referenceAlignmentIssue } from './referenceAlignment';
 /**
  * Per-attachment translation orchestration:
  *  - lazy per-page translation with a pool-sized prefetch window
@@ -154,6 +155,7 @@ export const MAX_RENDER_RETRIES = 2;
  */
 export function looksTranslated(source: string, translated: string, targetLang: string, opts?: { isReference?: boolean }): boolean {
 	const t = translated.trim();
+	if (referenceAlignmentIssue(source, t)) return false;
 	if (!t) {
 		return false;
 	}
@@ -3440,6 +3442,8 @@ export class TranslationManager {
 
 /** Reason codes contain no source or response text and are safe for diagnostics. */
 export function referenceRejectReason(source: string, translated: string, phase: string): string {
+ const alignment = referenceAlignmentIssue(source, translated);
+ if (alignment) return `${phase}:${alignment}`;
  if(!translated.trim()) return `${phase}:empty`;
  if(isEcho(source,translated)) return `${phase}:reference-echo`;
  if(isTruncatedTranslation(stripProtectable(source),stripProtectable(translated))) return `${phase}:reference-truncated`;
@@ -3448,6 +3452,8 @@ export function referenceRejectReason(source: string, translated: string, phase:
 
 /** Same validator, with a stable, text-free explanation for its rejection. */
 export function translationRejectReason(source: string, translated: string, target: string): string | null {
+ const alignment = referenceAlignmentIssue(source, translated);
+ if (alignment) return alignment;
  if (looksTranslated(source, translated, target)) return null;
  if (!translated.trim()) return 'empty';
  if (isEcho(source, translated)) return 'echo';
