@@ -644,8 +644,19 @@ function mergeContinuationRows(
 		const continuation = cur.every(d => {
 			const prev = prevOf(d.col);
 			const gap = prev ? topOf(d) - bottomOf(prev) : Infinity;
+			// A lone label after a populated numeric record can be a category
+			// heading. Missing values alone are not evidence of a wrapped cell.
+			const categoryCandidate = cur.length === 1 && d.col === 0 && !!prev
+				&& !/^[\d≤≥<>]/.test(firstText(prev))
+				&& !/^\(/.test(firstText(d)) && !firstText(d).includes('@')
+				&& prevRow.some(p => p.col !== d.col && p.members.some(m => /\d/.test(m.text) && looksTabular(m.text)));
+			const wrappedLabel = !!prev && (firstText(prev).length >= 40
+				|| /\b(?:and|or|of|for|with|in|the)\s*$/i.test(firstText(prev)))
+				&& Math.max(...prev.members.map(m => m.box.left + m.box.width)) >=
+					Math.max(...drafts.filter(x => x.col === d.col).flatMap(x => x.members.map(m => m.box.left + m.box.width))) - em * 2;
 			return !d.straddles && !!prev
-				&& (CONTINUATION_START.test(firstText(d)) || (fewerColumns && gap <= tightLimit))
+				&& (CONTINUATION_START.test(firstText(d))
+					|| (fewerColumns && gap <= tightLimit && (!categoryCandidate || wrappedLabel)))
 				&& gap <= em * 0.8;
 		});
 		if (!continuation) {
@@ -888,9 +899,13 @@ function structureTableCellsUnchecked(
 			text: b.sourceText,
 			fontSize: b.fontSize
 		}));
+		// A trailing explanatory note is outside the records, even when the
+		// table detector's padded region includes it. Leave it as prose.
+		const lastDataTop = Math.max(-Infinity,...members.filter(m=>/\d/.test(m.text) && looksTabular(m.text)).map(m=>m.box.top));
+		const recordMembers = members.filter(m=>!(m.box.top>lastDataTop && /^(?:Values?|Data)\s+(?:are\s+)?(?:presented|expressed|reported|shown)\b/i.test(m.text.trim())));
 		const model = isTextTable
-			? buildTextTableModel(pageIndex, tableIndex, region, members, Math.max(6, em), evidence)
-			: buildTableModel(pageIndex, tableIndex, region, members, evidence);
+			? buildTextTableModel(pageIndex, tableIndex, region, recordMembers, Math.max(6, em), evidence)
+			: buildTableModel(pageIndex, tableIndex, region, recordMembers, evidence);
 		for (const cell of model.cells) {
 			const originals = cell.memberIds.map(id => originalById.get(id)).filter((b): b is SourceBlock => !!b);
 			if (!originals.length) continue;

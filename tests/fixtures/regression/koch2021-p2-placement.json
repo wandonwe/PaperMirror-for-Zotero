@@ -1,0 +1,1342 @@
+{
+  "width": 595.276,
+  "height": 790.866,
+  "blocks": [
+    {
+      "id": "page-1-block-0",
+      "pageIndex": 1,
+      "order": 0,
+      "type": "paragraph",
+      "sourceText": "Koch et al. European Radiology Experimental",
+      "boundingBox": {
+        "x": 56.69378,
+        "y": 32.76755800000001,
+        "width": 146.62456472999793,
+        "height": 7.999900000000025
+      },
+      "lineRectsPdf": [
+        [
+          56.69378,
+          750.098542,
+          203.31834472999793,
+          758.098442
+        ]
+      ],
+      "fontSize": 8,
+      "column": 0,
+      "isReference": false,
+      "translationMode": "preserve",
+      "preserveReason": "running-head",
+      "readingIndex": 0,
+      "sourceRegion": {
+        "id": "page-1-furniture-page-1-block-0",
+        "kind": "page-furniture",
+        "boundsPdf": [
+          56.69378,
+          750.098542,
+          203.31834472999793,
+          758.098442
+        ],
+        "evidence": "page-margin"
+      }
+    },
+    {
+      "id": "page-1-block-1",
+      "pageIndex": 1,
+      "order": 1,
+      "type": "paragraph",
+      "sourceText": "(2021) 5:43",
+      "boundingBox": {
+        "x": 224.33727680000007,
+        "y": 32.76755800000001,
+        "width": 36.6235422,
+        "height": 7.999900000000025
+      },
+      "lineRectsPdf": [
+        [
+          224.33727680000007,
+          750.098542,
+          260.9608190000001,
+          758.098442
+        ]
+      ],
+      "fontSize": 8,
+      "column": 0,
+      "isReference": false,
+      "translationMode": "preserve",
+      "preserveReason": "marks",
+      "readingIndex": 1,
+      "sourceRegion": {
+        "id": "page-1-furniture-page-1-block-1",
+        "kind": "page-furniture",
+        "boundsPdf": [
+          224.33727680000007,
+          750.098542,
+          260.9608190000001,
+          758.098442
+        ],
+        "evidence": "page-margin"
+      }
+    },
+    {
+      "id": "page-1-region-0",
+      "pageIndex": 1,
+      "order": 2,
+      "type": "paragraph",
+      "sourceText": "Key points \u000f Dual-source dual-energy CT (DECT) allowed for accurate bone mineral density (BMD) assessment. \u000f DECT-based BMD measurements showed a better repeatability in comparison to quantitative CT. \u000f DECT enables viable retrospective volumetric BMD measurements without requiring calibration phantoms.\n\nBackground",
+      "boundingBox": {
+        "x": 56.6929,
+        "y": 87.32352000000003,
+        "width": 229.44430321399688,
+        "height": 140.29675999999995
+      },
+      "lineRectsPdf": [
+        [
+          56.6929,
+          693.24248,
+          105.69515000000001,
+          703.54248
+        ],
+        [
+          64.6866,
+          669.3714219999999,
+          274.426322811996,
+          679.1713219999999
+        ],
+        [
+          76.7055,
+          657.352832,
+          278.259063505998,
+          667.152732
+        ],
+        [
+          64.6866,
+          645.390352,
+          280.993235507999,
+          655.190252
+        ],
+        [
+          76.7055,
+          633.371752,
+          266.1238469440019,
+          643.171652
+        ],
+        [
+          64.6866,
+          621.352502,
+          286.1372032139969,
+          631.1524019999999
+        ],
+        [
+          76.7055,
+          609.390752,
+          254.09251000799898,
+          619.190652
+        ],
+        [
+          76.7055,
+          597.372152,
+          118.8058704,
+          607.172052
+        ],
+        [
+          56.6929,
+          563.24572,
+          112.23668,
+          573.54572
+        ]
+      ],
+      "fontSize": 10,
+      "column": 0,
+      "isReference": false,
+      "readingIndex": 2,
+      "regionParagraphs": [
+        {
+          "lineRectsPdf": [
+            [
+              56.6929,
+              693.24248,
+              105.69515000000001,
+              703.54248
+            ],
+            [
+              64.6866,
+              669.3714219999999,
+              274.426322811996,
+              679.1713219999999
+            ],
+            [
+              76.7055,
+              657.352832,
+              278.259063505998,
+              667.152732
+            ],
+            [
+              64.6866,
+              645.390352,
+              280.993235507999,
+              655.190252
+            ],
+            [
+              76.7055,
+              633.371752,
+              266.1238469440019,
+              643.171652
+            ],
+            [
+              64.6866,
+              621.352502,
+              286.1372032139969,
+              631.1524019999999
+            ],
+            [
+              76.7055,
+              609.390752,
+              254.09251000799898,
+              619.190652
+            ],
+            [
+              76.7055,
+              597.372152,
+              118.8058704,
+              607.172052
+            ]
+          ],
+          "fontSize": 10.5
+        },
+        {
+          "lineRectsPdf": [
+            [
+              56.6929,
+              563.24572,
+              112.23668,
+              573.54572
+            ]
+          ],
+          "fontSize": 10.5
+        }
+      ],
+      "memberIds": [
+        "page-1-block-2",
+        "page-1-block-3",
+        "page-1-block-4"
+      ],
+      "sourceRegion": {
+        "id": "page-1-column-0-band-top",
+        "kind": "body-column",
+        "boundsPdf": [
+          56.68898,
+          33.385762,
+          290.569474165993,
+          703.54248
+        ],
+        "evidence": "column-geometry"
+      },
+      "moduleId": "page-1-mod-0"
+    },
+    {
+      "id": "page-1-region-1",
+      "pageIndex": 1,
+      "order": 3,
+      "type": "paragraph",
+      "sourceText": "Osteoporosis represents the most common metabolic bone disease characterised by decreased bone mineral density (BMD) and elevated fracture risk [1, 2]. Demographic changes with concomitant increase in osteoporosis entail substantial socioeconomic burden [1]. According to the World Health Organization, dualenergy x-ray absorptiometry (DXA) is the current gold standard for BMD assessment due to widespread availability and cost-effectiveness [3]. However, numerous limitations of DXA have been reported, such as the inability to differentiate between cortical and trabecular bone and distortion of BMD measurement through overlying structures [4–8]. Quantitative computed tomography (QCT), the current clinical standard for volumetric BMD assessment, is limitedly available due to high radiation exposure and the need for in-scan calibration using phantoms that do not represent the true composition of trabecular bone and prevent retrospective opportunistic BMD assessment in routinely performed computed tomography (CT) scans [9–11]. Given the increasing number of CT scans in recent years, retrospective BMD assessment by measurement of trabecular Hounsfield units (HU) has been repeatedly suggested, despite being associated with inaccuracies due to inhomogeneous trabecular bone composition as well as technical aspects such as variation of tube voltages [12–15]. Dual-energy CT (DECT) allows for improved material differentiation by using energy dependence of the photoelectric effect at different x-ray spectra [16]. This technique has provided novel and clinically relevant information regarding various musculoskeletal applications compared to conventional CT [17, 18]. Previously, a phantomless dual-source DECT postprocessing algorithm which enables volumetric opportunistic BMD assessment of lumbar trabecular bone by application of dedicated material decomposition has been reported [16]. Initial studies have shown promising results both in vivo compared with DXA and in vitro compared with pull-out-forces in human cadaver vertebra specimens [19, 20]. In addition, this algorithm yielded significantly",
+      "boundingBox": {
+        "x": 56.68898,
+        "y": 231.71359800000005,
+        "width": 233.88049416599296,
+        "height": 501.76663999999994
+      },
+      "lineRectsPdf": [
+        [
+          56.6929,
+          549.352502,
+          290.569474165993,
+          559.1524019999999
+        ],
+        [
+          56.6929,
+          537.390752,
+          290.5224348419908,
+          547.190652
+        ],
+        [
+          56.6929,
+          525.372152,
+          290.5341943299948,
+          535.172052
+        ],
+        [
+          56.6929,
+          513.353552,
+          290.51361773199625,
+          523.153452
+        ],
+        [
+          56.69192,
+          501.391792,
+          290.5459547419956,
+          511.191692
+        ],
+        [
+          56.69192,
+          489.373202,
+          136.21320348999998,
+          499.173102
+        ],
+        [
+          64.68472,
+          477.354602,
+          290.543015887994,
+          487.154502
+        ],
+        [
+          56.69094,
+          465.392842,
+          290.5175338920009,
+          475.19274199999995
+        ],
+        [
+          56.69094,
+          453.374242,
+          290.4665741180039,
+          463.17414199999996
+        ],
+        [
+          56.69094,
+          441.355652,
+          290.43423019,
+          451.155552
+        ],
+        [
+          56.69094,
+          429.393892,
+          290.5096942659979,
+          439.193792
+        ],
+        [
+          56.69094,
+          417.375292,
+          290.42051419600784,
+          427.175192
+        ],
+        [
+          56.69094,
+          405.356692,
+          290.47735439999997,
+          415.156592
+        ],
+        [
+          56.69094,
+          393.394942,
+          290.54595383200103,
+          403.194842
+        ],
+        [
+          56.69094,
+          381.376342,
+          290.54399381799885,
+          391.176242
+        ],
+        [
+          56.69094,
+          369.357742,
+          290.52341344000484,
+          379.15764199999995
+        ],
+        [
+          56.69094,
+          357.395982,
+          290.54987326800386,
+          367.195882
+        ],
+        [
+          56.69094,
+          345.377392,
+          290.4979343859979,
+          355.17729199999997
+        ],
+        [
+          56.69094,
+          333.358792,
+          290.40287515999995,
+          343.158692
+        ],
+        [
+          56.69094,
+          321.39703199999997,
+          290.53713398599785,
+          331.19693199999995
+        ],
+        [
+          56.69094,
+          309.378432,
+          229.16918600000002,
+          319.17833199999995
+        ],
+        [
+          64.68374,
+          297.359842,
+          290.476376165998,
+          307.159742
+        ],
+        [
+          56.68996,
+          285.398082,
+          290.5047942079988,
+          295.19798199999997
+        ],
+        [
+          56.68996,
+          273.379482,
+          290.4891143679988,
+          283.179382
+        ],
+        [
+          56.68996,
+          261.360882,
+          290.4459947099999,
+          271.160782
+        ],
+        [
+          56.68996,
+          249.399122,
+          290.5390937599999,
+          259.199022
+        ],
+        [
+          56.68996,
+          237.380532,
+          290.454814228004,
+          247.180432
+        ],
+        [
+          56.68996,
+          225.361932,
+          126.271216,
+          235.161832
+        ],
+        [
+          64.68374,
+          213.400172,
+          290.5449754659978,
+          223.200072
+        ],
+        [
+          56.68996,
+          201.381572,
+          290.518514361996,
+          211.181472
+        ],
+        [
+          56.68996,
+          189.362982,
+          290.498907127999,
+          199.162882
+        ],
+        [
+          56.68996,
+          177.401222,
+          290.50969425599794,
+          187.201122
+        ],
+        [
+          56.68996,
+          165.382622,
+          290.518514263997,
+          175.182522
+        ],
+        [
+          56.68996,
+          153.364022,
+          290.50675398,
+          163.163922
+        ],
+        [
+          56.68996,
+          141.40227199999998,
+          290.482254046003,
+          151.202172
+        ],
+        [
+          56.68996,
+          129.383672,
+          290.47833398800407,
+          139.183572
+        ],
+        [
+          56.68996,
+          117.365072,
+          290.5028339340019,
+          127.16497199999999
+        ],
+        [
+          56.68996,
+          105.403312,
+          290.45285463999994,
+          115.203212
+        ],
+        [
+          56.68996,
+          93.384722,
+          290.49008674000004,
+          103.18462199999999
+        ],
+        [
+          56.68996,
+          81.36612199999999,
+          290.46754966000003,
+          91.16602199999998
+        ],
+        [
+          56.68898,
+          69.40436199999999,
+          290.5469339639969,
+          79.20426199999999
+        ],
+        [
+          56.68898,
+          57.385762,
+          290.43618877799895,
+          67.185662
+        ]
+      ],
+      "fontSize": 10,
+      "column": 0,
+      "isReference": false,
+      "readingIndex": 3,
+      "regionParagraphs": [
+        {
+          "lineRectsPdf": [
+            [
+              56.6929,
+              549.352502,
+              290.569474165993,
+              559.1524019999999
+            ],
+            [
+              56.6929,
+              537.390752,
+              290.5224348419908,
+              547.190652
+            ],
+            [
+              56.6929,
+              525.372152,
+              290.5341943299948,
+              535.172052
+            ],
+            [
+              56.6929,
+              513.353552,
+              290.51361773199625,
+              523.153452
+            ],
+            [
+              56.69192,
+              501.391792,
+              290.5459547419956,
+              511.191692
+            ],
+            [
+              56.69192,
+              489.373202,
+              136.21320348999998,
+              499.173102
+            ],
+            [
+              64.68472,
+              477.354602,
+              290.543015887994,
+              487.154502
+            ],
+            [
+              56.69094,
+              465.392842,
+              290.5175338920009,
+              475.19274199999995
+            ],
+            [
+              56.69094,
+              453.374242,
+              290.4665741180039,
+              463.17414199999996
+            ],
+            [
+              56.69094,
+              441.355652,
+              290.43423019,
+              451.155552
+            ],
+            [
+              56.69094,
+              429.393892,
+              290.5096942659979,
+              439.193792
+            ],
+            [
+              56.69094,
+              417.375292,
+              290.42051419600784,
+              427.175192
+            ],
+            [
+              56.69094,
+              405.356692,
+              290.47735439999997,
+              415.156592
+            ],
+            [
+              56.69094,
+              393.394942,
+              290.54595383200103,
+              403.194842
+            ],
+            [
+              56.69094,
+              381.376342,
+              290.54399381799885,
+              391.176242
+            ],
+            [
+              56.69094,
+              369.357742,
+              290.52341344000484,
+              379.15764199999995
+            ],
+            [
+              56.69094,
+              357.395982,
+              290.54987326800386,
+              367.195882
+            ],
+            [
+              56.69094,
+              345.377392,
+              290.4979343859979,
+              355.17729199999997
+            ],
+            [
+              56.69094,
+              333.358792,
+              290.40287515999995,
+              343.158692
+            ],
+            [
+              56.69094,
+              321.39703199999997,
+              290.53713398599785,
+              331.19693199999995
+            ],
+            [
+              56.69094,
+              309.378432,
+              229.16918600000002,
+              319.17833199999995
+            ],
+            [
+              64.68374,
+              297.359842,
+              290.476376165998,
+              307.159742
+            ],
+            [
+              56.68996,
+              285.398082,
+              290.5047942079988,
+              295.19798199999997
+            ],
+            [
+              56.68996,
+              273.379482,
+              290.4891143679988,
+              283.179382
+            ],
+            [
+              56.68996,
+              261.360882,
+              290.4459947099999,
+              271.160782
+            ],
+            [
+              56.68996,
+              249.399122,
+              290.5390937599999,
+              259.199022
+            ],
+            [
+              56.68996,
+              237.380532,
+              290.454814228004,
+              247.180432
+            ],
+            [
+              56.68996,
+              225.361932,
+              126.271216,
+              235.161832
+            ],
+            [
+              64.68374,
+              213.400172,
+              290.5449754659978,
+              223.200072
+            ],
+            [
+              56.68996,
+              201.381572,
+              290.518514361996,
+              211.181472
+            ],
+            [
+              56.68996,
+              189.362982,
+              290.498907127999,
+              199.162882
+            ],
+            [
+              56.68996,
+              177.401222,
+              290.50969425599794,
+              187.201122
+            ],
+            [
+              56.68996,
+              165.382622,
+              290.518514263997,
+              175.182522
+            ],
+            [
+              56.68996,
+              153.364022,
+              290.50675398,
+              163.163922
+            ],
+            [
+              56.68996,
+              141.40227199999998,
+              290.482254046003,
+              151.202172
+            ],
+            [
+              56.68996,
+              129.383672,
+              290.47833398800407,
+              139.183572
+            ],
+            [
+              56.68996,
+              117.365072,
+              290.5028339340019,
+              127.16497199999999
+            ],
+            [
+              56.68996,
+              105.403312,
+              290.45285463999994,
+              115.203212
+            ],
+            [
+              56.68996,
+              93.384722,
+              290.49008674000004,
+              103.18462199999999
+            ],
+            [
+              56.68996,
+              81.36612199999999,
+              290.46754966000003,
+              91.16602199999998
+            ],
+            [
+              56.68898,
+              69.40436199999999,
+              290.5469339639969,
+              79.20426199999999
+            ],
+            [
+              56.68898,
+              57.385762,
+              290.43618877799895,
+              67.185662
+            ]
+          ],
+          "fontSize": 10
+        }
+      ],
+      "memberIds": [
+        "page-1-block-5",
+        "page-1-block-6",
+        "page-1-block-7",
+        "page-1-block-8"
+      ],
+      "sourceRegion": {
+        "id": "page-1-column-0-band-top",
+        "kind": "body-column",
+        "boundsPdf": [
+          56.68898,
+          33.385762,
+          290.569474165993,
+          703.54248
+        ],
+        "evidence": "column-geometry"
+      },
+      "moduleId": "page-1-mod-0"
+    },
+    {
+      "id": "page-1-block-9",
+      "pageIndex": 1,
+      "order": 4,
+      "type": "paragraph",
+      "sourceText": "Page 2 of 10",
+      "boundingBox": {
+        "x": 496.06109,
+        "y": 32.76755800000001,
+        "width": 42.51626830000288,
+        "height": 7.999900000000025
+      },
+      "lineRectsPdf": [
+        [
+          496.06109,
+          750.098542,
+          538.5773583000029,
+          758.098442
+        ]
+      ],
+      "fontSize": 8,
+      "column": 1,
+      "isReference": false,
+      "translationMode": "preserve",
+      "preserveReason": "running-head",
+      "readingIndex": 4,
+      "sourceRegion": {
+        "id": "page-1-furniture-page-1-block-9",
+        "kind": "page-furniture",
+        "boundsPdf": [
+          496.06109,
+          750.098542,
+          538.5773583000029,
+          758.098442
+        ],
+        "evidence": "page-margin"
+      }
+    },
+    {
+      "id": "page-1-region-2",
+      "pageIndex": 1,
+      "order": 5,
+      "type": "paragraph",
+      "sourceText": "more accurate BMD assessment of the lumbar spine and superior diagnostic accuracy for the detection of osteoporosis compared to HU measurements in a recently published study [21]. However, the accuracy and precision of dual-source DECT has not yet been compared to QCT [22]. We hypothesised that volumetric dual-source DECT using material decomposition may yield more accurate and precise volumetric BMD assessment compared to QCT and facilitates osteoporosis screening by enabling retrospective opportunistic BMD measurements in routine CT scans without the need for calibration phantoms. Thus, the purpose of this study was to compare the accuracy and precision of phantomless dual-source DECT and QCT for volumetric BMD assessment in a prospective phantom study.",
+      "boundingBox": {
+        "x": 304.71955,
+        "y": 87.70210800000007,
+        "width": 233.85011498799872,
+        "height": 189.7946599999999
+      },
+      "lineRectsPdf": [
+        [
+          304.71955,
+          693.3639919999999,
+          538.5490843519958,
+          703.1638919999999
+        ],
+        [
+          304.71955,
+          681.402242,
+          538.5696637499999,
+          691.202142
+        ],
+        [
+          304.71955,
+          669.383642,
+          538.4599049679989,
+          679.183542
+        ],
+        [
+          304.71955,
+          657.365042,
+          538.5696649879987,
+          667.164942
+        ],
+        [
+          304.71955,
+          645.403282,
+          538.5530038220008,
+          655.203182
+        ],
+        [
+          304.71955,
+          633.384692,
+          346.805216,
+          643.184592
+        ],
+        [
+          312.71333,
+          621.366092,
+          538.482445818004,
+          631.165992
+        ],
+        [
+          304.71955,
+          609.404332,
+          538.5128245259979,
+          619.2042319999999
+        ],
+        [
+          304.71955,
+          597.385732,
+          538.5530043119958,
+          607.1856319999999
+        ],
+        [
+          304.71955,
+          585.367142,
+          538.568684151996,
+          595.1670419999999
+        ],
+        [
+          304.71955,
+          573.405382,
+          538.5304643459979,
+          583.205282
+        ],
+        [
+          304.71955,
+          561.386782,
+          538.5177238880041,
+          571.186682
+        ],
+        [
+          304.71955,
+          549.368182,
+          538.4834247279989,
+          559.168082
+        ],
+        [
+          304.71955,
+          537.406432,
+          538.47558471,
+          547.206332
+        ],
+        [
+          304.71955,
+          525.387832,
+          538.537323394007,
+          535.187732
+        ],
+        [
+          304.71955,
+          513.369232,
+          417.791775994002,
+          523.169132
+        ]
+      ],
+      "fontSize": 10,
+      "column": 1,
+      "isReference": false,
+      "readingIndex": 5,
+      "regionParagraphs": [
+        {
+          "lineRectsPdf": [
+            [
+              304.71955,
+              693.3639919999999,
+              538.5490843519958,
+              703.1638919999999
+            ],
+            [
+              304.71955,
+              681.402242,
+              538.5696637499999,
+              691.202142
+            ],
+            [
+              304.71955,
+              669.383642,
+              538.4599049679989,
+              679.183542
+            ],
+            [
+              304.71955,
+              657.365042,
+              538.5696649879987,
+              667.164942
+            ],
+            [
+              304.71955,
+              645.403282,
+              538.5530038220008,
+              655.203182
+            ],
+            [
+              304.71955,
+              633.384692,
+              346.805216,
+              643.184592
+            ],
+            [
+              312.71333,
+              621.366092,
+              538.482445818004,
+              631.165992
+            ],
+            [
+              304.71955,
+              609.404332,
+              538.5128245259979,
+              619.2042319999999
+            ],
+            [
+              304.71955,
+              597.385732,
+              538.5530043119958,
+              607.1856319999999
+            ],
+            [
+              304.71955,
+              585.367142,
+              538.568684151996,
+              595.1670419999999
+            ],
+            [
+              304.71955,
+              573.405382,
+              538.5304643459979,
+              583.205282
+            ],
+            [
+              304.71955,
+              561.386782,
+              538.5177238880041,
+              571.186682
+            ],
+            [
+              304.71955,
+              549.368182,
+              538.4834247279989,
+              559.168082
+            ],
+            [
+              304.71955,
+              537.406432,
+              538.47558471,
+              547.206332
+            ],
+            [
+              304.71955,
+              525.387832,
+              538.537323394007,
+              535.187732
+            ],
+            [
+              304.71955,
+              513.369232,
+              417.791775994002,
+              523.169132
+            ]
+          ],
+          "fontSize": 10
+        }
+      ],
+      "memberIds": [
+        "page-1-block-10",
+        "page-1-block-11"
+      ],
+      "sourceRegion": {
+        "id": "page-1-column-1-band-top",
+        "kind": "body-column",
+        "boundsPdf": [
+          304.71955,
+          309.352922,
+          538.5910736779989,
+          703.1638919999999
+        ],
+        "evidence": "column-geometry"
+      },
+      "moduleId": "page-1-mod-1"
+    },
+    {
+      "id": "page-1-region-3",
+      "pageIndex": 1,
+      "order": 6,
+      "type": "heading",
+      "sourceText": "Methods",
+      "boundingBox": {
+        "x": 304.7243,
+        "y": 291.3046,
+        "width": 40.19060000000002,
+        "height": 10.300000000000011
+      },
+      "lineRectsPdf": [
+        [
+          304.7243,
+          489.2614,
+          344.91490000000005,
+          499.5614
+        ]
+      ],
+      "fontSize": 10.5,
+      "column": 1,
+      "isReference": false,
+      "readingIndex": 6
+    },
+    {
+      "id": "page-1-region-4",
+      "pageIndex": 1,
+      "order": 7,
+      "type": "paragraph",
+      "sourceText": "This prospective phantom study did not need any approval by the institutional review board.\n\nPhantoms",
+      "boundingBox": {
+        "x": 304.7243,
+        "y": 303.713568,
+        "width": 233.80013474999538,
+        "height": 45.66794399999998
+      },
+      "lineRectsPdf": [
+        [
+          304.7243,
+          477.352532,
+          538.5244347499954,
+          487.152432
+        ],
+        [
+          304.7243,
+          465.390782,
+          478.05415101600283,
+          475.190682
+        ],
+        [
+          304.7243,
+          441.484488,
+          344.652734,
+          450.684588
+        ]
+      ],
+      "fontSize": 10,
+      "column": 1,
+      "isReference": false,
+      "readingIndex": 7,
+      "regionParagraphs": [
+        {
+          "lineRectsPdf": [
+            [
+              304.7243,
+              477.352532,
+              538.5244347499954,
+              487.152432
+            ],
+            [
+              304.7243,
+              465.390782,
+              478.05415101600283,
+              475.190682
+            ]
+          ],
+          "fontSize": 10
+        },
+        {
+          "lineRectsPdf": [
+            [
+              304.7243,
+              441.484488,
+              344.652734,
+              450.684588
+            ]
+          ],
+          "fontSize": 9
+        }
+      ],
+      "memberIds": [
+        "page-1-block-13",
+        "page-1-block-14"
+      ],
+      "sourceRegion": {
+        "id": "page-1-column-1-band-top",
+        "kind": "body-column",
+        "boundsPdf": [
+          304.71955,
+          309.352922,
+          538.5910736779989,
+          703.1638919999999
+        ],
+        "evidence": "column-geometry"
+      },
+      "moduleId": "page-1-mod-1"
+    },
+    {
+      "id": "page-1-region-5",
+      "pageIndex": 1,
+      "order": 8,
+      "type": "paragraph",
+      "sourceText": "A standardised anthropomorphic spine phantom (European spine phantom (ESP), serial number ESP-040; QRM GmbH, Moehrendorf, Germany) was used in this study (Fig. 1). The ESP represents a tool for standard quality control in DXA and QCT and contains three different hydroxyapatite (HA) inserts simulating trabecular bone densities of 50.0 (HA 50, L1), 98.4 (HA 100, L2), and 197.6 (HA 200, L3) mg/cm3 (Fig. 2). It should be noted that the exact HA densities as specified by the",
+      "boundingBox": {
+        "x": 304.7243,
+        "y": 351.67568800000004,
+        "width": 233.86677367799888,
+        "height": 105.83738999999997
+      },
+      "lineRectsPdf": [
+        [
+          304.7243,
+          429.39041199999997,
+          538.5009149899952,
+          439.19031199999995
+        ],
+        [
+          304.7243,
+          417.371812,
+          538.5910736779989,
+          427.17171199999996
+        ],
+        [
+          304.7243,
+          405.353212,
+          538.509734507999,
+          415.15311199999996
+        ],
+        [
+          304.7243,
+          393.391452,
+          538.5028743460026,
+          403.191352
+        ],
+        [
+          304.7243,
+          381.372862,
+          538.5234541720008,
+          391.172762
+        ],
+        [
+          304.7243,
+          369.354262,
+          538.4548552639969,
+          379.154162
+        ],
+        [
+          304.7243,
+          357.392502,
+          538.521494583997,
+          367.19240199999996
+        ],
+        [
+          304.7243,
+          345.37152199999997,
+          538.5346970199998,
+          356.988062
+        ],
+        [
+          304.72476,
+          333.352922,
+          538.554293568004,
+          343.15282199999996
+        ]
+      ],
+      "fontSize": 10,
+      "column": 1,
+      "isReference": false,
+      "readingIndex": 8,
+      "sourceRegion": {
+        "id": "page-1-column-1-band-top",
+        "kind": "body-column",
+        "boundsPdf": [
+          304.71955,
+          309.352922,
+          538.5910736779989,
+          703.1638919999999
+        ],
+        "evidence": "column-geometry"
+      },
+      "moduleId": "page-1-mod-1"
+    },
+    {
+      "id": "page-1-region-6",
+      "pageIndex": 1,
+      "order": 9,
+      "type": "caption",
+      "sourceText": "Fig. 1 Illustration of the European spine phantom (blue, brown) (ESP-040; QRM GmbH, Moehrendorf, Germany) and the QCT bone density calibration phantom (white, below) (BDC-03-29; QRM GmbH, Moehrendorf, Germany). Labels of the manufacturers have been removed. QCT, Quantitative computed tomography",
+      "boundingBox": {
+        "x": 310.7338,
+        "y": 678.837078,
+        "width": 219.86605164000002,
+        "height": 48.02499999999999
+      },
+      "lineRectsPdf": [
+        [
+          310.7338,
+          104.029022,
+          516.431225999998,
+          112.028922
+        ],
+        [
+          310.7338,
+          94.050752,
+          522.5839518399999,
+          102.050652
+        ],
+        [
+          310.7338,
+          84.016472,
+          530.59985164,
+          92.01637199999999
+        ],
+        [
+          310.7338,
+          74.038202,
+          516.4416286999988,
+          82.038102
+        ],
+        [
+          310.7338,
+          64.003922,
+          476.66932562000187,
+          72.003822
+        ]
+      ],
+      "fontSize": 8,
+      "column": 1,
+      "isReference": false,
+      "readingIndex": 9,
+      "sourceRegion": {
+        "id": "page-1-caption-page-1-region-6",
+        "kind": "caption",
+        "boundsPdf": [
+          310.7338,
+          64.003922,
+          530.59985164,
+          112.028922
+        ],
+        "evidence": "caption-continuation"
+      },
+      "moduleId": "page-1-mod-2"
+    }
+  ],
+  "translations": [
+    {
+      "id": "page-1-region-3",
+      "translatedText": "方法"
+    },
+    {
+      "id": "page-1-region-0",
+      "translatedText": "要点 双源双能CT（DECT）可实现准确的骨密度（BMD）评估。基于DECT的BMD测量较定量CT具有更好的重复性。DECT无需校准体模即可进行可行的回顾性体积BMD测量。\n\n背景"
+    },
+    {
+      "id": "page-1-region-2",
+      "translatedText": "在近期发表的一项研究[21]中，对腰椎BMD的评估更准确，且检测骨质疏松的诊断准确性优于HU测量。然而，双源DECT的准确性和精密度尚未与QCT进行比较[22]。我们假设，使用物质分解的体积双源DECT可能比QCT产生更准确、更精密的体积BMD评估，并通过在常规CT扫描中实现回顾性机会性BMD测量而无需校准体模，促进骨质疏松筛查。因此，本研究的目的是一项前瞻性体模研究中比较无体模双源DECT和QCT用于体积BMD评估的准确性和精密度。"
+    },
+    {
+      "id": "page-1-region-4",
+      "translatedText": "这项前瞻性体模研究无需机构审查委员会的任何批准。\n\n体模"
+    },
+    {
+      "id": "page-1-region-5",
+      "translatedText": "本研究使用了标准化拟人脊柱体模（欧洲脊柱体模（ESP），序列号ESP-040；QRM GmbH，德国默伦多夫）（图1）。ESP是DXA和QCT标准质量控制的工具，包含三个不同的羟基磷灰石（HA）插入物，模拟小梁骨密度分别为50.0（HA 50，L1）、98.4（HA 100，L2）和197.6（HA 200，L3）mg/cm3（图2）。应注意，由"
+    },
+    {
+      "id": "page-1-region-6",
+      "translatedText": "图1 欧洲脊柱体模（蓝色、棕色）（ESP-040；QRM GmbH，德国默伦多夫）和QCT骨密度校准体模（白色，下方）（BDC-03-29；QRM GmbH，德国默伦多夫）的图示。制造商的标签已被移除。QCT，定量计算机断层扫描"
+    },
+    {
+      "id": "page-1-region-1",
+      "translatedText": "骨质疏松症是最常见的代谢性骨病，其特征为骨密度（BMD）降低和骨折风险升高[1, 2]。人口结构变化及随之而来的骨质疏松症增加带来了巨大的社会经济负担[1]。根据世界卫生组织，双能X线吸收测定法（DXA）因广泛可及且具成本效益，是目前评估BMD的金标准[3]。然而，DXA的诸多局限性已有报道，如无法区分皮质骨与松质骨，以及重叠结构导致BMD测量失真[4–8]。定量计算机断层扫描（QCT）是目前临床评估体积BMD的标准，但因辐射暴露高，且需使用不能代表松质骨真实组成的体模进行扫描内校准，从而妨碍在常规计算机断层扫描（CT）中回顾性机会性评估BMD，故其可及性有限[9–11]。鉴于近年来CT扫描数量不断增加，通过测量松质骨Hounsfield单位（HU）进行回顾性BMD评估已被反复提出，尽管其因松质骨组成不均以及管电压变化等技术因素而存在不准确性[12–15]。双能CT（DECT）利用不同X线光谱下光电效应的能量依赖性，可改善物质区分[16]。与传统CT相比，该技术已在多种肌肉骨骼应用中提供新颖且具临床相关性的信息[17, 18]。此前已有报道一种无需体模的双源DECT后处理算法，通过应用专用物质分解实现腰椎松质骨的体积机会性BMD评估[16]。初步研究显示，与DXA相比的体内结果及与人尸体椎体标本拔出力的体外结果均具前景[19, 20]。此外，该算法产生了显著"
+    }
+  ]
+}

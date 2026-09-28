@@ -829,7 +829,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 					sourceText: block.sourceText,
 					lineRectsPdf: p.lineRectsPdf,
 					fontSize: p.fontSize ?? block.fontSize,
-					column: block.column
+					column: block.column,
+					sourceRegion: block.sourceRegion
 				});
 			}
 			continue;
@@ -1283,10 +1284,14 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const expansionAllowance = (item: StrictItem): { right: number; down: number } => {
         if (item.flowBoxes || imageTextBoxes.has(item.id)
             || (item.node.hasAttribute('data-pm-source-region') && !item.bodyRegion)) return {right:0,down:0};
+        // Split paragraphs must not collide with their own enclosing source box.
+        // Reserve every sibling's current box instead, including pending text.
+        const ownerId=item.id.split('::p')[0];
         const allowance=item.node.hasAttribute('data-pm-cell') ? { right: 0, down: 0 } : computeExpansionAllowance(item.box, [
             ...imageBoxes,
             ...inkObstacles.map(o => o.box),
-            ...geometric.filter(b => b.id !== item.id).map(b => pxOf.get(b.id)!).filter(Boolean)
+            ...geometric.filter(b => b.id !== ownerId).map(b => pxOf.get(b.id)!).filter(Boolean),
+            ...items.filter(i => i.id !== item.id).flatMap(i => i.flowBoxes ?? [i.box])
         ], canvas.width / BITMAP_SCALE, canvas.height / BITMAP_SCALE, item.fontPx, true);
         // Body paragraphs may use available space below, but never leave their
         // source column band. Captions and cells retain their stricter fixed box.
