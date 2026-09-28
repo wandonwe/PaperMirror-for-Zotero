@@ -1,3 +1,4 @@
+import {checkSplitParagraphExpansion} from './splitParagraphExpansion';
 import {checkEscPanels} from './escPanels';
 import {checkDescriptiveTable} from './descriptiveTable';
 import {checkLeeTypography} from './leeTypography';
@@ -13,6 +14,7 @@ import { buildStrictPage } from '../../src/ui/strictPageReplacement';
 const result=document.createElement('pre');result.id='result';document.body.append(result);
 async function run() {
 try {
+ checkSplitParagraphExpansion();
  await checkEscPanels((window as any).escPanelImage);
  checkDescriptiveTable();
  checkLeeTypography();

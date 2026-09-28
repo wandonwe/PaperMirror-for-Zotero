@@ -1,0 +1,741 @@
+{
+  "note": "Single-line table member texts separated using screenshot and archived member line rectangles; not raw PDF.js spans.",
+  "blocks": [
+    {
+      "id": "page-1-block-23",
+      "pageIndex": 1,
+      "order": 23,
+      "type": "paragraph",
+      "sourceText": "Characteristics",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          306.141693115,
+          271.743494873,
+          356.65719311500004,
+          280.243494873
+        ]
+      ],
+      "boundingBox": {
+        "x": 306.141693115,
+        "y": 510.622505127,
+        "width": 50.51550000000003,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-24",
+      "pageIndex": 1,
+      "order": 24,
+      "type": "paragraph",
+      "sourceText": "n (%)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          271.735194091,
+          513.981703857,
+          280.235194091
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 510.630805909,
+        "width": 19.116499999999974,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-25",
+      "pageIndex": 1,
+      "order": 25,
+      "type": "paragraph",
+      "sourceText": "Age, Mean (range)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          306.141693115,
+          259.676295166,
+          370.571693115,
+          268.176295166
+        ]
+      ],
+      "boundingBox": {
+        "x": 306.141693115,
+        "y": 522.6897048339999,
+        "width": 64.43,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-27",
+      "pageIndex": 1,
+      "order": 27,
+      "type": "paragraph",
+      "sourceText": "Gender",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          306.141693115,
+          248.113093261,
+          331.157193115,
+          256.613093261
+        ]
+      ],
+      "boundingBox": {
+        "x": 306.141693115,
+        "y": 534.252906739,
+        "width": 25.015499999999975,
+        "height": 8.500000000000028
+      }
+    },
+    {
+      "id": "page-1-block-26",
+      "pageIndex": 1,
+      "order": 26,
+      "type": "paragraph",
+      "sourceText": "55.6 (23–76)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          259.676295166,
+          538.5824038634855,
+          268.176295166
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 522.6897048339999,
+        "width": 43.71720000648554,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-28",
+      "pageIndex": 1,
+      "order": 28,
+      "type": "paragraph",
+      "sourceText": "- Female",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          314.641693115,
+          236.549906616,
+          344.621193115,
+          245.049906616
+        ]
+      ],
+      "boundingBox": {
+        "x": 314.641693115,
+        "y": 545.8160933839999,
+        "width": 29.979499999999973,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-29",
+      "pageIndex": 1,
+      "order": 29,
+      "type": "paragraph",
+      "sourceText": "10 (55.6%)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          236.549906616,
+          533.106703857,
+          245.049906616
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 545.8160933839999,
+        "width": 38.241499999999974,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-30",
+      "pageIndex": 1,
+      "order": 30,
+      "type": "paragraph",
+      "sourceText": "- Male",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          314.641693115,
+          224.986704711,
+          337.064693115,
+          233.486704711
+        ]
+      ],
+      "boundingBox": {
+        "x": 314.641693115,
+        "y": 557.379295289,
+        "width": 22.423000000000002,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-32",
+      "pageIndex": 1,
+      "order": 32,
+      "type": "paragraph",
+      "sourceText": "Disease laterality",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          306.141693115,
+          213.423502807,
+          364.91919311500004,
+          221.923502807
+        ]
+      ],
+      "boundingBox": {
+        "x": 306.141693115,
+        "y": 568.942497193,
+        "width": 58.77750000000003,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-31",
+      "pageIndex": 1,
+      "order": 31,
+      "type": "paragraph",
+      "sourceText": "8 (44.4%)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          224.986704711,
+          528.856703857,
+          233.486704711
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 557.379295289,
+        "width": 33.991499999999974,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-33",
+      "pageIndex": 1,
+      "order": 33,
+      "type": "paragraph",
+      "sourceText": "Bilateral",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          314.641693115,
+          201.8603,
+          343.915693115,
+          210.3603
+        ]
+      ],
+      "boundingBox": {
+        "x": 314.641693115,
+        "y": 580.5056999999999,
+        "width": 29.274,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-34",
+      "pageIndex": 1,
+      "order": 34,
+      "type": "paragraph",
+      "sourceText": "12 (66.7%)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          201.8603,
+          533.106703857,
+          210.3603
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 580.5056999999999,
+        "width": 38.241499999999974,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-35",
+      "pageIndex": 1,
+      "order": 35,
+      "type": "paragraph",
+      "sourceText": "Unilateral",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          314.641693115,
+          190.297099,
+          348.63319311500004,
+          198.797099
+        ]
+      ],
+      "boundingBox": {
+        "x": 314.641693115,
+        "y": 592.068901,
+        "width": 33.99150000000003,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-36",
+      "pageIndex": 1,
+      "order": 36,
+      "type": "paragraph",
+      "sourceText": "6 (33.3%)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          190.297099,
+          528.856703857,
+          198.797099
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 592.068901,
+        "width": 33.991499999999974,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-37",
+      "pageIndex": 1,
+      "order": 37,
+      "type": "paragraph",
+      "sourceText": "- Right side",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          308.266693115,
+          178.73389709399999,
+          347.93619311500004,
+          187.23389709399999
+        ]
+      ],
+      "boundingBox": {
+        "x": 308.266693115,
+        "y": 603.632102906,
+        "width": 39.66950000000003,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-38",
+      "pageIndex": 1,
+      "order": 38,
+      "type": "paragraph",
+      "sourceText": "2 (11.1%)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          178.73389709399999,
+          528.541353869971,
+          187.23389709399999
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 603.632102906,
+        "width": 33.67615001297099,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-39",
+      "pageIndex": 1,
+      "order": 39,
+      "type": "paragraph",
+      "sourceText": "- Left side",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          308.266693115,
+          167.17069519,
+          343.201693115,
+          175.67069519
+        ]
+      ],
+      "boundingBox": {
+        "x": 308.266693115,
+        "y": 615.1953048099999,
+        "width": 34.935,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-41",
+      "pageIndex": 1,
+      "order": 41,
+      "type": "paragraph",
+      "sourceText": "Surgical procedure",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          306.141693115,
+          155.607493286,
+          370.42804311824705,
+          164.107493286
+        ]
+      ],
+      "boundingBox": {
+        "x": 306.141693115,
+        "y": 626.758506714,
+        "width": 64.28635000324704,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-40",
+      "pageIndex": 1,
+      "order": 40,
+      "type": "paragraph",
+      "sourceText": "4 (22.2%)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          167.17069519,
+          528.856703857,
+          175.67069519
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 615.1953048099999,
+        "width": 33.991499999999974,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-42",
+      "pageIndex": 1,
+      "order": 42,
+      "type": "paragraph",
+      "sourceText": "Right ear surgery",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          314.641693115,
+          144.04430664,
+          373.49994311500006,
+          152.54430664
+        ]
+      ],
+      "boundingBox": {
+        "x": 314.641693115,
+        "y": 638.3216933599999,
+        "width": 58.858250000000055,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-43",
+      "pageIndex": 1,
+      "order": 43,
+      "type": "paragraph",
+      "sourceText": "12 (66.7%)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          144.04430664,
+          533.106703857,
+          152.54430664
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 638.3216933599999,
+        "width": 38.241499999999974,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-44",
+      "pageIndex": 1,
+      "order": 44,
+      "type": "paragraph",
+      "sourceText": "- Stapedotomy",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          308.266693115,
+          132.481104736,
+          358.08519311500004,
+          140.981104736
+        ]
+      ],
+      "boundingBox": {
+        "x": 308.266693115,
+        "y": 649.884895264,
+        "width": 49.81850000000003,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-45",
+      "pageIndex": 1,
+      "order": 45,
+      "type": "paragraph",
+      "sourceText": "10 (55.6%)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          132.481104736,
+          533.106703857,
+          140.981104736
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 649.884895264,
+        "width": 38.241499999999974,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-46",
+      "pageIndex": 1,
+      "order": 46,
+      "type": "paragraph",
+      "sourceText": "- Stapedectomy",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          308.266693115,
+          120.917902832,
+          361.38319311500004,
+          129.41790283199998
+        ]
+      ],
+      "boundingBox": {
+        "x": 308.266693115,
+        "y": 661.448097168,
+        "width": 53.11650000000003,
+        "height": 8.499999999999986
+      }
+    },
+    {
+      "id": "page-1-block-47",
+      "pageIndex": 1,
+      "order": 47,
+      "type": "paragraph",
+      "sourceText": "2 (11.1%)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          120.917902832,
+          528.541353869971,
+          129.41790283199998
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 661.448097168,
+        "width": 33.67615001297099,
+        "height": 8.499999999999986
+      }
+    },
+    {
+      "id": "page-1-block-48",
+      "pageIndex": 1,
+      "order": 48,
+      "type": "paragraph",
+      "sourceText": "Left ear surgery",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          314.641693115,
+          109.3547,
+          368.763743115,
+          117.8547
+        ]
+      ],
+      "boundingBox": {
+        "x": 314.641693115,
+        "y": 673.0113,
+        "width": 54.12205,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-49",
+      "pageIndex": 1,
+      "order": 49,
+      "type": "paragraph",
+      "sourceText": "6 (33.3%)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          109.3547,
+          528.856703857,
+          117.8547
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 673.0113,
+        "width": 33.991499999999974,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-50",
+      "pageIndex": 1,
+      "order": 50,
+      "type": "paragraph",
+      "sourceText": "- Stapedotomy",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          308.266693115,
+          97.791499023,
+          358.08519311500004,
+          106.291499023
+        ]
+      ],
+      "boundingBox": {
+        "x": 308.266693115,
+        "y": 684.574500977,
+        "width": 49.81850000000003,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-51",
+      "pageIndex": 1,
+      "order": 51,
+      "type": "paragraph",
+      "sourceText": "4 (22.2%)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          97.791499023,
+          528.856703857,
+          106.291499023
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 684.574500977,
+        "width": 33.991499999999974,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-52",
+      "pageIndex": 1,
+      "order": 52,
+      "type": "paragraph",
+      "sourceText": "- Stapedectomy",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          308.266693115,
+          86.22829711899999,
+          361.38319311500004,
+          94.72829711899999
+        ]
+      ],
+      "boundingBox": {
+        "x": 308.266693115,
+        "y": 696.137702881,
+        "width": 53.11650000000003,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-54",
+      "pageIndex": 1,
+      "order": 54,
+      "type": "paragraph",
+      "sourceText": "Values are presented as number (percentage)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          306.141693115,
+          74.66539999999999,
+          461.49109307607,
+          83.16539999999999
+        ]
+      ],
+      "boundingBox": {
+        "x": 306.141693115,
+        "y": 707.7006,
+        "width": 155.34939996107,
+        "height": 8.5
+      }
+    },
+    {
+      "id": "page-1-block-53",
+      "pageIndex": 1,
+      "order": 53,
+      "type": "paragraph",
+      "sourceText": "2 (11.1%)",
+      "fontSize": 8.5,
+      "column": 1,
+      "lineRectsPdf": [
+        [
+          494.865203857,
+          86.22829711899999,
+          528.541353869971,
+          94.72829711899999
+        ]
+      ],
+      "boundingBox": {
+        "x": 494.865203857,
+        "y": 696.137702881,
+        "width": 33.67615001297099,
+        "height": 8.5
+      }
+    }
+  ]
+}

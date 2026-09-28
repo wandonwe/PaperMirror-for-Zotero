@@ -274,7 +274,7 @@
 		"tableRow": 10,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "DLP (mGy·cm) Reconstruction system"
+		"text": "DLP (mGy·cm)"
 	},
 	{
 		"type": "paragraph",
@@ -301,13 +301,22 @@
 		"tableRow": 11,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Image type"
+		"text": "Reconstruction system"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
 		"readingIndex": 36,
-		"tableRow": 11,
+		"tableRow": 12,
+		"tableCol": 0,
+		"mode": "translate",
+		"text": "Image type"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 37,
+		"tableRow": 12,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "VMI:70 keV"
@@ -315,8 +324,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 37,
-		"tableRow": 11,
+		"readingIndex": 38,
+		"tableRow": 12,
 		"tableCol": 2,
 		"mode": "translate",
 		"text": "Conventional Image"
@@ -324,8 +333,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 38,
-		"tableRow": 12,
+		"readingIndex": 39,
+		"tableRow": 13,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Field of view (mm)"
@@ -333,18 +342,9 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 39,
-		"tableRow": 12,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "100"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
 		"readingIndex": 40,
-		"tableRow": 12,
-		"tableCol": 2,
+		"tableRow": 13,
+		"tableCol": 1,
 		"mode": "preserve",
 		"text": "100"
 	},
@@ -353,6 +353,15 @@
 		"column": 1,
 		"readingIndex": 41,
 		"tableRow": 13,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "100"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 42,
+		"tableRow": 14,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Matrix size"
@@ -360,18 +369,9 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 42,
-		"tableRow": 13,
-		"tableCol": 1,
-		"mode": "preserve",
-		"text": "512×512"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
 		"readingIndex": 43,
-		"tableRow": 13,
-		"tableCol": 2,
+		"tableRow": 14,
+		"tableCol": 1,
 		"mode": "preserve",
 		"text": "512×512"
 	},
@@ -380,6 +380,15 @@
 		"column": 1,
 		"readingIndex": 44,
 		"tableRow": 14,
+		"tableCol": 2,
+		"mode": "preserve",
+		"text": "512×512"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 45,
+		"tableRow": 15,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Slice thickness (mm)"
@@ -387,8 +396,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 45,
-		"tableRow": 14,
+		"readingIndex": 46,
+		"tableRow": 15,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "0.4"
@@ -396,8 +405,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 46,
-		"tableRow": 14,
+		"readingIndex": 47,
+		"tableRow": 15,
 		"tableCol": 2,
 		"mode": "translate",
 		"text": "0.8 (minimum available)"
@@ -405,8 +414,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 47,
-		"tableRow": 15,
+		"readingIndex": 48,
+		"tableRow": 16,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Reconstruction increment (mm)"
@@ -414,8 +423,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 48,
-		"tableRow": 15,
+		"readingIndex": 49,
+		"tableRow": 16,
 		"tableCol": 1,
 		"mode": "preserve",
 		"text": "0.35"
@@ -423,8 +432,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 49,
-		"tableRow": 15,
+		"readingIndex": 50,
+		"tableRow": 16,
 		"tableCol": 2,
 		"mode": "preserve",
 		"text": "0.4"
@@ -432,8 +441,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 50,
-		"tableRow": 16,
+		"readingIndex": 51,
+		"tableRow": 17,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Reconstruction kernel"
@@ -441,8 +450,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 51,
-		"tableRow": 16,
+		"readingIndex": 52,
+		"tableRow": 17,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "Qr40"
@@ -450,8 +459,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 52,
-		"tableRow": 16,
+		"readingIndex": 53,
+		"tableRow": 17,
 		"tableCol": 2,
 		"mode": "translate",
 		"text": "Standard (B)"
@@ -459,8 +468,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 53,
-		"tableRow": 17,
+		"readingIndex": 54,
+		"tableRow": 18,
 		"tableCol": 0,
 		"mode": "translate",
 		"text": "Iterative reconstruction"
@@ -468,8 +477,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 54,
-		"tableRow": 17,
+		"readingIndex": 55,
+		"tableRow": 18,
 		"tableCol": 1,
 		"mode": "translate",
 		"text": "QIR4"
@@ -477,8 +486,8 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 55,
-		"tableRow": 17,
+		"readingIndex": 56,
+		"tableRow": 18,
 		"tableCol": 2,
 		"mode": "translate",
 		"text": "iDose4"
@@ -486,13 +495,13 @@
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 56,
+		"readingIndex": 57,
 		"text": "EID-CT Energy integrating detector CT, P"
 	},
 	{
 		"type": "title",
 		"column": 1,
-		"readingIndex": 57,
+		"readingIndex": 58,
 		"text": "1 3"
 	}
 ]

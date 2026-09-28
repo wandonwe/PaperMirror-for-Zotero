@@ -120,27 +120,27 @@
 		"dupBlocks": 0
 	},
 	"chen2023-p4": {
-		"blocks": 87,
-		"translatable": 29,
-		"tableCells": 77,
+		"blocks": 91,
+		"translatable": 33,
+		"tableCells": 81,
 		"modules": 4,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 22,
-		"payloadChars": 3261,
+		"maxBlocksPerChunk": 26,
+		"payloadChars": 3257,
 		"dupBlocks": 0
 	},
 	"chen2023-p5": {
-		"blocks": 185,
-		"translatable": 52,
-		"tableCells": 178,
+		"blocks": 188,
+		"translatable": 54,
+		"tableCells": 181,
 		"modules": 4,
 		"chunks": 3,
 		"fastChunks": 3,
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 40,
-		"payloadChars": 1659,
+		"payloadChars": 1653,
 		"dupBlocks": 2
 	},
 	"chen2023-p6": {
@@ -168,15 +168,15 @@
 		"dupBlocks": 0
 	},
 	"chen2023-p8": {
-		"blocks": 92,
-		"translatable": 29,
-		"tableCells": 83,
+		"blocks": 94,
+		"translatable": 30,
+		"tableCells": 85,
 		"modules": 4,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 23,
-		"payloadChars": 4215,
+		"maxBlocksPerChunk": 24,
+		"payloadChars": 4210,
 		"dupBlocks": 0
 	},
 	"chen2023-p9": {
@@ -444,15 +444,15 @@
 		"dupBlocks": 0
 	},
 	"wu2026-p3": {
-		"blocks": 58,
-		"translatable": 36,
-		"tableCells": 49,
+		"blocks": 59,
+		"translatable": 37,
+		"tableCells": 50,
 		"modules": 5,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 30,
-		"payloadChars": 3343,
+		"maxBlocksPerChunk": 31,
+		"payloadChars": 3342,
 		"dupBlocks": 0
 	},
 	"wu2026-p4": {
