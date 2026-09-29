@@ -42,3 +42,9 @@ test('continuous anchors propagate within a page in both directions without echo
  controller.enabled=false;controller.guard.reset();controller.onPdfPositionChanged(7,0.1);controller.onPanePositionChanged(7,0.1);
  assert.equal(seen.length,4);
 });
+
+test('same-baseline font fragments join without bridging a column gutter',()=>{
+ const line=(left:number,top:number,width:number)=>({left,top,width,height:10});
+ assert.deepEqual(sourceFlowRegions([line(0,0,93),line(100,0,140),line(0,12,240),line(0,24,80)],10),[{left:0,top:0,width:240,height:34}]);
+ assert.deepEqual(sourceFlowRegions([line(0,0,140),line(160,0,140),line(0,12,140),line(160,12,140)],10),[{left:0,top:0,width:140,height:22},{left:160,top:0,width:140,height:22}]);
+});

@@ -358,6 +358,23 @@ export function detectTableRegions(
 	obstacles: GuardItem['box'][] = []
 ): { excluded: Set<string>; regions: TableRegion[]; textRegions: TableRegion[] } {
 	const em = Math.max(6, emPx);
+ // Two separately numbered tables in distinct columns are independent even
+ // when their numeric rows align. Partition before seeds can form a bridge.
+ const panelAnchors=items.filter(i=>isTableCaptionAnchor(i.text,i.type)).sort((a,b)=>a.box.left-b.box.left);
+ for(let n=1;n<panelAnchors.length;n++) {
+  const a=panelAnchors[n-1]!,b=panelAnchors[n]!;
+  if(b.box.left-(a.box.left+a.box.width)<em*2)continue;
+  const estimate=(a.box.left+a.box.width+b.box.left)/2;
+  const edges=items.flatMap(i=>[i.box.left,i.box.left+i.box.width]).filter(x=>Math.abs(x-estimate)<em*4).sort((x,y)=>x-y);
+  const gaps=edges.slice(1).flatMap((x,k)=>x-edges[k]!>=em*.5?[(x+edges[k]!)/2]:[])
+   .filter(x=>!items.some(i=>i.box.left<x&&i.box.left+i.box.width>x)).sort((x,y)=>Math.abs(x-estimate)-Math.abs(y-estimate));
+  const gap=gaps[0];if(gap===undefined)continue;
+  const left=items.filter(i=>i.box.left+i.box.width<=gap),right=items.filter(i=>i.box.left>=gap);
+  if(left.filter(i=>looksTabularSeed(i.text)).length<4||right.filter(i=>looksTabularSeed(i.text)).length<4)continue;
+  const l=detectTableRegions(left.map(i=>({...i,column:0})),emPx,obstacles),r=detectTableRegions(right.map(i=>({...i,column:0})),emPx,obstacles);
+  return {excluded:new Set([...l.excluded,...r.excluded]),regions:[...l.regions,...r.regions],textRegions:[...l.textRegions,...r.textRegions]};
+ }
+
 	// 整栏行不是种子 (2.7.8, 外部审核 第三批·4, wu2026-p6 实证): 相邻正文栏里
 	// "5/28; χ² = 16.258, P <0.001]. Similarly," 这类统计密集的【整行】过得了
 	// looksTabularSeed (小写词 <3),与左栏表格同高、栏沟只有 16pt,于是并进

@@ -155,6 +155,7 @@ export const MAX_RENDER_RETRIES = 2;
  */
 export function looksTranslated(source: string, translated: string, targetLang: string, opts?: { isReference?: boolean }): boolean {
 	const t = translated.trim();
+	if (/[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFD]/.test(t)) return false;
 	if (referenceAlignmentIssue(source, t)) return false;
 	if (!t) {
 		return false;
@@ -3452,6 +3453,7 @@ export function referenceRejectReason(source: string, translated: string, phase:
 
 /** Same validator, with a stable, text-free explanation for its rejection. */
 export function translationRejectReason(source: string, translated: string, target: string): string | null {
+ if (/[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFD]/.test(translated)) return 'invalid-character';
  const alignment = referenceAlignmentIssue(source, translated);
  if (alignment) return alignment;
  if (looksTranslated(source, translated, target)) return null;

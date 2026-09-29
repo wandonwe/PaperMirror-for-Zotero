@@ -1,3 +1,5 @@
+import {extractPanelTitles} from './panelTitles';
+import {removeCollapsedTextCopies} from './collapsedTextCopies';
 import {extractDescriptiveTables} from './descriptiveTable';
 import { separateDisplayFormulas } from './displayFormula';
 import { captionOwnership } from './captionOwnership';
@@ -33,7 +35,7 @@ import type { BlockType, SourceBlock } from '../types/models';
 import { detectTableRegions } from './tableGuard';
 import type { BorderGrid } from './tableBorders';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
-import { isIdentifierLabel, classifyContent, endsMidSentence, isPublisherBoilerplateLine, isRunningHeadOrFoot, type PreserveReason } from './metaFilter';
+import { isFooterDate, isIdentifierLabel, classifyContent, endsMidSentence, isPublisherBoilerplateLine, isRunningHeadOrFoot, type PreserveReason } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -442,7 +444,16 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 	// BY CONTENT here, BEFORE the ordering pass runs its own column detection —
 	// on page 1 the notice sits mid-page across the gutter where the
 	// position-based furniture filter can't see it.
-	const kept = lines.filter(l => !isPublisherBoilerplateLine(lineText(l)));
+	const kept = lines.flatMap(l => {
+  if(!isPublisherBoilerplateLine(lineText(l)))return [l];
+  // A conclusion may finish with one word on the copyright baseline. Keep
+  // that independently positioned word instead of dropping it with the imprint.
+  const at=l.items.findIndex(i=>isPublisherBoilerplateLine(i.text));
+  const prefix=at>0?l.items.slice(0,at):[];
+  if(prefix.length===1 && /^[a-z][A-Za-z-]+[.!?]$/.test(prefix[0]!.text.trim()))
+   return [{items:prefix,rect:rectOf(prefix),fontSize:sizeOf(prefix)}];
+  return [];
+ });
 
 	// Reading order: full-width lines first (title/abstract), then column by
 	// column, each top to bottom.
@@ -527,7 +538,7 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 		}
 		if (semanticBoundary(lineText(line), lineText(next))) { flush(); continue; }
 		// Isolate page furniture before a full-width body line can absorb it.
-		const footer = (l: SpanLine): boolean => pageHeight > 0 && l.rect[3] < pageHeight * 0.1
+		const footer = (l: SpanLine): boolean => isFooterDate(lineText(l), l.rect, pageHeight) || pageHeight > 0 && l.rect[3] < pageHeight * 0.1
 			&& (/^\d{1,4}$/.test(lineText(l).trim()) || /^(?:[\w.-]+\.(?:org|com|edu)\b|Radiology:\s*Volume\b)/i.test(lineText(l).trim()));
 		if (footer(line) !== footer(next)) { flush(); continue; }
 		// 边框硬屏障: a figure between two lines separates layout regions.
@@ -767,6 +778,7 @@ function sameGridCellStack(a: SpanLine, b: SpanLine, rows: GridRowBarriers): boo
 export interface SpanBuildOptions {
  /** Internal recursion guard after source-region assignment. */
  regionsAssigned?: boolean;
+ panelAnchors?: SourceBlock[];
 	pageIndex: number;
 	pageHeight: number;
 	/** 边框硬屏障: figure rects — in-figure labels dropped, no merges across. */
@@ -796,7 +808,7 @@ export interface SpanBuildResult {
  * numeric-dense cells (or a Table caption), so a prose page yields an empty set
  * and the whole reorder is inert.
  */
-export function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em: number, obstaclesPdf: Rect[] = []): Set<number> {
+export function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em: number, obstaclesPdf: Rect[] = [], anchors:SourceBlock[]=[]): Set<number> {
 	const out = new Set<number>();
 	if (lines.length < 6) {
 		return out;
@@ -813,7 +825,7 @@ export function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em
 	const obstacleBoxes = obstaclesPdf.map(r => ({
 		left: r[0], top: pageHeight - r[3], width: r[2] - r[0], height: r[3] - r[1]
 	}));
-	const guard = detectTableRegions(items, em, obstacleBoxes);
+	const guard = detectTableRegions([...items,...anchors.filter(b=>b.type==='table').map(b=>({id:b.id,text:b.sourceText,type:'table',box:{left:b.sourceRegion!.boundsPdf[0],top:pageHeight-b.sourceRegion!.boundsPdf[3],width:b.sourceRegion!.boundsPdf[2]-b.sourceRegion!.boundsPdf[0],height:b.sourceRegion!.boundsPdf[3]-b.sourceRegion!.boundsPdf[1]},fontSize:b.fontSize}))], em, obstacleBoxes);
 	if (!guard.regions.length && !guard.textRegions.length) {
 		return out;
 	}
@@ -827,6 +839,37 @@ export function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em
 }
 
 export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOptions): SpanBuildResult {
+	items=removeCollapsedTextCopies(items);
+ // A structured full-width abstract can outvote the two small columns below
+ // it. Extract an isolated lower two-column band independently, including its
+ // local font size, instead of interleaving affiliation and body lines.
+ if(options.pageIndex===0) {
+  const width=options.pageWidth||612;
+  const wide=groupIntoLines(items,width,options.pageHeight).filter(i=>i.rect[2]-i.rect[0]>width*.62);
+  let cut=wide.length?Math.min(...wide.map(i=>i.rect[1])):0;
+  let previous=cut;
+  for(const line of items.filter(l=>l.rect[3]<cut).sort((a,b)=>b.rect[3]-a.rect[3])) {
+   if(previous-line.rect[3]>15){cut=previous;break;}
+   previous=Math.min(previous,line.rect[1]);
+  }
+  const lower=items.filter(i=>i.rect[3]<cut);
+  if(lower.length>=15 && cut>0 && cut<options.pageHeight*.45) {
+   const rows=groupIntoLines(lower,width,options.pageHeight);
+   const bands=detectColumns(rows.map(l=>l.rect),width,options.pageHeight);
+   const top=Math.max(...lower.map(i=>i.rect[3]));
+   const sizes=bands.map((_,col)=>dominantFontSize(lower.filter(i=>columnOf(i.rect,bands,width)===col).map(i=>i.fontSize||8)));
+   if(bands.length===2 && Math.max(...sizes)/Math.min(...sizes)>=1.3 && cut-top>15 && bands.every(b=>rows.filter(l=>l.rect[0]>=b.left-2 && l.rect[2]<=b.right+2).length>=5)
+    && lower.every(i=>columnOf(i.rect,bands,width)>=0)) {
+    const rest=buildBlocksFromSpans(items.filter(i=>!lower.includes(i)),options);
+    const blocks=bands.flatMap((_,col)=>buildBlocksFromSpans(lower.filter(i=>columnOf(i.rect,bands,width)===col),options).blocks.map(b=>({...b,column:col})));
+    const all=[...rest.blocks,...blocks];
+    return {...rest,blocks:all.map((b,i)=>({...b,id:`page-${options.pageIndex}-local-${i}`,order:i}))};
+   }
+  }
+ }
+
+ const panels=extractPanelTitles(items,options.pageIndex,options.pageHeight);
+ if(panels.blocks.length){const rest=buildBlocksFromSpans(panels.rest,{...options,panelAnchors:[...(options.panelAnchors??[]),...panels.blocks]});return {...rest,blocks:[...rest.blocks,...panels.blocks]};}
 	const formulas = separateDisplayFormulas(items, options.pageIndex, options.pageHeight);
 	if (formulas.blocks.length) {
 		const rest = buildBlocksFromSpans(formulas.rest, options);
@@ -895,8 +938,14 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// 里的行整条摘出散文分组,各自成一行块,交给下游 structureTableCells 重新组网格
 	// (标签列作 tableCol=0)。非表格页探不到区域 → 摘出集为空 → 行为与从前逐字节
 	// 一致,不影响任何非表格版面。
-	const tableLineIdx = detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10), obstacles);
+	const tableLineIdx = detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10), obstacles,options.panelAnchors);
 	const proseLines = tableLineIdx.size ? lines.filter((_, i) => !tableLineIdx.has(i)) : lines;
+ // After isolating numbered panels, order prose using prose columns, not
+ // numeric table columns: a short paragraph tail must stay between its lines.
+ if(options.panelAnchors?.length) {
+  const proseBands=detectColumns(proseLines.map(l=>l.rect),pageWidth,options.pageHeight);
+  proseLines.sort((a,b)=>columnOf(a.rect,proseBands,pageWidth)-columnOf(b.rect,proseBands,pageWidth)||b.rect[3]-a.rect[3]||a.rect[0]-b.rect[0]);
+ }
 	const gridRows = (options.grids ?? (options.grid ? [options.grid] : [])).map(g => gridRowBarriers(g, options.pageHeight));
 	const paragraphs = gridRows.reduce((groups, rows) => mergeGridCellStacks(groups, rows),
 		groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, obstacles, gridRows));

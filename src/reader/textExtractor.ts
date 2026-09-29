@@ -126,6 +126,7 @@ export interface ExtractInputs {
  * "等 PDFWorker"与"等文本层渲染"分开 —— 不分开就只能猜。
  */
 export interface ExtractPhases {
+ fontRepair?: adapter.TextLayerPage['fontRepair'];
  structureCacheHit?: boolean;
 	obstaclesMs: number;
 	/**
@@ -164,6 +165,7 @@ export interface ExtractPhases {
 	 * 空数组,图表屏障一路靠亮度网格兜底。补上 waive 之后这个数应该从 0 变正。
 	 */
 	imageRects?: number;
+ imageBackground?: adapter.ImageBackgroundDiagnostics;
 	/** 推出的列数(边界数 - 1);-1 = 推不出网格。 */
 	gridCols?: number;
 	/** 推出的行数(边界数 - 1);-1 = 推不出网格。 */
@@ -367,6 +369,7 @@ export class TextExtractor implements PageParser {
 		const phases = this.phasesByPage.get(pageIndex);
 		if (phases) {
 			phases.imageRects = rects.length;
+   phases.imageBackground = adapter.getImageBackgroundDiagnostics(this.reader,pageIndex);
 		}
 		return rects;
 	}
@@ -688,6 +691,7 @@ export class TextExtractor implements PageParser {
 				phases.textLayerWaitMs = (phases.textLayerWaitMs ?? 0) + (Date.now() - waitStartedAt);
 			}
 			const page = adapter.getTextLayerItems(this.reader, pageIndex);
+
 			const grid = page ? await this.gridFor(pageIndex, page.pageHeight) : null;
 			return this.blocksFromSpanPage(pageIndex, page, obstacles, 'the text layer', grid);
 		}
@@ -709,6 +713,7 @@ export class TextExtractor implements PageParser {
 		try {
 			const page = await adapter.getTextContentItems(this.reader, pageIndex,
 				reason => this.noteOutcome(this.textContentOutcome, this.textContentNoted, pageIndex, reason));
+			const phases=this.phasesByPage.get(pageIndex);if(phases && page?.fontRepair)phases.fontRepair=page.fontRepair;
 			const grid = page ? await this.gridFor(pageIndex, page.pageHeight) : null;
 			return this.blocksFromSpanPage(pageIndex, page, obstacles, 'getTextContent', grid);
 		}

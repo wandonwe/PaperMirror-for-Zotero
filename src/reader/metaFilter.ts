@@ -80,6 +80,12 @@ const INSTITUTION_WORDS = /\b(university|hospital|department|institute|center|ce
  * SHORT runs in the top/bottom 8% band qualify: a body paragraph that happens
  * to reach into the band is many lines long and stays.
  */
+/** Standalone publication dates in the footer must not join a body continuation. */
+export function isFooterDate(text: string, rect: Rect, pageHeight: number): boolean {
+ if (pageHeight <= 0 || rect[3] >= pageHeight * 0.06) return false;
+ return /^(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|x{2,4})\.?\s+(?:\d{1,2}|x{2,4}),?\s+(?:19|20)\d{2}|\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(?:19|20)\d{2})$/i.test(text.trim());
+}
+
 export function isRunningHeadOrFoot(
 	rect: Rect,
 	pageHeight: number,
@@ -89,6 +95,7 @@ export function isRunningHeadOrFoot(
 	if (pageHeight <= 0) {
 		return false;
 	}
+	if (lineCount === 1 && isFooterDate(text, rect, pageHeight)) return true;
 	const band = pageHeight * 0.08;
 	const inTop = rect[1] > pageHeight - band;
 	const inBottom = rect[3] < band;

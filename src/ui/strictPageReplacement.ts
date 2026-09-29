@@ -871,7 +871,9 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	if (ctx) {
 		for (const block of replaceable) {
 			const whole = pixelBox(block, render, 1);
-			const colour = localPaper(ctx, whole, BITMAP_SCALE, paper);
+			// Caption badges may be narrower than the outside sampling margin.
+            // Sample their own region so a neighbouring pale title cannot win.
+            const colour = localPaper(ctx, whole, BITMAP_SCALE, paper, block.sourceRegion?.kind === 'caption');
 			blockPaper.set(block.id, colour);
 			// Font-relative padding, not a fixed 2px: masks hug the strokes.
 			const fontPx = Math.max(6, (block.fontSize ?? bodyPt) * pxPerPoint);
@@ -1026,7 +1028,11 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		const obstacles = [...imageBoxes, ...geometric.filter(b => b.id !== ownerId).flatMap(b => sourceOccupancy.get(b.id) ?? [])];
 		// Unequal line lengths alone do not require narrow strips. A left-aligned,
 		// unobstructed block can use its complete rectangle without shrinking.
-		const rectangular = sourceBands.every(b => Math.abs(b.left - region.left) <= (block.fontSize ?? bodyPt) * pxPerPoint * 1.5)
+		// A clipped bounding rectangle may retain only the wide foot of an
+        // L-shaped paragraph. It cannot replace bands outside that rectangle.
+        const rectangular = sourceBands.every(b => b.top >= region.top - .5 && b.top + b.height <= region.top + region.height + .5
+            && b.left >= region.left - .5 && b.left + b.width <= region.left + region.width + .5
+            && Math.abs(b.left - region.left) <= (block.fontSize ?? bodyPt) * pxPerPoint * 1.5)
 			&& !obstacles.some(b => intersectArea(region, b) > 0);
 		const safeRegions = (sourceBands.length > 1 && !rectangular ? sourceBands : [region])
 			.flatMap(band => imageSafeRegions(band, obstacles))
@@ -1201,6 +1207,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 
 	/** Reveal a measured-to-fit block: paint its mask, then show the node. */
 	const commit = (item: StrictItem): void => {
+		item.inkFailure = undefined;
 		if (item.committed) {
 			return;
 		}
@@ -1320,7 +1327,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// 门槛必然漏掉。改为 0.5% 且至少 3 个采样点命中(挡住反锯齿单点噪声)。
 	const INK_COLOUR_DISTANCE = 48;
 	const paperRgb = parseRgb(paper);
-	const regionHasInk = (b: PixelBox, minShare: number, minPoints: number): boolean => {
+	const regionHasInk = (b: PixelBox, minShare: number, minPoints: number, covered: PixelBox[] = []): boolean => {
 		if (!ctx) {
 			return false; // 无底图可采样时不否决 —— 交给 boxNewlyViolates 兜底
 		}
@@ -1334,6 +1341,19 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				return true; // 出界当作有墨,让候选被拒
 			}
 			const data = ctx.getImageData(x, y, w, h).data;
+			// Existing source-line masks already cover these pixels on commit.
+			// Do not mistake the source's descenders/padding for NEW ink; never
+			// exempt space outside the same block's actual mask rectangles.
+			for (const r of covered) {
+				const x0 = Math.max(0, Math.ceil(r.left * BITMAP_SCALE) - x);
+				const x1 = Math.min(w, Math.floor((r.left + r.width) * BITMAP_SCALE) - x);
+				const y0 = Math.max(0, Math.ceil(r.top * BITMAP_SCALE) - y);
+				const y1 = Math.min(h, Math.floor((r.top + r.height) * BITMAP_SCALE) - y);
+				for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) {
+					const i = (yy * w + xx) * 4;
+					data[i] = pr; data[i + 1] = pg; data[i + 2] = pb;
+				}
+			}
 			return bitmapHasInk(data, w, h, [pr, pg, pb], { minShare, minPoints, distance: INK_COLOUR_DISTANCE });
 		}
 		catch {
@@ -1342,14 +1362,13 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	};
 	/** 另置路径的口径 (2.4.0 原样): 判「这块区域是不是空白」。 */
 	const areaHasInk = (b: PixelBox): boolean => regionHasInk(b, 0.02, 1);
-	/** 扩边路径的口径 (2.4.6): 抓细线,门槛低、要求至少 3 点命中。 */
-	const stripHasInk = (b: PixelBox): boolean => regionHasInk(b, 0.005, 3);
 	/**
 	 * 这次扩展新占的地方有未建模墨迹吗?只看**新增条带**,不看原盒。
 	 * 任一条带命中即拒。
 	 */
 	const expansionHitsInk = (item: StrictItem): boolean =>
-		expansionStrips(item.originalBox, item.box).some(stripHasInk);
+		expansionStrips(item.originalBox, item.box).some(strip =>
+			regionHasInk(strip, 0.005, 3, lineBoxesFor.get(item.id) ?? []));
 
 	// ---- 提交前几何预校验 (2.2.3, 计划 第三批 item4 · 页面级原子提交) ----------
 	// 与末端 pmGeometryAudit 同一套「新增侵入>容差」判据(boxNewlyViolates),但在
@@ -1392,16 +1411,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			}
 			const original = { width: item.box.width, height: item.box.height };
 			const grow = expansionAllowance(item);
-			const expansions: [number, number][] = [];
-			if (grow.right > 4) {
-				expansions.push([original.width + grow.right, original.height]);
-			}
-			if (grow.down > 4) {
-				expansions.push([original.width, original.height + grow.down]);
-			}
-			if (grow.right > 4 && grow.down > 4) {
-				expansions.push([original.width + grow.right, original.height + grow.down]);
-			}
+			const expansions = verticalExpansionCandidates(original.width, original.height, grow.down, item.fontPx);
 			let fits = false;
 			for (const [w, h] of expansions) {
 				applyBox(item, w, h);
@@ -1444,16 +1454,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			let inkVetoed = false;
 			let geometryVetoed = false;
 			// 1. 算法3: 原字号下的扩展阶梯 — 右扩(标签/标题) → 下扩(段落) → 双向。
-			const expansions: [number, number][] = [];
-			if (grow.right > 4) {
-				expansions.push([original.width + grow.right, original.height]);
-			}
-			if (grow.down > 4) {
-				expansions.push([original.width, original.height + grow.down]);
-			}
-			if (grow.right > 4 && grow.down > 4) {
-				expansions.push([original.width + grow.right, original.height + grow.down]);
-			}
+			const expansions = verticalExpansionCandidates(original.width, original.height, grow.down, item.fontPx);
 			for (const [w, h] of expansions) {
 				applyBox(item, w, h);
 				// 预校验 (item4) + 未建模墨迹闸 (LO-10 2.4.6)。三道检查分开记账
@@ -1736,7 +1737,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// ---- placement probe: localise a blank-where-text-should-be -------------
 	// Samples the base bitmap + mask under each block. Diagnostic only (guarded,
 	// geometry/booleans, never text). See probeStrictPlacement() for the 口径.
-	(page as HTMLElement & { pmProbe?: () => StrictProbeRow[] }).pmProbe = (): StrictProbeRow[] => {
+	(page as HTMLElement & { pmProbe?: (samplePixels?: boolean) => StrictProbeRow[] }).pmProbe = (samplePixels = true): StrictProbeRow[] => {
 		const [pr, pg, pb] = parseRgb(paper);
 		const w = ctx?.canvas.width ?? 1;
 		const h = ctx?.canvas.height ?? 1;
@@ -1746,7 +1747,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			let baseInk = false;
 			let maskOpaque = false;
 			try {
-				for (const line of lineBoxesFor.get(item.id) ?? []) {
+				for (const line of samplePixels ? lineBoxesFor.get(item.id) ?? [] : []) {
 					const pts: [number, number][] = [
 						[line.left + line.width * 0.5, line.top + line.height * 0.5],
 						[line.left + line.width * 0.2, line.top + line.height * 0.5],
@@ -1774,7 +1775,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				state,
 				left: Math.round(item.box.left), top: Math.round(item.box.top),
 				width: Math.round(item.box.width), height: Math.round(item.box.height),
-				baseInk, maskOpaque,
+				baseInk, maskOpaque, bitmapSampled: samplePixels,
 				measurement: {fontPx: item.fontPx, lineHeight: item.node.style.lineHeight, scrollWidth:item.node.scrollWidth, scrollHeight:item.node.scrollHeight, overflow:item.lastOverflow},
 				...(item.inkFailure ? {inkFailure:item.inkFailure} : {}),
 				...(item.flowBoxes ? { flowRegions: item.flowBoxes.map(b => ({ ...b })) } : {}),
@@ -1868,6 +1869,7 @@ export function strictPageStats(element: HTMLElement): StrictPageStats | null {
  * Geometry + booleans only, never text. Returns null on a non-strict element.
  */
 export interface StrictProbeRow {
+ bitmapSampled?: boolean;
  measurement?: {fontPx:number;lineHeight:string;scrollWidth:number;scrollHeight:number;overflow?:FitFailure['overflow']};
 	id: string;
 	type: string;
@@ -1900,9 +1902,9 @@ export function strictAbandonedBlocks(element: HTMLElement): AbandonedBlock[] | 
 	return fn ? fn() : null;
 }
 
-export function probeStrictPlacement(element: HTMLElement): StrictProbeRow[] | null {
-	const fn = (element as HTMLElement & { pmProbe?: () => StrictProbeRow[] }).pmProbe;
-	return fn ? fn() : null;
+export function probeStrictPlacement(element: HTMLElement, samplePixels = true): StrictProbeRow[] | null {
+	const fn = (element as HTMLElement & { pmProbe?: (samplePixels?: boolean) => StrictProbeRow[] }).pmProbe;
+	return fn ? fn(samplePixels) : null;
 }
 
 /**
@@ -2202,6 +2204,19 @@ export function orderExpansions(expansions: [number, number][]): [number, number
 	return [...expansions].sort((a, b) => a[0] * a[1] - b[0] * b[1]);
 }
 
+/** Try small vertical additions before the maximum, without entering gutters.
+ * Every candidate still passes glyph, geometry and bitmap-ink checks. */
+export function verticalExpansionCandidates(width: number, height: number, down: number, fontPx: number): [number, number][] {
+	if (!(down > 0) || !Number.isFinite(down)) return [];
+	const step = Math.max(0.25, fontPx / 8, down / 32);
+	const result: [number, number][] = [];
+	for (let extra = Math.min(step, down); extra < down; extra += step) {
+		result.push([width, height + extra]);
+	}
+	result.push([width, height + down]);
+	return result;
+}
+
 export function computeExpansionAllowance(
 	box: PixelBox,
 	blockers: PixelBox[],
@@ -2211,7 +2226,7 @@ export function computeExpansionAllowance(
 	strictSourceWidth = false
 ): { right: number; down: number } {
 	let right = Math.max(0, pageW * 0.9 - (box.left + box.width));
-	let down = Math.max(0, pageH * 0.95 - (box.top + box.height));
+	let down = Math.max(0, pageH - Math.max(3, fontPx * 0.3) - (box.top + box.height));
 	for (const other of blockers) {
 		// 1.1.4 字段修复 (首字下沉页 overlap:region-7→region-8): 判据从"起点在
 		// 我边缘之外"改为"延伸超过我的边缘"——与我已有轻微重叠的邻居(drop cap

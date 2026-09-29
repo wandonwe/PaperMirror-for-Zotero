@@ -354,6 +354,18 @@ export function flowText<T>(text: string, regions: T[], fits: (text: string, reg
 
 /** Recover the available bands of an L-shaped source paragraph, including vector figures. */
 export function sourceFlowRegions(lines: PixelBox[], fontPx: number): PixelBox[] {
+ // PDF font switches split one printed line into runs. Rejoin only gaps
+ // smaller than one em on the same baseline; actual column gutters remain.
+ const joined:PixelBox[]=[];
+ for(const line of [...lines].sort((a,b)=>a.top-b.top || a.left-b.left)) {
+  const prev=joined[joined.length-1];
+  if(prev && Math.abs(prev.top-line.top)<fontPx*.2 && Math.abs(prev.height-line.height)<fontPx*.2
+   && line.left>=prev.left && line.left-(prev.left+prev.width)<=fontPx) {
+   prev.width=Math.max(prev.left+prev.width,line.left+line.width)-prev.left;
+   prev.height=Math.max(prev.top+prev.height,line.top+line.height)-prev.top;
+  } else joined.push({...line});
+ }
+ lines=joined;
  const sortedX = [...lines].sort((a,b) => a.left-b.left);
  let right = sortedX[0] ? sortedX[0].left+sortedX[0].width : 0;
  for (let i=1;i<sortedX.length;i++) {

@@ -54,7 +54,8 @@ export function imageRectsFromOperatorList(
 	fnArray: ArrayLike<number>,
 	argsArray: ArrayLike<unknown>,
 	ops: Partial<typeof DEFAULT_OPS> = {},
-	minSizePt = 12
+	minSizePt = 12,
+ ignoredPaintIndices: ReadonlySet<number> = new Set()
 ): PdfRect[] {
 	const OP = { ...DEFAULT_OPS, ...ops };
 	const paintOps = new Set([
@@ -82,7 +83,7 @@ export function imageRectsFromOperatorList(
 					ctm = multiply(ctm, args.slice(0, 6) as Matrix);
 				}
 			}
-			else if (paintOps.has(fn)) {
+			else if (paintOps.has(fn) && !ignoredPaintIndices.has(i)) {
 				// An image paints the unit square through the current matrix.
 				const corners = [apply(ctm, 0, 0), apply(ctm, 1, 0), apply(ctm, 0, 1), apply(ctm, 1, 1)];
 				const xs = corners.map(c => c[0]);
@@ -98,4 +99,17 @@ export function imageRectsFromOperatorList(
 		return [];
 	}
 	return rects;
+}
+
+/** Conservative photometric test for a repeated, behind-text page decoration.
+ * It never relaxes protection for unique figures, foreground images or dark plots. */
+export function isFaintPageBackground(data:ArrayLike<number>,channels:3|4,rect:PdfRect,repeated:boolean,beforeText:boolean):boolean {
+ if(!repeated||!beforeText||rect[2]-rect[0]<100||rect[3]-rect[1]<60||data.length<300)return false;
+ let total=0,dark=0,colour=0,white=0,ink=0;
+ const pixels=Math.floor(data.length/channels),step=Math.max(1,Math.floor(pixels/50000));
+ for(let i=0;i<pixels;i+=step){const k=i*channels,a=channels===4?data[k+3]!/255:1;
+  const rgb=[0,1,2].map(j=>255+(data[k+j]!-255)*a),low=Math.min(...rgb),high=Math.max(...rgb);
+  total++;if(low<170)dark++;if(high-low>15)colour++;if(low>245)white++;if(low<240)ink++;
+ }
+ return total>0&&dark/total<.005&&colour/total<.005&&white/total>.7&&ink/total>.01&&ink/total<.25;
 }
