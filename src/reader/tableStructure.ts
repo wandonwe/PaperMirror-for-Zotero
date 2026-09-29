@@ -758,7 +758,7 @@ function structureTableCellsUnchecked(
 	const FURNITURE = new Set(['display-formula', 'running-head', 'watermark', 'sliver', 'banner', 'boilerplate', 'names', 'dates', 'bibliographic', 'identifier']);
 	const isFurniture = (b: SourceBlock): boolean =>
 		b.translationMode === 'preserve' && !!b.preserveReason && FURNITURE.has(b.preserveReason);
-	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox && !isFurniture(b));
+	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox && !isFurniture(b) && !(b.type==='caption'&&b.sourceRegion?.kind==='caption'));
 	if (!geometric.length || (geometric.length < 2 && !grid)) {
 		return blocks;
 	}
@@ -777,7 +777,7 @@ function structureTableCellsUnchecked(
 	const grids = useGrid && grid ? (Array.isArray(grid) ? grid : [grid]) : [];
 	for (const [tableIndex, grid] of grids.entries()) {
 		const inGrid = geometric.filter(b => {
-			if (gridConsumed.has(b.id)) return false;
+			if (gridConsumed.has(b.id) || b.sourceRegion?.kind==='caption') return false;
 			const cx = b.boundingBox.x + b.boundingBox.width / 2;
 			const cy = b.boundingBox.y + b.boundingBox.height / 2;
 			return columnOfX(grid, cx) >= 0 && rowOfTop(grid, cy) >= 0;
@@ -870,7 +870,7 @@ function structureTableCellsUnchecked(
 		id: b.id,
 		text: b.sourceText,
 		type: b.type,
-		box: { left: b.boundingBox.x, top: b.boundingBox.y, width: b.boundingBox.width, height: b.boundingBox.height },
+		box: b.type==='table'&&b.sourceRegion ? {left:b.sourceRegion.boundsPdf[0],top:b.boundingBox.y + Math.max(...b.lineRectsPdf!.map(r=>r[3]!))-b.sourceRegion.boundsPdf[3],width:b.sourceRegion.boundsPdf[2]-b.sourceRegion.boundsPdf[0],height:b.sourceRegion.boundsPdf[3]-b.sourceRegion.boundsPdf[1]} : { left: b.boundingBox.x, top: b.boundingBox.y, width: b.boundingBox.width, height: b.boundingBox.height },
 		fontSize: b.fontSize,
 		column: b.column
 	})), Math.max(6, em));
@@ -890,7 +890,7 @@ function structureTableCellsUnchecked(
 		...guard.textRegions.map(region => ({ region, text: true }))
 	];
 	allRegions.forEach(({ region, text: isTextTable }, tableIndex) => {
-		const members = geometric.filter(b => !consumed.has(b.id) && contained({
+		const members = geometric.filter(b => b.sourceRegion?.kind!=='caption' && !consumed.has(b.id) && contained({
 			left: b.boundingBox.x, top: b.boundingBox.y,
 			width: b.boundingBox.width, height: b.boundingBox.height
 		}, region) >= 0.5).map(b => ({

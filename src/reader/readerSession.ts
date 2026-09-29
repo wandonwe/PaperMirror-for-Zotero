@@ -1906,20 +1906,14 @@ export class ReaderSession {
 		catch (e) {
 			logger.debug(MODULE, `abandoned list failed on page ${pageIndex + 1} (ignored)`, e);
 		}
-		// Placement 探针下热路径 (2.1.7, 计划 PF-2): 探针对每块每行做 getImageData
-		// 采样底图/遮罩,只为诊断导出定位病因。此前每页 FINAL 无条件跑,普通用户
-		// 从不导出诊断却白付数百次逐像素读取、拖长译文显现。现在仅在开启「调试
-		// 日志」时对该页采样;关闭时零成本。
-		if (getPref<boolean>('debugLogging', false)) {
-			try {
-				const probe = probeStrictPlacement(element);
-				if (probe) {
-					this.placementProbe.set(pageIndex, probe);
-				}
-			}
-			catch (e) {
-				logger.debug(MODULE, `placement probe failed on page ${pageIndex + 1} (ignored)`, e);
-			}
+		// Always archive lightweight placement measurements. Pixel sampling is
+		// still debug-only; bitmapSampled=false distinguishes omitted samples.
+		try {
+			const probe = probeStrictPlacement(element, getPref<boolean>('debugLogging', false));
+			if (probe) this.placementProbe.set(pageIndex, probe);
+		}
+		catch (e) {
+			logger.debug(MODULE, `placement probe failed on page ${pageIndex + 1} (ignored)`, e);
 		}
 		this.archivePage(state, true);
 		logger.info(

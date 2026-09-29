@@ -50,11 +50,15 @@ export function assignPageRegions(blocks:SourceBlock[],pageHeight:number):Source
 }
 /** Shared stage for char, text-content and text-layer extraction paths. */
 export function finalizePageRegions(blocks:SourceBlock[],pageHeight:number,obstacles:Rect[]=[]):SourceBlock[] {
- const protectedBlocks=blocks.filter(b=>b.translationMode!==undefined);
+ const isPanel=(b:SourceBlock):boolean=>b.sourceRegion?.kind==='caption' && b.sourceRegion.id.includes('-panel-title-');
+ const hasPanel=blocks.some(isPanel);
+ const protectedBlocks=blocks.filter(b=>b.translationMode!==undefined || isPanel(b));
  // Keep the established line/shard reconstruction before assigning body owners.
  // Premature column ownership freezes provisional column=-1 fragments and breaks
  // legitimate full-width paragraphs. Explicit parser caption owners remain guarded.
  const formulas=protectedBlocks.filter(b=>b.preserveReason==='display-formula').flatMap(b=>b.lineRectsPdf ?? []);
- const prose=coalesceRegions(blocks.filter(b=>b.translationMode===undefined),[...obstacles,...formulas]);
+ const captions=protectedBlocks.filter(isPanel).flatMap(b=>b.lineRectsPdf??[]);
+ const body=blocks.filter(b=>!protectedBlocks.includes(b));
+ const prose=coalesceRegions(hasPanel?orderBlocksForReading(body):body,[...obstacles,...formulas,...captions]);
  return assignPageRegions(orderBlocksForReading([...prose,...protectedBlocks]),pageHeight);
 }

@@ -1,3 +1,4 @@
+import { decodeLegacyText, legacyFontEncodings, resolvedPdfFont, repeatedImageRefs } from './legacyTextEncoding';
 import { onScrollIntent } from './scrollSynchronizer';
 /**
  * ============================================================================
@@ -31,7 +32,7 @@ import { onScrollIntent } from './scrollSynchronizer';
 import type { PageData } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
-import { imageRectsFromOperatorList } from './imageObstacles';
+import { imageRectsFromOperatorList, isFaintPageBackground } from './imageObstacles';
 import { segmentsFromOperatorList, type SegmentScanStats } from './tableBorders';
 
 /**
@@ -396,12 +397,14 @@ export async function getTextContentItems(
 		// 在 Xray 视角下不可见,于是整轮 textContentMs 只有 5 ms、一页没走通。
 		const doc = waive((waive(pdfWindow(reader)?.PDFViewerApplication) as
 			{ pdfDocument?: unknown } | undefined)?.pdfDocument) as
-			{ getPage?: (n: number) => Promise<unknown> } | undefined;
+			{ getPage?: (n: number) => Promise<unknown>; getData?: () => Promise<Uint8Array> } | undefined;
 		if (typeof doc?.getPage !== 'function') {
 			return say('no-getpage');
 		}
 		const page = waive(await doc.getPage(pageIndex + 1)) as {
 			getTextContent?: () => Promise<{ items?: unknown[] }>;
+            getOperatorList?: () => Promise<unknown>;
+            commonObjs?: {get:(id:string,callback?:(font:unknown)=>void)=>unknown};
 			view?: number[];
 		};
 		if (typeof page?.getTextContent !== 'function') {
@@ -411,10 +414,31 @@ export async function getTextContentItems(
 		}
 		const content = waive(await page.getTextContent());
 		const raw = Array.isArray(content?.items) ? content.items : [];
-		const items: TextLayerItem[] = [];
+		const fonts=new Map<string,{name:string; differences:Record<number,string>}>();
+        const fontRepair={controlRuns:0,resolvedFonts:0,encodingFonts:0,remainingRuns:0,error:''};
+        fontRepair.controlRuns=raw.filter(i=>/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(String((i as {str?:string}).str??''))).length;
+        if(raw.some(entry=>/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(String((entry as {str?:string}).str ?? '')))) {
+            try {
+                await page.getOperatorList?.();
+                let encodings=new Map<string,Record<number,string>>();
+                try { encodings=await legacyFontEncodings(doc,pageIndex); } catch(e) { fontRepair.error='font-resources-unavailable'; logger.warn(MODULE,'PDF font resource fallback unavailable',e); }
+                fontRepair.encodingFonts=encodings.size;
+                const common=waive(page.commonObjs) as typeof page.commonObjs;
+                const attemptedFonts=new Set<string>();
+                for(const entry of raw.filter(i=>/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(String((i as {str?:string}).str ?? '')))) {
+                    const id=(entry as {fontName?:string}).fontName;if(!id||attemptedFonts.has(id))continue;attemptedFonts.add(id);
+                    let font: {name?:string;differences?:Record<number,string>}|undefined;
+                    try { font=waive(await resolvedPdfFont(common,id)) as typeof font; } catch { continue; }
+                    if(font?.name)fonts.set(id,{name:font.name,differences:{...encodings.get(font.name),...font.differences}});
+                }
+            } catch(e) {fontRepair.error='font-access-unavailable'; logger.warn(MODULE,'Legacy font decoding unavailable',e); }
+        }
+        const items: TextLayerItem[] = [];
 		for (const entry of raw) {
-			const it = entry as { str?: unknown; transform?: unknown; width?: unknown };
-			const text = typeof it.str === 'string' ? it.str : '';
+			const it = entry as { str?: unknown; transform?: unknown; width?: unknown; fontName?:string };
+			const font=it.fontName ? fonts.get(it.fontName) : undefined;
+            const value=typeof it.str === 'string' ? it.str : '';
+            const text=font ? decodeLegacyText(value,font.name,font.differences) : value;
 			if (!text.trim() || !Array.isArray(it.transform) || typeof it.width !== 'number') {
 				continue; // 空串与结构标记(marked content)不是字
 			}
@@ -427,10 +451,13 @@ export async function getTextContentItems(
 		if (!items.length) {
 			return say(raw.length ? 'all-filtered' : 'no-items');
 		}
+fontRepair.resolvedFonts=fonts.size;
+        fontRepair.remainingRuns=items.filter(i=>/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(i.text)).length;
+        if(fontRepair.remainingRuns)logger.warn(MODULE,'Unresolved PDF control runs',fontRepair);
 		note?.('ok');
 		const view = Array.isArray(page.view) && page.view.length >= 4 ? page.view : null;
 		return {
-			items,
+			items, fontRepair,
 			pageWidth: view ? Number(view[2]) - Number(view[0]) : 612,
 			pageHeight: view ? Number(view[3]) - Number(view[1]) : 792
 		};
@@ -634,6 +661,7 @@ export interface TextLayerItem {
 }
 
 export interface TextLayerPage {
+ fontRepair?:{controlRuns:number;resolvedFonts:number;encodingFonts:number;remainingRuns:number;error:string};
 	items: TextLayerItem[];
 	pageWidth: number;
 	pageHeight: number;
@@ -1076,10 +1104,32 @@ export function getAllPageSizes(reader: ReaderLike): { width: number; height: nu
  * promises are never awaited. Returns null when the operator list cannot be
  * had (caller falls back to the luminance grid).
  */
+export interface ImageBackgroundDiagnostics {
+ repeatedRefs: number; candidates: number; pending: number; missingRef: number;
+ nonRepeated: number; sampled: number; excluded: number; errors: string[];
+}
+const imageBackgroundDiagnostics=new WeakMap<object,Map<number,ImageBackgroundDiagnostics>>();
+export function getImageBackgroundDiagnostics(reader:ReaderLike,pageIndex:number):ImageBackgroundDiagnostics|undefined {
+ return imageBackgroundDiagnostics.get(reader)?.get(pageIndex);
+}
+/** Image decoding finishes independently from getOperatorList(). */
+export async function resolvedPdfImage(objects:any,id:string,timeoutMs=1000):Promise<unknown> {
+ try {const ready=waive(objects?.get(id));if(ready)return ready;}catch{/* pending */}
+ return new Promise(resolve=>{
+  const timer=setTimeout(()=>resolve(undefined),timeoutMs);
+  try{objects?.get(id,(value:unknown)=>{clearTimeout(timer);resolve(waive(value));});}
+  catch{clearTimeout(timer);resolve(undefined);}
+ });
+}
 export async function getImageRectsPdf(
 	reader: ReaderLike,
 	pageIndex: number
 ): Promise<[number, number, number, number][] | null> {
+        const diagnostic:ImageBackgroundDiagnostics={repeatedRefs:0,candidates:0,pending:0,missingRef:0,nonRepeated:0,sampled:0,excluded:0,errors:[]};
+        let diagnostics=imageBackgroundDiagnostics.get(reader);
+        if(!diagnostics){diagnostics=new Map();imageBackgroundDiagnostics.set(reader,diagnostics);}
+        diagnostics.set(pageIndex,diagnostic);
+
 	const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 	try {
 		// 2.12.8: **每一跳都要穿 Xray**。2.9.9 就学过这一课 —— 模块开头写着
@@ -1130,9 +1180,41 @@ export async function getImageRectsPdf(
 			return null;
 		}
 		const winOps = waive(waive(win)?.pdfjsLib)?.OPS as Record<string, number> | undefined;
-		return imageRectsFromOperatorList(got.ops.fnArray, got.ops.argsArray, winOps ?? {});
+        const ignored=new Set<number>();
+        try {
+         const repeated=await repeatedImageRefs(pdfDocument);
+         diagnostic.repeatedRefs=repeated.size;
+         let beforeText=true;
+         for(let i=0;i<got.ops.fnArray.length;i++) {
+          const fn=got.ops.fnArray[i];if(fn===(winOps?.beginText??31))beforeText=false;
+          if(!beforeText||fn!==(winOps?.paintImageXObject??85))continue;
+          const id=got.ops.argsArray[i]?.[0];if(typeof id!=='string')continue;
+          diagnostic.candidates++;
+          const image:any=await resolvedPdfImage(waive(id.startsWith('g_')?got.page.commonObjs:got.page.objs),id);
+          if(!image){diagnostic.pending++;continue;}
+          if(!image.ref){diagnostic.missingRef++;continue;}
+          if(!repeated.has(image.ref)){diagnostic.nonRepeated++;continue;}
+          try {
+          const rects=imageRectsFromOperatorList(got.ops.fnArray.slice(0,i+1),got.ops.argsArray,winOps??{});
+          const rect=rects[rects.length-1];if(!rect)continue;
+          let data=image.data,channels:3|4=image.kind===2?3:4;
+          if(image.bitmap) {
+           const canvas=win.document.createElement('canvas');canvas.width=200;canvas.height=Math.max(1,Math.round(200*image.height/image.width));
+           const context=canvas.getContext('2d');context.drawImage(image.bitmap,0,0,canvas.width,canvas.height);data=context.getImageData(0,0,canvas.width,canvas.height).data;channels=4;
+          }
+          if(data&&(image.kind===2||image.kind===3||image.bitmap)) {
+           diagnostic.sampled++;
+           if(isFaintPageBackground(data,channels,rect,true,true))ignored.add(i);
+          }
+          }catch(e){diagnostic.errors.push(String(e).slice(0,200));}
+         }
+         diagnostic.excluded=ignored.size;
+         if(ignored.size)logger.debug(MODULE,'Repeated faint background images excluded from obstacles',{page:pageIndex+1,count:ignored.size});
+        } catch(e) {diagnostic.errors.push(String(e).slice(0,200));logger.debug(MODULE,'Background image classification unavailable',e);}
+        return imageRectsFromOperatorList(got.ops.fnArray, got.ops.argsArray, winOps ?? {},12,ignored);
 	}
 	catch (e) {
+		diagnostic.errors.push(String(e).slice(0,200));
 		logger.debug(MODULE, 'getImageRectsPdf failed', e);
 		return null;
 	}

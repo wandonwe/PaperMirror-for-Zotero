@@ -1,3 +1,9 @@
+import {checkFooterContinuation} from './footerContinuation';
+import {checkTitledAbbreviations} from './titledAbbreviations';
+import {checkWatermarkBackground} from './watermarkBackground';
+import {checkLegacyEncodedPanels,checkArchivedBlanksteinFailures} from './legacyEncodedPanels';
+import {checkSourceMaskExpansion} from './sourceMaskExpansion';
+import {checkBottomParagraphExpansion} from './bottomParagraphExpansion';
 import {checkSplitParagraphExpansion} from './splitParagraphExpansion';
 import {checkEscPanels} from './escPanels';
 import {checkDescriptiveTable} from './descriptiveTable';
@@ -15,6 +21,13 @@ const result=document.createElement('pre');result.id='result';document.body.appe
 async function run() {
 try {
  checkSplitParagraphExpansion();
+ checkBottomParagraphExpansion();
+ await checkSourceMaskExpansion();
+ await checkLegacyEncodedPanels();
+ await checkArchivedBlanksteinFailures();
+ await checkFooterContinuation();
+ await checkTitledAbbreviations();
+ await checkWatermarkBackground();
  await checkEscPanels((window as any).escPanelImage);
  checkDescriptiveTable();
  checkLeeTypography();
