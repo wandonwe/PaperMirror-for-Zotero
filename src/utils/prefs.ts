@@ -24,6 +24,7 @@ export type PrefKey
 	| 'autoPrefetch'
 	| 'paneSide'
 	| 'syncScroll'
+	| 'autoExplainSelection'
 	| 'showOriginal'
 	| 'viewMode'
 	| 'paneView'

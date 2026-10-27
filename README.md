@@ -24,6 +24,8 @@
 
 **PaperMirror(文镜)** —— 文字之镜,原文与译文两相映照。在 Zotero 自带的 PDF 阅读器里直接对照阅读外文文献:一边是**原版 PDF**(排版、图表、公式原封不动),另一边是**按版面重排的整页译文**,大小与原文一致、逐段对齐。图表、表格、公式、分栏、页眉页脚等都从原页原样保留,只有正文被替换并重新排版,不会被硬塞进原文的换行里。
 
+**4.5 更新**：选中原文后可自动深度解析，双击段落直接解析整段；覆盖模式保留原位阅读，点击解析卡片外部即可关闭。同时改善说明型表格的逐行对应与小数保护。详见 [4.5 更新记录](CHANGELOG.md#450--2026-10-27)。
+
 ### 三种阅读模式
 
 点击阅读器工具栏的**翻译图标**开关翻译;图标右边的**箭头 ▾**可选择模式。
@@ -51,9 +53,9 @@
 3. **等待逐页翻译**。当前页优先翻译,并预取前后相邻页;每页翻译完成前显示原文,完成后自动替换为译文。
 4. **切换模式**:点翻译图标旁的 **▾** → 选 原文 / 覆盖翻译 / 左右对照;菜单里还有**悬停看原文**、**原文淡化**两个开关(覆盖模式下用)。
 5. **译文面板顶部工具条**(左右对照模式)自左向右依次为:语言对 · 翻译服务 · 刷新(重新翻译本页) · 同步滚动开关 · **✦ 解析** · 保存到笔记 · 左右布局切换 · 设置 · 关闭。语言和翻译服务可在这里直接切换,无需进设置。
-6. **划词解析**:在左边 PDF 里选中一段文字,点面板工具条上的 **✦ 解析**,即可对选中内容做深度讲解(需要 LLM 服务商,免费必应/谷歌引擎不支持)。也可以直接**双击**右侧某段译文进行解析。
+6. **深度解析**:选中 PDF 原文，选区稳定后自动解析；可在 **设置 → PaperMirror** 中关闭“选中原文后自动解析”，之后仍可点击 **✦ 解析**。在覆盖模式下**双击原文**，或**双击译文段落**，会解析所在整段原文；解析保留当前阅读模式。点击卡片外部、按 **Esc** 或点击 **×** 关闭，卡片内部仍可复制或保存。解析需要已配置的大模型服务，可能产生 API 费用；免费必应/谷歌引擎不支持。
 7. **保存到笔记**:点**保存到笔记**,把当前页(或所选段落)的原文+译文存为该条目的子笔记。
-8. **重新翻译**:某页翻译不理想时点**刷新**,跳过缓存重译本页。
+8. **重新翻译**:某页翻译不理想时点**刷新**,跳过缓存重译本页。升级到 4.5 后，曾出现表格错位或小数异常的页面也请刷新重译。
 
 ### 翻译引擎(自备密钥 BYOK)
 
@@ -100,6 +102,8 @@ for paragraph. Figures, tables, equations, columns and running heads are kept
 from the rendered page exactly; only body text is replaced and re‑flowed, never
 crammed back into the original line breaks.
 
+**New in 4.5:** explain a stable source selection automatically or double-click a paragraph to explain its full source text. Overlay explanations keep the current reading mode and close when you click outside the card. The release also improves row alignment in descriptive tables and protects decimal values. See the [4.5 release notes](CHANGELOG.md#450--2026-10-27).
+
 ### Three reading modes
 
 Click the **translate icon** in the reader toolbar to toggle translation; the
@@ -141,14 +145,19 @@ download the `.xpi` again.
    engine · refresh (re‑translate this page) · sync‑scroll toggle · **✦ Explain**
    · Save to note · layout swap · Settings · Close. Language and engine can be
    switched right here, no trip to Settings.
-6. **Explain a selection** — select text in the PDF, then click **✦ Explain** in
-   the pane's bar for a deep explanation (needs an LLM provider; the free
-   Bing/Google engines can't explain). Double‑clicking a translated paragraph
-   works too.
+6. **Deep explanation** — select source text in the PDF; explanation starts
+   when the selection settles. Turn off **Automatically explain source selections**
+   in **Settings → PaperMirror** to use **✦ Explain** manually instead.
+   **Double-click** a source paragraph in Overlay mode or a translated paragraph
+   to explain the full source paragraph while keeping the current reading mode.
+   Click outside the card, press **Esc**, or click **×** to close it; copying and
+   saving inside the card remain available. Explanation requires a configured
+   LLM provider and may incur API charges; free Bing/Google engines cannot explain.
 7. **Save to note** — store the current page's (or the selected paragraph's)
    original + translation as a child note of the item.
 8. **Re‑translate** — if a page came out poorly, click **refresh** to redo it,
-   bypassing the cache.
+   bypassing the cache. After upgrading to 4.5, refresh pages that previously
+   showed misaligned tables or decimal errors.
 
 ### Translation engines (bring your own key)
 

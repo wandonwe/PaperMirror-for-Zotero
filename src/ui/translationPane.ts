@@ -249,6 +249,7 @@ export function nextSlotState(
 export interface PaneCallbacks {
 	onExplainBlock(pageIndex: number, blockId: string): void;
 	onCopyExplanation(): void;
+	onDismissExplanation?(): void;
 	onSaveExplanationNote(): void;
 	/** 菜单栏「解析」按钮 — explain the current PDF selection. */
 	onExplainSelection(): void;
@@ -312,6 +313,7 @@ interface PageSection {
 
 export class TranslationPane {
 	private host: HTMLElement;
+	private explanationHost: HTMLElement;
 	private doc: Document;
 	private strings: PaneStrings;
 	private callbacks: PaneCallbacks;
@@ -328,7 +330,6 @@ export class TranslationPane {
 	private privacyNoticeEl: HTMLElement | null = null;
 	private scrollHandler: (() => void) | null = null;
 	private disposeScrollIntent: (() => void) | null = null;
-	private keyHandler: ((event: KeyboardEvent) => void) | null = null;
 
 	/**
 	 * 'page'    整页对照 — the page rebuilt with translated body text, read as
@@ -349,7 +350,8 @@ export class TranslationPane {
 	private compareOriginal = false;
 	private resizeObserver: { disconnect(): void } | null = null;
 	private resizeTimer: ReturnType<typeof setTimeout> | null = null;
-	private explainKeyHandler: ((event: KeyboardEvent) => void) | null = null;
+	private explanationDismissDocuments: Document[] = [];
+	private disposeExplanationOutside: (() => void) | null = null;
 	private viewKindButton: HTMLElement | null = null;
 	private sideButton: HTMLElement | null = null;
 	private sideFill: HTMLElement | null = null;
@@ -470,6 +472,7 @@ export class TranslationPane {
 
 	constructor(host: HTMLElement, _title: string, strings: PaneStrings, callbacks: PaneCallbacks) {
 		this.host = host;
+		this.explanationHost = host;
 		this.doc = host.ownerDocument!;
 		this.strings = strings;
 		this.callbacks = callbacks;
@@ -1054,12 +1057,6 @@ export class TranslationPane {
 		// the StatusCapsule. There is no separate bottom toast module anymore.
 		this.host.append(header, this.scroll);
 
-		this.keyHandler = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') {
-				this.hideExplanation();
-			}
-		};
-		this.doc.addEventListener('keydown', this.keyHandler);
 	}
 
 	// ---- scroll anchoring ---------------------------------------------------
@@ -1090,6 +1087,16 @@ export class TranslationPane {
 
 	setTheme(theme: 'light' | 'dark'): void {
 		this.host.setAttribute('data-pm-theme', theme);
+		this.explanationHost.setAttribute('data-pm-theme', theme);
+	}
+
+	/** Move only the floating card; leave the reader and translation layout intact. */
+	setExplanationHost(host: HTMLElement): void {
+		if (host === this.explanationHost) return;
+		const card = this.explanationHost.querySelector('.pm-explain-card');
+		this.explanationHost = host;
+		host.setAttribute('data-pm-theme', this.host.getAttribute('data-pm-theme') ?? 'light');
+		if (card) host.appendChild(card);
 	}
 
 	setArticleFontSize(px: number): void {
@@ -1191,12 +1198,43 @@ export class TranslationPane {
 
 	// ---- explain card (demo .explain-card) ----------------------------------
 
+	/** PDF reading happens in a separate document; its clicks do not bubble here. */
+	setExplanationDismissDocument(doc: Document): void {
+		this.explanationDismissDocuments = [doc];
+		const card = this.explanationHost.querySelector('.pm-explain-card') as HTMLElement | null;
+		if (card) this.watchExplanationOutside(card);
+	}
+
+	private watchExplanationOutside(card: HTMLElement): void {
+		this.disposeExplanationOutside?.();
+		const docs = Array.from(new Set([this.doc, ...this.explanationDismissDocuments]));
+		const outside = (event: PointerEvent): void => {
+			if (event.button !== 0 || card.contains(event.target as Node)) return;
+			this.dismissExplanation();
+		};
+		const escape = (event: KeyboardEvent): void => {
+			if (event.key === 'Escape') this.dismissExplanation();
+		};
+		// PDF selection keeps keyboard focus in the iframe. Its key events
+		// cannot bubble to the main document, so both surfaces own dismissal.
+		for (const doc of docs) {
+			doc.addEventListener('pointerdown', outside, { capture: true });
+			doc.addEventListener('keydown', escape, { capture: true });
+		}
+		this.disposeExplanationOutside = () => {
+			for (const doc of docs) {
+				doc.removeEventListener('pointerdown', outside, { capture: true });
+				doc.removeEventListener('keydown', escape, { capture: true });
+			}
+		};
+	}
+
 	showExplanation(content: { loading?: boolean; sections?: ExplanationSection[]; error?: string; passage?: string }): void {
 		// The card FLOATS over the pane's lower edge — it must never touch the
 		// scroll position. The old behaviour prepended it into the scroll body
 		// and jumped to the top of the document, which read as "everything I
 		// was looking at just vanished".
-		let card = this.host.querySelector('.pm-explain-card') as HTMLElement | null;
+		let card = this.explanationHost.querySelector('.pm-explain-card') as HTMLElement | null;
 		if (!card) {
 			card = this.el('div', 'pm-explain-card pm-explain-floating');
 			const head = this.el('div', 'pm-card-head');
@@ -1207,7 +1245,7 @@ export class TranslationPane {
 			);
 			const closeBtn = this.el('button', 'pm-card-close', '×');
 			closeBtn.setAttribute('title', this.strings.close);
-			closeBtn.addEventListener('click', () => this.hideExplanation());
+			closeBtn.addEventListener('click', () => this.dismissExplanation());
 			head.append(this.el('span', 'pm-sparkle', '✦'), titles, closeBtn);
 
 			const grid = this.el('div', 'pm-explain-grid');
@@ -1217,14 +1255,8 @@ export class TranslationPane {
 				this.textButton('pm-footer-button', this.strings.explainSave, this.strings.explainSave, () => this.callbacks.onSaveExplanationNote())
 			);
 			card.append(head, grid, actions);
-			this.host.append(card);
-			// Esc dismisses — there must always be an obvious way out.
-			this.explainKeyHandler = (event: KeyboardEvent): void => {
-				if (event.key === 'Escape') {
-					this.hideExplanation();
-				}
-			};
-			this.doc.addEventListener('keydown', this.explainKeyHandler, true);
+			this.explanationHost.appendChild(card);
+			this.watchExplanationOutside(card);
 		}
 
 		const passageEl = card.querySelector('.pm-explain-passage') as HTMLElement;
@@ -1265,12 +1297,15 @@ export class TranslationPane {
 		}
 	}
 
+	private dismissExplanation(): void {
+		this.callbacks?.onDismissExplanation?.();
+		this.hideExplanation();
+	}
+
 	hideExplanation(): void {
-		if (this.explainKeyHandler) {
-			this.doc.removeEventListener('keydown', this.explainKeyHandler, true);
-			this.explainKeyHandler = null;
-		}
-		this.host.querySelector('.pm-explain-card')?.remove();
+		this.disposeExplanationOutside?.();
+		this.disposeExplanationOutside = null;
+		this.explanationHost.querySelector('.pm-explain-card')?.remove();
 	}
 
 	// ---- pages & blocks -----------------------------------------------------
@@ -2146,19 +2181,12 @@ export class TranslationPane {
 	}
 
 	destroy(): void {
+		this.hideExplanation();
 		this.disposeScrollIntent?.();
 		this.disposeScrollIntent = null;
 		if (this.scrollHandler) {
 			this.scroll.removeEventListener('scroll', this.scrollHandler);
 			this.scrollHandler = null;
-		}
-		if (this.keyHandler) {
-			this.doc.removeEventListener('keydown', this.keyHandler);
-			this.keyHandler = null;
-		}
-		if (this.explainKeyHandler) {
-			this.doc.removeEventListener('keydown', this.explainKeyHandler, true);
-			this.explainKeyHandler = null;
 		}
 		if (this.resizeTimer) {
 			clearTimeout(this.resizeTimer);

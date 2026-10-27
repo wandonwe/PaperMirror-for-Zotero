@@ -189,7 +189,7 @@ export class TextExtractor implements PageParser {
  private structureCache=new StructureCache();
  private extracting=new Map<string,Promise<SourceBlock[]>>();
  private structureKey(pageIndex:number):string {
-  return JSON.stringify(['structure-3.3.0-3',pageIndex,this.currentExtractInputs(pageIndex)]);
+  return JSON.stringify(['structure-4.5.0',pageIndex,this.currentExtractInputs(pageIndex)]);
  }
 
 	private reader: ReaderLike;

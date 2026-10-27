@@ -1573,6 +1573,26 @@ export function removePdfStyle(reader: ReaderLike, id: string): void {
 }
 
 /** Current text selection inside the PDF view, if any. */
+export function getOriginalSelectionDocument(reader: ReaderLike): Document | null {
+	try { return reader._internalReader?._primaryView?._iframeWindow?.document ?? null; }
+	catch { return null; }
+}
+
+/** Restrict automatic analysis to native PDF text, excluding search and plugin UI. */
+export function getOriginalSelectedText(reader: ReaderLike): string {
+	try {
+		const selection = getOriginalSelectionDocument(reader)?.defaultView?.getSelection();
+		if (!selection || selection.isCollapsed) return '';
+		const inTextLayer = (node: Node | null) => {
+			const element = node?.nodeType === 1 ? node as Element : node?.parentElement;
+			return !!element?.closest('.textLayer');
+		};
+		if (!inTextLayer(selection.anchorNode) || !inTextLayer(selection.focusNode)) return '';
+		return selection.toString();
+	}
+	catch { return ''; }
+}
+
 export function getSelectedText(reader: ReaderLike): string {
 	try {
 		const win = reader._internalReader?._primaryView?._iframeWindow;

@@ -19,6 +19,8 @@ export const STYLE_ID = 'pm-bilingual-style';
 
 export interface SplitViewHandles {
 	paneHost: HTMLElement;
+	/** Floating explanation surface, independent of the hidden translation pane. */
+	explanationHost: HTMLElement;
 	divider: HTMLElement;
 	destroy(): void;
 	setRatio(percent: number): void;
@@ -76,9 +78,13 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 
 	const paneHost = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
 	paneHost.className = 'pm-bilingual-pane';
+	const explanationHost = doc.createElementNS(HTML_NS, 'div') as HTMLElement;
+	explanationHost.className = 'pm-bilingual-pane pm-explanation-overlay-host';
+	containerEl.style.setProperty('position', 'relative');
 
 	// Insert AFTER the browser (never move the browser itself).
 	browserEl.after(divider, paneHost);
+	containerEl.appendChild(explanationHost);
 
 	const applySide = (side: 'left' | 'right'): void => {
 		if (side === 'left') {
@@ -300,6 +306,7 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 		try {
 			divider.remove();
 			paneHost.remove();
+			explanationHost.remove();
 			// Restore original inline styles exactly.
 			if (savedContainerStyle) {
 				containerEl.setAttribute('style', savedContainerStyle);
@@ -321,6 +328,7 @@ export function createSplitView(container: Element, readerBrowser: Element): Spl
 
 	return {
 		paneHost,
+		explanationHost,
 		divider,
 		destroy,
 		setRatio: applyRatio,
