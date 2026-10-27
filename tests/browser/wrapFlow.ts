@@ -6,6 +6,7 @@ import {checkSourceMaskExpansion} from './sourceMaskExpansion';
 import {checkBottomParagraphExpansion} from './bottomParagraphExpansion';
 import {checkSplitParagraphExpansion} from './splitParagraphExpansion';
 import {checkEscPanels} from './escPanels';
+import {checkTwoColumnTable} from './twoColumnTable';
 import {checkDescriptiveTable} from './descriptiveTable';
 import {checkLeeTypography} from './leeTypography';
 import {checkDisplayFormula} from './displayFormula';
@@ -30,6 +31,7 @@ try {
  await checkWatermarkBackground();
  await checkEscPanels((window as any).escPanelImage);
  checkDescriptiveTable();
+ checkTwoColumnTable();
  checkLeeTypography();
  checkDisplayFormula();
  checkToolbar();

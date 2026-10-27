@@ -99,7 +99,10 @@ const IDENTIFIER_PATTERNS: RegExp[] = [
 /** Heuristic spans: symbol-dense inline runs, protected only if isFormulaRun. */
 const HEURISTIC_PATTERNS: RegExp[] = [
 	// e.g. "y = βx + ε" or "P(A|B) = P(B|A)P(A)/P(B)"
-	/(?:[A-Za-zα-ωΑ-Ω0-9)\]]|\S)[^,。;；.!?]{0,80}?[=≈≠≤≥][^,。;；.!?]{1,120}/g
+	// A decimal dot belongs to the run, including a leading dot in .75≤1;
+	// a sentence punctuation dot followed by whitespace cannot start it.
+	// Otherwise ". ≈33.6 g" became a token for ". ≈33" plus unprotected ".6 g".
+	/(?:\.(?=\d)|[^\s,。;；.!?])(?:[^,。;；.!?]|\.(?=\d)){0,80}?[=≈≠≤≥](?:[^,。;；.!?]|\.(?=\d)){1,120}/g
 ];
 
 export interface ProtectResult {
@@ -182,8 +185,14 @@ export function protectFormulas(text: string, extraLiterals: string[] = []): Pro
 			: out.replace(pattern, mask);
 	});
 	for (const pattern of HEURISTIC_PATTERNS) {
-		out = out.replace(pattern, (match) => {
-			if (!isFormulaRun(match)) {
+		out = out.replace(pattern, (match, offset: number, whole: string) => {
+			// Commas remain formula separators. If a candidate starts/ends
+			// inside a grouped/locale number, leave it inline rather than issue
+			// a token for only part of the value (e.g. x≈1,234.5).
+			const before = whole.slice(0, offset), after = whole.slice(offset + match.length);
+			const splitNumber = (/^\d/.test(match) && /\d[.,]?$/.test(before))
+				|| (/\d$/.test(match) && /^(?:[.,]\d|\d)/.test(after));
+			if (splitNumber || !isFormulaRun(match)) {
 				return match;
 			}
 			return mask(match);

@@ -1,0 +1,50 @@
+{
+  "note": "Layout-only Chinese test content, manually separated from the supplied corpus and checked against the PDF; no translation API is called by this fixture.",
+  "title": "表 1 采集方案",
+  "rows": [
+    [
+      "节项",
+      "详情"
+    ],
+    [
+      "扫描仪",
+      "双源光子计数 CT（Naeotom Alpha；Siemens Healthineers®），配备碲化镉探测器；旋转时间 0.25 s；按期相设置准直：UHR 冠状动脉采集为 120 × 0.2 mm，高螺距胸颈扫描和 5 min 延迟期为 144 × 0.4 mm（QuantumPlus 全光谱模式）。"
+    ],
+    [
+      "患者体位",
+      "仰卧位，双臂上举过肩并略呈斜位，以减少颈动脉与纵隔重叠；测量基线血压和心率；按需给予 β 受体阻滞剂和/或硝酸甘油；单次屏气并嘱勿吞咽；采用 IMAR 减轻束硬化伪影。"
+    ],
+    [
+      "采集期相",
+      "• 非增强 CAC：肺尖至 L3，前瞻性心电触发。\n• UHR CCTA：120 kVp，回顾性心电门控，螺距 0.2。\n• 高螺距胸颈扫描（FLASH）：≤3.2 s，螺距 3.2，自尾侧向头侧（肺底→眶底），前瞻性心电触发。\n• 晚期碘增强（LIE，5 min）：心脏与乳腺，舒张期前瞻性心电触发。"
+    ],
+    [
+      "附加采集",
+      "低剂量呼气相扫描，用于量化 COPD 或吸烟 ≥20 包年者的气体潴留。"
+    ],
+    [
+      "对比剂方案",
+      "采用碘美普尔-400 或碘普罗胺-370 行三期静脉注射：\n• 第 1 期：0.7 mL/kg 未稀释对比剂，流率 5–6 mL/s。\n• 第 2 期：0.5 mL/kg 对比剂与 0.5 mL/kg 生理盐水，流率 3–4.5 mL/s。\n• 第 3 期：50 mL 生理盐水。\n70 kg 患者总量：84 mL（49 mL 未稀释与 35 mL 混合期）。"
+    ],
+    [
+      "碘剂量",
+      "碘美普尔-400：≈33.6 g（0.48 gI/kg）；碘普罗胺-370：≈31.08 g（0.44 gI/kg）。"
+    ],
+    [
+      "扫描参数",
+      "管电压：CCTA 为 120 kVp；中分辨率胸颈采集及 5 min 延迟期为 140 kVp。准直：120 × 0.2 mm（UHR CCTA）与 144 × 0.4 mm（FLASH 与 LIE）。CARE Dose 4D + CARE keV，参考 IQ 水平 64；CAC、FLASH 与 LIE 前瞻性心电触发，CCTA 回顾性心电门控；总 DLP ≈740 mGy·cm（有效剂量 ≈11–13 mSv）。"
+    ],
+    [
+      "图像重建",
+      "• 冠状动脉：层厚 0.2 mm，间隔 0.1 mm，1024² 矩阵，Bv60，QIR 4，ZeeFree。\n• 胸颈血管成像：层厚 0.4 mm，间隔 0.2 mm，768² 矩阵。\n• 心功能电影：层厚 1.5 mm，间隔 1 mm，覆盖 20 个心动期相（0–95%），512 矩阵。"
+    ],
+    [
+      "光谱后处理",
+      "VMI 40 keV（对比增强）与 70 keV（钙减影）；碘图用于肺灌注和 ECV；虚拟非增强（VNC）；碘–VNC 融合图像；纯管腔重建用于狭窄定量。"
+    ],
+    [
+      "重建软件",
+      "ReconCT（syngo.via VB80C）。"
+    ]
+  ]
+}

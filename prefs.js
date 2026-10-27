@@ -28,6 +28,7 @@ pref('extensions.zotero.bilingualReader.useContext', true);
 pref('extensions.zotero.bilingualReader.autoPrefetch', true);
 pref('extensions.zotero.bilingualReader.paneSide', 'right');
 pref('extensions.zotero.bilingualReader.syncScroll', true);
+pref('extensions.zotero.bilingualReader.autoExplainSelection', true);
 // 整页对照下: 开启后掀开遮罩,直接看到原页文字
 pref('extensions.zotero.bilingualReader.showOriginal', false);
 pref('extensions.zotero.bilingualReader.articleFontSize', 16);

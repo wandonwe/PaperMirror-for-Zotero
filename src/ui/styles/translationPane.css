@@ -551,6 +551,23 @@
 	box-shadow: 0 10px 34px rgba(15, 23, 42, .26);
 }
 
+/* Overlay analysis never allocates a second PDF column or intercepts reading. */
+.pm-bilingual-pane.pm-explanation-overlay-host {
+	position: absolute;
+	inset: 0;
+	min-width: 0;
+	background: transparent;
+	pointer-events: none;
+	z-index: 40;
+}
+.pm-explanation-overlay-host .pm-explain-floating {
+	pointer-events: auto;
+	left: max(12px, calc((100% - 1000px) / 2));
+	right: max(12px, calc((100% - 1000px) / 2));
+	font-size: 14px;
+}
+.pm-explanation-overlay-host .pm-explain-section { font-size: 14px; }
+
 .pm-card-head {
 	display: flex;
 	align-items: center;

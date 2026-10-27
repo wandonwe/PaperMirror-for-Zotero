@@ -746,7 +746,24 @@ function structureTableCellsUnchecked(
 	const assignedCells = blocks.filter(b => b.tableId && b.tableSource && b.tableRow !== undefined && b.tableCol !== undefined && (b.tableRectPdf || b.tableContentRectPdf));
 	if (assignedCells.length) {
 		const owned = new Set(assignedCells);
-		return [...structureTableCells(blocks.filter(b => !owned.has(b)), pageIndex, em, noTranslate, grid, useGrid, pageHeight), ...assignedCells];
+		// A recovered text table already owns its rows and columns. Its coarse
+		// outer frame must not be reused for the remaining caption/footnote:
+		// doing so creates new cells outside the established table boundary.
+		const ownedTables = new Map<string, SourceBlock[]>();
+		for (const cell of assignedCells) {
+			const list = ownedTables.get(cell.tableId!) ?? [];
+			list.push(cell); ownedTables.set(cell.tableId!, list);
+		}
+		const ownedBoxes = pageHeight === undefined ? [] : [...ownedTables.values()].map(cells => unionBox(cells.map(c => {
+			const r = tableCellBounds(c)!;
+			return {left:r[0], top:pageHeight-r[3], width:r[2]-r[0], height:r[3]-r[1]};
+		})));
+		const remainingGrids = (grid ? (Array.isArray(grid) ? grid : [grid]) : []).filter(g => !ownedBoxes.some(b => {
+			const overlap = Math.max(0, overlap1D(b.left,b.left+b.width,g.region.left,g.region.left+g.region.width))
+				* Math.max(0, overlap1D(b.top,b.top+b.height,g.region.top,g.region.top+g.region.height));
+			return overlap > g.region.width*g.region.height*.5 && overlap > b.width*b.height*.5;
+		}));
+		return [...structureTableCells(blocks.filter(b => !owned.has(b)), pageIndex, em, noTranslate, remainingGrids, useGrid, pageHeight), ...assignedCells];
 	}
 	const originalById = new Map(blocks.map(block => [block.id, block]));
 	// 页面附属内容不进表 (2.12.13):提取阶段不再丢块之后,页码、水印、页眉、日期行、

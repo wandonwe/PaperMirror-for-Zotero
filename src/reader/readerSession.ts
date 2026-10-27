@@ -1,3 +1,4 @@
+import { sourceBlockAtPoint } from './sourceBlockAtPoint';
 import { idleProgressFor } from '../ui/statusCapsule';
 import { temporaryPageArchive, pageContentKey } from '../export/pageArchive';
 import { showUnplacedTranslations } from '../ui/unplacedTranslations';
@@ -56,6 +57,7 @@ import { TextExtractor } from './textExtractor';
 import * as adapter from './zoteroReaderAdapter';
 import type { ReaderLike, PageRender } from './zoteroReaderAdapter';
 import { LruCache } from '../util/lru';
+import { watchAutoExplainSelection, type AutoExplanationWatcher } from './autoExplainSelection';
 
 const MODULE = 'readerSession';
 
@@ -225,6 +227,11 @@ export class ReaderSession {
 	);
 	/** 讲解结果缓存 (2.3.5, item7 · API-8): 段落+引擎/模型/语言 → 解析节。 */
 	private explainCache = new LruCache<ExplanationSection[]>(20);
+	private disposeAutoExplain: AutoExplanationWatcher | null = null;
+	private disposeOriginalDoubleClick: (() => void) | null = null;
+	private autoExplainPrefObserver: symbol | string | null = null;
+	private explanationRequest: AbortController | null = null;
+	private explanationIsAutomatic = false;
 	/**
 	 * Compress-and-retry rounds already spent, keyed by BLOCK id (max 2 each).
 	 * Per-block, not per-page: two long paragraphs at the top of a page must not
@@ -411,6 +418,11 @@ export class ReaderSession {
 				void this.explainSelection(source);
 			},
 			onCopyExplanation: () => this.copyExplanation(),
+			onDismissExplanation: () => {
+				this.explanationRequest?.abort();
+				this.explanationRequest = null;
+				this.disposeAutoExplain?.suppressCurrentSelection();
+			},
 			onSaveExplanationNote: () => void this.saveExplanationToNote(),
 			// 菜单栏「解析」: explains the current PDF selection, or the
 			// highlighted 译文 block, or asks the reader to select text first.
@@ -517,6 +529,7 @@ export class ReaderSession {
 		if (this.destroyed) {
 			return; // 同上: prime 期间被销毁,后续注册一律不做
 		}
+		this.watchAutomaticExplanation();
 
 		if (!getPref<boolean>('privacyNoticeAccepted', false)) {
 			const settings = await this.providerSettings();
@@ -1686,12 +1699,10 @@ export class ReaderSession {
 					node.addEventListener('click', focusBlock);
 					node.addEventListener('dblclick', () => {
 						focusBlock();
-						const id = node.getAttribute('data-pm-block')?.split('::')[0];  // 段落拆分块 id 形如 <region>::pN,取区域 id
-						if (id) {
-							void this.explainSelection(
-								state.blocks.find(b => b.id === id)?.sourceText ?? ''
-							);
-						}
+						const id = node.getAttribute('data-pm-block');
+						const block = state.blocks.find(b => b.id === id)
+							?? state.blocks.find(b => b.id === id?.replace(/::p\d+$/, ''));
+						if (block?.sourceText.trim()) void this.explainSelection(block.sourceText);
 					});
 					// 右键 = 重译此段 (单段 replay, 参照 retain-pdf item replay):
 					// one foreground request for exactly this block, keep-origin
@@ -2008,6 +2019,10 @@ export class ReaderSession {
 
 	/** Push the current mode onto the split view and the overlay. */
 	private applyViewMode(): void {
+		if (this.pane && this.split) {
+			this.pane.setExplanationHost(this.viewMode === 'split'
+				? this.split.paneHost : this.split.explanationHost);
+		}
 		// Until the privacy notice is accepted the pane must stay visible —
 		// that is where the notice is shown.
 		if (!getPref<boolean>('privacyNoticeAccepted', false)) {
@@ -2515,10 +2530,68 @@ export class ReaderSession {
 	 * 选中句子解析 (Read Frog-style analysis): explain the current PDF
 	 * selection — or the highlighted block — using the configured LLM.
 	 */
-	async explainSelection(explicitText?: string): Promise<void> {
-		if (!this.pane) {
+	private watchAutomaticExplanation(): void {
+		const doc = adapter.getOriginalSelectionDocument(this.reader);
+		if (!doc) return;
+		this.pane?.setExplanationDismissDocument(doc);
+		const cancelAutomatic = () => {
+			if (this.explanationIsAutomatic) {
+				this.explanationRequest?.abort();
+				this.explanationRequest = null;
+				this.pane?.hideExplanation();
+			}
+		};
+		this.disposeAutoExplain = watchAutoExplainSelection({
+			document: doc,
+			readText: () => adapter.getOriginalSelectedText(this.reader),
+			enabled: () => !this.destroyed && !this.isWindowHidden()
+				&& getPref<boolean>('privacyNoticeAccepted', false)
+				&& getPref<boolean>('autoExplainSelection', true),
+			onChange: cancelAutomatic,
+			onSelection: text => { void this.explainSelection(text, true); }
+		});
+		// Hover-to-peek hides translated nodes, so native PDF text receives the
+		// double click. Resolve the paragraph geometrically instead of using
+		// PDF.js's word selection.
+		const doubleClick = (event: MouseEvent) => {
+			if (this.viewMode !== 'overlay' || this.destroyed) return;
+			const target = event.target as Element | null;
+			if (!target?.closest?.('.textLayer')) return;
+			const pageElement = target.closest('.page');
+			const pageIndex = Number(pageElement?.getAttribute('data-page-number')) - 1;
+			if (!Number.isInteger(pageIndex) || pageIndex < 0) return;
+			const view = adapter.getPageView(this.reader, pageIndex);
+			const blocks = this.manager?.getPageState(pageIndex)?.blocks;
+			if (!view || !blocks) return;
+			const rect = view.div.getBoundingClientRect();
+			const block = sourceBlockAtPoint(blocks, event.clientX - rect.left - view.div.clientLeft,
+				event.clientY - rect.top - view.div.clientTop, view.toCss);
+			if (!block?.sourceText.trim()) return;
+			void this.explainSelection(block.sourceText);
+		};
+		doc.addEventListener('dblclick', doubleClick, true);
+		this.disposeOriginalDoubleClick = () => doc.removeEventListener('dblclick', doubleClick, true);
+		try {
+			this.autoExplainPrefObserver = registerPrefObserver('autoExplainSelection', value => {
+				if (!value) cancelAutomatic();
+			});
+		}
+		catch { /* The trigger still reads the preference before every request. */ }
+	}
+
+	async explainSelection(explicitText?: string, automatic = false): Promise<void> {
+		if (!this.pane || this.destroyed || !getPref<boolean>('privacyNoticeAccepted', false)) {
 			return;
 		}
+		if (!automatic) this.disposeAutoExplain?.suppressCurrentSelection();
+		this.explanationRequest?.abort();
+		const request = new AbortController();
+		this.explanationRequest = request;
+		this.explanationIsAutomatic = automatic;
+		const live = () => !this.destroyed && !request.signal.aborted
+			&& this.explanationRequest === request && !!this.pane
+			&& (!automatic || (getPref<boolean>('autoExplainSelection', true)
+				&& !this.isWindowHidden() && adapter.getOriginalSelectedText(this.reader).trim() === text));
 		// 1. Resolve the passage: explicit text > PDF selection > selected block
 		let text = (explicitText ?? '').trim() || adapter.getSelectedText(this.reader).trim();
 		let context = '';
@@ -2536,16 +2609,18 @@ export class ReaderSession {
 			context = state.blocks.map(b => b.sourceText).join('\n').slice(0, 600);
 		}
 		// 2. Resolve an LLM-capable provider
-		const settings = await this.providerSettings();
-		const provider = getProvider(settings.providerId);
-		if (!canExplain(provider)) {
-			this.pane.showExplanation({ passage: text, error: getString('papermirror-explain-needs-llm') });
-			return;
-		}
-		// 3. Run — 讲解缓存 (2.3.5, 第四批 item7 · API-8): 同段落+同引擎/模型/语言
-		// 的解析在会话内缓存,重复选中/误触零请求(重读一段是常态,按次计费)。
-		this.pane.showExplanation({ passage: text, loading: true });
 		try {
+			const settings = await this.providerSettings();
+			if (!live()) return;
+			const provider = getProvider(settings.providerId);
+			if (!canExplain(provider)) {
+				if (!automatic) this.pane.showExplanation({ passage: text, error: getString('papermirror-explain-needs-llm') });
+				return;
+			}
+			if (automatic && provider.requiresApiKey && !settings.apiKey) return;
+			// 3. Run — 讲解缓存 (2.3.5, 第四批 item7 · API-8): 同段落+同引擎/模型/语言
+			// 的解析在会话内缓存,重复选中/误触零请求(重读一段是常态,按次计费)。
+			this.pane.showExplanation({ passage: text, loading: true });
 			const { target } = this.resolveLanguages(text);
 			const cacheKey = hashSourceTexts([text, settings.providerId, settings.model ?? '', target]);
 			const cached = this.explainCache.get(cacheKey);
@@ -2559,14 +2634,17 @@ export class ReaderSession {
 				text,
 				targetLanguage: target,
 				documentTitle: item?.getDisplayTitle?.() ?? '',
-				context
+				context,
+				signal: request.signal
 			});
+			if (!live()) return;
 			const sections = parseExplanationSections(result);
 			this.explainCache.set(cacheKey, sections);
 			this.lastExplanation = { passage: text, sections, pageNumber: page + 1 };
 			this.pane.showExplanation({ passage: text, sections });
 		}
 		catch (e) {
+			if (!live()) return;
 			const error = e instanceof PaperMirrorError ? e : new PaperMirrorError('UNKNOWN', String(e));
 			const message = error.code === 'NO_API_KEY'
 				? getString('papermirror-error-no-api-key')
@@ -3456,6 +3534,16 @@ export class ReaderSession {
 			return;
 		}
 		this.destroyed = true;
+		this.explanationRequest?.abort();
+		this.explanationRequest = null;
+		this.disposeAutoExplain?.();
+		this.disposeAutoExplain = null;
+		this.disposeOriginalDoubleClick?.();
+		this.disposeOriginalDoubleClick = null;
+		if (this.autoExplainPrefObserver !== null) {
+			try { unregisterPrefObserver(this.autoExplainPrefObserver); } catch { /* best-effort */ }
+			this.autoExplainPrefObserver = null;
+		}
 		if (this.pollTimer !== null) {
 			clearInterval(this.pollTimer);
 			this.pollTimer = null;

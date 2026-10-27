@@ -1,5 +1,6 @@
 import {extractPanelTitles} from './panelTitles';
 import {removeCollapsedTextCopies} from './collapsedTextCopies';
+import {extractTwoColumnTables} from './twoColumnTable';
 import {extractDescriptiveTables} from './descriptiveTable';
 import { separateDisplayFormulas } from './displayFormula';
 import { captionOwnership } from './captionOwnership';
@@ -880,6 +881,13 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	if (glossary.cells.length) {
 		const rest = buildBlocksFromSpans(glossary.rest, options);
 		return { ...rest, blocks: [...rest.blocks, ...glossary.cells] };
+	}
+	// Label/value tables must claim source runs before prose grouping joins
+	// descriptions across rows or a coarse outer frame obscures the two columns.
+	const twoColumn = extractTwoColumnTables(items, options.pageIndex, options.pageHeight);
+	if (twoColumn.blocks.length) {
+		const rest = buildBlocksFromSpans(items.filter(i => !twoColumn.used.has(i)), options);
+		return { ...rest, blocks: [...rest.blocks, ...twoColumn.blocks] };
 	}
 	const descriptive=extractDescriptiveTables(groupIntoLines(items,pageWidth,options.pageHeight),options.pageIndex,options.pageHeight);
  if(descriptive.blocks.length) {
