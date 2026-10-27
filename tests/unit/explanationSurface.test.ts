@@ -122,7 +122,7 @@ test('dismissal cancels a delayed explanation and prevents its result from reope
  provider.complete = async (_prompt, _settings, options) => {
   signal = options?.signal; completeStarted(); return response;
  };
- (globalThis as any).Zotero = {Prefs: {get: () => true}};
+ (globalThis as any).Zotero = {Prefs: {get: (key: string) => key.endsWith('.localOnlyMode') ? false : true}};
  const pane = Object.assign(Object.create(TranslationPane.prototype), {
   explanationHost: {querySelector: () => ({remove() {}})},
   getSelectedBlockId: () => null, showExplanation: (value: unknown) => {shows.push(value);}

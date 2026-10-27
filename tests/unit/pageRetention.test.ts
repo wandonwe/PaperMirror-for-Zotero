@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { TranslationManager, type TranslationDeps } from '../../src/translation/translationManager';
 import { pagesToEvict, RETAIN_LIMIT, KEEP_RADIUS, type RetainCandidate } from '../../src/translation/pageRetention';
 
 function page(pageIndex: number, over: Partial<RetainCandidate> = {}): RetainCandidate {
@@ -100,18 +101,42 @@ test('可淘汰的页不足时,持有量就停在上限之上 —— 绝不硬�
 
 // ---- 接线的结构闸 -----------------------------------------------------------
 
-test('落盘成功才标 cached,四个 writeCache 现场一个不漏 (结构性回归闸, 2.8.3)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
-	const writes = src.split('this.deps.writeCache(').length - 1;
-	// 一处是 TranslationDeps 里的类型声明,不算调用现场。
-	assert.equal(writes, 4, `writeCache 调用现场应为 4 处,实际 ${writes} —— 新增现场必须同步标 cached`);
-	assert.equal(src.split('state.cached = true').length - 1, 5,
-		'四个 writeCache 现场各一处,加上整页缓存命中那一处');
-	assert.ok(/state\.fromCache = true;[\s\S]{0,240}state\.cached = true;/.test(src),
-		'整页缓存命中也要标 cached —— 否则复原出来的页永远卸不掉,上限被架空');
-	// 那个 best-effort 现场必须用 then 的成功分支,不能用 catch 之后无脑标。
-	assert.ok(/\.then\(\(\) => \{ state\.cached = true; \}, \(\) => \{ \/\* best effort \*\/ \}\);/.test(src),
-		'best-effort 落盘失败时不得标 cached');
+test('network, segment-hit, paragraph retry and compression only permit eviction after successful persistence', async () => {
+ for (const path of ['network','segments','paragraph','compression'] as const) for (const saved of [false,true]) {
+  let requests=0,writes=0;
+  const deps: TranslationDeps = {
+   extractPage: async pageIndex=>[{id:`b${pageIndex}`,pageIndex,order:0,type:'paragraph',sourceText:'A complete source paragraph.'}],
+   readCache:async()=>null,
+   ...(path==='segments'?{readSegments:async(_page:number,hashes:string[])=>new Map(hashes.map(hash=>[hash,'Traduction stockée.']))}:{}),
+   writeCache:async(pageIndex)=>{if(pageIndex!==0)return true;writes++;return writes===1 && (path==='paragraph'||path==='compression')?true:saved;},
+   translateRequest:async request=>{requests++;return {translations:request.blocks.map(b=>({id:b.id,
+    translatedText:path==='compression' && requests>1?'Courte.':'Une traduction complète dans la mémoire.'}))};},
+   getLanguages:()=>({source:'en',target:'fr'}),getDocumentTitle:()=>'',getGlossary:()=>[],useContext:()=>false,pageCount:()=>10
+  };
+  const manager=new TranslationManager(deps,{onPageUpdate:()=>{}},{prefetch:false,retainLimit:1});
+  try {
+   await manager.ensurePage(0,10);
+   if(path==='paragraph')assert.equal(await manager.retranslateBlock(0,'b0'),true);
+   if(path==='compression')assert.equal((await manager.compressBlocks(0,[{id:'b0',maxChars:10}])).get('b0'),'Courte.');
+   assert.equal(writes,path==='paragraph'||path==='compression'?2:1,path);
+   assert.equal(manager.getPageState(0)?.cached,saved,path);
+   if(path==='segments')assert.equal(requests,0,'an all-segment cache hit needs no provider request');
+   await manager.ensurePage(5,10);manager.setCurrentPage(5);
+   assert.equal(manager.getPageState(0)?.evicted===true,saved,`${path}: only durable content can be evicted`);
+   assert.equal(manager.getPageState(0)?.translations.size,saved?0:1,`${path}: failed storage retains its unique translation`);
+  } finally {manager.dispose();}
+ }
+});
+
+test('a complete page-cache hit remains durable without issuing a new request or rewriting the cache',async()=>{
+ let requests=0,writes=0;
+ const deps:TranslationDeps={extractPage:async()=>[{id:'b0',pageIndex:0,order:0,type:'paragraph',sourceText:'A complete source paragraph.'}],
+  readCache:async()=>[{id:'b0',translatedText:'Traduction déjà enregistrée.'}],writeCache:async()=>{writes++;return false;},
+  translateRequest:async()=>{requests++;return {translations:[]};},getLanguages:()=>({source:'en',target:'fr'}),
+  getDocumentTitle:()=>'',getGlossary:()=>[],useContext:()=>false,pageCount:()=>1};
+ const manager=new TranslationManager(deps,{onPageUpdate:()=>{}},{prefetch:false});
+ try {await manager.ensurePage(0,10);assert.equal(manager.getPageState(0)?.cached,true);assert.equal(requests,0);assert.equal(writes,0);}
+ finally {manager.dispose();}
 });
 
 test('被卸过的页必须能重新装载,且淘汰只在翻页时做 (结构性回归闸, 2.8.3)', () => {

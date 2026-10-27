@@ -2,12 +2,17 @@
 
 ## What leaves your machine
 
-Only the text of the pages you are reading, sent to the translation engine you
-configured, over HTTPS. Nothing else.
+Translation sends the text of requested pages, including nearby prefetched
+pages, to the engines you configured. With a provider pool enabled, requests
+may be shared across the selected engines. Deep explanations send the selected
+passage, a short excerpt of surrounding source text, and the current document's
+display title for context. Automatic selection explanation can be turned off in
+Settings; it uses the same provider endpoint restrictions as page translation.
 
-Specifically, the following never leave your machine: your Zotero database,
-library metadata, account details, file paths, annotations, notes, or anything
-identifying you or your installation.
+Your Zotero database, other library records, account details, local file paths,
+annotations, and saved notes are not included in these requests. Configured
+cloud endpoints use HTTPS unless you explicitly allow HTTP. Local-only mode
+restricts both translation and explanation requests to loopback hosts.
 
 ## Telemetry
 
@@ -44,6 +49,13 @@ permissions govern instead.
 
 Full paper text and full translations are not written to logs by default.
 
+During a reading session, lightweight page archives may temporarily hold both
+original text and translations on disk so content can be restored after memory
+eviction. Their directory is restricted to `0700` before writing and files to
+`0600` where supported, matching the cache's owner-only boundary. Archives are
+removed when the session closes. Failed PDF writes or attachment imports also
+attempt to remove their temporary export files; cleanup is best-effort.
+
 ## Uninstalling
 
 Removing the plugin deletes the private data it created: the local cache
@@ -62,9 +74,10 @@ JavaScript in a response are never parsed or executed.
 
 - Custom endpoints must be HTTPS unless you explicitly allow plain HTTP.
 - A local-only mode restricts traffic to your own machine.
-- The plugin does not run or connect to any local network service. (An earlier
-  optional "full-PDF service mode" that talked to a local BabelDOC bridge was
-  removed in 2.1.6; full-PDF export is now done entirely inside the plugin.)
+- The plugin can contact a local model endpoint that you configure, such as
+  Ollama. It does not start a local service itself.
+- The earlier optional full-PDF BabelDOC bridge was removed in 2.1.6; PDF export
+  is performed inside the plugin and does not upload the PDF to that bridge.
 
 ## Your responsibility
 

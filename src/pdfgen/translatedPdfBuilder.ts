@@ -1,3 +1,4 @@
+import { tableCellBounds } from '../ir/tableModel';
 import { preserveCollapsedPlotPanels } from '../reader/compositePlotGuard';
 /**
  * In-plugin translated-PDF builder — no external service, no Python.
@@ -117,7 +118,7 @@ function isReplaceable(block: SourceBlock, translation: string | undefined): boo
 	if (translation === undefined || !translation.trim()) {
 		return false;
 	}
-	if (block.isReference || !block.lineRectsPdf?.length) {
+	if (block.translationMode === 'preserve' || block.isReference || !block.lineRectsPdf?.length) {
 		return false;
 	}
 	// 标题可译 (2.3.4, 第四批 item6 · LO-5): 此前导出一律跳过 heading/title,
@@ -132,10 +133,8 @@ function isReplaceable(block: SourceBlock, translation: string | undefined): boo
 	if (isMetadataBlock(block.sourceText)) {
 		return false;
 	}
-	const [x1, y1, x2, y2] = block.lineRectsPdf.reduce(
-		(acc, r) => [Math.min(acc[0], r[0]), Math.min(acc[1], r[1]), Math.max(acc[2], r[2]), Math.max(acc[3], r[3])],
-		[Infinity, Infinity, -Infinity, -Infinity]
-	);
+	const cell = tableCellBounds(block);
+	const [x1, y1, x2, y2] = validRect(cell) ? cell : unionOfRects(block.lineRectsPdf);
 	return x2 - x1 >= 36 && y2 - y1 >= 7 && block.sourceText.trim().length >= 6;
 }
 
@@ -182,6 +181,41 @@ export function exportExpansionAllowance(
 	right = Math.max(0, Math.min(right, (box[2] - box[0]) * 0.6));
 	down = Math.max(0, Math.min(down, Math.max(fontSize * 2.8, (box[3] - box[1]) * 0.5)));
 	return { right, down };
+}
+
+type PdfRect = [number, number, number, number];
+function validRect(rect: PdfRect | undefined): rect is PdfRect {
+	return !!rect && rect.every(Number.isFinite) && rect[2] > rect[0] && rect[3] > rect[1];
+}
+function containsRect(owner: PdfRect, rect: PdfRect): boolean {
+	const epsilon = .01;
+	return rect[0] >= owner[0] - epsilon && rect[1] >= owner[1] - epsilon
+		&& rect[2] <= owner[2] + epsilon && rect[3] <= owner[3] + epsilon;
+}
+
+/** Export uses the same explicit source ownership as the reader. Neighbour ink
+ * alone cannot protect an empty adjacent cell or whitespace between table rows. */
+export function exportBlockGeometry(block: SourceBlock, blockers: PdfRect[], pageW: number,
+	pageH: number, fontSize: number): {box: PdfRect; owner?: PdfRect; grow: {right: number; down: number}; masks: PdfRect[]} | null {
+	const rects = block.lineRectsPdf;
+	if (!rects?.length || rects.some(r => !validRect(r))) return null;
+	const source = unionOfRects(rects);
+	const cell = tableCellBounds(block);
+	const owner = cell ?? block.sourceRegion?.boundsPdf;
+	if (owner && (!validRect(owner) || !containsRect(owner, source))) return null;
+	// A cell owns its whole rectangle, including a centred header's surrounding
+	// whitespace. Body/caption owners cap expansion without moving paragraphs.
+	const box: PdfRect = cell ? [...cell] : source;
+	const grow = exportExpansionAllowance(box, blockers, pageW, pageH, fontSize);
+	if (owner) {
+		grow.right = Math.max(0, Math.min(grow.right, owner[2] - box[2]));
+		grow.down = Math.max(0, Math.min(grow.down, box[1] - owner[1]));
+	}
+	const masks: PdfRect[] = rects.map(r => owner
+		? [Math.max(owner[0], r[0] - MASK_PAD), Math.max(owner[1], r[1] - MASK_PAD),
+			Math.min(owner[2], r[2] + MASK_PAD), Math.min(owner[3], r[3] + MASK_PAD)]
+		: [r[0] - MASK_PAD, r[1] - MASK_PAD, r[2] + MASK_PAD, r[3] + MASK_PAD]);
+	return {box, ...(owner ? {owner} : {}), grow, masks};
 }
 
 export async function buildTranslatedPdf(
@@ -267,16 +301,21 @@ export async function buildTranslatedPdf(
 			//    里**永久丢失**。现在放不下(最小字号仍溢出)就整块跳过: 不涂白、
 			//    不画截断,原文完整保留 —— 与阅读器严格替换同一条铁律「宁保原文,
 			//    不毁内容」。
-			const union = unionOfRects(rects);
+			const sourceSize = block.fontSize && block.fontSize > 0 ? block.fontSize : 10;
+			const blockers = [...blockerOf.entries()].filter(([id]) => id !== block.id).map(([, b]) => b);
+			const geometry = exportBlockGeometry(block, blockers, pageSize.width, pageSize.height, sourceSize);
+			if (!geometry) {
+				keptOriginal++;
+				continue; // Invalid ownership must never paint over valid source content.
+			}
+			const union = geometry.box;
 			const boxWidth = union[2] - union[0];
 			const boxHeight = union[3] - union[1];
-			const sourceSize = block.fontSize && block.fontSize > 0 ? block.fontSize : 10;
 			const text = sanitize(stripStyleMarkers(translation!));
 			// 扩边阶梯 (2.3.4, item6 · LO-6): 原盒原字号 → 右扩 → 下扩 → 双向
 			// (全程不缩字) → 最大扩展 + 缩字 —— 与阅读器同序「先无损、后有损」。
 			// 此前没有阶梯,略长段直接一路缩到 5pt 近不可读,留白弃之不用。
-			const blockers = [...blockerOf.entries()].filter(([id]) => id !== block.id).map(([, b]) => b);
-			const grow = exportExpansionAllowance(union, blockers, pageSize.width, pageSize.height, sourceSize);
+			const grow = geometry.grow;
 			const steps: { w: number; h: number; shrink: boolean }[] = [
 				{ w: boxWidth, h: boxHeight, shrink: false }
 			];
@@ -298,6 +337,7 @@ export async function buildTranslatedPdf(
 					const baseline = union[3] - attempt.baselineOffsets[index]!;
 					const ink = verticalMetrics(line, attempt.fontSize);
 					const right = union[0] + measure(line, attempt.fontSize);
+					if (geometry.owner && !containsRect(geometry.owner, [union[0], baseline - ink.descent, right, baseline + ink.ascent])) return false;
 					return data.blocks.every(other => other.id === block.id || !(other.lineRectsPdf ?? []).some(r =>
 						Math.min(right, r[2]) - Math.max(union[0], r[0]) > 0.01
 						&& Math.min(baseline + ink.ascent, r[3]) - Math.max(baseline - ink.descent, r[1]) > 0.01));
@@ -314,12 +354,12 @@ export async function buildTranslatedPdf(
 			// Defer painting: a later block mask must never erase earlier glyphs.
 			const fitted = layout;
 			masks.push(() => {
-				for (const [x1, y1, x2, y2] of rects) {
+				for (const [x1, y1, x2, y2] of geometry.masks) {
 					page.drawRectangle({
-						x: x1 - MASK_PAD,
-						y: y1 - MASK_PAD,
-						width: (x2 - x1) + MASK_PAD * 2,
-						height: (y2 - y1) + MASK_PAD * 2,
+						x: x1,
+						y: y1,
+						width: x2 - x1,
+						height: y2 - y1,
 						color: WHITE
 					});
 				}
