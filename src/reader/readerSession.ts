@@ -230,6 +230,7 @@ export class ReaderSession {
 	private disposeAutoExplain: AutoExplanationWatcher | null = null;
 	private disposeOriginalDoubleClick: (() => void) | null = null;
 	private autoExplainPrefObserver: symbol | string | null = null;
+	private localOnlyPrefObserver: symbol | string | null = null;
 	private explanationRequest: AbortController | null = null;
 	private explanationIsAutomatic = false;
 	/**
@@ -738,8 +739,9 @@ export class ReaderSession {
 					const parts = await this.cacheKey(pageIndex, blocks.map(b => b.sourceText));
 					if (parts) {
 						// producedBy = 运行时引擎 (P3, 2.0.10, 仅诊断): 键是规范引擎的。
-						await cacheManager.writePage(parts, translations, this.providerForPage(pageIndex));
+						return await cacheManager.writePage(parts, translations, this.providerForPage(pageIndex));
 					}
+					return false;
 				},
 				// 段落级缓存: per-segment store scoped by provider/model/prompt/
 				// glossary, beneath the page cache. 普通刷新 (圆环) reuses it.
@@ -971,6 +973,18 @@ export class ReaderSession {
 		this.applyConcurrencyPlan();
 	}
 
+	/** Shared by page translation and manual/automatic deep analysis. */
+	private providerEndpointAllowed(settings: ProviderSettings, defaultBaseURL: string): boolean {
+		return !getPref<boolean>('localOnlyMode', false)
+			|| /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(endpointHost(settings, defaultBaseURL));
+	}
+
+	private assertProviderEndpointAllowed(settings: ProviderSettings, defaultBaseURL: string): void {
+		if (!this.providerEndpointAllowed(settings, defaultBaseURL)) {
+			throw new PaperMirrorError('HTTP_INSECURE', 'Local-only mode is enabled; configure a localhost endpoint.', { retryable: false });
+		}
+	}
+
 	private async translateRequest(request: TranslationRequest, signal: AbortSignal, hooks?: TranslateHooks): Promise<TranslationResponse> {
 		const chosen = typeof request.pageIndex === 'number'
 			? this.providerForPage(request.pageIndex)
@@ -980,12 +994,7 @@ export class ReaderSession {
 		if (provider.requiresApiKey && !settings.apiKey) {
 			throw new PaperMirrorError('NO_API_KEY', getString('papermirror-error-no-api-key'), { retryable: false });
 		}
-		if (getPref<boolean>('localOnlyMode', false)) {
-			const host = endpointHost(settings, provider.defaultBaseURL);
-			if (!/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host)) {
-				throw new PaperMirrorError('HTTP_INSECURE', 'Local-only mode is enabled; configure a localhost endpoint.', { retryable: false });
-			}
-		}
+		this.assertProviderEndpointAllowed(settings, provider.defaultBaseURL);
 		// Scale the request timeout with the PAYLOAD: a fixed 60 s was fine for a
 		// one-block salvage but structurally too short for an 8000-char batch on a
 		// slow/thinking model (whose honest generation time is 70–200 s) — the old
@@ -2060,9 +2069,8 @@ export class ReaderSession {
 	}
 
 	/**
-	 * 完整 PDF 翻译: submit the attachment to the local BabelDOC bridge and
-	 * attach the resulting 纯译文/双语 PDFs to the item. The compare view stays
-	 * open as the instant preview while this runs in the background.
+	 * Build translated/bilingual PDFs locally and import them as attachments.
+	 * The current reader stays available while export runs.
 	 */
 	async exportTranslatedPdf(): Promise<void> {
 		// 点击必须立刻可见 (2.3.8, 修「点击后没反应」): 状态胶囊在每页翻完后会
@@ -2118,23 +2126,25 @@ export class ReaderSession {
 					}
 				})();
 				const tmp = PathUtils.join((PathUtils as unknown as { tempDir: string }).tempDir, `${stem}.${suffix}.${rand}.pdf`);
-				await IOUtils.write(tmp, data);
 				try {
-					await (IOUtils as unknown as { setPermissions?(path: string, permissions: number): Promise<void> }).setPermissions?.(tmp, 0o600);
+					await IOUtils.write(tmp, data);
+					try {
+						await (IOUtils as unknown as { setPermissions?(path: string, permissions: number): Promise<void> }).setPermissions?.(tmp, 0o600);
+					}
+					catch { /* 权限收紧尽力而为 */ }
+					await (Zotero as unknown as {
+						Attachments: { importFromFile(options: { file: string; parentItemID?: number; title?: string }): Promise<unknown> };
+					}).Attachments.importFromFile({
+						file: tmp,
+						parentItemID: parentID,
+						title: suffix === 'mono' ? `${stem} (译文)` : `${stem} (双语对照)`
+					});
 				}
-				catch { /* 权限收紧尽力而为 */ }
-				await (Zotero as unknown as {
-					Attachments: { importFromFile(options: { file: string; parentItemID?: number; title?: string }): Promise<unknown> };
-				}).Attachments.importFromFile({
-					file: tmp,
-					parentItemID: parentID,
-					title: suffix === 'mono' ? `${stem} (译文)` : `${stem} (双语对照)`
-				});
-				try {
-					await IOUtils.remove(tmp);
-				}
-				catch {
-					// temp cleanup is best-effort
+				finally {
+					// A failed write/import can still leave a complete private PDF.
+					// Clean it on every outcome, including attachment import failure.
+					try { await IOUtils.remove(tmp, { ignoreAbsent: true }); }
+					catch { /* temp cleanup is best-effort */ }
 				}
 			};
 			await saveOne(monoBytes, 'mono');
@@ -2531,6 +2541,16 @@ export class ReaderSession {
 	 * selection — or the highlighted block — using the configured LLM.
 	 */
 	private watchAutomaticExplanation(): void {
+		// This policy also applies to manual explanations, even when the native
+		// PDF selection document is temporarily unavailable.
+		try {
+			this.localOnlyPrefObserver = registerPrefObserver('localOnlyMode', () => {
+				this.explanationRequest?.abort();
+				this.explanationRequest = null;
+				this.pane?.hideExplanation();
+			});
+		}
+		catch { /* The policy is checked again before dispatch and response commit. */ }
 		const doc = adapter.getOriginalSelectionDocument(this.reader);
 		if (!doc) return;
 		this.pane?.setExplanationDismissDocument(doc);
@@ -2588,8 +2608,9 @@ export class ReaderSession {
 		const request = new AbortController();
 		this.explanationRequest = request;
 		this.explanationIsAutomatic = automatic;
+		let endpointStillAllowed = () => true;
 		const live = () => !this.destroyed && !request.signal.aborted
-			&& this.explanationRequest === request && !!this.pane
+			&& this.explanationRequest === request && !!this.pane && endpointStillAllowed()
 			&& (!automatic || (getPref<boolean>('autoExplainSelection', true)
 				&& !this.isWindowHidden() && adapter.getOriginalSelectedText(this.reader).trim() === text));
 		// 1. Resolve the passage: explicit text > PDF selection > selected block
@@ -2618,6 +2639,11 @@ export class ReaderSession {
 				return;
 			}
 			if (automatic && provider.requiresApiKey && !settings.apiKey) return;
+			// Automatic selections stay quiet when the configured cloud endpoint
+			// is disallowed. A manual action explains the policy in its card.
+			if (automatic && !this.providerEndpointAllowed(settings, provider.defaultBaseURL)) return;
+			this.assertProviderEndpointAllowed(settings, provider.defaultBaseURL);
+			endpointStillAllowed = () => this.providerEndpointAllowed(settings, provider.defaultBaseURL);
 			// 3. Run — 讲解缓存 (2.3.5, 第四批 item7 · API-8): 同段落+同引擎/模型/语言
 			// 的解析在会话内缓存,重复选中/误触零请求(重读一段是常态,按次计费)。
 			this.pane.showExplanation({ passage: text, loading: true });
@@ -3543,6 +3569,10 @@ export class ReaderSession {
 		if (this.autoExplainPrefObserver !== null) {
 			try { unregisterPrefObserver(this.autoExplainPrefObserver); } catch { /* best-effort */ }
 			this.autoExplainPrefObserver = null;
+		}
+		if (this.localOnlyPrefObserver !== null) {
+			try { unregisterPrefObserver(this.localOnlyPrefObserver); } catch { /* best-effort */ }
+			this.localOnlyPrefObserver = null;
 		}
 		if (this.pollTimer !== null) {
 			clearInterval(this.pollTimer);

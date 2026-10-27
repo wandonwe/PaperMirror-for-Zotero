@@ -768,7 +768,7 @@ export interface TranslationDeps {
 	restoreSnapshot?(pageIndex: number): Promise<PageTranslationState | null>;
 	/** Cache access; may be no-ops. */
 	readCache(pageIndex: number, blocks: SourceBlock[]): Promise<TranslatedBlock[] | null>;
-	writeCache(pageIndex: number, blocks: SourceBlock[], translations: TranslatedBlock[]): Promise<void>;
+	writeCache(pageIndex: number, blocks: SourceBlock[], translations: TranslatedBlock[]): Promise<void | boolean>;
 	/**
 	 * 段落级缓存 (optional): batch-read/write individual segment translations by
 	 * content hash. The page cache stays as the fast whole-page index; the
@@ -859,6 +859,7 @@ export class TranslationManager {
 	 * 不等待** —— 任务立刻交还槽位,而 resetAllAndWait / dispose 仍能等到它。
 	 */
 	private pendingWrites = new Set<Promise<void>>();
+	private pageWrites = new WeakMap<PageTranslationState, symbol>();
 	private disposed = false;
 	private currentPage = 0;
 	private prefetchEnabled = true;
@@ -1466,8 +1467,7 @@ export class TranslationManager {
 					const complete = state.blocks.every(b =>
 						b.translationMode === 'preserve' || state.translations.has(b.id));
 					if (complete) {
-						await this.deps.writeCache(pageIndex, state.blocks, all);
-						state.cached = true; // 2.8.3: 落盘成功才允许被淘汰
+						await this.persistPage(state, all);
 					}
 					// The SHORTER (fitting) version replaces the long one in the
 					// segment store too, so a 普通刷新 does not resurrect a
@@ -1544,6 +1544,8 @@ export class TranslationManager {
 		// 同时取消在飞的 compress (2.0.7, 审核 P2-2): 它不在主键下,漏掉时其
 		// 完成回调会用旧 state 覆写刷新后的缓存(写盘处另有身份校验兜底)。
 		await this.scheduler.cancelAndWait(`page-${pageIndex}-compress`);
+		await Promise.all((prior?.blocks ?? []).map(block =>
+			this.scheduler.cancelAndWait(`page-${pageIndex}-seg-${block.id}`)));
 		if (this.disposed) {
 			return;
 		}
@@ -1572,6 +1574,8 @@ export class TranslationManager {
 		this.failedSegments.delete(segmentHash(block.sourceText, source, target));
 		try {
 			return await this.scheduler.enqueue(`page-${pageIndex}-seg-${blockId}`, PRIORITY.CURRENT_RETRANSLATE, async (signal) => {
+				const live = (): boolean => !this.disposed && !signal.aborted && this.pages.get(pageIndex) === state;
+				if (!live()) return false;
 				// 2.7.5 (审核 P2): 单段重译也走计量入口 —— 此前绕过 meteredTranslate,
 				// 一次重译的 token 从诊断里消失。
 				const resp = await this.requestGate.run(this.laneFor(pageIndex), true, () => this.meteredTranslate({
@@ -1583,6 +1587,7 @@ export class TranslationManager {
 					blocks: [{ id: block.id, type: block.type, text }],
 					glossary: this.glossaryFor([block.sourceText])
 				}, signal), signal);
+				if (!live()) return false;
 				const hit = resp.translations.find(t =>
 					looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference })
 					&& reg.ok(t.translatedText));
@@ -1590,6 +1595,7 @@ export class TranslationManager {
 					return false;
 				}
 				const restored = reg.restore(hit.translatedText);
+				state.cached = false; // The replacement is not durable yet.
 				state.translations.set(blockId, restored);
 				state.keepOrigin?.delete(blockId);
 				this.docMemory.learn(extractTermPairs(block.sourceText, restored));
@@ -1600,6 +1606,7 @@ export class TranslationManager {
 						translatedText: restored
 					}]).catch(() => { /* best effort */ });
 				}
+				if (!live()) return false;
 				// preserve 块永远不会进 translations(表格数据单元格等按设计保留
 				// 原文),所以完整性判据必须给它们豁免 —— 否则任何含表格的页面上
 				// 这个条件恒假,「重译此段」的新译文永远写不进页面缓存
@@ -1609,14 +1616,11 @@ export class TranslationManager {
 				const pageComplete = state.blocks.every(b =>
 					b.translationMode === 'preserve' || state.translations.has(b.id));
 				if (pageComplete) {
-					await this.deps.writeCache(pageIndex, state.blocks, state.blocks
+					await this.persistPage(state, state.blocks
 						.filter(b => state.translations.has(b.id))
-						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })))
-						// 2.8.3: 只有真的落盘了才标 cached —— 失败就永不淘汰,
-						// 绝不把唯一的一份译文卸掉。
-						.then(() => { state.cached = true; }, () => { /* best effort */ });
+						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })));
 				}
-				return true;
+				return live();
 			}, { foreground: true, lane: this.laneFor(pageIndex), maxRetries: 0 });
 		}
 		catch (e) {
@@ -2189,6 +2193,30 @@ export class TranslationManager {
 		const tracked = p.catch(() => { /* best effort — 缓存失败不该影响翻译 */ });
 		this.pendingWrites.add(tracked);
 		void tracked.finally(() => { this.pendingWrites.delete(tracked); });
+	}
+
+	/** Only a confirmed page write may release the in-memory translation. */
+	private async persistPage(state: PageTranslationState, translations: TranslatedBlock[]): Promise<void> {
+		if (this.disposed || this.pages.get(state.pageIndex) !== state) return;
+		state.cached = false;
+		const revision = state.translationRevision;
+		const write = Symbol('page-write');
+		this.pageWrites.set(state, write);
+		try {
+			const persisted = await this.deps.writeCache(state.pageIndex, state.blocks, translations);
+			if (!this.disposed && this.pages.get(state.pageIndex) === state
+				&& state.translationRevision === revision && this.pageWrites.get(state) === write) {
+				// Legacy injected stores resolve void on success; production returns
+				// false for a missing key or failed disk write.
+				state.cached = persisted !== false;
+			}
+		}
+		catch (e) {
+			logger.warn(MODULE, 'page write failed; keeping translations in memory', e);
+		}
+		finally {
+			if (this.pageWrites.get(state) === write) this.pageWrites.delete(state);
+		}
 	}
 
 	/** 等所有已发出的写盘真正落地(清盘/切配置前必须调用)。 */
@@ -2813,10 +2841,9 @@ export class TranslationManager {
 			// 采用,被跳过的段落即使止损记忆早已清空也永远不再重试。与主路径
 			// 「a page with unrecovered blocks is NOT cached」同一条规则。
 			if (keepOrigin.size === 0) {
-				await this.deps.writeCache(pageIndex, blocks, activeBlocks
+				await this.persistPage(state, activeBlocks
 					.filter(b => state.translations.has(b.id))
 					.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })));
-				state.cached = true; // 2.8.3
 			}
 			return;
 		}
@@ -3432,8 +3459,7 @@ export class TranslationManager {
 			const all: TranslatedBlock[] = activeBlocks
 				.filter(b => state.translations.has(b.id))
 				.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! }));
-			await this.deps.writeCache(pageIndex, blocks, all);
-			state.cached = true; // 2.8.3
+			await this.persistPage(state, all);
 		}
 		else {
 			logger.warn(MODULE, `Page ${pageIndex + 1} left uncached (${untranslatedCount} untranslated block(s)) so a revisit retries`);

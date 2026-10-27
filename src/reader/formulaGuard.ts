@@ -68,16 +68,23 @@ const DELIMITED_PATTERNS: RegExp[] = [
  *  - mean ± deviation             34.2 ± 5.1
  *  - sample sizes                 n = 342
  */
+// A statistic owns complete numeric operands: sign, leading decimal and
+// scientific exponent travel with the value rather than remaining beside a
+// placeholder where a translator could mistake them for prose punctuation.
+const STAT_MANTISSA = String.raw`(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|\.\d+)`;
+const STAT_EXPONENT = String.raw`(?:[eE]\s*[-+−]?\s*\d+|[×x·⋅*]\s*10\s*(?:\^\s*)?(?:[-+−]\s*\d+|\d+|[⁺⁻]?[⁰¹²³⁴⁵⁶⁷⁸⁹]+))`;
+const STAT_NUMBER = String.raw`(?:[-+−]\s*)?${STAT_MANTISSA}(?:\s*${STAT_EXPONENT})?`;
+const STAT_COUNT = String.raw`(?:\d{1,3}(?:,\d{3})+|\d+)`;
 const CITATION_STAT_PATTERNS: RegExp[] = [
 	/\[\d{1,3}(?:\s*[,;–—-]\s*\d{1,3}){0,8}\]/g,
 	// 圆括号数字引用 (1) (2–4) (1,5–7) — Radiology 等刊风格 (1.1.4 字段修复:
 	// 引言段全是这种引用,不掩蔽则忠实译文里全保留为拉丁字符,把"疑似未翻译"
 	// 验收比率顶爆 → 整段 unrecovered)。仅纯数字+分隔符,不碰 (Smith et al.)。
 	/\(\d{1,3}(?:\s*[,;–—-]\s*\d{1,3}){0,8}\)/g,
-	/\b[Pp]\s*[<>=≤≥]\s*\.?\d+(?:\.\d+)?/g,
-	/\b\d{1,2}(?:\.\d)?%\s*CIs?\s*[:=,]?\s*\d[\d.]*\s*(?:[–—-]|to)\s*\d[\d.]*/g,
-	/\d+(?:\.\d+)?\s*±\s*\d+(?:\.\d+)?/g,
-	/\b[nN]\s*=\s*\d[\d,]*/g
+	new RegExp(String.raw`\b[Pp]\s*[<>=≤≥]\s*${STAT_NUMBER}`, 'g'),
+	new RegExp(String.raw`\b\d{1,2}(?:\.\d+)?%\s*CIs?\s*[:=,]?\s*${STAT_NUMBER}\s*(?:[–—-]|to)\s*${STAT_NUMBER}`, 'g'),
+	new RegExp(String.raw`${STAT_NUMBER}\s*±\s*${STAT_NUMBER}`, 'g'),
+	new RegExp(String.raw`\b[nN]\s*=\s*${STAT_COUNT}`, 'g')
 ];
 
 /**
@@ -179,10 +186,15 @@ export function protectFormulas(text: string, extraLiterals: string[] = []): Pro
 		return i >= 0 && /[0-9]/.test(source[i]!);
 	};
 	CITATION_STAT_PATTERNS.forEach((pattern, k) => {
-		out = k < 2
-			? out.replace(pattern, (match, offset: number, whole: string) =>
-				precededByDigit(whole, offset) ? match : mask(match))
-			: out.replace(pattern, mask);
+		out = out.replace(pattern, (match, offset: number, whole: string) => {
+			if (k < 2) return precededByDigit(whole, offset) ? match : mask(match);
+			const before = whole.slice(0, offset), after = whole.slice(offset + match.length);
+			// Unsupported locale/grouping or exponent syntax stays entirely
+			// inline. A partial numeric token is less safe than no token.
+			const splitStart = /^[-+−.\d]/.test(match) && /[\d.,−–—+-]$/.test(before);
+			const splitEnd = /^(?:[.,]\d|\d|[eE](?:[-+−\d\s]|$)|[×·⋅*^⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]|x\s*10)/.test(after.trimStart());
+			return splitStart || splitEnd ? match : mask(match);
+		});
 	});
 	for (const pattern of HEURISTIC_PATTERNS) {
 		out = out.replace(pattern, (match, offset: number, whole: string) => {

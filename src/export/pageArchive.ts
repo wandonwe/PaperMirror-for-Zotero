@@ -37,14 +37,20 @@ export class PageArchive {
   this.closed=true;await Promise.all([...this.pending.values()]);this.keys.clear();this.ready.clear();await this.io.close().catch(()=>{});
  }
 }
+// Archives contain both original text and translations. Match the private
+// cache boundary before any plaintext is written, including atomic temp files.
+async function restrictPermissions(path:string, mode:number):Promise<void> {
+ try {await (IOUtils as unknown as {setPermissions?(path:string,mode:number):Promise<void>}).setPermissions?.(path,mode);}
+ catch { /* POSIX modes may be unavailable on Windows; retain platform ACLs. */ }
+}
 export function temporaryPageArchive():PageArchive {
  let dir:string|undefined;
  const directory=async():Promise<string>=>{
   if(!dir)dir=PathUtils.join((PathUtils as unknown as {tempDir:string}).tempDir,`papermirror-pages-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  await IOUtils.makeDirectory(dir,{ignoreExisting:true});return dir;
+  await IOUtils.makeDirectory(dir,{ignoreExisting:true});await restrictPermissions(dir,0o700);return dir;
  };
  return new PageArchive({
-  async write(page,text){const d=await directory();const path=PathUtils.join(d,`${page}.json`);await IOUtils.writeUTF8(path,text,{tmpPath:path+'.tmp'});},
+  async write(page,text){const d=await directory();const path=PathUtils.join(d,`${page}.json`);await IOUtils.writeUTF8(path,text,{tmpPath:path+'.tmp'});await restrictPermissions(path,0o600);},
   async read(page){if(!dir)throw Error('archive-not-created');return IOUtils.readUTF8(PathUtils.join(dir,`${page}.json`));},
   async close(){if(dir)await IOUtils.remove(dir,{recursive:true,ignoreAbsent:true});}
  });

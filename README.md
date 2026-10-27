@@ -24,7 +24,7 @@
 
 **PaperMirror(文镜)** —— 文字之镜,原文与译文两相映照。在 Zotero 自带的 PDF 阅读器里直接对照阅读外文文献:一边是**原版 PDF**(排版、图表、公式原封不动),另一边是**按版面重排的整页译文**,大小与原文一致、逐段对齐。图表、表格、公式、分栏、页眉页脚等都从原页原样保留,只有正文被替换并重新排版,不会被硬塞进原文的换行里。
 
-**4.5 更新**：选中原文后可自动深度解析，双击段落直接解析整段；覆盖模式保留原位阅读，点击解析卡片外部即可关闭。同时改善说明型表格的逐行对应与小数保护。详见 [4.5 更新记录](CHANGELOG.md#450--2026-10-27)。
+**4.6 更新**：统一翻译与深度解析的本地模式约束，改善统计数值保护、译文保存及 PDF 导出边界。保留自动划词解析、整段双击和覆盖模式浮动卡片。作者：**wangdongwei**。详见 [4.6 更新记录](CHANGELOG.md#460--2026-10-27)。
 
 ### 三种阅读模式
 
@@ -55,7 +55,7 @@
 5. **译文面板顶部工具条**(左右对照模式)自左向右依次为:语言对 · 翻译服务 · 刷新(重新翻译本页) · 同步滚动开关 · **✦ 解析** · 保存到笔记 · 左右布局切换 · 设置 · 关闭。语言和翻译服务可在这里直接切换,无需进设置。
 6. **深度解析**:选中 PDF 原文，选区稳定后自动解析；可在 **设置 → PaperMirror** 中关闭“选中原文后自动解析”，之后仍可点击 **✦ 解析**。在覆盖模式下**双击原文**，或**双击译文段落**，会解析所在整段原文；解析保留当前阅读模式。点击卡片外部、按 **Esc** 或点击 **×** 关闭，卡片内部仍可复制或保存。解析需要已配置的大模型服务，可能产生 API 费用；免费必应/谷歌引擎不支持。
 7. **保存到笔记**:点**保存到笔记**,把当前页(或所选段落)的原文+译文存为该条目的子笔记。
-8. **重新翻译**:某页翻译不理想时点**刷新**,跳过缓存重译本页。升级到 4.5 后，曾出现表格错位或小数异常的页面也请刷新重译。
+8. **重新翻译**:某页翻译不理想时点**刷新**,跳过页面缓存并复用合格的段落译文。升级后若仍有版面问题，可先刷新该页；旧译文有统计数值错误时，对受影响段落右键选择“重译此段”，无需清空全库缓存。
 
 ### 翻译引擎(自备密钥 BYOK)
 
@@ -79,6 +79,7 @@
 - 论文文本只通过 HTTPS 发送给你配置的引擎;无遥测,你的文献库、账户、数据库信息都不会离开本机。
 - 自定义端点默认必须 HTTPS;可选的本地整篇 PDF 服务仅允许回环地址(loopback),因为那类请求会携带密钥。
 - 译文按"文件哈希 + 设置"缓存在本地,可在设置里一键清除。
+- 启用“仅本地模式”时，页面翻译及自动、手动解析均只允许本机回环端点。
 
 完整声明见 [docs/PRIVACY.md](docs/PRIVACY.md)。
 
@@ -102,7 +103,7 @@ for paragraph. Figures, tables, equations, columns and running heads are kept
 from the rendered page exactly; only body text is replaced and re‑flowed, never
 crammed back into the original line breaks.
 
-**New in 4.5:** explain a stable source selection automatically or double-click a paragraph to explain its full source text. Overlay explanations keep the current reading mode and close when you click outside the card. The release also improves row alignment in descriptive tables and protects decimal values. See the [4.5 release notes](CHANGELOG.md#450--2026-10-27).
+**New in 4.6:** local-only mode applies consistently to translation and deep explanation, with more reliable statistical values, translation persistence, and PDF export boundaries. Automatic source-selection analysis, whole-paragraph double-clicking, and floating overlay cards remain available. Author: **wangdongwei**. See the [4.6 release notes](CHANGELOG.md#460--2026-10-27).
 
 ### Three reading modes
 
@@ -156,8 +157,10 @@ download the `.xpi` again.
 7. **Save to note** — store the current page's (or the selected paragraph's)
    original + translation as a child note of the item.
 8. **Re‑translate** — if a page came out poorly, click **refresh** to redo it,
-   bypassing the cache. After upgrading to 4.5, refresh pages that previously
-   showed misaligned tables or decimal errors.
+   bypassing the page cache while reusing valid saved segments. After upgrading,
+   refresh pages with layout issues. For statistical errors in an old translation,
+   right-click the affected paragraph to retranslate that segment; clearing the
+   entire library cache is unnecessary.
 
 ### Translation engines (bring your own key)
 
@@ -192,6 +195,8 @@ import/export supported.
   requests carry your key.
 - Translations are cached locally, keyed by file hash + settings, and can be
   cleared from the settings pane.
+- With **Local-only mode** enabled, page translation and automatic or manual
+  explanation may use only a loopback endpoint on this computer.
 
 Full statement: [docs/PRIVACY.md](docs/PRIVACY.md).
 

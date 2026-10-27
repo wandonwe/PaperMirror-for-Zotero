@@ -149,7 +149,7 @@ function serializedBytes(text: string): number {
 	return text.length;
 }
 
-export async function writePage(parts: CacheKeyParts, translations: TranslatedBlock[], producedBy?: string): Promise<void> {
+export async function writePage(parts: CacheKeyParts, translations: TranslatedBlock[], producedBy?: string): Promise<boolean> {
 	const path = pagePath(parts);
 	const dir = PathUtils.parent(path);
 	const entry: CachedPage & { producedBy?: string } = {
@@ -163,6 +163,7 @@ export async function writePage(parts: CacheKeyParts, translations: TranslatedBl
 		...(producedBy ? { producedBy } : {}),
 		translations
 	};
+	let persisted = false;
 	await enqueueWrite(path, async () => {
 		const startedAt = Date.now();
 		try {
@@ -173,6 +174,7 @@ export async function writePage(parts: CacheKeyParts, translations: TranslatedBl
 			// Atomic: write to tmp file, then rename over the target.
 			await IOUtils.writeJSON(path, entry, { tmpPath: path + '.tmp' });
 			await chmodBestEffort(path, 0o600);
+			persisted = true;
 			// 2.8.4: 只记次数/字节/耗时,不记路径也不记内容。
 			writeStats.pageWrites++;
 			writeStats.pageBytes += serializedBytes(JSON.stringify(entry));
@@ -183,6 +185,7 @@ export async function writePage(parts: CacheKeyParts, translations: TranslatedBl
 			logger.warn(MODULE, 'Cache write failed (continuing without cache)', e);
 		}
 	});
+	return persisted; // Failed persistence must never authorise memory eviction.
 }
 
 /**
