@@ -20,6 +20,18 @@ export function verticalInkFits(ink: VerticalBounds, box: VerticalBounds): boole
  return ink.top >= box.top - 0.01 && ink.bottom <= box.bottom + 0.01;
 }
 
+/** Undo a whole-page quarter turn before applying horizontal-font metrics. */
+export function uprightVerticalBounds(
+ rect: VerticalBounds & {left:number;right:number},
+ clip: VerticalBounds & {left:number;right:number},
+ rotation:number
+):VerticalBounds {
+ return rotation===90 ? {top:clip.right-rect.right,bottom:clip.right-rect.left}
+  : rotation===180 ? {top:clip.bottom-rect.bottom,bottom:clip.bottom-rect.top}
+   : rotation===270 ? {top:rect.left-clip.left,bottom:rect.right-clip.left}
+    : {top:rect.top-clip.top,bottom:rect.bottom-clip.top};
+}
+
 export interface InkFailure {
  offset: number; topOverflow: number; bottomOverflow: number;
  rectTop: number; rectBottom: number; clipHeight: number;
@@ -47,7 +59,10 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
  const failures = new WeakMap<HTMLElement, InkFailure>();
  const guard = (node: HTMLElement): boolean => {
   failures.delete(node);
-  const clip = node.getBoundingClientRect();
+  const clientClip = node.getBoundingClientRect();
+  const rotation=Number(node.closest?.('[data-pm-page-turn]')?.getAttribute('data-pm-page-turn') ?? 0);
+  const clip=uprightVerticalBounds(clientClip,clientClip,rotation);
+  const upright=(rect:DOMRect):VerticalBounds=>uprightVerticalBounds(rect,clientClip,rotation);
   const walker = doc.createTreeWalker(node, 4 /* SHOW_TEXT */);
   const range = doc.createRange();
   let text: Node | null;
@@ -67,7 +82,7 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
     if (start === end) return true;
     range.setStart(text!, offsets[start]!); range.setEnd(text!, offsets[end]!);
     const rects = Array.from(range.getClientRects());
-    if (rects.every(rect => rect.width <= 0 || verticalInkFits(rect, clip))) return true;
+    if (rects.every(rect => rect.width <= 0 || verticalInkFits(upright(rect), clip))) return true;
     if (end-start > 1) {
      const mid = Math.floor((start+end)/2);
      return fitsRange(start,mid) && fitsRange(mid,end);
@@ -82,7 +97,7 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
     }
     return rects.every(rect => {
      if (rect.width <= 0) return true;
-     const ink = inkVerticalBounds(rect,metrics);
+     const ink = inkVerticalBounds(upright(rect),metrics);
      if (verticalInkFits(ink,clip)) return true;
      failures.set(node,{offset:offsets[start]!,topOverflow:Math.max(0,clip.top-ink.top),bottomOverflow:Math.max(0,ink.bottom-clip.bottom),
       rectTop:ink.top-clip.top,rectBottom:ink.bottom-clip.top,clipHeight:clip.bottom-clip.top,font:ctx?.font ?? '',

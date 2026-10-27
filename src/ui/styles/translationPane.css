@@ -541,12 +541,15 @@
    moves, and Esc or × dismisses it. It must never affect the scroll layout. */
 .pm-explain-card.pm-explain-floating {
 	position: absolute;
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
 	left: 12px;
 	right: 12px;
 	bottom: 12px;
 	margin: 0;
-	max-height: 55%;
-	overflow-y: auto;
+	max-height: min(max(55%, 180px), calc(100% - 24px));
+	overflow: hidden;
 	z-index: 30;
 	box-shadow: 0 10px 34px rgba(15, 23, 42, .26);
 }
@@ -572,6 +575,7 @@
 	display: flex;
 	align-items: center;
 	gap: 9px;
+	flex: none;
 }
 
 .pm-sparkle {
@@ -590,6 +594,7 @@
 	flex-direction: column;
 	font-size: 12px;
 	min-width: 0;
+	flex: 1 1 auto;
 }
 
 .pm-card-titles strong {
@@ -606,6 +611,13 @@
 }
 
 .pm-card-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border-radius: 7px;
 	margin-left: auto;
 	font-size: 18px;
 	line-height: 1;
@@ -613,10 +625,16 @@
 	flex: none;
 }
 
+.pm-card-close:hover {
+	background: var(--pm-soft);
+}
+
 .pm-explain-grid {
 	margin-top: 13px;
 	display: grid;
 	gap: 10px;
+	min-height: 0;
+	overflow-y: auto;
 }
 
 .pm-explain-section {
@@ -645,8 +663,15 @@
 
 .pm-explain-actions {
 	display: flex;
+	flex-wrap: wrap;
+	flex: none;
 	gap: 6px;
 	margin-top: 12px;
+}
+
+/* Author styles must respect the loading/error state's native hidden flag. */
+.pm-explain-actions[hidden] {
+	display: none;
 }
 
 /* ===== footer (demo .translation-footer) ===== */
@@ -1243,7 +1268,8 @@
 	display: flex;
 	align-items: center;
 	gap: 5px;
-	height: 26px;
+	height: 28px;
+	box-sizing: border-box;
 	padding: 0 8px;
 	border-radius: 7px;
 	background: transparent;
@@ -1363,7 +1389,9 @@
  * (实测 hover 前后 backgroundColor 与 color 完全不变)。换成背景变化,
  * 与 .pm-chip / .pm-icon-button 的 hover 一致。 */
 .pm-bar-action {
-	height: 26px;
+	height: 28px;
+	min-width: 28px;
+	box-sizing: border-box;
 	padding: 0 10px;
 	border-radius: 7px;
 	background: transparent;
@@ -1388,7 +1416,8 @@
 
 /* The sync switch sits between the two, so it stays quiet until it is on. */
 .pm-bar .pm-switch-label {
-	height: 26px;
+	height: 28px;
+	box-sizing: border-box;
 	padding: 0 6px;
 	border-radius: 7px;
 	font-size: 11.5px;

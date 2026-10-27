@@ -1,5 +1,6 @@
 import { decodeLegacyText, legacyFontEncodings, resolvedPdfFont, repeatedImageRefs } from './legacyTextEncoding';
 import { onScrollIntent } from './scrollSynchronizer';
+import { canonicalPagePoint, pageQuarterTurn, type PageQuarterTurn } from './overlayGeometry';
 /**
  * ============================================================================
  * Zotero Reader adapter — THE ONLY module allowed to touch undocumented
@@ -612,6 +613,28 @@ export interface PageViewHandle {
 	toCss(xPdf: number, yPdf: number): [number, number];
 	/** Document of the inner PDF.js iframe (for creating nodes/styles). */
 	doc: Document;
+	/** Reader's additional rotation, relative to the PDF's intrinsic turn. */
+	rotation: PageQuarterTurn;
+	/** The affine viewport mapping, for same-size rotation/crop invalidation. */
+	viewportKey: string;
+	/** Unrounded viewport size; clientWidth/clientHeight lose subpixel zoom. */
+	viewportWidth: number;
+	viewportHeight: number;
+}
+
+/** Canonical bitmap orientation; viewer-only turns must not change this. */
+export function getPageIntrinsicRotation(reader: ReaderLike, pageIndex: number): PageQuarterTurn {
+	try {
+		const viewer = reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication?.pdfViewer;
+		const page = pageViewOf(reader, pageIndex);
+		if (typeof page?.pdfPage?.rotate === 'number') return pageQuarterTurn(page.pdfPage.rotate);
+		if (typeof page?.viewport?.rotation === 'number' && typeof viewer?.pagesRotation === 'number') {
+			return pageQuarterTurn(page.viewport.rotation - viewer.pagesRotation);
+		}
+		if (typeof page?.viewport?.rotation === 'number') return pageQuarterTurn(page.viewport.rotation);
+	}
+	catch { /* a virtualised page may not have a PDFPageProxy yet */ }
+	return 0;
 }
 
 export function getPageView(reader: ReaderLike, pageIndex: number): PageViewHandle | null {
@@ -624,9 +647,19 @@ export function getPageView(reader: ReaderLike, pageIndex: number): PageViewHand
 		if (!div || !viewport?.convertToViewportPoint || !win?.document) {
 			return null;
 		}
+		const intrinsicRotation = getPageIntrinsicRotation(reader, pageIndex);
+		const rotation = pageQuarterTurn(typeof viewport.rotation === 'number'
+			? viewport.rotation - intrinsicRotation : viewer?.pagesRotation);
+		const viewportKey = [intrinsicRotation, ...[ [0, 0], [1, 0], [0, 1] ].flatMap(([x, y]) =>
+			viewport.convertToViewportPoint(x, y).map(Number))].join(',');
+		const viewportWidth = Number(viewport.width), viewportHeight = Number(viewport.height);
 		return {
 			div,
 			doc: win.document as Document,
+			rotation,
+			viewportKey,
+			viewportWidth: Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : div.clientWidth,
+			viewportHeight: Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : div.clientHeight,
 			toCss: (xPdf: number, yPdf: number) => {
 				const [x, y] = viewport.convertToViewportPoint(xPdf, yPdf);
 				return [Number(x), Number(y)];
@@ -991,14 +1024,32 @@ export function getPageRender(reader: ReaderLike, pageIndex: number): PageRender
 		const viewportWidth = Number(viewport.width) || canvas.width;
 		const viewportHeight = Number(viewport.height) || canvas.height;
 		const scale = Number(viewport.scale) > 0 ? Number(viewport.scale) : 1;
+		const rotation = getPageView(reader, pageIndex)?.rotation ?? 0;
+		let canonicalCanvas = canvas;
+		if (rotation !== 0) {
+			// The core rasteriser uses the PDF's intrinsic orientation. Its live
+			// canvas fallback must offer the SAME orientation, otherwise the
+			// overlay's whole-page turn would rotate this bitmap a second time.
+			const sideways = rotation === 90 || rotation === 270;
+			canonicalCanvas = canvas.ownerDocument.createElement('canvas');
+			canonicalCanvas.width = sideways ? canvas.height : canvas.width;
+			canonicalCanvas.height = sideways ? canvas.width : canvas.height;
+			const ctx = canonicalCanvas.getContext('2d', { willReadFrequently: true });
+			if (!ctx) return null;
+			if (rotation === 90) ctx.setTransform(0, -1, 1, 0, 0, canvas.width);
+			else if (rotation === 180) ctx.setTransform(-1, 0, 0, -1, canvas.width, canvas.height);
+			else ctx.setTransform(0, 1, -1, 0, canvas.height, 0);
+			ctx.drawImage(canvas, 0, 0);
+		}
+		const sideways = rotation === 90 || rotation === 270;
 		return {
-			canvas,
-			viewportWidth,
-			viewportHeight,
+			canvas: canonicalCanvas,
+			viewportWidth: sideways ? viewportHeight : viewportWidth,
+			viewportHeight: sideways ? viewportWidth : viewportHeight,
 			scale,
 			toViewport: (x: number, y: number) => {
 				const [vx, vy] = viewport.convertToViewportPoint(x, y);
-				return [Number(vx), Number(vy)];
+				return canonicalPagePoint(Number(vx), Number(vy), viewportWidth, viewportHeight, rotation);
 			}
 		};
 	}

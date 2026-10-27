@@ -43,6 +43,7 @@ import {
 import type { FitMode } from './textFitter';
 import * as adapter from './zoteroReaderAdapter';
 import type { ReaderLike } from './zoteroReaderAdapter';
+import { overlayGeometry, type OverlayGeometry } from './overlayGeometry';
 import { StatusCapsule, CAPSULE_CSS, capsuleStateFor, type OverlayProgress, type OverlayPhase } from '../ui/statusCapsule';
 import type { PageRenderResult } from '../ui/translationPane';
 import paneCSS from '../ui/styles/translationPane.css';
@@ -150,6 +151,7 @@ export class PdfOverlay {
 	private renderer: OverlayPageRenderer | null = null;
 	/** 每页在飞的渲染,新一轮开始时作废上一轮。 */
 	private inFlight = new Map<number, AbortController>();
+	private inFlightGeometry = new Map<number, { div: HTMLElement; signature: string }>();
 	/**
 	 * Geometry the currently drawn layer was built for, per page.
 	 *
@@ -157,7 +159,7 @@ export class PdfOverlay {
 	 * every page on every frame both burns CPU and makes the text flicker. The
 	 * overlay only has to follow REAL geometry changes — zoom, rotation, a
 	 * re-render after virtualisation — and all of those change the page div's
-	 * pixel size or destroy our layer outright.
+	 * viewport mapping, pixel size or destroy our layer outright.
 	 */
 	private drawnSignature = new Map<number, string>();
 	/** 悬停看原文: hovering a paragraph reveals the source underneath it. */
@@ -286,6 +288,9 @@ export class PdfOverlay {
 	}
 
 	clearPage(pageIndex: number): void {
+		this.inFlight.get(pageIndex)?.abort();
+		this.inFlight.delete(pageIndex);
+		this.inFlightGeometry.delete(pageIndex);
 		this.pages.delete(pageIndex);
 		this.paperColour.delete(pageIndex);
 		this.drawnSignature.delete(pageIndex);
@@ -303,6 +308,15 @@ export class PdfOverlay {
 			// `updateviewarea` meant a full re-measure of every box on every
 			// scroll frame, for no visible benefit.
 			this.disposeEvents = adapter.onPdfRenderEvents(this.reader, (pageIndex) => {
+				// Cancel before another async fitting step can commit using the old
+				// orientation. A 180-degree turn keeps the same page dimensions.
+				for (const [index, pending] of this.inFlightGeometry) {
+					if (pageIndex !== null && pageIndex !== index) continue;
+					const latest = adapter.getPageView(this.reader, index);
+					if (!latest || latest.div !== pending.div || this.geometryOf(latest).signature !== pending.signature) {
+						this.inFlight.get(index)?.abort();
+					}
+				}
 				this.scheduleRedraw(pageIndex ?? undefined);
 			}, adapter.PDF_GEOMETRY_EVENTS);
 		}
@@ -407,6 +421,15 @@ export class PdfOverlay {
 
 	// ---- drawing ------------------------------------------------------------
 
+	private geometryOf(view: adapter.PageViewHandle): OverlayGeometry {
+		// Preserve the visibility gate, but use PDF.js's exact size for geometry:
+		// client dimensions round fractional zoom to whole CSS pixels.
+		const width = view.div.clientWidth > 0 ? view.viewportWidth : 0;
+		const visibleHeight = view.div.clientHeight || view.div.getBoundingClientRect().height;
+		const height = visibleHeight > 0 ? view.viewportHeight || visibleHeight : 0;
+		return overlayGeometry(width, height, view.rotation, view.viewportKey);
+	}
+
 	/**
 	 * 覆盖模式改走严格原位替换引擎 (3.1.0, 用户要求「覆盖翻译模式也要按对照翻译的
 	 * 能力优化」)。
@@ -433,16 +456,12 @@ export class PdfOverlay {
 		if (!data || !view || !this.renderer) {
 			return;
 		}
-		const width = view.div.clientWidth;
-		const height = view.div.clientHeight || view.div.getBoundingClientRect().height;
+		const geometry = this.geometryOf(view);
+		const { width, height, signature } = geometry;
 		if (width < 20 || height < 20) {
 			return; // 缩放中途还没有几何 —— 签名不记,下一个事件重试
 		}
-		// Scroll-only events: same page size, our layer still attached →
-		// nothing to do. Zoom and rotation both change these numbers, and a
-		// re-render after virtualisation removes the layer, so every case that
-		// genuinely needs a redraw still gets one.
-		const signature = `${Math.round(width)}x${Math.round(height)}`;
+		// Same affine viewport and attached layer: scrolling needs no redraw.
 		if (this.drawnSignature.get(pageIndex) === signature && view.div.querySelector(`.${LAYER_CLASS}`)) {
 			return;
 		}
@@ -450,11 +469,20 @@ export class PdfOverlay {
 		this.inFlight.get(pageIndex)?.abort();
 		const ctrl = new AbortController();
 		this.inFlight.set(pageIndex, ctrl);
+		this.inFlightGeometry.set(pageIndex, { div: view.div, signature });
 
 		const layer = view.doc.createElement('div');
 		layer.className = LAYER_CLASS;
 		layer.setAttribute('data-pm-mode', this.displayMode);
 		layer.setAttribute('data-pm-peekhover', String(this.peekOnHover));
+		layer.setAttribute('data-pm-page-turn', String(view.rotation));
+		// Fit text in its canonical page, then rotate masks and text together.
+		// Fitting directly in a 90-degree viewport would make paragraph line
+		// boxes tall and narrow while the translated glyphs remained horizontal.
+		Object.assign(layer.style, {
+			width: `${width}px`, height: `${height}px`, right: 'auto', bottom: 'auto',
+			transformOrigin: '0 0', transform: geometry.transform
+		});
 		this.applyPaperColour(layer, pageIndex);
 		if (!view.div.style.position) {
 			view.div.style.position = 'relative';
@@ -472,7 +500,8 @@ export class PdfOverlay {
 			// commit to a page div that is still live, else reschedule onto the
 			// fresh one instead of leaving a layer on a node about to be discarded.
 			const latest = adapter.getPageView(this.reader, pageIndex);
-			if (!latest || latest.div !== view.div || !view.div.isConnected) {
+			if (!latest || latest.div !== view.div || !view.div.isConnected
+				|| this.geometryOf(latest).signature !== signature) {
 				layer.remove();
 				this.drawnSignature.delete(pageIndex);
 				this.scheduleRedraw(pageIndex);
@@ -494,6 +523,8 @@ export class PdfOverlay {
 			// 最终量测里(通常已就绪 → 一两个微任务),这里等两帧再摘,缩放不闪原文。
 			const win = view.doc.defaultView;
 			const dropOld = (): void => {
+				// An earlier frame callback must never remove a newer render's layer.
+				if (ctrl.signal.aborted || this.inFlight.get(pageIndex) !== ctrl || !layer.isConnected) return;
 				for (const node of Array.from(view.div.querySelectorAll(`.${LAYER_CLASS}`))) {
 					if (node !== layer) {
 						node.remove();
@@ -615,6 +646,7 @@ export class PdfOverlay {
 			ctrl.abort();
 		}
 		this.inFlight.clear();
+		this.inFlightGeometry.clear();
 		for (const pageIndex of this.pages.keys()) {
 			this.removeLayer(pageIndex);
 		}

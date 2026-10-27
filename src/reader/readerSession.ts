@@ -1564,10 +1564,12 @@ export class ReaderSession {
 		if (!current()) {
 			return false;
 		}
-		// 底图位图 LRU (2.2.5, item6): 同页同宽度已 rasterize 过就直接复用,免去
-		// 最贵的 pdf.js 整页渲染;buildStrictPage 只重建遮罩+文本层。宽度取整分桶,
-		// 缩放换宽度自然落到不同键、旧宽度条目由 LRU 淘汰。
-		const bitmapKey = `${pageIndex}@${Math.round(width)}`;
+		// The bitmap remains in the PDF's intrinsic orientation. Overlay-only
+		// viewer turns happen AFTER strict fitting, so they may reuse this raster.
+		// Keep exact widths: rounding could reuse a slightly different viewport
+		// and leave masks out of alignment at fractional zoom levels.
+		const intrinsicRotation = adapter.getPageIntrinsicRotation(this.reader, pageIndex);
+		const bitmapKey = `${pageIndex}@${width}#${intrinsicRotation}`;
 		let render = this.baseBitmaps.get(bitmapKey) ?? null;
 		if (!render) {
 			// Supersample within a fixed pixel budget: sharp text without letting a
