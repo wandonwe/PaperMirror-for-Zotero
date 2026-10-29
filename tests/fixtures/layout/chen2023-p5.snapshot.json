@@ -181,7 +181,7 @@
 		"tableRow": 6,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "BMI (kg/m2)*"
+		"text": "BMI (kg/m²)*"
 	},
 	{
 		"type": "paragraph",
@@ -1084,7 +1084,7 @@
 		"tableRow": 10,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "MLA (mm2)"
+		"text": "MLA (mm²)"
 	},
 	{
 		"type": "paragraph",
@@ -1156,7 +1156,7 @@
 		"tableRow": 12,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Total plaque volume (mm3)"
+		"text": "Total plaque volume (mm³)"
 	},
 	{
 		"type": "paragraph",
@@ -1192,7 +1192,7 @@
 		"tableRow": 13,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Calcified plaque volume (mm3)"
+		"text": "Calcified plaque volume (mm³)"
 	},
 	{
 		"type": "paragraph",
@@ -1228,7 +1228,7 @@
 		"tableRow": 14,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Noncalcified plaque volume (mm3)"
+		"text": "Noncalcified plaque volume (mm³)"
 	},
 	{
 		"type": "paragraph",
@@ -1264,7 +1264,7 @@
 		"tableRow": 15,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Necrotic core volume (mm3)"
+		"text": "Necrotic core volume (mm³)"
 	},
 	{
 		"type": "paragraph",

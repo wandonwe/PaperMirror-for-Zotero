@@ -14,7 +14,9 @@
  * Pure module — no DOM, unit-tested.
  */
 
-import { protectFormulas, restoreFormulas, verifyPlaceholders, type PlaceholderReport } from '../reader/formulaGuard';
+import { protectNumericPowers } from './numericPowers';
+import { protectTechnicalUnits } from './technicalUnits';
+import { makePlaceholder, protectFormulas, restoreFormulas, verifyPlaceholders, type PlaceholderReport } from '../reader/formulaGuard';
 import { finalizeStyleMarkers, insertStyleMarkers, type StyleRun } from '../reader/styleRuns';
 import type { PlaceholderEntry } from '../types/models';
 
@@ -41,7 +43,14 @@ export class PlaceholderRegistry {
 	static protect(sourceText: string, extraLiterals: string[] = [], styleRuns?: StyleRun[]): PlaceholderRegistry {
 		const marked = insertStyleMarkers(sourceText, styleRuns);
 		const { text, placeholders } = protectFormulas(marked, extraLiterals);
-		return new PlaceholderRegistry(text, placeholders);
+		let index = placeholders.reduce((next, entry) => Math.max(next, Number(entry.token.match(/\d+/)?.[0] ?? -1) + 1), 0);
+		const maskLiteral = (original:string):string => {
+			const token = makePlaceholder(index++);
+			placeholders.push({token, original});
+			return token;
+		};
+		const protectedText = protectNumericPowers(protectTechnicalUnits(text, maskLiteral), maskLiteral);
+		return new PlaceholderRegistry(protectedText, placeholders);
 	}
 
 	get count(): number {

@@ -24,7 +24,7 @@
 
 **PaperMirror(文镜)** —— 文字之镜,原文与译文两相映照。在 Zotero 自带的 PDF 阅读器里直接对照阅读外文文献:一边是**原版 PDF**(排版、图表、公式原封不动),另一边是**按版面重排的整页译文**,大小与原文一致、逐段对齐。图表、表格、公式、分栏、页眉页脚等都从原页原样保留,只有正文被替换并重新排版,不会被硬塞进原文的换行里。
 
-**4.6 更新**：统一翻译与深度解析的本地模式约束，改善统计数值保护、译文保存及 PDF 导出边界。保留自动划词解析、整段双击和覆盖模式浮动卡片。作者：**wangdongwei**。详见 [4.6 更新记录](CHANGELOG.md#460--2026-10-27)。
+**4.7 更新**：改善上下标、技术单位、表格与图注边界，修复跨栏跨页断句造成的语义遗漏，并按原有彩线位置保留独立图例对应。作者：**wangdongwei**。详见 [4.7 更新记录](CHANGELOG.md#470--2026-10-30) 和 [验证范围](docs/RELEASE-4.7.0-VALIDATION.md)。
 
 ### 三种阅读模式
 
@@ -87,7 +87,7 @@
 
 - **一直转圈/没出译文?** 该 PDF 可能没有文本层(是扫描件),需要先 OCR;或所选引擎需要密钥而尚未配置。
 - **提示需要 LLM?** 解析功能需要大模型服务商,免费必应/谷歌引擎只做翻译、不做讲解。
-- **译文里夹着英文?** 点该页**刷新**重译一次即可。
+- **部分段落仍是原文?** 先刷新该页。提取或校验失败、空间不足时会保留原文，状态提示会说明原因。
 - **检查更新说已是最新但其实有新版?** 到 **插件 → ⚙ → 检查更新** 手动触发一次。
 
 ---
@@ -103,7 +103,7 @@ for paragraph. Figures, tables, equations, columns and running heads are kept
 from the rendered page exactly; only body text is replaced and re‑flowed, never
 crammed back into the original line breaks.
 
-**New in 4.6:** local-only mode applies consistently to translation and deep explanation, with more reliable statistical values, translation persistence, and PDF export boundaries. Automatic source-selection analysis, whole-paragraph double-clicking, and floating overlay cards remain available. Author: **wangdongwei**. See the [4.6 release notes](CHANGELOG.md#460--2026-10-27).
+**New in 4.7:** improved superscript, technical-unit, table and caption handling; shared complete-sentence translations across column and page breaks; and independently anchored legend labels that retain their correspondence with the original colored markers. Author: **wangdongwei**. See the [4.7 release notes](CHANGELOG.md#470--2026-10-30) and [validation scope](docs/RELEASE-4.7.0-VALIDATION.md).
 
 ### Three reading modes
 
@@ -206,7 +206,9 @@ Full statement: [docs/PRIVACY.md](docs/PRIVACY.md).
   scan) and needs OCR; or the chosen engine needs a key you haven't set.
 - **"Requires an LLM"?** Explanation needs an LLM provider; the free Bing/Google
   engines translate but don't explain.
-- **English mixed into the translation?** Click **refresh** on that page to redo it.
+- **Some paragraphs remain in the source language?** Refresh that page first.
+  Extraction or validation failures and limited space can retain the original;
+  the page status reports the reason.
 - **"No updates found" but there is one?** Trigger **Add‑ons → ⚙ → Check for
   Updates** manually.
 

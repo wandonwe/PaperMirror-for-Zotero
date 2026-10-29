@@ -97,7 +97,7 @@ export function canMerge(a: SourceBlock, b: SourceBlock, obstacles: Rect[] = [])
 		return false;
 	}
 	// 边框硬屏障: a figure between the two regions separates them for good.
-	if (obstacleBetween(ra, rb, obstacles)) {
+	if (obstacleBetween(ra, rb, [...obstacles,...(a.layoutBarriersPdf??[]),...(b.layoutBarriersPdf??[])])) {
 		return false;
 	}
 	// b must sit BELOW a (PDF y grows upward): a's bottom edge above b's top.
@@ -178,6 +178,9 @@ export function mergeTwo(a: SourceBlock, b: SourceBlock): SourceBlock {
 	return {
 		...a,
 		sourceText: joined,
+		...((a.layoutBarriersPdf?.length || b.layoutBarriersPdf?.length)
+			? {layoutBarriersPdf:[...new Map([...(a.layoutBarriersPdf??[]),...(b.layoutBarriersPdf??[])].map(r=>[r.join(','),r])).values()]}
+			: {}),
 		regionParagraphs,
 		// Provenance: the group keeps the ids of every fragment it absorbed —
 		// merging must not lose the source relationship.
@@ -262,7 +265,7 @@ export function canAbsorb(host: SourceBlock, shard: SourceBlock, obstacles: Rect
 	const rh = unionRect(host.lineRectsPdf as Rect[]);
 	const rs = unionRect(shard.lineRectsPdf as Rect[]);
 
-	if (obstacleBetween(rh, rs, obstacles)) {
+	if (obstacleBetween(rh, rs, [...obstacles,...(host.layoutBarriersPdf??[]),...(shard.layoutBarriersPdf??[])])) {
 		return false;
 	}
 	// Same column at a relaxed 40%, or the shard sits inside the host's span.
@@ -340,7 +343,7 @@ export function canMergeCaption(host: SourceBlock, next: SourceBlock, obstacles:
 	}
 	const rh = unionRect(host.lineRectsPdf as Rect[]);
 	const rn = unionRect(next.lineRectsPdf as Rect[]);
-	if (obstacleBetween(rh, rn, obstacles)) {
+	if (obstacleBetween(rh, rn, [...obstacles,...(host.layoutBarriersPdf??[]),...(next.layoutBarriersPdf??[])])) {
 		return false;
 	}
 	const em = Math.max(host.fontSize ?? 8, 6);

@@ -211,7 +211,9 @@ export const geminiNativeProvider: TranslationProvider = {
 		const text = extractText(json);
 		const { translations } = request.plain
 			? parsePlainResponse(text, request.blocks[0]!.id)
-			: validateResponse(text, request.blocks.map(b => b.id));
+			: validateResponse(text, request.blocks.map(b => b.id), {
+				rejectDuplicateIds: request.blocks.some(b => b.continuationUnit)
+			});
 		return usage ? { translations, usage } : { translations };
 	},
 

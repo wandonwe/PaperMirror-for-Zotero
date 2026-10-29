@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 test('charBudget blocks add layout-budget rules; absent budgets add none', async () => {
 	const { buildSystemPrompt, PROMPT_VERSION } = await import('../../src/translation/promptBuilder');
-	assert.equal(PROMPT_VERSION, 3, 'prompt version bumped to invalidate long-form caches');
+	assert.equal(PROMPT_VERSION, 4, 'content protection policy invalidates earlier translations');
 	const base = {
 		sourceLanguage: 'en', targetLanguage: 'zh-CN', documentTitle: 'T',
 		previousContext: '', blocks: [{ id: 'a', type: 'paragraph', text: 'x' }]

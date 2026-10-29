@@ -202,6 +202,8 @@ export class TextExtractor implements PageParser {
 	/** 逐页边框网格缓存;undefined = 还没取过,null = 取过但这页没有网格。 */
 	private borderGrids = new Map<number, BorderGrid | null>();
 	private allBorderGrids = new Map<number, BorderGrid[]>();
+	/** Same painted paths also locate legend entries; colours stay in the PDF. */
+	private legendSegments = new Map<number, [number, number, number, number][]>();
 	/** 网格取证的计数,随网格一起缓存 (2.12.14):重抽取时从缓存拿网格,遥测也得跟着回填 ——
 	 *  真机 2.12.13 的 p12–18 就是这样:gridInside 有值,edgeSegments/gridCols 全空。 */
 	private gridPhases = new Map<number, Partial<ExtractPhases>>();
@@ -393,9 +395,12 @@ export class TextExtractor implements PageParser {
 		let grid: BorderGrid | null = null;
 		let gridCount = 0;
 		let segCount = 0;
+		let pathsReady = false;
 		try {
 			const segs = await withTimeout(adapter.getPageEdgesPdf(this.reader, pageIndex), 3000, 'getPageEdgesPdf');
 			segCount = segs?.length ?? 0;
+			pathsReady = Array.isArray(segs);
+			if (pathsReady) this.legendSegments.set(pageIndex, segs!);
 			if (segs && segs.length) {
 				grid = borderGrid(segs, { pageHeight });
 				const all = borderGrids(segs, { pageHeight });
@@ -431,7 +436,10 @@ export class TextExtractor implements PageParser {
 				];
 			}
 		}
-		if (grid) this.borderGrids.set(pageIndex, grid);
+		// A successful empty scan is evidence; an unavailable/late operator
+		// list is not. Keep the latter retryable instead of freezing the old
+		// merged source structure for the rest of the session.
+		if (pathsReady) this.borderGrids.set(pageIndex, grid);
 		{
 			const phases = this.phasesByPage.get(pageIndex);
 			if (phases) {
@@ -477,7 +485,8 @@ export class TextExtractor implements PageParser {
   try {
    const blocks=await work,path=this.pathByPage.get(pageIndex);
    // DOM text layers may still be changing. Cache only PDF-coordinate sources.
-   if(blocks.length&&(path==='chars'||path==='text-content'))this.structureCache.put(key,blocks);
+   // A late path list must be allowed to refine marker ownership on revisit.
+   if(blocks.length&&(path==='chars'||path==='text-content')&&this.legendSegments.has(pageIndex))this.structureCache.put(key,blocks);
    return blocks;
   } finally {if(this.extracting.get(key)===work)this.extracting.delete(key);}
  }
@@ -526,6 +535,7 @@ export class TextExtractor implements PageParser {
 				}
 			}
 			if (pageData.chars.length) {
+				await this.gridFor(pageIndex, pageHeight);
 				const result = buildBlocks(pageData.chars, {
 					pageIndex,
 					pageWidth,
@@ -533,7 +543,8 @@ export class TextExtractor implements PageParser {
 					bodyFontSize: this.bodyFontSize || undefined,
 					includeReferences: this.includeReferences,
 					referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
-					imageRectsPdf: obstacles
+					imageRectsPdf: obstacles,
+					legendSegmentsPdf: this.legendSegments.get(pageIndex)
 				});
 				const sourceBlockCount = result.blocks.length;
 				// Canonical reading order BEFORE coalescing: row-wise streams
@@ -690,7 +701,7 @@ export class TextExtractor implements PageParser {
 			if (phases) {
 				phases.textLayerWaitMs = (phases.textLayerWaitMs ?? 0) + (Date.now() - waitStartedAt);
 			}
-			const page = adapter.getTextLayerItems(this.reader, pageIndex);
+			const page = await adapter.repairTextLayerSymbols(this.reader, pageIndex, adapter.getTextLayerItems(this.reader, pageIndex));
 
 			const grid = page ? await this.gridFor(pageIndex, page.pageHeight) : null;
 			return this.blocksFromSpanPage(pageIndex, page, obstacles, 'the text layer', grid);
@@ -750,7 +761,8 @@ export class TextExtractor implements PageParser {
 			referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
 			imageRectsPdf: obstacles,
 			grid,
-			grids: this.allBorderGrids.get(pageIndex)
+			grids: this.allBorderGrids.get(pageIndex),
+			legendSegmentsPdf: this.legendSegments.get(pageIndex)
 		});
 		// Rebuild semantic regions from whatever fragments extraction
 		// produced: whole regions translate as whole sentences.

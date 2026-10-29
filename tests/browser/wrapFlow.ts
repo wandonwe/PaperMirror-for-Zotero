@@ -5,6 +5,8 @@ import {checkLegacyEncodedPanels,checkArchivedBlanksteinFailures} from './legacy
 import {checkSourceMaskExpansion} from './sourceMaskExpansion';
 import {checkBottomParagraphExpansion} from './bottomParagraphExpansion';
 import {checkSplitParagraphExpansion} from './splitParagraphExpansion';
+import {checkSharedSourceLine} from './sharedSourceLine';
+import {checkFigureCaptionMask} from './figureCaptionMask';
 import {checkEscPanels} from './escPanels';
 import {checkTwoColumnTable} from './twoColumnTable';
 import {checkDescriptiveTable} from './descriptiveTable';
@@ -21,6 +23,8 @@ import { buildStrictPage } from '../../src/ui/strictPageReplacement';
 const result=document.createElement('pre');result.id='result';document.body.append(result);
 async function run() {
 try {
+ checkSharedSourceLine();
+ checkFigureCaptionMask();
  checkSplitParagraphExpansion();
  checkBottomParagraphExpansion();
  await checkSourceMaskExpansion();

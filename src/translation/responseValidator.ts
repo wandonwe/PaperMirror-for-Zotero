@@ -104,7 +104,7 @@ export interface ValidatedResponse {
 	extraIds: string[];
 }
 
-export function validateResponse(raw: string | unknown, expectedIds: string[]): ValidatedResponse {
+export function validateResponse(raw: string | unknown, expectedIds: string[], options?: { rejectDuplicateIds?: boolean }): ValidatedResponse {
 	const data = typeof raw === 'string' ? extractJSON(raw) : raw;
 	if (!data || typeof data !== 'object') {
 		throw new PaperMirrorError('BAD_RESPONSE', 'The translation response is not an object.');
@@ -114,11 +114,26 @@ export function validateResponse(raw: string | unknown, expectedIds: string[]): 
 		throw new PaperMirrorError('BAD_RESPONSE', 'The translation response is missing the "translations" array.');
 	}
 	const expected = new Set(expectedIds);
+	// Joint sentence restoration must see an ambiguous part as missing, rather
+	// than a first-row choice made before the parent can enforce completeness.
+	// Count even malformed/empty occurrences of an expected id in strict mode.
+	const counts = new Map<string, number>();
+	if (options?.rejectDuplicateIds) {
+		for (const entry of translationsRaw) {
+			if (entry && typeof entry.id === 'string') {
+				counts.set(entry.id, (counts.get(entry.id) ?? 0) + 1);
+			}
+		}
+	}
 	const seen = new Set<string>();
 	const translations: TranslatedBlock[] = [];
 	const extraIds: string[] = [];
 	for (const entry of translationsRaw) {
 		if (!entry || typeof entry.id !== 'string' || typeof entry.translatedText !== 'string') {
+			continue;
+		}
+		if (options?.rejectDuplicateIds && expected.has(entry.id)
+			&& (counts.get(entry.id) !== 1 || !entry.translatedText.trim())) {
 			continue;
 		}
 		if (seen.has(entry.id)) {
@@ -132,6 +147,7 @@ export function validateResponse(raw: string | unknown, expectedIds: string[]): 
 			extraIds.push(entry.id);
 		}
 	}
-	const missingIds = expectedIds.filter(id => !seen.has(id));
+	const accepted = options?.rejectDuplicateIds ? new Set(translations.map(t => t.id)) : seen;
+	const missingIds = expectedIds.filter(id => !accepted.has(id));
 	return { translations, missingIds, extraIds };
 }

@@ -86,7 +86,9 @@ export interface TableRegion {
 
 /** Cell-like: short and dominated by digits/symbols rather than prose. */
 export function looksTabular(text: string): boolean {
-	const t = text.trim();
+	// Raised source digits remain semantic Unicode in displayed text. Use an
+	// equivalent numeric view only for this structural classification.
+	const t = text.normalize('NFKC').trim();
 	if (!t || t.length > 160) {
 		return false;
 	}

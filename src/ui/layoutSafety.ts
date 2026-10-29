@@ -328,6 +328,28 @@ export function imageSafeRegions(box: PixelBox, images: PixelBox[]): PixelBox[] 
  return result.sort((a,b)=>a.top-b.top || a.left-b.left);
 }
 
+/** Reserve neighbouring source ink even when subtraction leaves only one band.
+ * `undefined` means the original rectangle is safe. An empty array means no
+ * translation can be placed here; it must stay original. Neither case may be
+ * inferred from the number of surviving bands alone.
+ */
+export function sourcePlacementFlow(
+ region: PixelBox, sourceBands: PixelBox[], obstacles: PixelBox[], fontPx: number, minSize: number
+): PixelBox[] | undefined {
+ const rectangular = sourceBands.every(b => b.top >= region.top - .5
+  && b.top + b.height <= region.top + region.height + .5
+  && b.left >= region.left - .5 && b.left + b.width <= region.left + region.width + .5
+  && Math.abs(b.left - region.left) <= fontPx * 1.5)
+  && !obstacles.some(b => inter(region,b) > 0);
+ const safe = (sourceBands.length > 1 && !rectangular ? sourceBands : [region])
+  .flatMap(b => imageSafeRegions(b,obstacles))
+  .filter(b => b.width >= minSize && b.height >= minSize);
+ const only = safe[0];
+ const unchanged = safe.length === 1 && only !== undefined
+  && (['left','top','width','height'] as const).every(k => Math.abs(only[k]-region[k]) < .01);
+ return unchanged ? undefined : safe;
+}
+
 /** Split without loss; measurement is provided by the actual renderer/font. */
 export function flowText<T>(text: string, regions: T[], fits: (text: string, region: T, index: number, offset: number)=>boolean): string[] | null {
  const chars=Array.from(text),parts:string[]=[];

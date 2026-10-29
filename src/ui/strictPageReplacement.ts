@@ -35,7 +35,7 @@ import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
 import { detectTableRegions } from '../reader/tableGuard';
 import { buildTableModel, buildTextTableModel, cellPreserveEvidence, type CellMember } from '../reader/tableStructure';
-import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, planOverlapClips, imageSafeBox, imageSafeRegions, sourceFlowRegions, flowText, type AuditBox, type AuditObstacles } from './layoutSafety';
+import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, planOverlapClips, imageSafeBox, imageSafeRegions, sourceFlowRegions, sourcePlacementFlow, flowText, type AuditBox, type AuditObstacles } from './layoutSafety';
 import { parseStyledSegments } from '../reader/styleRuns';
 import {
 	inkFor,
@@ -557,15 +557,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// `replaceable: 0, committed: 0` —— 表题在这里被无条件丢弃,用户看到的是
 	// "这页一个字没译"。
 	//
-	// 表格的几何模型(区域探测、单元格成员)输入**维持原样**,见下面的 `tabular`:
-	// 这一版只放表题进排版,不动表格判定,免得把两个变化搅在一起。
 	const geometric = selectGeometricBlocks(preserveCollapsedPlotPanels(input.blocks));
-	// 表格几何模型的输入 —— 与改动前的 `geometric` 逐字相同(不含表题)。
-	// 表题不当区域种子、不当单元格成员: 它在表框外,进去只会污染区域范围。
-	const tabular = geometric.filter(b => b.type !== 'table' && !isTableCellBlock(b));
+	// Figure/table titles and captions already have their own source regions.
+	// Do not reinterpret them as cells of a nearby frame during rendering.
+	const tabular = geometric.filter(b => b.type !== 'table' && b.type !== 'caption' && b.sourceRegion?.kind !== 'legend-item' && !isTableCellBlock(b));
 	const translatable = geometric.filter(b => b.translationMode !== 'preserve');
-	// 页面基准字号仍只看正文侧样本(不含表题)—— bodyPt 会喂给 detectTableRegions
-	// 的 em,表题字号掺进中位数就会改变表格判定,而这一版不该动表格。
+	// Estimate the table detector's em from body/cell candidates, not captions.
 	const bodySizes = tabular.filter(b => b.translationMode !== 'preserve')
 		.map(b => b.fontSize ?? 0).filter(s => s > 0).sort((a, b) => a - b);
 	const bodyPt = bodySizes.length ? bodySizes[Math.floor(bodySizes.length / 2)]! : 10;
@@ -809,7 +806,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// A block overlapping a detected table REGION that the cell model did
 		// NOT turn into a cell (e.g. a paragraph the extractor stitched across
 		// cells) stays original — never stamped in Chinese across the table.
-		if (area > 0 && [...guard.regions, ...guard.textRegions].some(r => intersectArea(box, r as unknown as PixelBox) > area * 0.15)) {
+		if (block.sourceRegion?.kind !== 'legend-item' && area > 0 && [...guard.regions, ...guard.textRegions].some(r => intersectArea(box, r as unknown as PixelBox) > area * 0.15)) {
 			tableIntentional++;
 			skipped.push({ id: block.id, reason: 'table-structure' });
 			continue;
@@ -881,12 +878,24 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			const lines: PixelBox[] = [];
 			for (const rect of block.lineRectsPdf as Rect[]) {
 				const box = rectToPixels(rect, render, 1);
-				// A cell mask may erase source glyphs, never its border or neighbour.
+				// Marker-owned text may erase its glyphs, never the PDF's coloured
+				// mark just to its left. Padding must stay within the text owner,
+				// including when the marker gap is smaller than one screen pixel.
+				const bounded = block.tableRectPdf || imageTextBoxes.has(block.id) || block.sourceRegion?.kind === 'legend-item';
 				const inset = block.tableRectPdf ? Math.min(pxPerPoint, whole.width / 4, whole.height / 4) : 0;
-				const left = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.max(box.left - pad, whole.left + inset) : box.left - pad;
-				const top = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.max(box.top - pad, whole.top + inset) : box.top - pad;
-				const right = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.min(box.left + box.width + pad, whole.left + whole.width - inset) : box.left + box.width + pad;
-				const bottom = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.min(box.top + box.height + pad, whole.top + whole.height - inset) : box.top + box.height + pad;
+				let left = bounded ? Math.max(box.left - pad, whole.left + inset) : box.left - pad;
+				let top = bounded ? Math.max(box.top - pad, whole.top + inset) : box.top - pad;
+				let right = bounded ? Math.min(box.left + box.width + pad, whole.left + whole.width - inset) : box.left + box.width + pad;
+				let bottom = bounded ? Math.min(box.top + box.height + pad, whole.top + whole.height - inset) : box.top + box.height + pad;
+				if (block.sourceRegion?.kind === 'legend-item') {
+					// A fractional fill can still tint the marker's antialiased tip
+					// in the neighbouring bitmap pixel. Only fully owned pixels may
+					// be painted; the source drawing remains byte-for-byte intact.
+					left = Math.ceil(left * BITMAP_SCALE) / BITMAP_SCALE;
+					top = Math.ceil(top * BITMAP_SCALE) / BITMAP_SCALE;
+					right = Math.floor(right * BITMAP_SCALE) / BITMAP_SCALE;
+					bottom = Math.floor(bottom * BITMAP_SCALE) / BITMAP_SCALE;
+				}
 				if (right > left && bottom > top) {
                  const line={left,top,width:right-left,height:bottom-top};lines.push(line);
                  lineColours.set(line,block.tableId ? localPaper(ctx,line,BITMAP_SCALE,colour,true) : colour);
@@ -1009,7 +1018,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// Compute source occupancy once per page, not once per neighbour per block.
 	const sourceOccupancy = new Map(geometric.map(b => {
 		const bands = !isTableCellBlock(b)
-			? sourceFlowRegions(((b.lineRectsPdf ?? []) as Rect[]).map(r => rectToPixels(r, render, 1)), (b.fontSize ?? bodyPt) * pxPerPoint)
+			? (b.regionParagraphs?.length ? b.regionParagraphs : [{lineRectsPdf:b.lineRectsPdf ?? [],fontSize:b.fontSize}])
+				.flatMap(group => sourceFlowRegions(group.lineRectsPdf.map(r => rectToPixels(r, render, 1)), (group.fontSize ?? b.fontSize ?? bodyPt) * pxPerPoint))
 			: [];
 		return [b.id, bands.length > 1 ? bands : [clippedBox.get(b.id) ?? pxOf.get(b.id)!].filter(Boolean)] as const;
 	}));
@@ -1030,15 +1040,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// unobstructed block can use its complete rectangle without shrinking.
 		// A clipped bounding rectangle may retain only the wide foot of an
         // L-shaped paragraph. It cannot replace bands outside that rectangle.
-        const rectangular = sourceBands.every(b => b.top >= region.top - .5 && b.top + b.height <= region.top + region.height + .5
-            && b.left >= region.left - .5 && b.left + b.width <= region.left + region.width + .5
-            && Math.abs(b.left - region.left) <= (block.fontSize ?? bodyPt) * pxPerPoint * 1.5)
-			&& !obstacles.some(b => intersectArea(region, b) > 0);
-		const safeRegions = (sourceBands.length > 1 && !rectangular ? sourceBands : [region])
-			.flatMap(band => imageSafeRegions(band, obstacles))
-			.filter(r => r.width >= 4 * pxPerPoint && r.height >= 4 * pxPerPoint);
 		const fullSourceBox = pixelBox(block, render, 1);
-		const flowBoxes = !isTableCellBlock(block) && safeRegions.length > 1 ? safeRegions : undefined;
+		const flowBoxes = !isTableCellBlock(block)
+			? sourcePlacementFlow(region, sourceBands, obstacles, (block.fontSize ?? bodyPt) * pxPerPoint, 4 * pxPerPoint)
+			: undefined;
 		const box = flowBoxes ? fullSourceBox : imageSafeBox(region, imageBoxes);
 		if (!box) {
 			skipped.push({ id: block.id, reason: 'image' });
@@ -1075,7 +1080,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// 角色(脚注、表注、细则),保留自己的字号;带内的仍统一,免得相邻段落忽大忽小。
 		const ownPt = block.fontSize ?? bodyPt;
 		const inBand = anchorPt > 0 && ownPt >= anchorPt * 0.8 && ownPt <= anchorPt * 1.25;
-		const rolePt = (block.type === 'paragraph' || block.type === 'list') && inBand && !isTableCellBlock(block)
+		const rolePt = (block.type === 'paragraph' || block.type === 'list') && inBand && !isTableCellBlock(block) && block.sourceRegion?.kind !== 'legend-item'
 			? anchorPt
 			: ownPt;
 		// Apply the readability floor in PDF points, then scale the whole page.
@@ -1558,6 +1563,9 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		item.node.style.height = `${item.originalBox.height}px`;
 	};
 	const tryAnnexTitle = (item: StrictItem): boolean => {
+		// A flow container is positioned through its child bands. Moving only
+		// the parent would leave geometry validation checking the old bands.
+		if (item.flowBoxes !== undefined) return false;
 		const pageH = canvas.height / BITMAP_SCALE;
 		const ob = item.originalBox;
 		item.node.style.letterSpacing = '';
@@ -2158,9 +2166,9 @@ export function isTableCellBlock(block: { id: string; tableRow?: number }): bool
 }
 
 /** 页面基准字号的样本 (2.7.3) — pure: 只有正文流块,表格单元格不算。 */
-export function bodyAnchorSizes(blocks: { id: string; type: string; fontSize?: number; tableRow?: number }[]): number[] {
+export function bodyAnchorSizes(blocks: { id: string; type: string; fontSize?: number; tableRow?: number; sourceRegion?: SourceBlock['sourceRegion'] }[]): number[] {
 	return blocks
-		.filter(b => (b.type === 'paragraph' || b.type === 'list') && !isTableCellBlock(b))
+		.filter(b => (b.type === 'paragraph' || b.type === 'list') && !isTableCellBlock(b) && b.sourceRegion?.kind !== 'legend-item')
 		.map(b => b.fontSize ?? 0);
 }
 

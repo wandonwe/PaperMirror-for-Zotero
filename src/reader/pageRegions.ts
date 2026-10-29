@@ -2,6 +2,7 @@ import type {SourceBlock,SourceRegion} from '../types/models';
 import {tableCellBounds} from '../ir/tableModel';
 import {coalesceRegions} from './regionCoalescer';
 import {orderBlocksForReading} from './readingOrder';
+import {repairBodyColumnOwnership} from './bodyColumnContinuity';
 type Rect=[number,number,number,number];
 function union(rects:Rect[]):Rect {
  return [Math.min(...rects.map(r=>r[0])),Math.min(...rects.map(r=>r[1])),Math.max(...rects.map(r=>r[2])),Math.max(...rects.map(r=>r[3]))];
@@ -50,6 +51,9 @@ export function assignPageRegions(blocks:SourceBlock[],pageHeight:number):Source
 }
 /** Shared stage for char, text-content and text-layer extraction paths. */
 export function finalizePageRegions(blocks:SourceBlock[],pageHeight:number,obstacles:Rect[]=[]):SourceBlock[] {
+ const repaired=repairBodyColumnOwnership(blocks,obstacles);
+ const repairedColumns=repaired!==blocks;
+ blocks=repaired;
  const isPanel=(b:SourceBlock):boolean=>b.sourceRegion?.kind==='caption' && b.sourceRegion.id.includes('-panel-title-');
  const hasPanel=blocks.some(isPanel);
  const protectedBlocks=blocks.filter(b=>b.translationMode!==undefined || isPanel(b));
@@ -59,6 +63,6 @@ export function finalizePageRegions(blocks:SourceBlock[],pageHeight:number,obsta
  const formulas=protectedBlocks.filter(b=>b.preserveReason==='display-formula').flatMap(b=>b.lineRectsPdf ?? []);
  const captions=protectedBlocks.filter(isPanel).flatMap(b=>b.lineRectsPdf??[]);
  const body=blocks.filter(b=>!protectedBlocks.includes(b));
- const prose=coalesceRegions(hasPanel?orderBlocksForReading(body):body,[...obstacles,...formulas,...captions]);
+ const prose=coalesceRegions(hasPanel||repairedColumns?orderBlocksForReading(body):body,[...obstacles,...formulas,...captions]);
  return assignPageRegions(orderBlocksForReading([...prose,...protectedBlocks]),pageHeight);
 }

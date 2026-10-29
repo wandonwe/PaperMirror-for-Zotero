@@ -1,6 +1,7 @@
 import type { SourceBlock } from '../types/models';
 import type { SpanItem } from './spanBlockBuilder';
 import { joinLines } from './paragraphHeuristics';
+import { joinSemanticSpans } from './semanticSpans';
 
 type Rect = [number, number, number, number];
 interface Line { items: SpanItem[]; rect: Rect; font: number }
@@ -18,11 +19,7 @@ const fontOf = (items: SpanItem[]): number => {
  return [...weights].sort((a, b) => b[1] - a[1])[0]?.[0] || 8;
 };
 function text(items: SpanItem[]): string {
- const sorted = items.slice().sort((a, b) => a.rect[0] - b.rect[0]);
- return sorted.reduce((out, item, index) => {
-  const gap = index ? item.rect[0] - sorted[index - 1]!.rect[2] : 0;
-  return out + (index && gap > itemFont(item) * .13 ? ' ' : '') + item.text.trim();
- }, '').trim();
+ return joinSemanticSpans(items, {spaceThreshold: .13, trimRuns: true, gapFontSize: 'run', joinCJK: false});
 }
 const line = (items: SpanItem[]): Line => ({items, rect: union(items), font: fontOf(items)});
 /** Group baselines independently of page gutters. The heading of the value

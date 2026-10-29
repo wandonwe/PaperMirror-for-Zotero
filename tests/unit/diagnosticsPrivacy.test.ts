@@ -135,7 +135,7 @@ test('尝试去向明细只含枚举键与数字,错误消息一律不进诊断 
 
 test('readerSession 把三个计量钩子原样转给适配器 (结构性回归闸, 2.7.9)', () => {
 	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
-	const call = /provider\.translate\(request,[^;]*?\);/s.exec(src);
+	const call = /provider\.translate\(outgoing,[^;]*?\);/s.exec(src);
 	assert.ok(call, '找不到 provider.translate 调用');
 	for (const hook of ['onAttempt', 'onUsage', 'onParamHeal']) {
 		assert.ok(new RegExp(`${hook}: hooks\\?\\.${hook}`).test(call[0]),

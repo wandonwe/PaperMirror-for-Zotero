@@ -35,6 +35,31 @@ test('validateResponse ignores extra and duplicate ids', () => {
 	assert.deepEqual(result.extraIds, ['zzz']);
 });
 
+test('strict part validation makes duplicate expected ids missing without losing independent valid ids', () => {
+	const raw = '{"translations":[{"id":"part","translatedText":"first"},{"id":"part","translatedText":"conflict"},{"id":"normal","translatedText":"独立译文"}]}';
+	const result = validateResponse(raw, ['part', 'normal'], { rejectDuplicateIds: true });
+	assert.deepEqual(result.translations, [{ id: 'normal', translatedText: '独立译文' }]);
+	assert.deepEqual(result.missingIds, ['part']);
+});
+
+test('strict part validation counts malformed duplicate rows and rejects empty expected parts', () => {
+	const raw = { translations: [
+		{ id: 'duplicate', translatedText: 'first' }, { id: 'duplicate', translatedText: null },
+		{ id: 'empty', translatedText: '  ' }, { id: 'valid', translatedText: '完整译文' }
+	] };
+	const result = validateResponse(raw, ['duplicate', 'empty', 'valid'], { rejectDuplicateIds: true });
+	assert.deepEqual(result.translations, [{ id: 'valid', translatedText: '完整译文' }]);
+	assert.deepEqual(result.missingIds, ['duplicate', 'empty']);
+});
+
+test('strict unknown ids cannot fulfil an expected sentence part', () => {
+	const result = validateResponse({ translations: [{ id: 'unknown', translatedText: '错误的身份' }] },
+		['part'], { rejectDuplicateIds: true });
+	assert.deepEqual(result.translations, []);
+	assert.deepEqual(result.missingIds, ['part']);
+	assert.deepEqual(result.extraIds, ['unknown']);
+});
+
 test('validateResponse throws on non-JSON', () => {
 	assert.throws(() => validateResponse('not json at all', ['a']), PaperMirrorError);
 });

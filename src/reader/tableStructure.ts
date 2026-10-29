@@ -775,7 +775,13 @@ function structureTableCellsUnchecked(
 	const FURNITURE = new Set(['display-formula', 'running-head', 'watermark', 'sliver', 'banner', 'boilerplate', 'names', 'dates', 'bibliographic', 'identifier']);
 	const isFurniture = (b: SourceBlock): boolean =>
 		b.translationMode === 'preserve' && !!b.preserveReason && FURNITURE.has(b.preserveReason);
-	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox && !isFurniture(b) && !(b.type==='caption'&&b.sourceRegion?.kind==='caption'));
+	// A figure caption is prose belonging to the figure, not a table cell.
+	// Its last line can extend beyond a decorative frame's apparent last row;
+	// assigning it by the centre point would shrink the owner and clip its mask.
+	// A numbered Table badge can share a caption region with its title. Keep
+	// that type='table' badge as a detector anchor; member selection below
+	// already prevents it from becoming cell content.
+	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox && !isFurniture(b) && b.type !== 'caption' && b.sourceRegion?.kind !== 'legend-item');
 	if (!geometric.length || (geometric.length < 2 && !grid)) {
 		return blocks;
 	}
@@ -814,7 +820,20 @@ function structureTableCellsUnchecked(
                 // original text box instead of welding the coloured panels.
                 const contradictory=model.cells.some(cell=>{
                  const xs=cell.memberIds.map(id=>originalById.get(id)!).filter(b=>b?.boundingBox);
-                 return xs.some((a,i)=>xs.slice(i+1).some(b=>{
+                 const ordered=[...xs].sort((a,b)=>a.boundingBox!.y-b.boundingBox!.y);
+                 // A large unoccupied band inside an apparent cell is not
+                 // evidence that text above and below it forms one flow. A
+                 // framed illustration can surround a heading, the picture,
+                 // and its notes. Keep those source boxes independent instead
+                 // of translating them together through the empty picture band.
+                 let bottom=-Infinity;
+                 const disconnected=ordered.some(b=>{
+                  const box=b.boundingBox!,gap=box.y-bottom;
+                  const split=Number.isFinite(bottom)&&gap>Math.max(6,em,b.fontSize||em)*6;
+                  bottom=Math.max(bottom,box.y+box.height);
+                  return split;
+                 });
+                 return disconnected || xs.some((a,i)=>xs.slice(i+1).some(b=>{
                   const x=a.boundingBox!,y=b.boundingBox!,f=Math.min(a.fontSize||em,b.fontSize||em);
                   return Math.abs(x.y-y.y)<f*.6 && Math.max(x.x,y.x)-Math.min(x.x+x.width,y.x+y.width)>f;
                  }));
@@ -858,6 +877,7 @@ function structureTableCellsUnchecked(
 						...(cell.rowSpan ? { tableRowSpan: cell.rowSpan } : {}),
 						...(cell.colSpan ? { tableColSpan: cell.colSpan } : {}),
 						lineRectsPdf: originals.flatMap(o => o.lineRectsPdf ?? []),
+						...mergedLayoutBarriers(originals),
 						...(sizes.length ? { fontSize: sizes[Math.floor(sizes.length / 2)] } : {}),
 						...(pageColumn !== undefined ? { column: pageColumn } : {}),
 						tableRow: cell.row,
@@ -952,6 +972,7 @@ function structureTableCellsUnchecked(
 				...(cell.rowSpan ? { tableRowSpan: cell.rowSpan } : {}),
 				...(cell.colSpan ? { tableColSpan: cell.colSpan } : {}),
 				lineRectsPdf: originals.flatMap(b => b.lineRectsPdf ?? []),
+				...mergedLayoutBarriers(originals),
 				fontSize: sizes.length ? sizes[Math.floor(sizes.length / 2)] : undefined,
 				column: pageColumn,
 				tableCol: cell.col,
@@ -1073,6 +1094,13 @@ export function buildGridTableModel(
 	}
 	cells.sort((a, b) => a.row - b.row || a.col - b.col);
 	return { region: grid.region, rowCount: grid.rows.length - 1, colCount: grid.columns.length - 1, cells };
+}
+
+/** Keep non-text layout barriers when member fragments become a new cell. */
+function mergedLayoutBarriers(originals: SourceBlock[]): Pick<SourceBlock, 'layoutBarriersPdf'> {
+ const barriers = [...new Map(originals.flatMap(b => b.layoutBarriersPdf ?? [])
+  .map(r => [r.join(','), [...r] as [number, number, number, number]])).values()];
+ return barriers.length ? { layoutBarriersPdf: barriers } : {};
 }
 
 /** Source blocks use top-down bounding boxes and bottom-up PDF ink rectangles. */

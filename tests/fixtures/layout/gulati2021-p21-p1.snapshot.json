@@ -28,7 +28,7 @@
 		"tableRow": 0,
 		"tableCol": 3,
 		"mode": "translate",
-		"text": "Stress CMR6"
+		"text": "Stress CMR⁶"
 	},
 	{
 		"type": "paragraph",
@@ -55,7 +55,7 @@
 		"tableRow": 2,
 		"tableCol": 3,
 		"mode": "translate",
-		"text": "min/1.73 m2)"
+		"text": "min/1.73 m²)"
 	},
 	{
 		"type": "paragraph",
@@ -181,7 +181,7 @@
 		"tableRow": 0,
 		"tableCol": 1,
 		"mode": "translate",
-		"text": "Stress Nuclear1*"
+		"text": "Stress Nuclear¹*"
 	},
 	{
 		"type": "paragraph",
@@ -275,7 +275,7 @@
 		"type": "paragraph",
 		"column": 3,
 		"readingIndex": 39,
-		"text": "CCTA7* Allergy to iodinated contrast Ina"
+		"text": "CCTA⁷* Allergy to iodinated contrast Ina"
 	},
 	{
 		"type": "paragraph",

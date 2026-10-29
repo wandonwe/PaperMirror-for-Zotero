@@ -1,4 +1,5 @@
 import { imageCaptionRegions, withinCaption, markImageCaptions } from './imageCaption';
+import { extractLegendItems } from './legendItems';
 /**
  * Pure logic that turns the char stream from Zotero's PDF.js fork
  * (pdfDocument.getPageData -> chars with break flags) into structured
@@ -7,6 +8,7 @@ import { imageCaptionRegions, withinCaption, markImageCaptions } from './imageCa
 
 import type { BlockType, BoundingBox, PdfChar, SourceBlock } from '../types/models';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
+import { isDecorativeTextRule } from './textRules';
 import { detectGlyphFormulaRuns } from './glyphFormula';
 import { detectStyleRuns } from './styleRuns';
 import { isIdentifierLabel, classifyContent, isPublisherBoilerplateLine } from './metaFilter';
@@ -32,6 +34,8 @@ import {
 } from './paragraphHeuristics';
 
 export interface BuildOptions {
+ /** Reuses the page's existing painted-path scan; never guesses from prose gaps. */
+ legendSegmentsPdf?: Rect[];
 	pageIndex: number;
 	/** Page height in PDF units (used to normalize Y and find header/footer bands). */
 	pageHeight: number;
@@ -478,8 +482,22 @@ function toBoundingBox(rect: [number, number, number, number], pageHeight: numbe
  */
 export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResult {
 	const { pageIndex, pageHeight, pageWidth } = options;
+	if (options.legendSegmentsPdf?.length) {
+		const spans = chars.map(c => ({ text: c.c, rect: c.rect as Rect, fontSize: c.fontSize }));
+		const legends = extractLegendItems(spans, { pageIndex, pageWidth, pageHeight,
+			segments: options.legendSegmentsPdf, obstacles: options.imageRectsPdf });
+		if (legends.blocks.length) {
+			const remaining = new Set(legends.rest);
+			const rest = buildBlocks(chars.filter((_, i) => remaining.has(spans[i]!)), { ...options, legendSegmentsPdf: undefined });
+			return { ...rest, blocks: [...rest.blocks, ...legends.blocks],
+				totalParagraphs: rest.totalParagraphs + legends.blocks.length };
+		}
+	}
 	const obstacles = options.imageRectsPdf ?? [];
 	let lines = buildLines(chars);
+	const ruleLines=lines.filter(l=>isDecorativeTextRule(textForRange(chars,l.start,l.end),l.rect,l.fontSize));
+	const ruleRects=ruleLines.map(l=>l.rect);
+	if (ruleLines.length) lines=lines.filter(l=>!ruleLines.includes(l));
 	const captionRegions=imageCaptionRegions(lines.map(l=>({text:textForRange(chars,l.start,l.end),rect:l.rect as Rect,fontSize:l.fontSize})),obstacles);
 	// 边框硬屏障 rule 1: lines INSIDE a figure are diagram labels ("X-rays",
 	// "Low keV") — they stay on the original page and never enter the
@@ -492,7 +510,7 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 	// on page 1 they sit mid-page across the gutter, where the position-based
 	// furniture filter can't see them, and one such line bridges the columns.
 	lines = lines.filter(l => !isPublisherBoilerplateLine(textForRange(chars, l.start, l.end)));
-	let paragraphs = buildParagraphs(chars, lines, pageWidth, pageHeight, obstacles);
+	let paragraphs = buildParagraphs(chars, lines, pageWidth, pageHeight, [...obstacles,...ruleRects]);
 	paragraphs = paragraphs.filter(p => !isHeaderOrFooter(p, pageHeight));
 	paragraphs = orderParagraphs(paragraphs, pageWidth);
 
@@ -551,6 +569,7 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 			sourceText: text,
 			boundingBox: toBoundingBox(p.rect, pageHeight),
 			lineRectsPdf: p.lines.map(line => [...line.rect] as [number, number, number, number]),
+			...(ruleRects.length?{layoutBarriersPdf:ruleRects.map(r=>[...r] as Rect)}:{}),
 			fontSize: p.fontSize,
 			column: columnOf(p.rect as Rect, columnBands, pageWidth),
 			isReference,
