@@ -87,4 +87,3 @@ export async function oneFont(options: Parameters<typeof font>[1] = {}): Promise
  page.node.set(PDFName.of('Resources'), pdf.context.obj({ Font: { F1: font(pdf, options) } }));
  return source(pdf);
 }
-
