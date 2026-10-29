@@ -59,6 +59,42 @@ function bitmapScaleFor(widthPx: number, heightPx: number): number {
 	return Math.max(1, Math.min(BITMAP_SCALE_MAX, Math.sqrt(BITMAP_PIXEL_BUDGET / area)));
 }
 
+/** Marker-owned masks have different horizontal and vertical boundaries.
+ * Only whole pixels inside the text's horizontal owner may cover the page:
+ * even a fractional pixel to the left can tint a neighbouring coloured mark.
+ * Vertically, PDF advance boxes are not exact glyph-ink bounds. Keep normal
+ * glyph padding and round outward, bounded by the whitespace partition to
+ * other source lines so peek/revert cannot clear a neighbouring line's mask. */
+export function legendMaskLineBox(line: PixelBox, owner: PixelBox, otherLines: readonly PixelBox[],
+	pad: number, bitmapScale: number, pageHeight: number): PixelBox | null {
+	const finiteBox = (box: PixelBox): boolean => [box.left, box.top, box.width, box.height].every(Number.isFinite)
+		&& box.width > 0 && box.height > 0;
+	if (!finiteBox(line) || !finiteBox(owner) || !Number.isFinite(pad) || pad < 0
+		|| !(Number.isFinite(bitmapScale) && bitmapScale > 0) || !(Number.isFinite(pageHeight) && pageHeight > 0)) return null;
+	const left = Math.ceil(Math.max(line.left - pad, owner.left) * bitmapScale) / bitmapScale;
+	const right = Math.floor(Math.min(line.left + line.width + pad, owner.left + owner.width) * bitmapScale) / bitmapScale;
+	let upperLimit = 0, lowerLimit = pageHeight;
+	for (const other of otherLines) {
+		if (!finiteBox(other) || Math.min(right, other.left + other.width) <= Math.max(left, other.left)) continue;
+		const otherBottom = other.top + other.height, bottom = line.top + line.height;
+		if (otherBottom <= line.top) upperLimit = Math.max(upperLimit, (otherBottom + line.top) / 2);
+		else if (other.top >= bottom) lowerLimit = Math.min(lowerLimit, (bottom + other.top) / 2);
+		else {
+			// Existing overlapping source evidence cannot justify growing a mask.
+			upperLimit = Math.max(upperLimit, line.top);
+			lowerLimit = Math.min(lowerLimit, bottom);
+		}
+	}
+	const top = Math.max(0, Math.floor((line.top - pad) * bitmapScale)) / bitmapScale;
+	const bottom = Math.min(Math.ceil((line.top + line.height + pad) * bitmapScale), Math.floor(pageHeight * bitmapScale)) / bitmapScale;
+	// Shortening this interval would recreate a partially erased original.
+	// A caller must retain the complete entry when the padded glyph band has
+	// insufficient space; no ink/geometry threshold is relaxed to make it fit.
+	if (top < Math.ceil(upperLimit * bitmapScale) / bitmapScale
+		|| bottom > Math.floor(lowerLimit * bitmapScale) / bitmapScale) return null;
+	return right > left && bottom > top ? { left, top, width: right - left, height: bottom - top } : null;
+}
+
 /** The leading/tracking compress ladder. The FONT SIZE never changes here. */
 const STRICT_LADDER: { lineHeight: number; letterSpacingEm: number }[] = [
 	{ lineHeight: 1.42, letterSpacingEm: 0 },
@@ -865,6 +901,9 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const blockPaper = new Map<string, string>();
 	const lineBoxesFor = new Map<string, PixelBox[]>();
  const lineColours = new WeakMap<PixelBox,string>();
+	const unsafeLegendMasks = new Set<string>();
+	const sourceMaskLines = geometric.flatMap(block => ((block.lineRectsPdf ?? []) as Rect[])
+		.map(rect => ({ id: block.id, box: rectToPixels(rect, render, 1) })));
 	if (ctx) {
 		for (const block of replaceable) {
 			const whole = pixelBox(block, render, 1);
@@ -878,24 +917,21 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			const lines: PixelBox[] = [];
 			for (const rect of block.lineRectsPdf as Rect[]) {
 				const box = rectToPixels(rect, render, 1);
-				// Marker-owned text may erase its glyphs, never the PDF's coloured
-				// mark just to its left. Padding must stay within the text owner,
-				// including when the marker gap is smaller than one screen pixel.
-				const bounded = block.tableRectPdf || imageTextBoxes.has(block.id) || block.sourceRegion?.kind === 'legend-item';
+				if (block.sourceRegion?.kind === 'legend-item') {
+					const line = legendMaskLineBox(box, whole, sourceMaskLines.filter(other => other.id !== block.id).map(other => other.box),
+						pad, BITMAP_SCALE, pageHeightPx);
+					if (!line) { unsafeLegendMasks.add(block.id); lines.length = 0; break; }
+					lines.push(line); lineColours.set(line, colour);
+					continue;
+				}
+				// Table cells and labels embedded in an image retain their existing
+				// owner-bound padding; marker-owned text was handled separately.
+				const bounded = block.tableRectPdf || imageTextBoxes.has(block.id);
 				const inset = block.tableRectPdf ? Math.min(pxPerPoint, whole.width / 4, whole.height / 4) : 0;
 				let left = bounded ? Math.max(box.left - pad, whole.left + inset) : box.left - pad;
 				let top = bounded ? Math.max(box.top - pad, whole.top + inset) : box.top - pad;
 				let right = bounded ? Math.min(box.left + box.width + pad, whole.left + whole.width - inset) : box.left + box.width + pad;
 				let bottom = bounded ? Math.min(box.top + box.height + pad, whole.top + whole.height - inset) : box.top + box.height + pad;
-				if (block.sourceRegion?.kind === 'legend-item') {
-					// A fractional fill can still tint the marker's antialiased tip
-					// in the neighbouring bitmap pixel. Only fully owned pixels may
-					// be painted; the source drawing remains byte-for-byte intact.
-					left = Math.ceil(left * BITMAP_SCALE) / BITMAP_SCALE;
-					top = Math.ceil(top * BITMAP_SCALE) / BITMAP_SCALE;
-					right = Math.floor(right * BITMAP_SCALE) / BITMAP_SCALE;
-					bottom = Math.floor(bottom * BITMAP_SCALE) / BITMAP_SCALE;
-				}
 				if (right > left && bottom > top) {
                  const line={left,top,width:right-left,height:bottom-top};lines.push(line);
                  lineColours.set(line,block.tableId ? localPaper(ctx,line,BITMAP_SCALE,colour,true) : colour);
@@ -1026,6 +1062,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const items: StrictItem[] = [];
 	const byId = new Map<string, StrictItem>();
 	for (const block of replaceable) {
+		if (unsafeLegendMasks.has(block.id)) {
+			skipped.push({ id: block.id, reason: 'legend-mask-boundary' });
+			continue;
+		}
 		const candidate = isTableCellBlock(block) ? pixelBox(block, render, 1)
 			: clippedBox.get(block.id) ?? pixelBox(block, render, 1);
 		const inset = block.tableRectPdf ? Math.min(pxPerPoint, candidate.width / 4, candidate.height / 4) : 0;
@@ -1797,7 +1837,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// ---- live placement stats (#6): never a silent English block -----------
 	(page as HTMLElement & { pmStats?: () => StrictPageStats }).pmStats = (): StrictPageStats => {
 		let committed = 0;
-		let abandoned = 0;
+		let abandoned = unsafeLegendMasks.size;
 		let pending = 0;
 		for (const item of items) {
 			if (item.committed) {
@@ -1811,7 +1851,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			}
 		}
 		return {
-			replaceable: items.length,
+			replaceable: items.length + unsafeLegendMasks.size,
 			committed, abandoned, pending,
 			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed, inkBlocked,
 			layoutMs: Math.round(layoutMs)
@@ -1830,8 +1870,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		element: page,
 		blocksPlaced: items.length,
 		stats: {
-			replaceable: items.length,
-			committed: 0, abandoned: 0, pending: items.length,
+			replaceable: items.length + unsafeLegendMasks.size,
+			committed: 0, abandoned: unsafeLegendMasks.size, pending: items.length,
 			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed: 0, inkBlocked: 0,
 			layoutMs: Math.round(layoutMs)
 		}
