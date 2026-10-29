@@ -127,7 +127,7 @@
 		"tableRow": 8,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Minimum lumen area (mm2)"
+		"text": "Minimum lumen area (mm²)"
 	},
 	{
 		"type": "paragraph",
@@ -163,7 +163,7 @@
 		"tableRow": 10,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Total plaque volume (mm3)"
+		"text": "Total plaque volume (mm³)"
 	},
 	{
 		"type": "paragraph",
@@ -181,7 +181,7 @@
 		"tableRow": 11,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Calcified plaque volume (mm3)"
+		"text": "Calcified plaque volume (mm³)"
 	},
 	{
 		"type": "paragraph",
@@ -199,7 +199,7 @@
 		"tableRow": 12,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Noncalcified plaque volume (mm3) 41.8 (2"
+		"text": "Noncalcified plaque volume (mm³) 41.8 (2"
 	},
 	{
 		"type": "paragraph",
@@ -208,7 +208,7 @@
 		"tableRow": 13,
 		"tableCol": 0,
 		"mode": "translate",
-		"text": "Necrotic core volume (mm3)"
+		"text": "Necrotic core volume (mm³)"
 	},
 	{
 		"type": "paragraph",

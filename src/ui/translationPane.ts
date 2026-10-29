@@ -1237,6 +1237,8 @@ export class TranslationPane {
 		let card = this.explanationHost.querySelector('.pm-explain-card') as HTMLElement | null;
 		if (!card) {
 			card = this.el('div', 'pm-explain-card pm-explain-floating');
+			card.setAttribute('role', 'region');
+			card.setAttribute('aria-label', this.strings.explainTitle);
 			const head = this.el('div', 'pm-card-head');
 			const titles = this.el('div', 'pm-card-titles');
 			titles.append(
@@ -1245,6 +1247,7 @@ export class TranslationPane {
 			);
 			const closeBtn = this.el('button', 'pm-card-close', '×');
 			closeBtn.setAttribute('title', this.strings.close);
+			closeBtn.setAttribute('aria-label', this.strings.close);
 			closeBtn.addEventListener('click', () => this.dismissExplanation());
 			head.append(this.el('span', 'pm-sparkle', '✦'), titles, closeBtn);
 

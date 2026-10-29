@@ -1084,19 +1084,22 @@ test('looksContextBleed flags an impossibly long first-block translation', () =>
 	assert.equal(looksContextBleed(source, bloated, false), false, 'no context → no bleed check');
 });
 
-test('an unfinished previous-page tail is injected as chunk-0 context (跨页续接)', async () => {
+test('an unfinished previous-page tail is bound to the continuing body block (跨页续接)', async () => {
 	const contexts: string[] = [];
 	const pageBlocks = (p: number): SourceBlock[] => [{
 		id: `p${p}b0`, pageIndex: p, order: 0, type: 'paragraph',
 		sourceText: p === 0
 			? 'The measurement protocol was applied to every cohort, and the resulting values were' // ends mid-sentence
-			: 'subsequently normalized against the baseline scans acquired before contrast injection.'
+			: 'subsequently normalized against the baseline scans acquired before contrast injection.',
+  column: 0, fontSize: 8,
+  boundingBox: {x:40,y:p===0?700:60,width:240,height:24},
+  lineRectsPdf: [[40,p===0?68:708,280,p===0?76:716]]
 	}];
 	const { deps } = makeDeps({
 		extractPage: async p => pageBlocks(p),
 		readCache: async () => null,
 		translateRequest: async (req) => {
-			contexts.push(req.previousContext);
+			contexts.push(...req.blocks.map(b => b.continuationContext?.before ?? ''));
 			return { translations: req.blocks.map(b => ({ id: b.id, translatedText: '这是完整的中文译文段落内容示例。' })) };
 		}
 	});
@@ -1104,7 +1107,7 @@ test('an unfinished previous-page tail is injected as chunk-0 context (跨页续
 	await manager.ensurePage(0, 10);
 	await manager.ensurePage(1, 10);
 	assert.ok(contexts.some(c => c.includes('resulting values were')),
-		`page-2 chunk 0 must carry the page-1 tail, got ${JSON.stringify(contexts)}`);
+		`the continuing block must carry the page-1 source tail, got ${JSON.stringify(contexts)}`);
 	manager.dispose();
 });
 

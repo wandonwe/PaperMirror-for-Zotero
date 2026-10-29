@@ -12,6 +12,13 @@ export function checkToolbar():void {
    const rect=button.getBoundingClientRect();
    if(rect.width && (rect.right>outer.right+1 || rect.left<outer.left-1)) throw Error(`Toolbar clips button at ${width}: ${button.title} ${rect.right-outer.right} ${JSON.stringify([...bar.children].map(c=>({cl:c.className,w:c.getBoundingClientRect().width})))}`);
   }
+  for(const control of bar.querySelectorAll<HTMLElement>('button, [role="switch"]')) {
+   const rect=control.getBoundingClientRect();
+   if(!rect.width)continue;
+   if(Math.abs(rect.height-28)>.1 || Math.abs(rect.top+rect.height/2-(outer.top+outer.height/2))>.1)
+    throw Error(`Toolbar control is not aligned at ${width}: ${control.className} ${rect.height}`);
+   if(rect.width<28-.1)throw Error(`Toolbar target too narrow at ${width}: ${control.className} ${rect.width}`);
+  }
   if(width<=860 && getComputedStyle(host.querySelector('.pm-provider-name')!).display!=='none')throw Error('Provider label uses window width instead of pane width');
   pane.destroy();host.remove();
  }

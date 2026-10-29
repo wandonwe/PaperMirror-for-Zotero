@@ -66,10 +66,10 @@ test('geometric 过滤不再排除表题 (结构性回归闸, 2.8.14)', () => {
 		"不许退回 `type !== 'table'` —— 它挡掉的只有表题,真机第 9 页整页因此一个字没译");
 });
 
-test('表格几何模型的输入维持原样(不含表题) (结构性回归闸, 2.8.14)', () => {
+test('表题、图注和独立图例不参与表格几何推断，已归属的单元格不再推断', () => {
 	const src = read('src/ui/strictPageReplacement.ts');
-	assert.ok(/const tabular = geometric\.filter\(b => b\.type !== 'table' && !isTableCellBlock\(b\)\);/.test(src),
-		'表题不当区域种子、不当单元格成员 —— 它在表框外,进去会撑大区域范围');
+	assert.ok(/const tabular = geometric\.filter\(b => b\.type !== 'table' && b\.type !== 'caption' && b\.sourceRegion\?\.kind !== 'legend-item' && !isTableCellBlock\(b\)\);/.test(src),
+		'表题和图注不当区域种子或单元格成员，避免图片外框把完整图注改写为矮表格格子');
 	assert.ok(/detectTableRegions\(\s*\n?\s*tabular\.map/.test(src),
 		'区域探测喂 tabular,不喂 geometric —— 这一版只放表题进排版,不动表格判定');
 	assert.ok(/const members: CellMember\[\] = tabular\b/.test(src),

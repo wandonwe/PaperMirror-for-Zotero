@@ -194,7 +194,7 @@ test('3.1.10:严格页只对字号带内的段落套用页面基准字号', () =
 	const src = readFileSync(join(process.cwd(), 'src/ui/strictPageReplacement.ts'), 'utf8')
 		.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 	assert.match(src, /const inBand = anchorPt > 0 && ownPt >= anchorPt \* 0\.8 && ownPt <= anchorPt \* 1\.25;/);
-	assert.match(src, /\(block\.type === 'paragraph' \|\| block\.type === 'list'\) && inBand && !isTableCellBlock\(block\)\s*\? anchorPt\s*: ownPt/,
+	assert.match(src, /\(block\.type === 'paragraph' \|\| block\.type === 'list'\) && inBand && !isTableCellBlock\(block\) && block\.sourceRegion\?\.kind !== 'legend-item'\s*\? anchorPt\s*: ownPt/,
 		'带外的块(脚注、表注)必须用自己的字号,不能被基准拉大或拉小');
 	// 一致性:带的边界与 bodyAnchorPt 选带的边界相同。
 	assert.equal(bodyAnchorPt([7, 7, 7, 7, 8.5, 10, 10, 20]), 7, 'CAD-RADS p1:四条 7pt 脚注让基准落在 7');

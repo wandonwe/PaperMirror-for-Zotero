@@ -1,6 +1,7 @@
 import {extractPanelTitles} from './panelTitles';
 import {removeCollapsedTextCopies} from './collapsedTextCopies';
 import {extractTwoColumnTables} from './twoColumnTable';
+import {joinSemanticSpans} from './semanticSpans';
 import {extractDescriptiveTables} from './descriptiveTable';
 import { separateDisplayFormulas } from './displayFormula';
 import { captionOwnership } from './captionOwnership';
@@ -8,6 +9,8 @@ import { semanticBoundary } from './semanticBoundary';
 import { extractAbbreviationTables } from './abbreviationTable';
 import { columnOfX, rowOfTop } from './tableBorders';
 import { imageCaptionRegions, withinCaption, markImageCaptions } from './imageCaption';
+import { isDecorativeTextRule } from './textRules';
+import { extractLegendItems } from './legendItems';
 /**
  * Build SourceBlocks from positioned text items (the PDF.js text layer).
  *
@@ -99,6 +102,15 @@ function columnGapThreshold(fontSize: number): number {
 	return Math.max(fontSize * 1.6, 8);
 }
 
+/** A page-wide gutter without a matching vertical channel is weak evidence.
+ * Slack admits real line overhangs, not ordinary word gaps inside the same line. */
+export function crossesLineGutter(previousRight: number, nextLeft: number,
+	gutter: Pick<BandedGutter, 'x' | 'top'>, slack: number, fontSize: number): boolean {
+	const gap = nextLeft - previousRight;
+	return previousRight <= gutter.x + slack && nextLeft >= gutter.x
+		&& (Number.isFinite(gutter.top) || previousRight <= gutter.x || gap >= fontSize * 0.25);
+}
+
 function union(a: Rect, b: Rect): Rect {
 	return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
 }
@@ -147,6 +159,21 @@ function sizeOf(items: SpanItem[]): number {
 		}
 	}
 	return best || 10;
+}
+
+/** Some PDFs draw dotted section rules as text. They have no linguistic
+ * content: including their full-width rect in prose welds neighbouring label
+ * and value columns, and their dots then enter the translated paragraph.
+ * Leave the original drawing intact, but exclude only independent, long dot
+ * rows from text extraction. Inline ellipses, leaders with labels/page numbers,
+ * short punctuation, and table rows of missing-value dashes remain content. */
+export function removeDecorativeTextRules(items: SpanItem[]): SpanItem[] {
+	const rules = new Set(decorativeTextRows(items).flat());
+	return rules.size ? items.filter(i => !rules.has(i)) : items;
+}
+
+function decorativeTextRows(items: SpanItem[]): SpanItem[][] {
+	return groupIntoRows(items).filter(row => isDecorativeTextRule(row.map(i => i.text).join(''), rectOf(row), sizeOf(row)));
 }
 
 /** Step 1: items sharing a baseline band, left to right. No x constraint. */
@@ -249,6 +276,39 @@ export function pageBodySize(lines: SpanLine[]): number {
 	return best;
 }
 
+/** A small raised/lowered run is read beside its local base, not beside
+ * whichever whole-page row happens to overlap it first. Resolve anchors from
+ * all runs before y-sorting: superscripts can appear before their base row. */
+function scriptRowAnchors(items: SpanItem[]): Map<SpanItem, SpanItem> {
+	const anchors = new Map<SpanItem, SpanItem>();
+	for (const script of items) {
+		const token = script.text.trim();
+		// Resolve compact indices/references (including alphabetic subscripts),
+		// never defer a smaller-font prose sentence or a complete heading.
+		const numericIndex = /^[+−-]?\d{1,6}$/u.test(token);
+		if (!token || (!numericIndex && [...token].length > 4) || /\s/u.test(token)) continue;
+		const size = fontSizeOf(script);
+		let nearest: SpanItem | undefined;
+		let best = Infinity;
+		for (const base of items) {
+			const font = fontSizeOf(base);
+			if (base === script || size < font * 0.45 || size > font * 0.86 || font <= 0) continue;
+			const gap = script.rect[0] - base.rect[2];
+			if (gap < -font * 0.2 || gap > font * 0.65) continue;
+			const rise = script.rect[1] - base.rect[1];
+			const lowered = base.rect[3] - script.rect[3];
+			const raised = rise >= font * 0.2 && rise <= font * 0.85 && script.rect[3] <= base.rect[3] + font * 0.4;
+			const subscript = lowered >= font * 0.2 && lowered <= font * 0.85
+				&& script.rect[1] <= base.rect[1] - font * 0.1;
+			if (!raised && !subscript) continue;
+			const score = Math.abs(gap) / font + Math.abs((script.rect[1] + script.rect[3]) - (base.rect[1] + base.rect[3])) / font * 0.05;
+			if (score < best) { best = score; nearest = base; }
+		}
+		if (nearest) anchors.set(script, nearest);
+	}
+	return anchors;
+}
+
 export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 	const usable = items.filter((i) => {
 		if (!i.text.trim().length || !Number.isFinite(i.rect[1]) || !Number.isFinite(i.rect[3])) {
@@ -269,7 +329,8 @@ export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 	if (!usable.length) {
 		return [];
 	}
-	const sorted = [...usable].sort((a, b) => (b.rect[3] - a.rect[3]) || (a.rect[0] - b.rect[0]));
+	const anchors = scriptRowAnchors(usable);
+	const sorted = usable.filter(item => !anchors.has(item)).sort((a, b) => (b.rect[3] - a.rect[3]) || (a.rect[0] - b.rect[0]));
 	const rows: { items: SpanItem[]; top: number; bottom: number }[] = [];
 	for (const item of sorted) {
 		const height = Math.max(1, item.rect[3] - item.rect[1]);
@@ -299,6 +360,23 @@ export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 			// 就是这样被下一行的「…tion to iodine-based…」污染的。上下标的本质
 			// 是**字号更小**,这一点不会被行盒的成长带偏。
 			if (itemFont > 0 && rowFontSize(r) > 0 && itemFont < rowFontSize(r) * 0.75) {
+				// A larger heading in another column can share the row's band.
+				// It must not make the next normal body line look like a script.
+				// Same-sized runs already overlapping this x-range provide the
+				// stable local baseline; unrelated columns cannot move its centre.
+				const sameSize = r.items.filter(peer => {
+					const size = fontSizeOf(peer);
+					return size > 0 && Math.abs(size - itemFont) <= Math.min(size, itemFont) * 0.15;
+				});
+				const peers = sameSize.filter(peer =>
+					Math.min(peer.rect[2], item.rect[2]) > Math.max(peer.rect[0], item.rect[0]));
+				const larger = r.items.filter(peer => itemFont < fontSizeOf(peer) * 0.75);
+				const separateColumn = larger.every(big => sameSize.every(peer =>
+					Math.max(big.rect[0] - peer.rect[2], peer.rect[0] - big.rect[2]) >= itemFont * 0.8));
+				if (peers.length && separateColumn) {
+					const band = rectOf(peers);
+					return Math.abs((band[1] + band[3]) / 2 - centre) <= height * 0.6;
+				}
 				const overlap = Math.min(r.top, item.rect[3]) - Math.max(r.bottom, item.rect[1]);
 				return overlap >= height * 0.5;
 			}
@@ -312,6 +390,15 @@ export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 		else {
 			rows.push({ items: [item], top: item.rect[3], bottom: item.rect[1] });
 		}
+	}
+	const rowFor = new Map(rows.flatMap(row => row.items.map(item => [item, row] as const)));
+	for (const [script, base] of anchors) {
+		let anchor = base;
+		while (anchors.has(anchor)) anchor = anchors.get(anchor)!; // Font sizes strictly increase; no cycles.
+		const row = rowFor.get(anchor)!;
+		row.items.push(script);
+		row.top = Math.max(row.top, script.rect[3]);
+		row.bottom = Math.min(row.bottom, script.rect[1]);
 	}
 	for (const row of rows) {
 		row.items.sort((a, b) => a.rect[0] - b.rect[0]);
@@ -421,7 +508,7 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 				// strictly before the gutter centre let that single line bridge the
 				// two columns into one scrambled line (三栏页连字符悬垂焊行).
 				const slack = Math.min(6, size * 0.6);
-				const crossesGutter = ((!captionRows.has(row) || gap >= size * 0.8) && rowGutters.some(g => previous.rect[2] <= g.x + slack && item.rect[0] >= g.x))
+				const crossesGutter = ((!captionRows.has(row) || gap >= size * 0.8) && rowGutters.some(g => crossesLineGutter(previous.rect[2], item.rect[0], g, slack, size)))
 					|| (gap >= size * 1.05
 						&& weakGutterXs.some(x => previous.rect[2] <= x + slack && item.rect[0] >= x));
 				const repeatedLocalGap = gap >= size * 1.05
@@ -473,21 +560,7 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 
 /** Join the runs of a line into text, inserting spaces where there are gaps. */
 export function lineText(line: SpanLine): string {
-	let out = '';
-	let previousRight: number | null = null;
-	for (const item of line.items) {
-		const text = item.text;
-		if (previousRight !== null) {
-			const gap = item.rect[0] - previousRight;
-			const isCJKJoin = /[一-鿿]$/.test(out) && /^[一-鿿]/.test(text);
-			if (gap > (line.fontSize || 10) * 0.18 && !/\s$/.test(out) && !isCJKJoin) {
-				out += ' ';
-			}
-		}
-		out += text;
-		previousRight = item.rect[2];
-	}
-	return out.replace(/\s+/g, ' ').trim();
+	return joinSemanticSpans(line.items, {fontSize: line.fontSize, spaceThreshold: .18});
 }
 
 /**
@@ -777,6 +850,10 @@ function sameGridCellStack(a: SpanLine, b: SpanLine, rows: GridRowBarriers): boo
 }
 
 export interface SpanBuildOptions {
+ /** Painted path evidence already collected for border detection. */
+ legendSegmentsPdf?: Rect[];
+ /** Internal drawing-rule barriers retained across recursive extraction. */
+ textRuleRectsPdf?: Rect[];
  /** Internal recursion guard after source-region assignment. */
  regionsAssigned?: boolean;
  panelAnchors?: SourceBlock[];
@@ -841,6 +918,21 @@ export function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em
 
 export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOptions): SpanBuildResult {
 	items=removeCollapsedTextCopies(items);
+	if (options.legendSegmentsPdf?.length) {
+		const legends = extractLegendItems(items, { pageIndex: options.pageIndex,
+			pageWidth: options.pageWidth || 612, pageHeight: options.pageHeight,
+			segments: options.legendSegmentsPdf, obstacles: options.imageRectsPdf });
+		if (legends.blocks.length) {
+			const rest = buildBlocksFromSpans(legends.rest, { ...options, legendSegmentsPdf: undefined });
+			return { ...rest, blocks: [...rest.blocks, ...legends.blocks] };
+		}
+	}
+	const ruleRows=decorativeTextRows(items);
+	const rules=new Set(ruleRows.flat());
+	if (rules.size) {
+		items=items.filter(i=>!rules.has(i));
+		options={...options,textRuleRectsPdf:[...(options.textRuleRectsPdf??[]),...ruleRows.map(rectOf)]};
+	}
  // A structured full-width abstract can outvote the two small columns below
  // it. Extract an isolated lower two-column band independently, including its
  // local font size, instead of interleaving affiliation and body lines.
@@ -956,7 +1048,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
  }
 	const gridRows = (options.grids ?? (options.grid ? [options.grid] : [])).map(g => gridRowBarriers(g, options.pageHeight));
 	const paragraphs = gridRows.reduce((groups, rows) => mergeGridCellStacks(groups, rows),
-		groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, obstacles, gridRows));
+		groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, [...obstacles,...(options.textRuleRectsPdf??[])], gridRows));
 
 	// Materialise, then repair anything still split mid-sentence.
 	const bands = detectColumns(lines.map(l => l.rect), pageWidth, options.pageHeight);
@@ -1000,7 +1092,8 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
   for (const index of indexes) {
    const last = groups[groups.length - 1];
    const isPageNumber=(i:number):boolean=>draft[i]!.rect[3]<options.pageHeight*0.1 && /^\d{1,4}$/.test(draft[i]!.text.trim());
-   if (!last || isPageNumber(last[last.length-1]!) || isPageNumber(index) || semanticBoundary(draft[last[last.length - 1]!]!.text, draft[index]!.text)) groups.push([index]);
+   if (!last || isPageNumber(last[last.length-1]!) || isPageNumber(index) || semanticBoundary(draft[last[last.length - 1]!]!.text, draft[index]!.text)
+    || obstacleBetween(draft[last[last.length-1]!]!.rect,draft[index]!.rect,options.textRuleRectsPdf??[])) groups.push([index]);
    else last.push(index);
   }
   return groups;
@@ -1262,6 +1355,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 				height: p.rect[3] - p.rect[1]
 			},
 			lineRectsPdf: p.group.map(l => [...l.rect] as Rect),
+			...(options.textRuleRectsPdf?.length ? {layoutBarriersPdf:options.textRuleRectsPdf.map(r=>[...r] as Rect)} : {}),
 			fontSize: p.fontSize,
 			column: stampColumn(p.rect, !!p.isTableLine),
 			isReference: isRef,

@@ -197,3 +197,20 @@ test('段落 context 也随不译词变化', async () => {
 	assert.notEqual(segmentContextHash(base), segmentContextHash({ ...base, glossaryHash: 'g2' }));
 	assert.equal(segmentContextHash(base), segmentContextHash({ ...base }), '相同输入必须稳定');
 });
+
+test('content integrity policy separates both page and segment caches without deleting old entries', async () => {
+	const { PROMPT_VERSION } = await import('../../src/translation/promptBuilder');
+	const { segmentContextHash, segmentsFileName } = await import('../../src/cache/cacheSchema');
+	const legacy = { ...baseKey, promptVersion: 3 };
+	const current = { ...baseKey, promptVersion: PROMPT_VERSION };
+	assert.equal(PROMPT_VERSION, 4);
+	assert.notEqual(pageFileName(legacy), pageFileName(current));
+	assert.notEqual(segmentContextHash(legacy), segmentContextHash(current));
+	assert.notEqual(segmentsFileName(legacy), segmentsFileName(current));
+	const oldEntry = {
+		schemaVersion: CACHE_SCHEMA_VERSION, key: legacy, createdAt: 'now',
+		translations: [{ id: 'b0', translatedText: '低 kVp 能谱重建' }]
+	};
+	assert.equal(isValidCachedPage(oldEntry, current), false);
+	assert.equal(isValidCachedPage(oldEntry, legacy), true, 'old entries remain intact for their original identity');
+});

@@ -21,13 +21,21 @@ export interface BoundingBox {
 /** Explicit source ownership carried from extraction into layout. Coordinates are raw PDF points. */
 export interface SourceRegion {
  id: string;
- kind: 'caption' | 'body-column' | 'table-cell' | 'page-furniture';
+ kind: 'caption' | 'body-column' | 'table-cell' | 'page-furniture' | 'legend-item';
  boundsPdf: [number,number,number,number];
- evidence: 'label-aligned-lines' | 'caption-continuation' | 'column-geometry' | 'table-model' | 'page-margin';
+ evidence: 'label-aligned-lines' | 'caption-continuation' | 'column-geometry' | 'table-model' | 'page-margin' | 'marker-aligned-lines';
+ /** Proven leading painted segment for a legend. A horizontal segment has
+  * equal y coordinates; no colour is inferred or repainted from this proof. */
+ markerPdf?: [number,number,number,number];
 }
 
 export interface SourceBlock {
+ /** Source evidence for a sentence split across layout blocks. Never changes
+  * the block's text or geometry; included in its translation cache identity. */
+ continuationContext?: { before: string; after: string; identity?: string };
  sourceRegion?: SourceRegion;
+	/** Text-layer drawing rules, retained only as extraction/merge barriers. */
+	layoutBarriersPdf?: [number, number, number, number][];
 	id: string;
 	pageIndex: number;
 	order: number;
@@ -164,6 +172,16 @@ export interface TranslationRequest {
 		id: string;
 		type: BlockType;
 		text: string;
+  /** Internal source/placeholder provenance for shared sentence translation.
+   * These fields are stripped before provider dispatch. */
+  sourceText?: string;
+  rawText?: string;
+  protectedLiterals?: PlaceholderEntry[];
+  /** Adjacent parts of this same source sentence, for understanding only. */
+  continuationContext?: { before: string; after: string; identity?: string };
+  /** Internal request parts of one complete source sentence. Display blocks
+   * retain their original identity and geometry after response assembly. */
+  continuationUnit?: { id: string; partIndex: number; parts: number; source: string };
 		/**
 		 * Layout budget: the translation must fit roughly this many
 		 * target-language characters (strict in-place replacement re-requests
@@ -182,6 +200,8 @@ export interface TranslationRequest {
 
 export interface TranslationResponse {
 	translations: TranslatedBlock[];
+ /** Internal source-unit reuse; no provider HTTP call was made. */
+ cacheOnly?: boolean;
 	/** 服务商报告的 token 用量 (2.7.0, 审核 F-2): 纯计数,无文本;缺失即服务商不报。 */
 	usage?: { inputTokens: number; outputTokens: number; cachedInputTokens: number };
 }

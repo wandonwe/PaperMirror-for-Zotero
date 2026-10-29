@@ -35,7 +35,7 @@ import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
 import { detectTableRegions } from '../reader/tableGuard';
 import { buildTableModel, buildTextTableModel, cellPreserveEvidence, type CellMember } from '../reader/tableStructure';
-import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, planOverlapClips, imageSafeBox, imageSafeRegions, sourceFlowRegions, flowText, type AuditBox, type AuditObstacles } from './layoutSafety';
+import { auditPlacedBoxes, violationStillPresent, boxNewlyViolates, planOverlapClips, imageSafeBox, imageSafeRegions, sourceFlowRegions, sourcePlacementFlow, flowText, type AuditBox, type AuditObstacles } from './layoutSafety';
 import { parseStyledSegments } from '../reader/styleRuns';
 import {
 	inkFor,
@@ -57,6 +57,67 @@ const BITMAP_PIXEL_BUDGET = 3_200_000;
 function bitmapScaleFor(widthPx: number, heightPx: number): number {
 	const area = Math.max(1, widthPx * heightPx);
 	return Math.max(1, Math.min(BITMAP_SCALE_MAX, Math.sqrt(BITMAP_PIXEL_BUDGET / area)));
+}
+
+/** A bounded binary-ink guard seeded by a proven painted marker segment.
+ * No colour meaning is inferred. Unknown/connected/edge-clipped evidence
+ * remains original; the source bitmap is never edited or repainted. */
+export function legendMarkerInkBounds(data: ArrayLike<number>, width: number, height: number,
+ segment: [number,number,number,number], paper: readonly [number,number,number]): PixelBox | null {
+ if(!Number.isInteger(width)||!Number.isInteger(height)||width<3||height<3||width*height>16384
+  ||data.length<width*height*4||!segment.every(Number.isFinite)||!paper.every(Number.isFinite))return null;
+ const [ax,ay,bx,by]=segment,dx=bx-ax,dy=by-ay,length=dx*dx+dy*dy;if(!(length>0))return null;
+ const ink=(i:number):boolean=>Math.max(Math.abs((data[i*4]??255)-paper[0]),Math.abs((data[i*4+1]??255)-paper[1]),Math.abs((data[i*4+2]??255)-paper[2]))>8;
+ const seen=new Uint8Array(width*height),queue:number[]=[];
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++) {
+  const t=Math.max(0,Math.min(1,((x+.5-ax)*dx+(y+.5-ay)*dy)/length));
+  if((x+.5-ax-t*dx)**2+(y+.5-ay-t*dy)**2<=1.25**2&&ink(y*width+x)){const i=y*width+x;seen[i]=1;queue.push(i);}
+ }
+ if(!queue.length)return null;
+ let left=width,top=height,right=0,bottom=0;
+ for(let at=0;at<queue.length;at++) {
+  const i=queue[at]!,x=i%width,y=Math.floor(i/width);
+  if(x===0||y===0||x===width-1||y===height-1)return null;
+  left=Math.min(left,x);top=Math.min(top,y);right=Math.max(right,x+1);bottom=Math.max(bottom,y+1);
+  for(let yy=y-1;yy<=y+1;yy++)for(let xx=x-1;xx<=x+1;xx++){const next=yy*width+xx;if(!seen[next]&&ink(next)){seen[next]=1;queue.push(next);}}
+ }
+ return {left,top,width:right-left,height:bottom-top};
+}
+
+/** Complete glyph padding rounds OUTWARD on all four sides. Actual painted
+ * marker pixels and other source lines bound the available whitespace. A
+ * shortened band would leave original ink, so any conflict rejects the
+ * complete entry instead of clipping one of its source glyph edges. */
+export function legendMaskLineBox(line: PixelBox, owner: PixelBox, otherLines: readonly PixelBox[],
+ pad: number, bitmapScale: number, pageHeight: number, markers: readonly PixelBox[], pageWidth: number): PixelBox | null {
+ const valid=(b:PixelBox):boolean=>[b.left,b.top,b.width,b.height].every(Number.isFinite)&&b.width>0&&b.height>0;
+ if(!valid(line)||!valid(owner)||!Number.isFinite(pad)||pad<0||!Number.isFinite(bitmapScale)||bitmapScale<=0
+  ||!Number.isFinite(pageHeight)||pageHeight<=0||!Number.isFinite(pageWidth)||pageWidth<=0||!markers.length||markers.some(b=>!valid(b))
+  ||Math.floor((owner.left+owner.width)*bitmapScale)<=Math.ceil(owner.left*bitmapScale))return null;
+ const left=Math.max(0,Math.floor((line.left-pad)*bitmapScale))/bitmapScale;
+ const top=Math.max(0,Math.floor((line.top-pad)*bitmapScale))/bitmapScale;
+ const right=Math.min(Math.ceil((line.left+line.width+pad)*bitmapScale),Math.floor(pageWidth*bitmapScale))/bitmapScale;
+ const bottom=Math.min(Math.ceil((line.top+line.height+pad)*bitmapScale),Math.floor(pageHeight*bitmapScale))/bitmapScale;
+ if(right<=left||bottom<=top)return null;
+ const intersects=(b:PixelBox):boolean=>Math.min(right,b.left+b.width)>Math.max(left,b.left)&&Math.min(bottom,b.top+b.height)>Math.max(top,b.top);
+ if(markers.some(intersects))return null;
+ let minLeft=0,minTop=0,maxRight=pageWidth,maxBottom=pageHeight;
+ for(const other of otherLines.filter(valid)) {
+  const otherRight=other.left+other.width,otherBottom=other.top+other.height,lineRight=line.left+line.width,lineBottom=line.top+line.height;
+  if(Math.min(right,otherRight)>Math.max(left,other.left)) {
+   if(otherBottom<=line.top)minTop=Math.max(minTop,(otherBottom+line.top)/2);
+   else if(other.top>=lineBottom)maxBottom=Math.min(maxBottom,(lineBottom+other.top)/2);
+   else if(intersects(other))return null;
+  }
+  if(Math.min(bottom,otherBottom)>Math.max(top,other.top)) {
+   if(otherRight<=line.left)minLeft=Math.max(minLeft,(otherRight+line.left)/2);
+   else if(other.left>=lineRight)maxRight=Math.min(maxRight,(lineRight+other.left)/2);
+   else if(intersects(other))return null;
+  }
+ }
+ if(left<Math.ceil(minLeft*bitmapScale)/bitmapScale||top<Math.ceil(minTop*bitmapScale)/bitmapScale
+  ||right>Math.floor(maxRight*bitmapScale)/bitmapScale||bottom>Math.floor(maxBottom*bitmapScale)/bitmapScale)return null;
+ return {left,top,width:right-left,height:bottom-top};
 }
 
 /** The leading/tracking compress ladder. The FONT SIZE never changes here. */
@@ -557,15 +618,12 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// `replaceable: 0, committed: 0` —— 表题在这里被无条件丢弃,用户看到的是
 	// "这页一个字没译"。
 	//
-	// 表格的几何模型(区域探测、单元格成员)输入**维持原样**,见下面的 `tabular`:
-	// 这一版只放表题进排版,不动表格判定,免得把两个变化搅在一起。
 	const geometric = selectGeometricBlocks(preserveCollapsedPlotPanels(input.blocks));
-	// 表格几何模型的输入 —— 与改动前的 `geometric` 逐字相同(不含表题)。
-	// 表题不当区域种子、不当单元格成员: 它在表框外,进去只会污染区域范围。
-	const tabular = geometric.filter(b => b.type !== 'table' && !isTableCellBlock(b));
+	// Figure/table titles and captions already have their own source regions.
+	// Do not reinterpret them as cells of a nearby frame during rendering.
+	const tabular = geometric.filter(b => b.type !== 'table' && b.type !== 'caption' && b.sourceRegion?.kind !== 'legend-item' && !isTableCellBlock(b));
 	const translatable = geometric.filter(b => b.translationMode !== 'preserve');
-	// 页面基准字号仍只看正文侧样本(不含表题)—— bodyPt 会喂给 detectTableRegions
-	// 的 em,表题字号掺进中位数就会改变表格判定,而这一版不该动表格。
+	// Estimate the table detector's em from body/cell candidates, not captions.
 	const bodySizes = tabular.filter(b => b.translationMode !== 'preserve')
 		.map(b => b.fontSize ?? 0).filter(s => s > 0).sort((a, b) => a - b);
 	const bodyPt = bodySizes.length ? bodySizes[Math.floor(bodySizes.length / 2)]! : 10;
@@ -809,7 +867,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// A block overlapping a detected table REGION that the cell model did
 		// NOT turn into a cell (e.g. a paragraph the extractor stitched across
 		// cells) stays original — never stamped in Chinese across the table.
-		if (area > 0 && [...guard.regions, ...guard.textRegions].some(r => intersectArea(box, r as unknown as PixelBox) > area * 0.15)) {
+		if (block.sourceRegion?.kind !== 'legend-item' && area > 0 && [...guard.regions, ...guard.textRegions].some(r => intersectArea(box, r as unknown as PixelBox) > area * 0.15)) {
 			tableIntentional++;
 			skipped.push({ id: block.id, reason: 'table-structure' });
 			continue;
@@ -868,7 +926,43 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const blockPaper = new Map<string, string>();
 	const lineBoxesFor = new Map<string, PixelBox[]>();
  const lineColours = new WeakMap<PixelBox,string>();
+	const unsafeLegendMasks = new Set<string>();
+	const sourceMaskLines = geometric.flatMap(block => ((block.lineRectsPdf ?? []) as Rect[])
+		.map(rect => ({ id: block.id, box: rectToPixels(rect, render, 1) })));
 	if (ctx) {
+		const markerGuards = new Map<string, PixelBox | null>();
+		for (const block of geometric.filter(b => b.sourceRegion?.kind === 'legend-item')) {
+			let guard: PixelBox | null = null;
+			const marker = block.sourceRegion?.markerPdf, first = block.lineRectsPdf?.[0], font = block.fontSize ?? 0;
+			// Proof is checked in original PDF coordinates; the viewport segment
+			// may become vertical or reverse direction after page rotation.
+			if (Array.isArray(marker) && marker.length === 4 && Array.isArray(first) && first.length === 4 && first.every(Number.isFinite) && marker.every(Number.isFinite) && marker[2] > marker[0] && marker[1] === marker[3]
+				&& marker[2] - marker[0] >= font * .5 && marker[2] - marker[0] <= font * 2.75
+				&& first[0] - marker[2] > 0 && first[0] - marker[2] <= font * .9
+				&& marker[1] >= first[1] + font * .2 && marker[1] <= first[3] - font * .1) {
+				try {
+					const a = render.toViewport(marker[0], marker[1]), b = render.toViewport(marker[2], marker[3]);
+					const margin = Math.max(2 / BITMAP_SCALE, font * pxPerPoint * .6);
+					const x0 = Math.max(0, Math.floor((Math.min(a[0], b[0]) - margin) * BITMAP_SCALE));
+					const y0 = Math.max(0, Math.floor((Math.min(a[1], b[1]) - margin) * BITMAP_SCALE));
+					const x1 = Math.min(canvas.width, Math.ceil((Math.max(a[0], b[0]) + margin) * BITMAP_SCALE));
+					const y1 = Math.min(canvas.height, Math.ceil((Math.max(a[1], b[1]) + margin) * BITMAP_SCALE));
+					const width = x1 - x0, height = y1 - y0;
+					if (width > 0 && height > 0 && width * height <= 16384) {
+						const colour = localPaper(ctx, pixelBox(block, render, 1), BITMAP_SCALE, paper);
+						const found = legendMarkerInkBounds(ctx.getImageData(x0, y0, width, height).data, width, height,
+							[a[0] * BITMAP_SCALE - x0, a[1] * BITMAP_SCALE - y0, b[0] * BITMAP_SCALE - x0, b[1] * BITMAP_SCALE - y0], parseRgb(colour));
+						if (found) {
+							const box = { left: (x0 + found.left) / BITMAP_SCALE, top: (y0 + found.top) / BITMAP_SCALE,
+								width: found.width / BITMAP_SCALE, height: found.height / BITMAP_SCALE };
+							if (intersectArea(box, rectToPixels(first, render, 1)) === 0) guard = box;
+						}
+					}
+				} catch { /* Missing/tainted or ambiguous raster evidence retains the entry. */ }
+			}
+			markerGuards.set(block.id, guard);
+		}
+		const paintedMarkers = [...markerGuards.values()].filter((box): box is PixelBox => box !== null);
 		for (const block of replaceable) {
 			const whole = pixelBox(block, render, 1);
 			// Caption badges may be narrower than the outside sampling margin.
@@ -881,12 +975,22 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			const lines: PixelBox[] = [];
 			for (const rect of block.lineRectsPdf as Rect[]) {
 				const box = rectToPixels(rect, render, 1);
-				// A cell mask may erase source glyphs, never its border or neighbour.
+				if (block.sourceRegion?.kind === 'legend-item') {
+					const line = markerGuards.get(block.id) ? legendMaskLineBox(box, whole,
+						sourceMaskLines.filter(other => other.id !== block.id).map(other => other.box),
+						pad, BITMAP_SCALE, pageHeightPx, paintedMarkers, pageWidthPx) : null;
+					if (!line) { unsafeLegendMasks.add(block.id); lines.length = 0; break; }
+					lines.push(line); lineColours.set(line, colour);
+					continue;
+				}
+				// Table cells and labels embedded in an image retain their existing
+				// owner-bound padding; marker-owned text was handled separately.
+				const bounded = block.tableRectPdf || imageTextBoxes.has(block.id);
 				const inset = block.tableRectPdf ? Math.min(pxPerPoint, whole.width / 4, whole.height / 4) : 0;
-				const left = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.max(box.left - pad, whole.left + inset) : box.left - pad;
-				const top = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.max(box.top - pad, whole.top + inset) : box.top - pad;
-				const right = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.min(box.left + box.width + pad, whole.left + whole.width - inset) : box.left + box.width + pad;
-				const bottom = (block.tableRectPdf || imageTextBoxes.has(block.id)) ? Math.min(box.top + box.height + pad, whole.top + whole.height - inset) : box.top + box.height + pad;
+				let left = bounded ? Math.max(box.left - pad, whole.left + inset) : box.left - pad;
+				let top = bounded ? Math.max(box.top - pad, whole.top + inset) : box.top - pad;
+				let right = bounded ? Math.min(box.left + box.width + pad, whole.left + whole.width - inset) : box.left + box.width + pad;
+				let bottom = bounded ? Math.min(box.top + box.height + pad, whole.top + whole.height - inset) : box.top + box.height + pad;
 				if (right > left && bottom > top) {
                  const line={left,top,width:right-left,height:bottom-top};lines.push(line);
                  lineColours.set(line,block.tableId ? localPaper(ctx,line,BITMAP_SCALE,colour,true) : colour);
@@ -1009,13 +1113,18 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// Compute source occupancy once per page, not once per neighbour per block.
 	const sourceOccupancy = new Map(geometric.map(b => {
 		const bands = !isTableCellBlock(b)
-			? sourceFlowRegions(((b.lineRectsPdf ?? []) as Rect[]).map(r => rectToPixels(r, render, 1)), (b.fontSize ?? bodyPt) * pxPerPoint)
+			? (b.regionParagraphs?.length ? b.regionParagraphs : [{lineRectsPdf:b.lineRectsPdf ?? [],fontSize:b.fontSize}])
+				.flatMap(group => sourceFlowRegions(group.lineRectsPdf.map(r => rectToPixels(r, render, 1)), (group.fontSize ?? b.fontSize ?? bodyPt) * pxPerPoint))
 			: [];
 		return [b.id, bands.length > 1 ? bands : [clippedBox.get(b.id) ?? pxOf.get(b.id)!].filter(Boolean)] as const;
 	}));
 	const items: StrictItem[] = [];
 	const byId = new Map<string, StrictItem>();
 	for (const block of replaceable) {
+		if (unsafeLegendMasks.has(block.id)) {
+			skipped.push({ id: block.id, reason: 'legend-mask-boundary' });
+			continue;
+		}
 		const candidate = isTableCellBlock(block) ? pixelBox(block, render, 1)
 			: clippedBox.get(block.id) ?? pixelBox(block, render, 1);
 		const inset = block.tableRectPdf ? Math.min(pxPerPoint, candidate.width / 4, candidate.height / 4) : 0;
@@ -1030,15 +1139,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// unobstructed block can use its complete rectangle without shrinking.
 		// A clipped bounding rectangle may retain only the wide foot of an
         // L-shaped paragraph. It cannot replace bands outside that rectangle.
-        const rectangular = sourceBands.every(b => b.top >= region.top - .5 && b.top + b.height <= region.top + region.height + .5
-            && b.left >= region.left - .5 && b.left + b.width <= region.left + region.width + .5
-            && Math.abs(b.left - region.left) <= (block.fontSize ?? bodyPt) * pxPerPoint * 1.5)
-			&& !obstacles.some(b => intersectArea(region, b) > 0);
-		const safeRegions = (sourceBands.length > 1 && !rectangular ? sourceBands : [region])
-			.flatMap(band => imageSafeRegions(band, obstacles))
-			.filter(r => r.width >= 4 * pxPerPoint && r.height >= 4 * pxPerPoint);
 		const fullSourceBox = pixelBox(block, render, 1);
-		const flowBoxes = !isTableCellBlock(block) && safeRegions.length > 1 ? safeRegions : undefined;
+		const flowBoxes = !isTableCellBlock(block)
+			? sourcePlacementFlow(region, sourceBands, obstacles, (block.fontSize ?? bodyPt) * pxPerPoint, 4 * pxPerPoint)
+			: undefined;
 		const box = flowBoxes ? fullSourceBox : imageSafeBox(region, imageBoxes);
 		if (!box) {
 			skipped.push({ id: block.id, reason: 'image' });
@@ -1075,7 +1179,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		// 角色(脚注、表注、细则),保留自己的字号;带内的仍统一,免得相邻段落忽大忽小。
 		const ownPt = block.fontSize ?? bodyPt;
 		const inBand = anchorPt > 0 && ownPt >= anchorPt * 0.8 && ownPt <= anchorPt * 1.25;
-		const rolePt = (block.type === 'paragraph' || block.type === 'list') && inBand && !isTableCellBlock(block)
+		const rolePt = (block.type === 'paragraph' || block.type === 'list') && inBand && !isTableCellBlock(block) && block.sourceRegion?.kind !== 'legend-item'
 			? anchorPt
 			: ownPt;
 		// Apply the readability floor in PDF points, then scale the whole page.
@@ -1558,6 +1662,9 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		item.node.style.height = `${item.originalBox.height}px`;
 	};
 	const tryAnnexTitle = (item: StrictItem): boolean => {
+		// A flow container is positioned through its child bands. Moving only
+		// the parent would leave geometry validation checking the old bands.
+		if (item.flowBoxes !== undefined) return false;
 		const pageH = canvas.height / BITMAP_SCALE;
 		const ob = item.originalBox;
 		item.node.style.letterSpacing = '';
@@ -1789,7 +1896,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// ---- live placement stats (#6): never a silent English block -----------
 	(page as HTMLElement & { pmStats?: () => StrictPageStats }).pmStats = (): StrictPageStats => {
 		let committed = 0;
-		let abandoned = 0;
+		let abandoned = unsafeLegendMasks.size;
 		let pending = 0;
 		for (const item of items) {
 			if (item.committed) {
@@ -1803,7 +1910,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			}
 		}
 		return {
-			replaceable: items.length,
+			replaceable: items.length + unsafeLegendMasks.size,
 			committed, abandoned, pending,
 			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed, inkBlocked,
 			layoutMs: Math.round(layoutMs)
@@ -1822,8 +1929,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		element: page,
 		blocksPlaced: items.length,
 		stats: {
-			replaceable: items.length,
-			committed: 0, abandoned: 0, pending: items.length,
+			replaceable: items.length + unsafeLegendMasks.size,
+			committed: 0, abandoned: unsafeLegendMasks.size, pending: items.length,
 			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed: 0, inkBlocked: 0,
 			layoutMs: Math.round(layoutMs)
 		}
@@ -2158,9 +2265,9 @@ export function isTableCellBlock(block: { id: string; tableRow?: number }): bool
 }
 
 /** 页面基准字号的样本 (2.7.3) — pure: 只有正文流块,表格单元格不算。 */
-export function bodyAnchorSizes(blocks: { id: string; type: string; fontSize?: number; tableRow?: number }[]): number[] {
+export function bodyAnchorSizes(blocks: { id: string; type: string; fontSize?: number; tableRow?: number; sourceRegion?: SourceBlock['sourceRegion'] }[]): number[] {
 	return blocks
-		.filter(b => (b.type === 'paragraph' || b.type === 'list') && !isTableCellBlock(b))
+		.filter(b => (b.type === 'paragraph' || b.type === 'list') && !isTableCellBlock(b) && b.sourceRegion?.kind !== 'legend-item')
 		.map(b => b.fontSize ?? 0);
 }
 

@@ -5,11 +5,14 @@
 
 import type { TranslationRequest } from '../types/models';
 
-// v3: translate natural-language names and affiliations as well as prose.
-// Cached original-language names from the previous policy must be retranslated.
-export const PROMPT_VERSION = 3;
+// v4: preserve technical units through placeholder protection and validation.
+// Both page and segment cache identities include this policy version, so a
+// translation accepted before the integrity checks cannot bypass them.
+export const PROMPT_VERSION = 4;
 
 const allTextRule = 'Translate all natural-language content, including person names, company/manufacturer names, institutions, product names, author lists, affiliations and publication names. Use established target-language names where known, otherwise a faithful transliteration; do not invent an original spelling or identity. Translate surrounding titles and roles too. Preserve numerical values, formulas, URLs, DOIs and exact alphanumeric model identifiers.';
+const continuationRule = 'A block with continuationContext is a source sentence fragment split by layout (possibly across columns or pages). Read before + text + after together to understand the sentence. Translate only this block\'s text, keeping its role in that sentence: preserve negation, before/after conditions, and the ordered correspondence of metrics and values. Keep the translation in source-fragment order so adjacent translated fragments join coherently; do not prematurely close a sentence or move a condition/list into another fragment. The before/after source evidence is not additional content to translate or repeat. Where target-language grammar needs it, repeat only the minimal governing predicate to make a continuation unambiguous.';
+const continuationUnitRule = 'Blocks sharing continuationUnit.id are ordered PARTS OF ONE COMPLETE SOURCE SENTENCE. Translate continuationUnit.source ONCE as a complete faithful sentence, then partition that ONE translation into contiguous natural phrase fragments for the part ids in order. The fragments concatenated must contain all original measurements, subjects, predicates, conjunctions, negation, timing conditions, and ordered metric/value relationships exactly once. Target-language grammar may redistribute meaning between neighbouring parts; never delete meaning to force word-by-word ownership. Keep fragment lengths roughly proportional to the corresponding source parts when possible. Every part.text is source content, even when repeated in the reference copy continuationUnit.source. Return every part id exactly once with a nonempty fragment. Do not translate the parts independently, repeat the whole sentence in each part, or leave natural-language words untranslated because a part is unfinished.';
 
 export function languageDisplayName(code: string): string {
 	switch (code) {
@@ -30,6 +33,8 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 	const hasPlaceholders = request.blocks.some(b => b.text.includes('⟦PM'));
 	const referenceRule = 'In bibliography entries, translate the article or book TITLE into the target language. Translate author and journal names too; keep years, volumes, pages and DOIs unchanged. A reference title is natural language, not an identifier; do not copy the entire entry unchanged.';
 	const hasStyleTags = request.blocks.some(b => b.text.includes('⟦b⟧') || b.text.includes('⟦i⟧'));
+ const hasContinuation = request.blocks.some(b => b.continuationContext);
+ const hasContinuationUnits = request.blocks.some(b => b.continuationUnit);
 	if (request.plain) {
 		// 纯文本兜底 (修复链路最后一环): the block failed the JSON path repeatedly —
 		// strip every structural demand so nothing but translation can go wrong.
@@ -40,6 +45,8 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
             allTextRule
 		];
 		if (request.referenceContent) lines.push(referenceRule);
+  if (hasContinuation) lines.push(continuationRule);
+  if (hasContinuationUnits) lines.push(continuationUnitRule);
 		if (hasPlaceholders) {
 			lines.push('Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation unchanged.');
 		}
@@ -65,6 +72,8 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 		allTextRule
 	];
 	if (request.referenceContent) lines.push('- ' + referenceRule);
+ if (hasContinuation) lines.push('- ' + continuationRule);
+ if (hasContinuationUnits) lines.push('- ' + continuationUnitRule);
 	if (hasPlaceholders) {
 		lines.push('- Tokens like ⟦PM0⟧ are protected placeholders; copy them into the translation UNCHANGED and in a natural position.');
 	}
@@ -108,7 +117,11 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 
 export function buildUserPayload(request: TranslationRequest): string {
 	if (request.plain) {
-		return request.blocks[0]?.text ?? '';
+  const block = request.blocks[0];
+  if (block?.continuationContext) {
+   return JSON.stringify({ continuationContext: block.continuationContext, text: block.text });
+  }
+  return block?.text ?? '';
 	}
 	return JSON.stringify({
 		sourceLanguage: request.sourceLanguage,

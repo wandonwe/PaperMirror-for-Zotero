@@ -78,6 +78,7 @@ test('saved translations belong to the PDF page used for their visual background
 test('extractor coalesces concurrent work, reuses stable structure and invalidates changed options',async()=>{
  const {TextExtractor}=await import('../../src/reader/textExtractor');const {StructureCache}=await import('../../src/reader/structureCache');
  const x=Object.create(TextExtractor.prototype) as any;x.structureCache=new StructureCache();x.extracting=new Map();x.inputsByPage=new Map();x.pathByPage=new Map();x.phasesByPage=new Map();
+ x.legendSegments=new Map([[0,[]]]); // Confirmed empty painted-path evidence is stable.
  let option=false,calls=0;
  x.currentExtractInputs=()=>({includeReferences:option});
  x.extractPageUncached=async(page:number)=>{calls++;await Promise.resolve();x.pathByPage.set(page,'text-content');return [{id:'a',sourceText:'original',pageIndex:page,order:0,type:'paragraph'}];};

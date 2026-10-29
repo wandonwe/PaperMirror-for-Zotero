@@ -1,5 +1,8 @@
 import { decodeLegacyText, legacyFontEncodings, resolvedPdfFont, repeatedImageRefs } from './legacyTextEncoding';
+import { embeddedSymbolRepairs, type SymbolGlyphObservation } from './embeddedFontSymbols';
+import { repairSymbolText } from './symbolFontSemantics';
 import { onScrollIntent } from './scrollSynchronizer';
+import { canonicalPagePoint, pageQuarterTurn, type PageQuarterTurn } from './overlayGeometry';
 /**
  * ============================================================================
  * Zotero Reader adapter — THE ONLY module allowed to touch undocumented
@@ -235,6 +238,100 @@ function getPdfApplication(reader: ReaderLike): any {
 	return app;
 }
 
+type SymbolRepairMap = { byFont: Map<string, Map<string, string>>; pageWide: Map<string, string>; repairedGlyphs: number };
+const symbolPages = new WeakMap<object, Map<number, Promise<SymbolRepairMap>>>();
+const emptySymbols = (): SymbolRepairMap => ({byFont: new Map(), pageWide: new Map(), repairedGlyphs: 0});
+const symbolCandidate = (text: string): boolean => /[$¼]/.test(text);
+
+/** Inspect the original glyph, not a font's often incorrect Unicode or name.
+ * A page-wide fallback is safe only when EVERY drawing of that Unicode has
+ * verified, agreeing semantics. Mixed real currency/fractions stay font-bound. */
+async function pageSymbolRepairs(reader: ReaderLike, pageIndex: number): Promise<SymbolRepairMap> {
+ let app: any;
+ try {app = getPdfApplication(reader);} catch {return emptySymbols();}
+ const doc = waive(app.pdfDocument) as object & {getPage?: (n: number) => Promise<unknown>; getData?: () => Promise<Uint8Array>};
+ if (typeof doc?.getPage !== 'function' || typeof doc.getData !== 'function') return emptySymbols();
+ let pages = symbolPages.get(doc);
+ if (!pages) {pages = new Map(); symbolPages.set(doc, pages);}
+ const cached = pages.get(pageIndex); if (cached) return cached;
+ let complete = true;
+ const pending = (async (): Promise<SymbolRepairMap> => {
+  const page = waive(await doc.getPage!(pageIndex + 1)) as any;
+  if (typeof page?.getOperatorList !== 'function') {complete = false; return emptySymbols();}
+  const list = waive(await page.getOperatorList()) as any;
+  if (!Array.isArray(list?.fnArray) || !Array.isArray(list?.argsArray)) {complete = false; return emptySymbols();}
+  const ops = waive(waive(pdfWindow(reader))?.pdfjsLib)?.OPS as Record<string, number> | undefined;
+  const fonts = new Map<string, string>();
+  const used: {fontId: string; code: number; unicode: string}[] = [];
+  let drawingProofComplete = true;
+  let fontId = ''; const stack: string[] = [];
+  for (let i = 0; i < list.fnArray.length; i++) {
+   const fn = list.fnArray[i], args = waive(list.argsArray[i]) as any;
+   if (fn === (ops?.save ?? 10) || fn === (ops?.paintFormXObjectBegin ?? 74)) stack.push(fontId);
+   else if (fn === (ops?.restore ?? 11) || fn === (ops?.paintFormXObjectEnd ?? 75)) fontId = stack.pop() ?? '';
+   else if (fn === (ops?.setFont ?? 37)) fontId = typeof args?.[0] === 'string' ? args[0] : '';
+   else if (fn === (ops?.setGState ?? 9)) {
+    const states = args?.[0];
+    if (!Array.isArray(states)) fontId = '';
+    else for (const rawState of states) {
+     const state = waive(rawState) as any;
+     if (state?.[0] === 'Font') fontId = typeof state?.[1]?.[0] === 'string' ? state[1][0] : '';
+    }
+   }
+   else if ([ops?.showText ?? 44, ops?.showSpacedText ?? 45, ops?.nextLineShowText ?? 46, ops?.nextLineSetSpacingShowText ?? 47].includes(fn)) {
+    // Normalized PDF.js showText uses args[0]; the older spacing form keeps
+    // the glyph array last. Numbers in a TJ array are spacing, never glyphs.
+    const glyphs = args?.[args.length - 1];
+    if (!Array.isArray(glyphs)) {drawingProofComplete = false; continue;}
+    for (const raw of glyphs) {
+     const glyph = waive(raw) as any;
+     if (typeof glyph === 'number' && Number.isFinite(glyph)) continue;
+     if (!glyph || typeof glyph.unicode !== 'string') {drawingProofComplete = false; continue;}
+     if (symbolCandidate(glyph.unicode) && glyph.unicode !== '$' && glyph.unicode !== '¼') drawingProofComplete = false;
+     if (glyph && (glyph.unicode === '$' || glyph.unicode === '¼')) {
+      used.push({fontId, code: typeof glyph.originalCharCode === 'number' ? glyph.originalCharCode : NaN, unicode: glyph.unicode});
+     }
+    }
+   }
+  }
+  if (!drawingProofComplete) {complete = false; return emptySymbols();}
+  if (!used.length) return emptySymbols();
+  for (const id of new Set(used.map(g => g.fontId))) {
+   if (!id) {complete = false; continue;}
+   const font = waive(await resolvedPdfFont(waive(page.commonObjs), id)) as {name?: string} | undefined;
+   if (typeof font?.name === 'string' && font.name) fonts.set(id, font.name);
+   else complete = false;
+  }
+  const observations: SymbolGlyphObservation[] = used.map(g => ({fontName: fonts.get(g.fontId) ?? '', originalCharCode: g.code, unicode: g.unicode}));
+  const verified = await embeddedSymbolRepairs(doc, pageIndex, observations);
+  const byFont = new Map<string, Map<string, string>>();
+  for (const [id, name] of fonts) {
+   const map = verified.get(name); if (map) {byFont.set(id, map); byFont.set(name, map);}
+  }
+  const pageWide = new Map<string, string>();
+  for (const unicode of new Set(used.map(g => g.unicode))) {
+   const targets = used.filter(g => g.unicode === unicode).map(g => byFont.get(g.fontId)?.get(unicode));
+   if (targets.length && targets.every(t => t !== undefined && t === targets[0])) pageWide.set(unicode, targets[0]!);
+  }
+  return {byFont, pageWide, repairedGlyphs: used.filter(g => byFont.get(g.fontId)?.has(g.unicode)).length};
+ })();
+ pages.set(pageIndex, pending);
+ try {
+  const result = await pending; if (!complete) pages.delete(pageIndex); return result;
+ } catch (e) {
+  pages.delete(pageIndex); logger.debug(MODULE, 'Embedded symbol evidence unavailable', e); return emptySymbols();
+ }
+}
+
+/** DOM spans often retain only a generic CSS font. In that case use only the
+ * whole-page proof above; never guess a font from prose or rectangle overlap. */
+export async function repairTextLayerSymbols(reader: ReaderLike, pageIndex: number, page: TextLayerPage | null): Promise<TextLayerPage | null> {
+ if (!page || !page.items.some(i => symbolCandidate(i.text))) return page;
+ const maps = await pageSymbolRepairs(reader, pageIndex);
+ return {...page, items: page.items.map(item => ({...item, text: repairSymbolText(item.text,
+  (item.fontName ? maps.byFont.get(item.fontName) : undefined) ?? maps.pageWide)}))};
+}
+
 export interface RawPageInfo {
 	pageData: PageData;
 	pageWidth: number;
@@ -414,8 +511,10 @@ export async function getTextContentItems(
 		}
 		const content = waive(await page.getTextContent());
 		const raw = Array.isArray(content?.items) ? content.items : [];
+		const symbolMaps = raw.some(i => symbolCandidate(String((i as {str?: unknown}).str ?? '')))
+			? await pageSymbolRepairs(reader, pageIndex) : emptySymbols();
 		const fonts=new Map<string,{name:string; differences:Record<number,string>}>();
-        const fontRepair={controlRuns:0,resolvedFonts:0,encodingFonts:0,remainingRuns:0,error:''};
+        const fontRepair={controlRuns:0,resolvedFonts:0,encodingFonts:0,remainingRuns:0,error:'',symbolGlyphs:symbolMaps.repairedGlyphs,symbolFonts:new Set(symbolMaps.byFont.values()).size};
         fontRepair.controlRuns=raw.filter(i=>/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(String((i as {str?:string}).str??''))).length;
         if(raw.some(entry=>/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(String((entry as {str?:string}).str ?? '')))) {
             try {
@@ -438,7 +537,8 @@ export async function getTextContentItems(
 			const it = entry as { str?: unknown; transform?: unknown; width?: unknown; fontName?:string };
 			const font=it.fontName ? fonts.get(it.fontName) : undefined;
             const value=typeof it.str === 'string' ? it.str : '';
-            const text=font ? decodeLegacyText(value,font.name,font.differences) : value;
+            const legacyText=font ? decodeLegacyText(value,font.name,font.differences) : value;
+            const text=repairSymbolText(legacyText,(it.fontName ? symbolMaps.byFont.get(it.fontName) : undefined) ?? new Map());
 			if (!text.trim() || !Array.isArray(it.transform) || typeof it.width !== 'number') {
 				continue; // 空串与结构标记(marked content)不是字
 			}
@@ -549,6 +649,20 @@ export async function getPageData(reader: ReaderLike, pageIndex: number): Promis
 			paragraphBreakAfter: !!c.paragraphBreakAfter
 		});
 	}
+	if (copied.some(c => symbolCandidate(c.c)) || Array.from({length}, (_, i) => String(chars[i]?.u ?? '')).some(symbolCandidate)) {
+		const maps = await pageSymbolRepairs(reader, pageIndex);
+		let output = 0;
+		for (let i = 0; i < length; i++) {
+			const raw = chars[i]; if (!raw) continue;
+			const char = copied[output++]!;
+			const map = (char.fontName ? maps.byFont.get(char.fontName) : undefined) ?? maps.pageWide;
+			const unicode = typeof raw.u === 'string' ? raw.u : '';
+			// Zotero expands the same glyph to c:'1⁄4', u:'¼'. Its original
+			// Unicode identity may be used only when the glyph proof exists.
+			char.c = (unicode === '$' || unicode === '¼') && map.has(unicode)
+				? map.get(unicode)! : repairSymbolText(char.c, map);
+		}
+	}
 	return {
 		pageData: { chars: copied, viewBox: pageData.viewBox, pageLabel: pageData.pageLabel },
 		pageWidth,
@@ -612,6 +726,28 @@ export interface PageViewHandle {
 	toCss(xPdf: number, yPdf: number): [number, number];
 	/** Document of the inner PDF.js iframe (for creating nodes/styles). */
 	doc: Document;
+	/** Reader's additional rotation, relative to the PDF's intrinsic turn. */
+	rotation: PageQuarterTurn;
+	/** The affine viewport mapping, for same-size rotation/crop invalidation. */
+	viewportKey: string;
+	/** Unrounded viewport size; clientWidth/clientHeight lose subpixel zoom. */
+	viewportWidth: number;
+	viewportHeight: number;
+}
+
+/** Canonical bitmap orientation; viewer-only turns must not change this. */
+export function getPageIntrinsicRotation(reader: ReaderLike, pageIndex: number): PageQuarterTurn {
+	try {
+		const viewer = reader._internalReader?._primaryView?._iframeWindow?.PDFViewerApplication?.pdfViewer;
+		const page = pageViewOf(reader, pageIndex);
+		if (typeof page?.pdfPage?.rotate === 'number') return pageQuarterTurn(page.pdfPage.rotate);
+		if (typeof page?.viewport?.rotation === 'number' && typeof viewer?.pagesRotation === 'number') {
+			return pageQuarterTurn(page.viewport.rotation - viewer.pagesRotation);
+		}
+		if (typeof page?.viewport?.rotation === 'number') return pageQuarterTurn(page.viewport.rotation);
+	}
+	catch { /* a virtualised page may not have a PDFPageProxy yet */ }
+	return 0;
 }
 
 export function getPageView(reader: ReaderLike, pageIndex: number): PageViewHandle | null {
@@ -624,9 +760,19 @@ export function getPageView(reader: ReaderLike, pageIndex: number): PageViewHand
 		if (!div || !viewport?.convertToViewportPoint || !win?.document) {
 			return null;
 		}
+		const intrinsicRotation = getPageIntrinsicRotation(reader, pageIndex);
+		const rotation = pageQuarterTurn(typeof viewport.rotation === 'number'
+			? viewport.rotation - intrinsicRotation : viewer?.pagesRotation);
+		const viewportKey = [intrinsicRotation, ...[ [0, 0], [1, 0], [0, 1] ].flatMap(([x, y]) =>
+			viewport.convertToViewportPoint(x, y).map(Number))].join(',');
+		const viewportWidth = Number(viewport.width), viewportHeight = Number(viewport.height);
 		return {
 			div,
 			doc: win.document as Document,
+			rotation,
+			viewportKey,
+			viewportWidth: Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : div.clientWidth,
+			viewportHeight: Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : div.clientHeight,
 			toCss: (xPdf: number, yPdf: number) => {
 				const [x, y] = viewport.convertToViewportPoint(xPdf, yPdf);
 				return [Number(x), Number(y)];
@@ -655,13 +801,15 @@ export function getPageView(reader: ReaderLike, pageIndex: number): PageViewHand
 
 export interface TextLayerItem {
 	text: string;
+	/** PDF.js font identity when the layer exposes it; CSS generic families are not identities. */
+	fontName?: string;
 	/** [x1, y1, x2, y2] in raw PDF coordinates (origin bottom-left). */
 	rect: [number, number, number, number];
 	fontSize?: number;
 }
 
 export interface TextLayerPage {
- fontRepair?:{controlRuns:number;resolvedFonts:number;encodingFonts:number;remainingRuns:number;error:string};
+ fontRepair?:{controlRuns:number;resolvedFonts:number;encodingFonts:number;remainingRuns:number;error:string;symbolGlyphs?:number;symbolFonts?:number};
 	items: TextLayerItem[];
 	pageWidth: number;
 	pageHeight: number;
@@ -875,7 +1023,8 @@ export function getTextLayerItems(reader: ReaderLike, pageIndex: number): TextLa
 			const fontSize = Number.isFinite(declared) && declared > 0
 				? declared / scale
 				: rect[3] - rect[1];
-			items.push({ text, rect, fontSize });
+			const fontName = span.dataset?.fontName;
+			items.push({ text, rect, fontSize, ...(fontName ? {fontName} : {}) });
 		}
 		if (!items.length) {
 			return null;
@@ -991,14 +1140,32 @@ export function getPageRender(reader: ReaderLike, pageIndex: number): PageRender
 		const viewportWidth = Number(viewport.width) || canvas.width;
 		const viewportHeight = Number(viewport.height) || canvas.height;
 		const scale = Number(viewport.scale) > 0 ? Number(viewport.scale) : 1;
+		const rotation = getPageView(reader, pageIndex)?.rotation ?? 0;
+		let canonicalCanvas = canvas;
+		if (rotation !== 0) {
+			// The core rasteriser uses the PDF's intrinsic orientation. Its live
+			// canvas fallback must offer the SAME orientation, otherwise the
+			// overlay's whole-page turn would rotate this bitmap a second time.
+			const sideways = rotation === 90 || rotation === 270;
+			canonicalCanvas = canvas.ownerDocument.createElement('canvas');
+			canonicalCanvas.width = sideways ? canvas.height : canvas.width;
+			canonicalCanvas.height = sideways ? canvas.width : canvas.height;
+			const ctx = canonicalCanvas.getContext('2d', { willReadFrequently: true });
+			if (!ctx) return null;
+			if (rotation === 90) ctx.setTransform(0, -1, 1, 0, 0, canvas.width);
+			else if (rotation === 180) ctx.setTransform(-1, 0, 0, -1, canvas.width, canvas.height);
+			else ctx.setTransform(0, 1, -1, 0, canvas.height, 0);
+			ctx.drawImage(canvas, 0, 0);
+		}
+		const sideways = rotation === 90 || rotation === 270;
 		return {
-			canvas,
-			viewportWidth,
-			viewportHeight,
+			canvas: canonicalCanvas,
+			viewportWidth: sideways ? viewportHeight : viewportWidth,
+			viewportHeight: sideways ? viewportWidth : viewportHeight,
 			scale,
 			toViewport: (x: number, y: number) => {
 				const [vx, vy] = viewport.convertToViewportPoint(x, y);
-				return [Number(vx), Number(vy)];
+				return canonicalPagePoint(Number(vx), Number(vy), viewportWidth, viewportHeight, rotation);
 			}
 		};
 	}

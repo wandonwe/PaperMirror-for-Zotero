@@ -14,7 +14,7 @@ export function decodeLegacyText(text:string,name:string,differences:Record<numb
 const documents=new WeakMap<object,Promise<PDFDocument>>();
 /** Keep parsing and its result in the privileged realm. A content Promise's
  * .then() result must not transport a privileged PDFDocument across Xray. */
-function parsedDocument(doc:object & {getData?:()=>Promise<Uint8Array>}):Promise<PDFDocument> {
+export function parsedDocument(doc:object & {getData?:()=>Promise<Uint8Array>}):Promise<PDFDocument> {
  let pending=documents.get(doc);
  if(!pending) {
   const bytes=new Promise<Uint8Array>((resolve,reject)=>{

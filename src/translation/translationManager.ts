@@ -1,3 +1,5 @@
+import { numericPowerIssue, isNumericPowerLiteral } from './numericPowers';
+import { technicalUnitIssue, isTechnicalUnitLiteral } from './technicalUnits';
 import { referenceAlignmentIssue } from './referenceAlignment';
 /**
  * Per-attachment translation orchestration:
@@ -38,6 +40,7 @@ import { RequestScheduler } from './requestScheduler';
 import { RequestGate } from './requestGate';
 import { weightsFromThroughput, type ProviderThroughput } from './providerPool';
 import { planChunks, trailingContext, type PlannedChunk } from './segmenter';
+import { buildContinuityContexts, pageContinuityNeeds, contextualSourceText } from './sourceContinuity';
 import { buildLayoutModules } from '../reader/layoutModules';
 import { fnv1a64 } from '../cache/cacheSchema';
 import { addUsage, emptyUsage, type TokenUsage } from './usageMeter';
@@ -155,6 +158,7 @@ export const MAX_RENDER_RETRIES = 2;
  */
 export function looksTranslated(source: string, translated: string, targetLang: string, opts?: { isReference?: boolean }): boolean {
 	const t = translated.trim();
+	if (technicalUnitIssue(source, t) || numericPowerIssue(source, t)) return false;
 	if (/[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFD]/.test(t)) return false;
 	if (referenceAlignmentIssue(source, t)) return false;
 	if (!t) {
@@ -295,8 +299,9 @@ export function initialCharBudget(block: SourceBlock, targetLang: string): numbe
  * lives in the segment STORE the host injects (a different context reads a
  * different store), so the hash itself stays a pure content key.
  */
-export function segmentHash(sourceText: string, sourceLang: string, targetLang: string): string {
-	return fnv1a64(`${sourceText}\u0000${sourceLang}\u0000${targetLang}`);
+export function segmentHash(sourceText: string, sourceLang: string, targetLang: string, continuationContext?: SourceBlock['continuationContext']): string {
+ const identity = contextualSourceText({ sourceText, continuationContext } as SourceBlock);
+	return fnv1a64(`${identity}\u0000${sourceLang}\u0000${targetLang}`);
 }
 
 /** Cap on residue re-translations per page — a safety valve against storms. */
@@ -739,6 +744,7 @@ export interface TranslateHooks {
 	onAttempt?: () => void;
 	onUsage?: (usage: TokenUsage) => void;
 	onParamHeal?: (param: RejectedParam) => void;
+ onProgress?: () => void;
 }
 
 export interface TranslationDeps {
@@ -793,6 +799,8 @@ export interface TranslationDeps {
 	/** 不译词列表 — masked via placeholders before every request. */
 	getNoTranslate?(): string[];
 	useContext(): boolean;
+ /** Stable full provider-pool/user-policy identity for shared source sentences. */
+ continuityIdentity?(): string;
 	pageCount(): number;
 }
 
@@ -815,6 +823,58 @@ export class TranslationManager {
 	 *  服务商在途请求收到 ≈ 其页面并发上限,当前页请求优先出手。 */
 	private requestGate = new RequestGate();
 	private pages = new Map<number, PageTranslationState>();
+ private pageCancelEpochs = new Map<number, number>();
+ /** Only source extraction is shared; a context read never schedules translation. */
+ private continuityReads = new Map<number, Promise<SourceBlock[]>>();
+
+ /** Source-only cache preparation, also used by export recovery. Never calls
+  * a provider or creates a neighbouring translation page. */
+ async contextualizeSource(pageIndex: number, blocks: SourceBlock[]): Promise<SourceBlock[]> {
+  if (!blocks.length) return blocks;
+  if (!this.deps.useContext()) return blocks.some(b => b.continuationContext)
+   ? blocks.map(({continuationContext: _old, ...source}) => source) : blocks;
+  const needs = pageContinuityNeeds(blocks);
+  let unavailable = false;
+  const read = async (index: number, needed: boolean): Promise<SourceBlock[] | undefined> => {
+   if (!needed || index < 0 || index >= this.deps.pageCount()) return undefined;
+   const live = this.pages.get(index)?.blocks;
+   if (live?.length) return live;
+   let pending = this.continuityReads.get(index);
+   if (!pending) {
+    pending = this.withExtractionSlot(index, async () => {
+     if (this.extractZombies.has(index)) return [];
+     return this.withExtractTimeout(this.deps.extractPage(index), index);
+    });
+    this.continuityReads.set(index, pending);
+   }
+   try {
+    const source = await pending;
+    if (!source.length) unavailable = true;
+    return source;
+   } catch (error) {
+    unavailable = true;
+    logger.warn(MODULE, `Source continuation unavailable on page ${index + 1}`, error);
+    return undefined;
+   } finally {
+    if (this.continuityReads.get(index) === pending) this.continuityReads.delete(index);
+   }
+  };
+  const [previous, next] = await Promise.all([
+   read(pageIndex - 1, needs.previous), read(pageIndex + 1, needs.next)
+  ]);
+  const contexts = buildContinuityContexts(blocks, { previous, next });
+  const identity = this.deps.continuityIdentity?.();
+  return blocks.map(block => {
+   const { continuationContext: _old, ...source } = block;
+   const context = contexts.get(block.id);
+   // A failed neighbour read must not revive an old context-free translation.
+   // Empty evidence also has a distinct identity; successful retry gets its
+   // actual source evidence and therefore another identity.
+   return context ? { ...source, continuationContext: {...context, ...(identity ? {identity} : {})} }
+    : unavailable && block.translationMode !== 'preserve'
+     ? { ...source, continuationContext: { before: '', after: '', ...(identity ? {identity} : {}) } } : source;
+  });
+ }
 	/**
 	 * 被"释放等重试"的页 (2.9.0)。**释放 ≠ 消失** —— 见 `ReleaseReason` 的注释:
 	 * 此前五处删除都不留痕,真机上第 36/41/45 页因此整行从诊断里消失。
@@ -924,10 +984,24 @@ export class TranslationManager {
 	 * 经计量的服务商调用 (2.7.0): 两条请求路径(整页运行与压缩重译/单块重译)
 	 * 都从这里出去,响应里的用量按页累加。只碰数字,响应正文原样透传。
 	 */
-	private async meteredTranslate(request: TranslationRequest, signal: AbortSignal, onAttempts?: (n: number) => void): Promise<TranslationResponse> {
+	private async meteredTranslate(request: TranslationRequest, signal: AbortSignal, onAttempts?: (n: number) => void, heartbeat?:()=>void): Promise<TranslationResponse> {
+  // Centralized here so missing-ID, slow-lane, residue, plain, compression and
+  // single-block retries all retain the same immutable source evidence.
+  const sourceById = new Map(this.pages.get(request.pageIndex ?? -1)?.blocks.map(b => [b.id, b]));
+  const useContext = this.deps.useContext();
+  request = { ...request, blocks: request.blocks.map(block => {
+   const {continuationContext: _old, protectedLiterals: _literals, sourceText: _sourceText, ...textBlock} = block;
+   const sourceBlock = sourceById.get(block.id);
+   const context = useContext ? sourceBlock?.continuationContext : undefined;
+   if (!context || !sourceBlock) return textBlock;
+   const registry = PlaceholderRegistry.protect(sourceBlock.sourceText, this.literalsFor(sourceBlock), sourceBlock.styleRuns);
+   const protectedLiterals = registry.text === block.text ? registry.entries.map(entry => ({...entry})) : [];
+   return { ...textBlock, continuationContext: {before:context.before, after:context.after}, sourceText: sourceBlock.sourceText, protectedLiterals };
+  }) };
 		let attempts = 0;
 		let reported = false;
 		let cancelledBeforeSend = false;
+  let cacheOnly = false;
 		const record = (usage: TokenUsage): void => {
 			reported = true;
 			this.usageReports++;
@@ -940,9 +1014,10 @@ export class TranslationManager {
 		};
 		const hooks: TranslateHooks = {
 			onAttempt: () => {
+                heartbeat?.();
                 attempts++;
                 for (const block of request.blocks) {
-                    const key = `${request.pageIndex}:${segmentHash(block.text, request.sourceLanguage, request.targetLanguage)}`;
+                    const key = `${request.pageIndex}:${segmentHash(block.text, request.sourceLanguage, request.targetLanguage, block.continuationContext)}`;
                     if (this.requestedContent.has(key)) this.usage.repeatedBlockSubmissions++;
                     this.requestedContent.add(key);
                 }
@@ -951,13 +1026,15 @@ export class TranslationManager {
                 }
             },
 			onUsage: record,
-			onParamHeal: param => bump(this.paramHeals, param)
+			onParamHeal: param => bump(this.paramHeals, param),
+   onProgress: heartbeat
 		};
 		try {
 			const response = await this.deps.translateRequest(request, signal, hooks);
+   cacheOnly = response.cacheOnly === true && attempts === 0;
 			// 适配器已经经 onUsage 上报的不再重复累加 (一个响应只记一次);
 			// 没走回调的 (免费引擎 / 测试桩) 沿用响应里的 usage 字段。
-			if (!reported) {
+			if (!reported && !cacheOnly) {
 				if (response.usage) {
 					record(response.usage);
 				}
@@ -965,7 +1042,16 @@ export class TranslationManager {
 					this.usageMissing++;
 				}
 			}
-			return response;
+   // The old chunk-tail guard only covered the first block. Source sentence
+   // evidence now follows each block through every retry path, so apply the
+   // same conservative bleed check here, including single-ID salvage replies.
+   return { ...response, translations: response.translations.filter(translation => {
+    const block = request.blocks.length === 1
+     ? sourceById.get(request.blocks[0]!.id) : sourceById.get(translation.id);
+    const context = useContext ? block?.continuationContext : undefined;
+    return !block || !context || !looksContextBleed(block.sourceText, translation.translatedText,
+     !!(context.before || context.after));
+   }) };
 		}
 		catch (e) {
 			if (e instanceof PaperMirrorError && e.code === 'CANCELLED' && attempts === 0) {
@@ -988,7 +1074,7 @@ export class TranslationManager {
 		finally {
 			// 适配器不支持 onAttempt (免费引擎 / 桩) 时,一次调用按一次尝试计;
 			// 发出前就取消的 (attempts 仍为 0 且以 CANCELLED 结束) 不计。
-			const n = attempts || (cancelledBeforeSend ? 0 : 1);
+			const n = attempts || (cancelledBeforeSend || cacheOnly ? 0 : 1);
 			this.httpAttempts += n;
 			onAttempts?.(n);
 		}
@@ -1134,10 +1220,19 @@ export class TranslationManager {
 		if (pending) return pending;
 		const epoch = this.restoreEpoch;
 		const job = (async () => {
-			const saved = await this.deps.restoreSnapshot!(pageIndex).catch(() => null);
+			let saved = await this.deps.restoreSnapshot!(pageIndex).catch(() => null);
 			if (this.disposed || epoch !== this.restoreEpoch) return undefined;
 			if (this.pages.get(pageIndex) !== current) return this.pages.get(pageIndex);
 			if (!saved?.blocks.length) return current;
+			const invalidUnits = saved.blocks.filter(block => {
+				const text = saved!.translations.get(block.id);
+				return text !== undefined && (technicalUnitIssue(block.sourceText, text) || numericPowerIssue(block.sourceText, text)) !== null;
+			});
+			if (invalidUnits.length) {
+				const translations = new Map(saved.translations);
+				for (const block of invalidUnits) translations.delete(block.id);
+				saved = {...saved, translations, status:'idle', cached:false};
+			}
 			this.pages.set(pageIndex, saved);
 			this.touchPage(pageIndex);
 			this.usage.displayRestores++;
@@ -1436,7 +1531,9 @@ export class TranslationManager {
 					if (!pb || !t.translatedText.trim()) {
 						continue;
 					}
+					if (!pb.reg.ok(t.translatedText)) continue;
 					const restored = pb.reg.restore(t.translatedText);
+					if (technicalUnitIssue(pb.block.sourceText, restored) || numericPowerIssue(pb.block.sourceText, restored)) continue;
 					const previous = state.translations.get(t.id);
 					// Only accept a genuinely shorter retry; equal/longer output
 					// cannot help it fit and would burn the result for nothing.
@@ -1479,7 +1576,7 @@ export class TranslationManager {
 						this.trackWrite(this.deps.writeSegments(pageIndex, [...accepted]
 							.filter(([id]) => byId.has(id))
 							.map(([id, text]) => ({
-								hash: segmentHash(byId.get(id)!.sourceText, source, target),
+								hash: segmentHash(byId.get(id)!.sourceText, source, target, byId.get(id)!.continuationContext),
 								translatedText: text
 							}))
 						));
@@ -1519,7 +1616,7 @@ export class TranslationManager {
 				const sample = prior.blocks.map(b => b.sourceText).join('\n').slice(0, 4000);
 				const { source, target } = this.deps.getLanguages(sample);
 				for (const b of prior.blocks) {
-					this.failedSegments.delete(segmentHash(b.sourceText, source, target));
+					this.failedSegments.delete(segmentHash(b.sourceText, source, target, b.continuationContext));
 				}
 			}
 			catch { /* language resolution is best-effort here */ }
@@ -1571,7 +1668,7 @@ export class TranslationManager {
 		const { source, target } = this.deps.getLanguages(block.sourceText);
 		const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block), block.styleRuns);
 		const text = reg.text;
-		this.failedSegments.delete(segmentHash(block.sourceText, source, target));
+		this.failedSegments.delete(segmentHash(block.sourceText, source, target, block.continuationContext));
 		try {
 			return await this.scheduler.enqueue(`page-${pageIndex}-seg-${blockId}`, PRIORITY.CURRENT_RETRANSLATE, async (signal) => {
 				const live = (): boolean => !this.disposed && !signal.aborted && this.pages.get(pageIndex) === state;
@@ -1589,8 +1686,8 @@ export class TranslationManager {
 				}, signal), signal);
 				if (!live()) return false;
 				const hit = resp.translations.find(t =>
-					looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference })
-					&& reg.ok(t.translatedText));
+					reg.ok(t.translatedText)
+					&& looksTranslated(block.sourceText, reg.restore(t.translatedText), target, { isReference: block.isReference }));
 				if (!hit) {
 					return false;
 				}
@@ -1602,7 +1699,7 @@ export class TranslationManager {
 				this.notify(state);
 				if (this.deps.writeSegments) {
 					await this.deps.writeSegments(pageIndex, [{
-						hash: segmentHash(block.sourceText, source, target),
+						hash: segmentHash(block.sourceText, source, target, block.continuationContext),
 						translatedText: restored
 					}]).catch(() => { /* best effort */ });
 				}
@@ -1983,6 +2080,7 @@ export class TranslationManager {
 	 * revisit re-runs it.
 	 */
 	cancelPage(pageIndex: number): void {
+  this.pageCancelEpochs.set(pageIndex, (this.pageCancelEpochs.get(pageIndex) ?? 0) + 1);
 		this.scheduler.cancel(`page-${pageIndex}`);
 		this.scheduler.cancel(`page-${pageIndex}-compress`);
 	}
@@ -1994,7 +2092,7 @@ export class TranslationManager {
 	 * provider+language, so the old entries simply stop matching.
 	 */
 	resetAll(): void {
-		this.restoreEpoch++; this.displayRestores.clear(); this.requestedContent.clear();
+		this.restoreEpoch++; this.displayRestores.clear(); this.requestedContent.clear(); this.continuityReads.clear();
 		this.scheduler.cancelAll();
 		this.pages.clear();
 		this.unstableFired.clear();
@@ -2014,7 +2112,7 @@ export class TranslationManager {
 	 * 停在旧译文或原文,得手动点圆环)。
 	 */
 	async resetAllAndWait(): Promise<void> {
-		this.restoreEpoch++; this.displayRestores.clear(); this.requestedContent.clear();
+		this.restoreEpoch++; this.displayRestores.clear(); this.requestedContent.clear(); this.continuityReads.clear();
 		await this.scheduler.cancelAllAndWait();
 		// 已发出但还没落盘的段落写入也要等 (2.5.9): 它们不再阻塞调度槽,
 		// 清盘前必须在这里收口,否则就是 2.0.7 修过的那条竞态。
@@ -2029,6 +2127,7 @@ export class TranslationManager {
 	}
 
 	cancelAll(): void {
+  for (const index of this.pages.keys()) this.pageCancelEpochs.set(index, (this.pageCancelEpochs.get(index) ?? 0) + 1);
 		this.scheduler.cancelAll();
 	}
 
@@ -2231,6 +2330,7 @@ export class TranslationManager {
 		if (this.disposed) {
 			return;
 		}
+  const cancelEpoch = this.pageCancelEpochs.get(pageIndex) ?? 0;
 		const jobKey = `page-${pageIndex}`;
 		// 「正在解绕的僵尸」必须先于所有早退判据识别出来 (2.5.8)。cancel() 对
 		// 运行中的任务只发 abort 信号,它要等自己的 run() 结算才离开
@@ -2382,6 +2482,9 @@ export class TranslationManager {
 			if (this.disposed || this.pages.get(pageIndex) !== state) {
 				return; // superseded while extracting
 			}
+   if ((this.pageCancelEpochs.get(pageIndex) ?? 0) !== cancelEpoch) {
+    state.status = 'idle'; this.notify(state); return;
+   }
 			if (navigationAtStart !== this.navigationGeneration
 				&& !this.wantedPages().includes(pageIndex)) {
 				this.releasePage(pageIndex, state, 'navigation-superseded');
@@ -2414,6 +2517,19 @@ export class TranslationManager {
 				this.notify(state);
 				return;
 			}
+   const priorIdentities = new Map(blocks.map(b => [b.id, contextualSourceText(b)]));
+			blocks = await this.contextualizeSource(pageIndex, blocks);
+			if (this.disposed || this.pages.get(pageIndex) !== state) return;
+   if ((this.pageCancelEpochs.get(pageIndex) ?? 0) !== cancelEpoch) {
+    state.status = 'idle'; this.notify(state); return;
+   }
+   if (navigationAtStart !== this.navigationGeneration && !this.wantedPages().includes(pageIndex)) {
+    this.releasePage(pageIndex, state, 'navigation-superseded'); return;
+   }
+   for (const block of blocks) {
+    if (priorIdentities.get(block.id) !== contextualSourceText(block)) state.translations.delete(block.id);
+   }
+			state.blocks = blocks;
 
 			await this.scheduler.enqueue(`page-${pageIndex}`, priority, async (signal) => {
 				// 排队时间 = 抽取完到调度器真正让这页开跑 (2.8.4)。
@@ -2551,8 +2667,8 @@ export class TranslationManager {
 					blocks: [{ id: block.id, type: block.type, text }],
 					glossary: this.glossaryFor([block.sourceText])
 				}, signal);
-				const hit = resp.translations.find(t => looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference })
-					&& reg.ok(t.translatedText));
+				const hit = resp.translations.find(t => reg.ok(t.translatedText)
+					&& looksTranslated(block.sourceText, reg.restore(t.translatedText), target, { isReference: block.isReference }));
 				if (!hit) {
 					continue;
 				}
@@ -2626,7 +2742,7 @@ export class TranslationManager {
 					const response = await this.requestGate.run(
 						lane, foreground,
 						async () => {
-							const r = await this.meteredTranslate(request, sig, n => { metrics.attemptCount += n; });
+							const r = await this.meteredTranslate(request, sig, n => { metrics.attemptCount += n; }, beat);
 							succeeded = true;
 							return r;
 						}, sig,
@@ -2690,7 +2806,7 @@ export class TranslationManager {
 
 		// 1. Extract — normally already done OUTSIDE the provider lane by
 		// ensurePage (preBlocks); the inline path remains for direct callers.
-		const blocks = preBlocks ?? await this.deps.extractPage(pageIndex);
+		const blocks = preBlocks ?? await this.contextualizeSource(pageIndex, await this.deps.extractPage(pageIndex));
 		beat();
 		if (signal.aborted) {
 			throw new PaperMirrorError('CANCELLED', 'cancelled');
@@ -2712,6 +2828,7 @@ export class TranslationManager {
 		const { source, target } = this.deps.getLanguages(sampleText);
 		const glossary = this.glossaryFor(activeBlocks.map(b => b.sourceText));
 		const sourceById = new Map(activeBlocks.map(b => [b.id, b.sourceText]));
+  const sourceBlockById = new Map(activeBlocks.map(b => [b.id, b]));
 		const refById = new Set(activeBlocks.filter(b => b.isReference).map(b => b.id));
 		// Accept a response only if it is actually translated (not echoed English).
 		const accept = (id: string, text: string): boolean =>
@@ -2770,7 +2887,7 @@ export class TranslationManager {
 		// store the host injects). 普通刷新 re-enters here with the page cache
 		// bypassed but segments live, so only the segments that actually failed
 		// or changed cost a request. 'force' skips this entirely.
-		const segHash = (b: SourceBlock): string => segmentHash(b.sourceText, source, target);
+		const segHash = (b: SourceBlock): string => segmentHash(b.sourceText, source, target, b.continuationContext);
 		let segmentHits = 0;
 		if (!bypass.bypassSegments && this.deps.readSegments) {
 			this.usage.segmentLookups += activeBlocks.length;
@@ -2883,11 +3000,12 @@ export class TranslationManager {
 				noteReject(id, 'empty');
 				return false;
 			}
-			if (!accept(id, text)) {
-				noteReject(id, rejectedResponse(id, text, 'validator'));
+			const reg = regById.get(id);
+			const restored = reg ? reg.restore(text) : text;
+			if (!accept(id, restored)) {
+				noteReject(id, rejectedResponse(id, restored, 'validator'));
 				return false;
 			}
-			const reg = regById.get(id);
 			if (reg && !reg.ok(text)) {
 				noteReject(id, reg.status.last?.missing.length ? 'placeholder:missing' : 'placeholder:unexpected');
 				return false;
@@ -2904,7 +3022,7 @@ export class TranslationManager {
 		// truncation) or delay the fast batches that paint most of the page.
 		const maskedById = new Map(protectedBlocks.map(p => [p.block.id, p.text]));
 		const riskOf = (b: SourceBlock): boolean => {
-			const ph = regById.get(b.id)?.count ?? 0;
+			const ph = regById.get(b.id)?.entries.filter(entry => !isTechnicalUnitLiteral(entry.original) && !isNumericPowerLiteral(entry.original)).length ?? 0;
 			return b.type === 'table'
 				|| b.sourceText.length > 2400
 				|| ph >= 5
@@ -2962,40 +3080,8 @@ export class TranslationManager {
 				? trailingContext(chunks[i - 1]!.blocks)
 				: ''
 		));
-		// 跨页续接 (参照 retain-pdf continuation_hint, 受控消费): when the previous
-		// page's last body paragraph ends mid-sentence, or this page opens like a
-		// continuation, the tail is injected as chunk-0 context — SOURCE text
-		// only, no cross-page block merging, so the per-page overlay contract and
-		// the one-shot commit stay intact.
-		if (this.deps.useContext() && contexts.length && !contexts[0] && chunks[0]!.lane === 'fast' && chunks[0]!.kind === 'prose' && pageIndex > 0) {
-			const prev = this.pages.get(pageIndex - 1);
-			const lastBody = [...(prev?.blocks ?? [])].reverse()
-				.find(b => (b.type === 'paragraph' || b.type === 'list') && !b.isReference);
-			const first = chunks[0]!.blocks[0];
-			if (lastBody && first) {
-				const tail = lastBody.sourceText.trim();
-				const unfinished = !/[.!?。!?]["'”’)\]]*$/.test(tail);
-				const continuing = /^[a-z,;)\]]/.test(first.sourceText.trim());
-				// 几何收紧 (移植自 MinerU `para_split.py::__merge_2_text_blocks` 的
-				// 两条条件, opendatalab/MinerU, Apache-2.0): (a) 上页末段的最后一行
-				// 必须顶到块右边界(差 < 行高)——没顶满说明段落其实已结束;
-				// (b) 两块宽度差 < min(两块宽)——宽度悬殊的多半不是同一段。
-				const lastLine = lastBody.lineRectsPdf?.[lastBody.lineRectsPdf.length - 1];
-				const blockRight = lastBody.boundingBox
-					? lastBody.boundingBox.x + lastBody.boundingBox.width
-					: undefined;
-				const lineHeight = lastLine ? Math.max(4, lastLine[3] - lastLine[1]) : 0;
-				const lastLineFull = !lastLine || blockRight === undefined
-					|| (blockRight - lastLine[2]) < lineHeight;
-				const w1 = lastBody.boundingBox?.width;
-				const w2 = first.boundingBox?.width;
-				const similarWidth = !w1 || !w2 || Math.abs(w1 - w2) < Math.min(w1, w2);
-				if ((unfinished || continuing) && lastLineFull && similarWidth) {
-					// API-7: 跨页尾同样收窄 600→300。
-					contexts[0] = tail.length <= 300 ? tail : tail.slice(-300);
-				}
-			}
-		}
+		// Sentence-specific bidirectional context is prepared before cache lookup,
+		// from complete source pages rather than the already-filtered chunks.
 
 		const runChunk = async (plan: PlannedChunk, chunkIndex: number): Promise<void> => {
 			const chunk = plan.blocks;
@@ -3160,8 +3246,8 @@ export class TranslationManager {
 						// actually translated, not the English echoed back, and no
 						// protected token was lost or invented.
 						const first = single.translations.find(t =>
-							looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference })
-							&& pb.reg.ok(t.translatedText));
+							pb.reg.ok(t.translatedText)
+							&& looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference }));
 						if (first) {
 							received.set(block.id, first.translatedText);
 						}
@@ -3237,7 +3323,7 @@ export class TranslationManager {
 				return Promise.resolve();
 			}
 			return this.deps.writeSegments(pageIndex, results.map(r => ({
-				hash: segmentHash(sourceById.get(r.id) ?? '', source, target),
+				hash: segmentHash(sourceById.get(r.id) ?? '', source, target, sourceBlockById.get(r.id)?.continuationContext),
 				translatedText: r.translatedText
 			}))).catch(() => { /* best-effort */ });
 		};
@@ -3307,7 +3393,7 @@ export class TranslationManager {
 						plain: true
 					}, signal);
 					const translatedHit = resp.translations.find(t =>
-						looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference }));
+						looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference }));
 					const hit = translatedHit && pb.reg.ok(translatedHit.translatedText) ? translatedHit : undefined;
 					if (hit) {
 						const restored = pb.reg.restore(hit.translatedText);
@@ -3482,6 +3568,8 @@ export function translationRejectReason(source: string, translated: string, targ
  if (/[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFD]/.test(translated)) return 'invalid-character';
  const alignment = referenceAlignmentIssue(source, translated);
  if (alignment) return alignment;
+ const unitIssue = technicalUnitIssue(source, translated) || numericPowerIssue(source, translated);
+ if (unitIssue) return unitIssue;
  if (looksTranslated(source, translated, target)) return null;
  if (!translated.trim()) return 'empty';
  if (isEcho(source, translated)) return 'echo';

@@ -1,3 +1,5 @@
+import { contextualSourceText } from '../translation/sourceContinuity';
+import { ContinuationUnitStore } from '../translation/continuationUnitStore';
 import { sourceBlockAtPoint } from './sourceBlockAtPoint';
 import { idleProgressFor } from '../ui/statusCapsule';
 import { temporaryPageArchive, pageContentKey } from '../export/pageArchive';
@@ -268,6 +270,7 @@ export class ReaderSession {
 	/** 每页 placement 探针 (审核: 封面标题空洞定位): 每块的 base 位图/遮罩取样
 	 *  (baseInk/maskOpaque),分辨「底图缺字」与「遮罩误盖」。只几何+布尔,无文本。 */
 	private pageArchive = temporaryPageArchive();
+ private continuationUnits = new ContinuationUnitStore();
  private placementKeys = new Map<number,string>();
 	private placementProbe = new Map<number, import('../ui/strictPageReplacement').StrictProbeRow[]>();
 	/** 放弃清单 (2.7.0, 审核 B-1): 页索引 → 放弃块 id + 原因枚举串,无文本。 */
@@ -705,8 +708,9 @@ export class ReaderSession {
                         cached:blocks.every(b => b.translationMode === 'preserve' || translations.has(b.id))};
                 },
 				readCache: async (pageIndex, blocks) => {
-					const texts = blocks.map(b => b.sourceText);
-					const parts = await this.cacheKey(pageIndex, texts);
+					const texts = blocks.map(contextualSourceText);
+     const sample = blocks.map(b=>b.sourceText).join('\n').slice(0,2000);
+					const parts = await this.cacheKey(pageIndex, texts, undefined, sample);
 					if (parts) {
 						const hit = await cacheManager.readPage(parts);
 						if (hit) {
@@ -723,7 +727,7 @@ export class ReaderSession {
 					if (this.pool.length > 1) {
 						const canonical = parts?.provider;
 						for (const pid of this.pool) {
-							const alt = await this.cacheKey(pageIndex, texts, pid);
+							const alt = await this.cacheKey(pageIndex, texts, pid, sample);
 							if (!alt || alt.provider === canonical) {
 								continue;
 							}
@@ -736,7 +740,7 @@ export class ReaderSession {
 					return null;
 				},
 				writeCache: async (pageIndex, blocks, translations) => {
-					const parts = await this.cacheKey(pageIndex, blocks.map(b => b.sourceText));
+					const parts = await this.cacheKey(pageIndex, blocks.map(contextualSourceText), undefined, blocks.map(b=>b.sourceText).join('\n').slice(0,2000));
 					if (parts) {
 						// producedBy = 运行时引擎 (P3, 2.0.10, 仅诊断): 键是规范引擎的。
 						return await cacheManager.writePage(parts, translations, this.providerForPage(pageIndex));
@@ -771,6 +775,7 @@ export class ReaderSession {
 					// 保护,读完立即释放,不在整个导出期间全局暂停淘汰。
 					|| this.exportPins.has(pageIndex),
 				useContext: () => getPref<boolean>('useContext', true),
+    continuityIdentity: () => this.continuityNamespace(),
 				pageCount: () => adapter.getPageCount(this.reader),
 				// Each page's provider LANE — lets the scheduler cap providers
 				// independently and reserve a foreground slot for the current one.
@@ -995,18 +1000,51 @@ export class ReaderSession {
 			throw new PaperMirrorError('NO_API_KEY', getString('papermirror-error-no-api-key'), { retryable: false });
 		}
 		this.assertProviderEndpointAllowed(settings, provider.defaultBaseURL);
+  // A sentence boundary is a translation unit, even when the display retains
+  // separate page/column blocks. MT services without structured part output
+  // keep their existing contract; language-model providers translate the parts
+  // together and the response is assembled back into the original block IDs.
 		// Scale the request timeout with the PAYLOAD: a fixed 60 s was fine for a
 		// one-block salvage but structurally too short for an 8000-char batch on a
 		// slow/thinking model (whose honest generation time is 70–200 s) — the old
 		// behavior was timeout → retry → same timeout → page dies "stuck". Rule:
 		// base + 12 ms per source char, capped at 120 s (the manager's idle
 		// watchdog is 150 s, so a full-length request can never trip it).
-		const payloadChars = request.blocks.reduce((n, b) => n + b.text.length, 0);
-		const scaled = Math.min(120000, Math.max(settings.timeoutMs, 20000 + payloadChars * 12));
-		return provider.translate(request, { ...settings, timeoutMs: scaled }, { signal, onAttempt: hooks?.onAttempt, onUsage: hooks?.onUsage, onParamHeal: hooks?.onParamHeal });
+  const translateRaw = (outgoing:TranslationRequest, activeSignal:AbortSignal=signal):Promise<TranslationResponse> => {
+   const payloadChars = outgoing.blocks.reduce((n, b) => n + b.text.length + (b.continuationUnit?.source.length ?? 0), 0);
+   const scaled = Math.min(120000, Math.max(settings.timeoutMs, 20000 + payloadChars * 12));
+   return provider.translate(outgoing, { ...settings, timeoutMs: scaled }, { signal:activeSignal, onAttempt: hooks?.onAttempt, onUsage: hooks?.onUsage, onParamHeal: hooks?.onParamHeal })
+    .finally(()=>{hooks?.onProgress?.();});
+  };
+  if (['bing-free','google-free','deepl'].includes(provider.id)) return translateRaw(request);
+  // Explicit settings scope the shared unit; dynamic learned terms must not
+  // split one sentence back into independent translations on adjacent pages.
+  const namespace = this.continuityNamespace();
+  return this.continuationUnits.translate(request, translateRaw, signal, namespace,
+   {
+    noTranslate:readNoTranslateList(), glossary:this.loadGlossary(), onProgress:hooks?.onProgress,
+    readUnit:async key => {
+     const parts=await this.segmentContext(0);
+     if(!parts)return null;
+     const stored=(await cacheManager.readSegments(parts,[key])).get(key);
+     if(!stored)return null;
+     try {
+      const parsed:unknown=JSON.parse(stored);
+      return Array.isArray(parsed) && parsed.every(t=>typeof t==='string') ? parsed as string[] : null;
+     } catch {return null;}
+    },
+    writeUnit:async (key,translations) => {
+     const parts=await this.segmentContext(0);
+     if(!parts)throw new PaperMirrorError('CACHE_CORRUPT','完整源句译文未能持久保存，请重试。',{retryable:true});
+     const encoded=JSON.stringify(translations);
+     await cacheManager.writeSegments(parts,[{hash:key,translatedText:encoded}]);
+     const persisted=(await cacheManager.readSegments(parts,[key])).get(key);
+     if(persisted!==encoded)throw new PaperMirrorError('CACHE_CORRUPT','完整源句译文未能持久保存，请重试。',{retryable:true});
+    }
+   });
 	}
 
-	private async cacheKey(pageIndex: number, texts: string[], providerId?: string): Promise<CacheKeyParts | null> {
+	private async cacheKey(pageIndex: number, texts: string[], providerId?: string, sourceSample?:string): Promise<CacheKeyParts | null> {
 		const item = adapter.getReaderItem(this.reader);
 		if (!item) {
 			return null;
@@ -1016,7 +1054,7 @@ export class ReaderSession {
 		// (2.2.1, item1)—— 用池内其它服务商各自的键探测同一页是否已被译过。
 		const chosen = providerId ?? this.canonicalProviderForPage(pageIndex);
 		const settings = await this.providerSettingsFor(chosen);
-		const { source, target } = this.resolveLanguages(texts.join('\n').slice(0, 2000));
+		const { source, target } = this.resolveLanguages(sourceSample ?? texts.join('\n').slice(0, 2000));
 		return {
 			attachmentKey: item.key,
 			fileHash: this.fileHash || 'nohash',
@@ -1058,6 +1096,14 @@ export class ReaderSession {
 			String(getPref<boolean>('useContext', true))
 		]);
 	}
+
+ private continuityNamespace():string {
+  return hashSourceTexts([
+   JSON.stringify(this.configIdentity()),getPref<string>('providerProfiles','{}'),
+   getPref<string>('provider','bing-free'),getPref<string>('parallelProviders','[]'),
+   String(getPref<boolean>('useContext',true))
+  ]);
+ }
 
 	private loadGlossary(): GlossaryRule[] {
 		return parseGlossaryJSON(getPref<string>('glossaryGlobal', '[]'));
@@ -1108,6 +1154,7 @@ export class ReaderSession {
   }, placement);
  }
  private resetPageArchive(): void {
+  this.continuationUnits.clear();
   void this.pageArchive.close();this.pageArchive=temporaryPageArchive();
   this.placementKeys.clear();this.placementProbe.clear();this.abandonedBlocks.clear();this.geometryAudits.clear();this.placementStats.clear();
  }
@@ -1564,10 +1611,12 @@ export class ReaderSession {
 		if (!current()) {
 			return false;
 		}
-		// 底图位图 LRU (2.2.5, item6): 同页同宽度已 rasterize 过就直接复用,免去
-		// 最贵的 pdf.js 整页渲染;buildStrictPage 只重建遮罩+文本层。宽度取整分桶,
-		// 缩放换宽度自然落到不同键、旧宽度条目由 LRU 淘汰。
-		const bitmapKey = `${pageIndex}@${Math.round(width)}`;
+		// The bitmap remains in the PDF's intrinsic orientation. Overlay-only
+		// viewer turns happen AFTER strict fitting, so they may reuse this raster.
+		// Keep exact widths: rounding could reuse a slightly different viewport
+		// and leave masks out of alignment at fractional zoom levels.
+		const intrinsicRotation = adapter.getPageIntrinsicRotation(this.reader, pageIndex);
+		const bitmapKey = `${pageIndex}@${width}#${intrinsicRotation}`;
 		let render = this.baseBitmaps.get(bitmapKey) ?? null;
 		if (!render) {
 			// Supersample within a fixed pixel budget: sharp text without letting a
@@ -3228,7 +3277,11 @@ export class ReaderSession {
 			return { translations: null, translationsMissing: 'missing:never-processed' };
 		}
 		try {
-			const parts = await this.cacheKey(pageIndex, rebuilt.map(b => b.sourceText));
+   // Rebuilt display text alone cannot identify a translated continuation.
+   // Recover the same source-only evidence as the normal cache read path.
+   if (!this.manager) return {translations:null, translationsMissing:'missing:cache-miss'};
+   const contextual = await this.manager.contextualizeSource(pageIndex, rebuilt);
+			const parts = await this.cacheKey(pageIndex, contextual.map(contextualSourceText), undefined, rebuilt.map(b=>b.sourceText).join('\n').slice(0,2000));
 			const hit = parts ? await cacheManager.readPage(parts) : null;
 			if (hit && hit.length) {
 				return { translations: hit, translationSource: 'restored-from-cache' };
@@ -3616,7 +3669,7 @@ export class ReaderSession {
 		this.overlay?.destroy();
 		this.overlay = null;
 		this.manager?.dispose();
- void this.pageArchive.close();
+ void this.pageArchive.close();this.continuationUnits.clear();
 		this.manager = null;
 		this.pane?.destroy();
 		this.pane = null;
