@@ -6,7 +6,7 @@ import {buildStrictPage, placementTally, probeStrictPlacement} from '../../src/u
 type Scenario = {name:string;items:LegendSpan[];options:LegendOptions};
 type Marker = {segment:LegendRect;color:string};
 export interface LegendMarkerMaskResult {
- scenarios:number;entries:number;markerPixelsChecked:number;glyphEdgePixelsChecked:number;boundaryFallbacks:number;scales:number[];phaseOffsets:number[];
+ scenarios:number;entries:number;markerPixelsChecked:number;glyphEdgePixelsChecked:number;boundaryFallbacks:number;committedEntries:number;maskBoundaryFallbacks:number;overflowFallbacks:number;placements:{name:string;scale:number;failFirst:boolean;committed:number;maskBoundaryFallbacks:number;overflowFallbacks:number}[];scales:number[];phaseOffsets:number[];
 }
 const COLORS=['#5ca7d1','#ed634e','#424342','#686ba6'];
 const bitmapScale=(w:number,h:number):number=>Math.max(1,Math.min(2,Math.sqrt(3_200_000/(w*h))));
@@ -43,10 +43,12 @@ function markerFor(block:SourceBlock,segments:readonly LegendRect[]):LegendRect 
  * and whole-entry fallback; no colour recognition/repainting is being added.
  */
 export function checkLegendMarkerMask():LegendMarkerMaskResult {
- const result:LegendMarkerMaskResult={scenarios:0,entries:0,markerPixelsChecked:0,glyphEdgePixelsChecked:0,boundaryFallbacks:0,scales:[.7,1,1.35],phaseOffsets:[0,.25,.5,.75]};
+ const result:LegendMarkerMaskResult={scenarios:0,entries:0,markerPixelsChecked:0,glyphEdgePixelsChecked:0,boundaryFallbacks:0,committedEntries:0,maskBoundaryFallbacks:0,overflowFallbacks:0,placements:[],scales:[.7,1,1.35],phaseOffsets:[0,.25,.5,.75]};
  for(const test of cases())for(const scale of result.scales)for(const failFirst of [false,true]) {
   const {blocks}=extractLegendItems(test.items,test.options);
   if(blocks.length!==8)throw Error(`${test.name}: eight independent entries required, got ${blocks.length}`);
+  const expectedBoundary=test.name.startsWith('minimum-marker-text-gap');
+  const originalIds=new Set(expectedBoundary?blocks.map(b=>b.id):failFirst?[blocks[0]!.id]:[]);
   const {pageWidth:width,pageHeight:height}=test.options;
   const ratio=scale*bitmapScale(width*scale,height*scale);
   const source=document.createElement('canvas');
@@ -67,11 +69,15 @@ export function checkLegendMarkerMask():LegendMarkerMaskResult {
    ctx.font=`${block.fontSize}px Arial`;
    ctx.fillText(original,line[0],height-line[3],line[2]-line[0]);
    // PDF advance rectangles need not enclose a font's antialiased ink. Put
-   // controlled original glyph-edge strokes across both vertical boundaries,
+   // controlled original glyph-edge strokes across all four boundaries,
    // independently of the platform font's convenient Canvas 'top' metrics.
    const edgeHeight=block.fontSize!*.09;
    for(const edge of [height-line[3],height-line[1]]) {
     const strip={id:block.id,left:line[0]+block.fontSize!*.7,top:edge-edgeHeight/2,width:block.fontSize!*1.3,height:edgeHeight};
+    ctx.fillRect(strip.left,strip.top,strip.width,strip.height);glyphEdges.push(strip);
+   }
+   for(const edge of [line[0],line[2]]) {
+    const strip={id:block.id,left:edge-edgeHeight/2,top:height-line[3]+block.fontSize!*.25,width:edgeHeight,height:block.fontSize!*.5};
     ctx.fillRect(strip.left,strip.top,strip.width,strip.height);glyphEdges.push(strip);
    }
   }
@@ -97,8 +103,8 @@ export function checkLegendMarkerMask():LegendMarkerMaskResult {
    const page=built.element as any;
    const unfit=page.pmSettleStrict(true) as {id:string}[];
    const still=page.pmShrinkFit(unfit.map(b=>b.id)) as string[];
-   if(still.some(id=>!failFirst || id!==blocks[0]!.id))throw Error(`${test.name} ${scale}: a short legend did not fit: ${still.join(',')}`);
-   if(failFirst && !still.includes(blocks[0]!.id))throw Error('Long first entry did not exercise complete-source fallback');
+   if(still.some(id=>expectedBoundary || !failFirst || id!==blocks[0]!.id))throw Error(`${test.name} ${scale}: a short legend did not fit: ${still.join(',')}`);
+   if(!expectedBoundary && failFirst && !still.includes(blocks[0]!.id))throw Error('Long first entry did not exercise complete-source fallback');
    page.pmRevert(still);
    const mask=built.element.querySelector<HTMLCanvasElement>('.pm-repage-mask')!;
    const base=built.element.querySelector<HTMLCanvasElement>('.pm-repage-canvas')!;
@@ -119,7 +125,7 @@ export function checkLegendMarkerMask():LegendMarkerMaskResult {
     }
     if(!painted)throw Error('Marker has no coloured source pixels');
    };
-   const markersIntact=(originalIds:ReadonlySet<string>=new Set(failFirst?[blocks[0]!.id]:[])):void=>{
+   const markersIntact=(unmaskedIds:ReadonlySet<string>=originalIds):void=>{
     const cover=mask.getContext('2d')!.getImageData(0,0,mask.width,mask.height).data;
     markers.forEach(marker=>markerIntact(marker,cover));
     for(const edge of glyphEdges) {
@@ -130,7 +136,7 @@ export function checkLegendMarkerMask():LegendMarkerMaskResult {
       const i=(y*base.width+x)*4;
       if(Math.max(255-original[i]!,255-original[i+1]!,255-original[i+2]!)<=20)continue;
       ink++;result.glyphEdgePixelsChecked++;
-      const expected=originalIds.has(edge.id)?0:255;
+      const expected=unmaskedIds.has(edge.id)?0:255;
       if(cover[i+3]!==expected)throw Error(`${test.name} scale=${scale}: original glyph edge ${edge.id} at ${x},${y} alpha=${cover[i+3]}, expected=${expected}`);
      }
      if(!ink)throw Error('Controlled source glyph edge has no ink');
@@ -141,6 +147,10 @@ export function checkLegendMarkerMask():LegendMarkerMaskResult {
     for(const [index,block] of blocks.entries()) {
      const node=built.element.querySelector<HTMLElement>(`[data-pm-block="${block.id}"]`)!;
      const probe=probes.find(p=>p.id===block.id)!;
+     if(expectedBoundary){
+      if(node || probe || !page.pmAbandoned().some((a:{id:string;reason:string})=>a.id===block.id&&a.reason==='legend-mask-boundary'))throw Error('A physically conflicting marker/text entry did not stay wholly original');
+      continue;
+     }
      if(!node || node.textContent!==labels[index])throw Error('Legend identity or complete translation was lost');
      if(node.hasAttribute('data-pm-annex') || node.hasAttribute('data-pm-flow'))throw Error('A legend moved to an unrelated flow or annex');
      const first=block.lineRectsPdf![0]!,area=block.sourceRegion!.boundsPdf;
@@ -157,13 +167,18 @@ export function checkLegendMarkerMask():LegendMarkerMaskResult {
     markersIntact();
    };
    checkPlacements();
-   for(const block of blocks.filter((_,i)=>!failFirst || i>0)) {
-    page.pmPeek([block.id],true);markersIntact(new Set([...(failFirst?[blocks[0]!.id]:[]),block.id]));
+   const stats=page.pmStats(),boundaryCount=page.pmAbandoned().filter((a:{reason:string})=>a.reason==='legend-mask-boundary').length;
+   const expectedCommitted=expectedBoundary?0:failFirst?7:8;
+   if(stats.committed!==expectedCommitted || stats.abandoned!==(expectedBoundary?8:failFirst?1:0) || stats.pending || stats.replaceable!==8)throw Error('Legend commit/fallback accounting changed');
+   result.committedEntries+=stats.committed;result.maskBoundaryFallbacks+=boundaryCount;result.overflowFallbacks+=expectedBoundary?0:failFirst?1:0;
+   result.placements.push({name:test.name,scale,failFirst,committed:stats.committed,maskBoundaryFallbacks:boundaryCount,overflowFallbacks:expectedBoundary?0:failFirst?1:0});
+   for(const block of blocks.filter((_,i)=>!expectedBoundary&&(!failFirst || i>0))) {
+    page.pmPeek([block.id],true);markersIntact(new Set([...originalIds,block.id]));
     page.pmPeek([block.id],false);checkPlacements();
    }
    // Whole-entry fallback must clear only its own text, retaining every marker
    // and the other seven independently committed labels.
-   if(!failFirst) {
+   if(!expectedBoundary&&!failFirst) {
     page.pmRevert([blocks[0]!.id]);markersIntact(new Set([blocks[0]!.id]));
     const probe=probeStrictPlacement(built.element,false)!.find(p=>p.id===blocks[0]!.id)!;
     if(probe.state!=='abandoned')throw Error('Legend revert did not restore the original entry');
@@ -177,19 +192,24 @@ export function checkLegendMarkerMask():LegendMarkerMaskResult {
  }
  // Inadequate neighbouring whitespace must retain the COMPLETE first entry,
  // including when its first line was safe but a later line failed planning.
- // These two atomicity controls supplement, not replace, the original 30 cases.
- for(const side of ['above','below'] as const) {
-  const test=cases()[1]!,{blocks}=extractLegendItems(test.items,test.options),first=blocks[0]!;
+ // Atomicity and invalid/legacy-marker controls supplement the original 30 cases.
+ for(const side of ['above','below','missing','nonfinite','wrong-row'] as const) {
+  const test=cases()[0]!,{blocks}=extractLegendItems(test.items,test.options),first=blocks[0]!;
   const {pageHeight:height,pageWidth:width}=test.options,scale=1;
   const target=side==='above'?first.lineRectsPdf![0]!:first.lineRectsPdf!.at(-1)!;
-  const rect:LegendRect=side==='above'?[target[0],target[3]+.2,target[2],target[3]+5.2]
-   :[target[0],target[1]-5.2,target[2],target[1]-.2];
+  const rect:LegendRect=side==='above'?[target[0],target[3]+.2,target[2],target[3]+1.2]
+   :[target[0],target[1]-1.2,target[2],target[1]-.2];
   const neighbour:SourceBlock={id:'preserved-neighbour',pageIndex:23,order:99,type:'paragraph',sourceText:'A neighbouring original line',
    lineRectsPdf:[rect],fontSize:5,column:0,translationMode:'preserve',preserveReason:'marks'};
   const source=document.createElement('canvas');source.width=width*2;source.height=height*2;
   const ctx=source.getContext('2d')!;ctx.fillStyle='white';ctx.fillRect(0,0,source.width,source.height);ctx.scale(2,2);
-  ctx.fillStyle='black';for(const b of [...blocks,neighbour])for(const line of b.lineRectsPdf!)ctx.fillRect(line[0]+3,height-line[3]+2,Math.min(70,line[2]-line[0]-6),2);
-  const built=buildStrictPage(document,{pageIndex:23,blocks:[...blocks,neighbour],translations:new Map(blocks.map((b,i)=>[b.id,`独立图例${i+1}`])),
+  for(const b of blocks){const m=b.sourceRegion!.markerPdf!;ctx.fillStyle=COLORS[blocks.indexOf(b)%4]!;ctx.fillRect(m[0],height-m[1]-.4,m[2]-m[0],.8);}
+  ctx.fillStyle='black';for(const b of [...blocks,neighbour])for(const line of b.lineRectsPdf!)ctx.fillRect(line[0]+3,height-line[3]+Math.min(2,(line[3]-line[1])/4),Math.min(70,line[2]-line[0]-6),Math.min(2,(line[3]-line[1])/2));
+  if(side==='missing')delete first.sourceRegion!.markerPdf;
+  if(side==='nonfinite')first.sourceRegion!.markerPdf![0]=NaN;
+  if(side==='wrong-row'){first.sourceRegion!.markerPdf![1]+=20;first.sourceRegion!.markerPdf![3]+=20;}
+  const inputBlocks=(side==='above'||side==='below')?[...blocks,neighbour]:blocks;
+  const built=buildStrictPage(document,{pageIndex:23,blocks:inputBlocks,translations:new Map(blocks.map((b,i)=>[b.id,`独立图例${i+1}`])),
    render:{canvas:source,viewportWidth:width,viewportHeight:height,scale,toViewport:(x,y)=>[x,height-y]}})!;
   document.body.append(built.element);
   try {

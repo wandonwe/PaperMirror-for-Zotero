@@ -175,7 +175,7 @@ export function extractLegendItems(items: readonly LegendSpan[], options: Legend
 			column: columnOf(area, columns, options.pageWidth),
 			fontSize: group.anchor.line.fontSize, lineRectsPdf: rects,
 			boundingBox: { x: area[0], y: options.pageHeight - area[3], width: area[2] - area[0], height: area[3] - area[1] },
-			sourceRegion: { id, kind: 'legend-item', boundsPdf: area, evidence: 'marker-aligned-lines' } };
+			sourceRegion: { id, kind: 'legend-item', boundsPdf: area, evidence: 'marker-aligned-lines', markerPdf: [...group.anchor.marker] } };
 	});
 	return { rest: items.filter(item => !claimed.has(item)), blocks };
 }

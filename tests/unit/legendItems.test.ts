@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { extractLegendItems, type LegendOptions, type LegendRect, type LegendSpan } from '../../src/reader/legendItems';
+import { StructureCache } from '../../src/reader/structureCache';
+import { pageContentKey } from '../../src/export/pageArchive';
 
 const fixture = JSON.parse(readFileSync('tests/fixtures/regression/kitagawa-legend-p8.spans.json', 'utf8')) as LegendOptions & { items: LegendSpan[] };
 const values = ['0.65', '0.74', '0.81', '0.85', '0.70', '0.73', '0.80', '0.84'];
@@ -26,9 +28,30 @@ test('real PDF gives eight separately anchored legend entries, retaining all lab
 		assert.equal(block.sourceRegion!.kind, 'legend-item');
 		assert.equal(block.sourceRegion!.evidence, 'marker-aligned-lines');
 		assert.equal(typeof block.column, 'number');
+		assert.ok(block.sourceRegion!.markerPdf);
+		assert.equal(block.sourceRegion!.markerPdf![1],block.sourceRegion!.markerPdf![3]);
 	}
 	assert.ok(result.blocks[1]!.sourceText.includes('Angiography + Computed Tomography Perfusion:'));
 	assert.ok(result.blocks[3]!.sourceText.includes('Score + Computed Tomography Perfusion Values:'));
+});
+
+test('marker evidence survives JSON and structure-cache copies without sharing mutable arrays',()=>{
+	const source=extractLegendItems(fixture.items,fixture).blocks;
+	const original=JSON.parse(JSON.stringify(source)) as typeof source;
+	const round=JSON.parse(JSON.stringify(source)) as typeof source;
+	assert.deepEqual(round[0]!.sourceRegion!.markerPdf,original[0]!.sourceRegion!.markerPdf);
+	round[0]!.sourceRegion!.markerPdf![0]-=3;assert.deepEqual(source,original);
+	const cache=new StructureCache();cache.put('marker-proof',source);source[0]!.sourceRegion!.markerPdf![0]-=100;
+	const first=cache.get('marker-proof')!;assert.deepEqual(first,original);
+	first[0]!.sourceRegion!.markerPdf![0]-=100;assert.deepEqual(cache.get('marker-proof'),original);
+});
+
+test('changed or absent marker proof changes the archived page and final redraw identity',()=>{
+	const block=extractLegendItems(fixture.items,fixture).blocks[0]!,translations=new Map([[block.id,'同一译文']]);
+	const key=pageContentKey([block],translations),moved=JSON.parse(JSON.stringify(block)) as typeof block;
+	moved.sourceRegion!.markerPdf![2]+=.25;assert.notEqual(pageContentKey([moved],translations),key);
+	const missing=JSON.parse(JSON.stringify(block)) as typeof block;delete missing.sourceRegion!.markerPdf;
+	assert.notEqual(pageContentKey([missing],translations),key);
 });
 
 test('real-PDF source runs are claimed exactly once and every unrelated span is returned by identity', () => {

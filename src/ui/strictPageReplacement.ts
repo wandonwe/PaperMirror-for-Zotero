@@ -59,40 +59,65 @@ function bitmapScaleFor(widthPx: number, heightPx: number): number {
 	return Math.max(1, Math.min(BITMAP_SCALE_MAX, Math.sqrt(BITMAP_PIXEL_BUDGET / area)));
 }
 
-/** Marker-owned masks have different horizontal and vertical boundaries.
- * Only whole pixels inside the text's horizontal owner may cover the page:
- * even a fractional pixel to the left can tint a neighbouring coloured mark.
- * Vertically, PDF advance boxes are not exact glyph-ink bounds. Keep normal
- * glyph padding and round outward, bounded by the whitespace partition to
- * other source lines so peek/revert cannot clear a neighbouring line's mask. */
+/** A bounded binary-ink guard seeded by a proven painted marker segment.
+ * No colour meaning is inferred. Unknown/connected/edge-clipped evidence
+ * remains original; the source bitmap is never edited or repainted. */
+export function legendMarkerInkBounds(data: ArrayLike<number>, width: number, height: number,
+ segment: [number,number,number,number], paper: readonly [number,number,number]): PixelBox | null {
+ if(!Number.isInteger(width)||!Number.isInteger(height)||width<3||height<3||width*height>16384
+  ||data.length<width*height*4||!segment.every(Number.isFinite)||!paper.every(Number.isFinite))return null;
+ const [ax,ay,bx,by]=segment,dx=bx-ax,dy=by-ay,length=dx*dx+dy*dy;if(!(length>0))return null;
+ const ink=(i:number):boolean=>Math.max(Math.abs((data[i*4]??255)-paper[0]),Math.abs((data[i*4+1]??255)-paper[1]),Math.abs((data[i*4+2]??255)-paper[2]))>8;
+ const seen=new Uint8Array(width*height),queue:number[]=[];
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++) {
+  const t=Math.max(0,Math.min(1,((x+.5-ax)*dx+(y+.5-ay)*dy)/length));
+  if((x+.5-ax-t*dx)**2+(y+.5-ay-t*dy)**2<=1.25**2&&ink(y*width+x)){const i=y*width+x;seen[i]=1;queue.push(i);}
+ }
+ if(!queue.length)return null;
+ let left=width,top=height,right=0,bottom=0;
+ for(let at=0;at<queue.length;at++) {
+  const i=queue[at]!,x=i%width,y=Math.floor(i/width);
+  if(x===0||y===0||x===width-1||y===height-1)return null;
+  left=Math.min(left,x);top=Math.min(top,y);right=Math.max(right,x+1);bottom=Math.max(bottom,y+1);
+  for(let yy=y-1;yy<=y+1;yy++)for(let xx=x-1;xx<=x+1;xx++){const next=yy*width+xx;if(!seen[next]&&ink(next)){seen[next]=1;queue.push(next);}}
+ }
+ return {left,top,width:right-left,height:bottom-top};
+}
+
+/** Complete glyph padding rounds OUTWARD on all four sides. Actual painted
+ * marker pixels and other source lines bound the available whitespace. A
+ * shortened band would leave original ink, so any conflict rejects the
+ * complete entry instead of clipping one of its source glyph edges. */
 export function legendMaskLineBox(line: PixelBox, owner: PixelBox, otherLines: readonly PixelBox[],
-	pad: number, bitmapScale: number, pageHeight: number): PixelBox | null {
-	const finiteBox = (box: PixelBox): boolean => [box.left, box.top, box.width, box.height].every(Number.isFinite)
-		&& box.width > 0 && box.height > 0;
-	if (!finiteBox(line) || !finiteBox(owner) || !Number.isFinite(pad) || pad < 0
-		|| !(Number.isFinite(bitmapScale) && bitmapScale > 0) || !(Number.isFinite(pageHeight) && pageHeight > 0)) return null;
-	const left = Math.ceil(Math.max(line.left - pad, owner.left) * bitmapScale) / bitmapScale;
-	const right = Math.floor(Math.min(line.left + line.width + pad, owner.left + owner.width) * bitmapScale) / bitmapScale;
-	let upperLimit = 0, lowerLimit = pageHeight;
-	for (const other of otherLines) {
-		if (!finiteBox(other) || Math.min(right, other.left + other.width) <= Math.max(left, other.left)) continue;
-		const otherBottom = other.top + other.height, bottom = line.top + line.height;
-		if (otherBottom <= line.top) upperLimit = Math.max(upperLimit, (otherBottom + line.top) / 2);
-		else if (other.top >= bottom) lowerLimit = Math.min(lowerLimit, (bottom + other.top) / 2);
-		else {
-			// Existing overlapping source evidence cannot justify growing a mask.
-			upperLimit = Math.max(upperLimit, line.top);
-			lowerLimit = Math.min(lowerLimit, bottom);
-		}
-	}
-	const top = Math.max(0, Math.floor((line.top - pad) * bitmapScale)) / bitmapScale;
-	const bottom = Math.min(Math.ceil((line.top + line.height + pad) * bitmapScale), Math.floor(pageHeight * bitmapScale)) / bitmapScale;
-	// Shortening this interval would recreate a partially erased original.
-	// A caller must retain the complete entry when the padded glyph band has
-	// insufficient space; no ink/geometry threshold is relaxed to make it fit.
-	if (top < Math.ceil(upperLimit * bitmapScale) / bitmapScale
-		|| bottom > Math.floor(lowerLimit * bitmapScale) / bitmapScale) return null;
-	return right > left && bottom > top ? { left, top, width: right - left, height: bottom - top } : null;
+ pad: number, bitmapScale: number, pageHeight: number, markers: readonly PixelBox[], pageWidth: number): PixelBox | null {
+ const valid=(b:PixelBox):boolean=>[b.left,b.top,b.width,b.height].every(Number.isFinite)&&b.width>0&&b.height>0;
+ if(!valid(line)||!valid(owner)||!Number.isFinite(pad)||pad<0||!Number.isFinite(bitmapScale)||bitmapScale<=0
+  ||!Number.isFinite(pageHeight)||pageHeight<=0||!Number.isFinite(pageWidth)||pageWidth<=0||!markers.length||markers.some(b=>!valid(b))
+  ||Math.floor((owner.left+owner.width)*bitmapScale)<=Math.ceil(owner.left*bitmapScale))return null;
+ const left=Math.max(0,Math.floor((line.left-pad)*bitmapScale))/bitmapScale;
+ const top=Math.max(0,Math.floor((line.top-pad)*bitmapScale))/bitmapScale;
+ const right=Math.min(Math.ceil((line.left+line.width+pad)*bitmapScale),Math.floor(pageWidth*bitmapScale))/bitmapScale;
+ const bottom=Math.min(Math.ceil((line.top+line.height+pad)*bitmapScale),Math.floor(pageHeight*bitmapScale))/bitmapScale;
+ if(right<=left||bottom<=top)return null;
+ const intersects=(b:PixelBox):boolean=>Math.min(right,b.left+b.width)>Math.max(left,b.left)&&Math.min(bottom,b.top+b.height)>Math.max(top,b.top);
+ if(markers.some(intersects))return null;
+ let minLeft=0,minTop=0,maxRight=pageWidth,maxBottom=pageHeight;
+ for(const other of otherLines.filter(valid)) {
+  const otherRight=other.left+other.width,otherBottom=other.top+other.height,lineRight=line.left+line.width,lineBottom=line.top+line.height;
+  if(Math.min(right,otherRight)>Math.max(left,other.left)) {
+   if(otherBottom<=line.top)minTop=Math.max(minTop,(otherBottom+line.top)/2);
+   else if(other.top>=lineBottom)maxBottom=Math.min(maxBottom,(lineBottom+other.top)/2);
+   else if(intersects(other))return null;
+  }
+  if(Math.min(bottom,otherBottom)>Math.max(top,other.top)) {
+   if(otherRight<=line.left)minLeft=Math.max(minLeft,(otherRight+line.left)/2);
+   else if(other.left>=lineRight)maxRight=Math.min(maxRight,(lineRight+other.left)/2);
+   else if(intersects(other))return null;
+  }
+ }
+ if(left<Math.ceil(minLeft*bitmapScale)/bitmapScale||top<Math.ceil(minTop*bitmapScale)/bitmapScale
+  ||right>Math.floor(maxRight*bitmapScale)/bitmapScale||bottom>Math.floor(maxBottom*bitmapScale)/bitmapScale)return null;
+ return {left,top,width:right-left,height:bottom-top};
 }
 
 /** The leading/tracking compress ladder. The FONT SIZE never changes here. */
@@ -905,6 +930,39 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const sourceMaskLines = geometric.flatMap(block => ((block.lineRectsPdf ?? []) as Rect[])
 		.map(rect => ({ id: block.id, box: rectToPixels(rect, render, 1) })));
 	if (ctx) {
+		const markerGuards = new Map<string, PixelBox | null>();
+		for (const block of geometric.filter(b => b.sourceRegion?.kind === 'legend-item')) {
+			let guard: PixelBox | null = null;
+			const marker = block.sourceRegion?.markerPdf, first = block.lineRectsPdf?.[0], font = block.fontSize ?? 0;
+			// Proof is checked in original PDF coordinates; the viewport segment
+			// may become vertical or reverse direction after page rotation.
+			if (Array.isArray(marker) && marker.length === 4 && Array.isArray(first) && first.length === 4 && first.every(Number.isFinite) && marker.every(Number.isFinite) && marker[2] > marker[0] && marker[1] === marker[3]
+				&& marker[2] - marker[0] >= font * .5 && marker[2] - marker[0] <= font * 2.75
+				&& first[0] - marker[2] > 0 && first[0] - marker[2] <= font * .9
+				&& marker[1] >= first[1] + font * .2 && marker[1] <= first[3] - font * .1) {
+				try {
+					const a = render.toViewport(marker[0], marker[1]), b = render.toViewport(marker[2], marker[3]);
+					const margin = Math.max(2 / BITMAP_SCALE, font * pxPerPoint * .6);
+					const x0 = Math.max(0, Math.floor((Math.min(a[0], b[0]) - margin) * BITMAP_SCALE));
+					const y0 = Math.max(0, Math.floor((Math.min(a[1], b[1]) - margin) * BITMAP_SCALE));
+					const x1 = Math.min(canvas.width, Math.ceil((Math.max(a[0], b[0]) + margin) * BITMAP_SCALE));
+					const y1 = Math.min(canvas.height, Math.ceil((Math.max(a[1], b[1]) + margin) * BITMAP_SCALE));
+					const width = x1 - x0, height = y1 - y0;
+					if (width > 0 && height > 0 && width * height <= 16384) {
+						const colour = localPaper(ctx, pixelBox(block, render, 1), BITMAP_SCALE, paper);
+						const found = legendMarkerInkBounds(ctx.getImageData(x0, y0, width, height).data, width, height,
+							[a[0] * BITMAP_SCALE - x0, a[1] * BITMAP_SCALE - y0, b[0] * BITMAP_SCALE - x0, b[1] * BITMAP_SCALE - y0], parseRgb(colour));
+						if (found) {
+							const box = { left: (x0 + found.left) / BITMAP_SCALE, top: (y0 + found.top) / BITMAP_SCALE,
+								width: found.width / BITMAP_SCALE, height: found.height / BITMAP_SCALE };
+							if (intersectArea(box, rectToPixels(first, render, 1)) === 0) guard = box;
+						}
+					}
+				} catch { /* Missing/tainted or ambiguous raster evidence retains the entry. */ }
+			}
+			markerGuards.set(block.id, guard);
+		}
+		const paintedMarkers = [...markerGuards.values()].filter((box): box is PixelBox => box !== null);
 		for (const block of replaceable) {
 			const whole = pixelBox(block, render, 1);
 			// Caption badges may be narrower than the outside sampling margin.
@@ -918,8 +976,9 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			for (const rect of block.lineRectsPdf as Rect[]) {
 				const box = rectToPixels(rect, render, 1);
 				if (block.sourceRegion?.kind === 'legend-item') {
-					const line = legendMaskLineBox(box, whole, sourceMaskLines.filter(other => other.id !== block.id).map(other => other.box),
-						pad, BITMAP_SCALE, pageHeightPx);
+					const line = markerGuards.get(block.id) ? legendMaskLineBox(box, whole,
+						sourceMaskLines.filter(other => other.id !== block.id).map(other => other.box),
+						pad, BITMAP_SCALE, pageHeightPx, paintedMarkers, pageWidthPx) : null;
 					if (!line) { unsafeLegendMasks.add(block.id); lines.length = 0; break; }
 					lines.push(line); lineColours.set(line, colour);
 					continue;
