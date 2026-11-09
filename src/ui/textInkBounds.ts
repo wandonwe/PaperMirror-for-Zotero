@@ -38,13 +38,43 @@ export function rasterInkBounds(rect: VerticalBounds, metrics: InkMetrics | unde
  const outline = inkVerticalBounds(rect, metrics);
  if (!metrics || outline === rect) return undefined;
  const ratio = validRatio(axis.ratio), eps = 1e-3;
- const baseline = toAbs(rect.bottom - metrics.fontBoundingBoxDescent, axis);
- const snapped = Math.floor(baseline * ratio + 0.5) / ratio;
- const shift = toRel(snapped, axis) - toRel(baseline, axis);
- const a = toAbs(outline.top + shift, axis), b = toAbs(outline.bottom + shift, axis);
- const lo = Math.floor(Math.min(a, b) * ratio + eps) / ratio, hi = Math.ceil(Math.max(a, b) * ratio - eps) / ratio;
- const r1 = toRel(lo, axis), r2 = toRel(hi, axis);
- return { top: Math.min(r1, r2), bottom: Math.max(r1, r2) };
+ // Canvas font boxes are whole pixels while layout may use half pixels (in
+ // Zotero a 15px heading measured 16+6 on canvas and 21.5 in layout). The
+ // difference may sit above or below the baseline, so keep both readings.
+ let top = Infinity, bottom = -Infinity;
+ for (const baselineRel of [rect.bottom - metrics.fontBoundingBoxDescent, rect.top + metrics.fontBoundingBoxAscent]) {
+  const baseline = toAbs(baselineRel, axis);
+  const snapped = Math.floor(baseline * ratio + 0.5) / ratio;
+  const rel = toRel(snapped, axis);
+  const a = toAbs(rel - metrics.actualBoundingBoxAscent, axis), b = toAbs(rel + metrics.actualBoundingBoxDescent, axis);
+  const lo = Math.floor(Math.min(a, b) * ratio + eps) / ratio, hi = Math.ceil(Math.max(a, b) * ratio - eps) / ratio;
+  const r1 = toRel(lo, axis), r2 = toRel(hi, axis);
+  top = Math.min(top, r1, r2); bottom = Math.max(bottom, r1, r2);
+ }
+ return { top, bottom };
+}
+
+/** Sub-pixel phases a scrolled pane can place the page at, in device pixels. */
+const RASTER_PHASES = [0, .125, .25, .375, .5, .625, .75, .875];
+
+/**
+ * Worst raster overflow over every sub-pixel phase (pure). Scrolling moves the
+ * page across the device grid continuously, so where the baseline and the clip
+ * edge round to changes with the scroll position; a placement must hold at all
+ * of them. Returns undefined when metrics cannot be trusted, else the largest
+ * top and bottom overflow in CSS px (0 = fits at every phase).
+ */
+export function rasterOverflowAllPhases(rect: VerticalBounds, metrics: InkMetrics | undefined, clip: VerticalBounds, axis: DeviceAxis): VerticalBounds | undefined {
+ const ratio = validRatio(axis.ratio);
+ let top = 0, bottom = 0;
+ for (const phase of RASTER_PHASES) {
+  const shifted = { ...axis, origin: axis.origin + phase / ratio };
+  const ink = rasterInkBounds(rect, metrics, shifted);
+  if (!ink) return undefined;
+  const limit = rasterClipBounds(clip, shifted);
+  top = Math.max(top, limit.top - ink.top); bottom = Math.max(bottom, ink.bottom - limit.bottom);
+ }
+ return { top: Math.max(0, top), bottom: Math.max(0, bottom) };
 }
 
 /** overflow:hidden clips on whole device pixels: round both clip edges to the grid (pure). */
@@ -111,7 +141,6 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
   const clip=uprightVerticalBounds(clientClip,clientClip,rotation);
   const upright=(rect:DOMRect):VerticalBounds=>uprightVerticalBounds(rect,clientClip,rotation);
   const axis=deviceAxisFor(clientClip,rotation,doc.defaultView?.devicePixelRatio || 1);
-  const rasterClip=rasterClipBounds(clip,axis);
   const walker = doc.createTreeWalker(node, 4 /* SHOW_TEXT */);
   const range = doc.createRange();
   let text: Node | null;
@@ -150,11 +179,11 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
      // Both contracts must hold: the 4.7 outline check (unchanged in every
      // engine) and the device-raster check that Gecko actually paints.
      const ink = inkVerticalBounds(box,metrics);
-     const raster = rasterInkBounds(box,metrics,axis);
-     const outlineFits = verticalInkFits(ink,clip), rasterFits = !raster || verticalInkFits(raster,rasterClip);
+     const raster = rasterOverflowAllPhases(box,metrics,clip,axis);
+     const outlineFits = verticalInkFits(ink,clip), rasterFits = !raster || (raster.top <= 0.01 && raster.bottom <= 0.01);
      if (outlineFits && rasterFits) return true;
-     const top = Math.max(clip.top-ink.top, raster ? rasterClip.top-raster.top : 0);
-     const bottom = Math.max(ink.bottom-clip.bottom, raster ? raster.bottom-rasterClip.bottom : 0);
+     const top = Math.max(clip.top-ink.top, raster ? raster.top : 0);
+     const bottom = Math.max(ink.bottom-clip.bottom, raster ? raster.bottom : 0);
      failures.set(node,{offset:offsets[start]!,topOverflow:Math.max(0,top),bottomOverflow:Math.max(0,bottom),
       rectTop:ink.top-clip.top,rectBottom:ink.bottom-clip.top,clipHeight:clip.bottom-clip.top,font:ctx?.font ?? '',
       metricsAvailable:!!metrics && Object.values(metrics).every(Number.isFinite)});

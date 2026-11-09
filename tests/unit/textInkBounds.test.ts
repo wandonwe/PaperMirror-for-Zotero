@@ -111,3 +111,28 @@ test('raster bounds follow quarter-turned pages and keep untrusted metrics conse
  assert.equal(rasterInkBounds({ top: 0, bottom: 30 }, metrics, deviceAxisFor(clientClip, 0, 2)), undefined, 'inconsistent font box');
  assert.equal(rasterInkBounds({ top: 0, bottom: 10 }, undefined, deviceAxisFor(clientClip, 0, 2)), undefined);
 });
+
+test('half-pixel layout font boxes keep both baseline readings (Zotero heading)', async () => {
+ const { rasterInkBounds } = await import('../../src/ui/textInkBounds');
+ // 「响」 in a 15px bold heading, measured in Zotero: canvas font box 16+6,
+ // layout range rect 21.5px. Its ink reached below the descent-anchored estimate.
+ const rect = { top: 491.6166687011719, bottom: 513.1166687011719 };
+ const metrics = { fontBoundingBoxAscent: 16, fontBoundingBoxDescent: 6, actualBoundingBoxAscent: 12.465, actualBoundingBoxDescent: 1.47 };
+ const ink = rasterInkBounds(rect, metrics, { origin: 0, sign: 1, ratio: 2 })!;
+ assert.equal(ink.bottom, 509, 'ascent-anchored baseline 507.6167 → ink to device row 1018');
+ assert.equal(ink.top, 494.5, 'descent-anchored baseline still bounds the top');
+});
+
+test('a placement must survive every sub-pixel scroll phase', async () => {
+ const { rasterOverflowAllPhases } = await import('../../src/ui/textInkBounds');
+ const metrics = { fontBoundingBoxAscent: 16, fontBoundingBoxDescent: 6, actualBoundingBoxAscent: 12.465, actualBoundingBoxDescent: 1.47 };
+ const axis = { origin: 490.81665, sign: 1 as const, ratio: 2 };
+ // The Zotero heading: box 15px tall, layout rect relative to the clip top.
+ const rect = { top: 491.6166687011719 - 493.81665, bottom: 513.1166687011719 - 493.81665 };
+ const tight = rasterOverflowAllPhases(rect, metrics, { top: 0, bottom: 15 }, { ...axis, origin: 493.81665 })!;
+ assert.ok(tight.bottom > 0, 'clipped at some scroll phase');
+ assert.equal(tight.top, 0);
+ const roomy = rasterOverflowAllPhases(rect, metrics, { top: 0, bottom: 16.5 }, { ...axis, origin: 493.81665 })!;
+ assert.deepEqual(roomy, { top: 0, bottom: 0 }, 'one and a half extra pixels hold at every phase');
+ assert.equal(rasterOverflowAllPhases(rect, undefined, { top: 0, bottom: 15 }, axis), undefined);
+});
