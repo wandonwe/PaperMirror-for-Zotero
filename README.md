@@ -24,7 +24,7 @@
 
 **PaperMirror(文镜)** —— 文字之镜,原文与译文两相映照。在 Zotero 自带的 PDF 阅读器里直接对照阅读外文文献:一边是**原版 PDF**(排版、图表、公式原封不动),另一边是**按版面重排的整页译文**,大小与原文一致、逐段对齐。图表、表格、公式、分栏、页眉页脚等都从原页原样保留,只有正文被替换并重新排版,不会被硬塞进原文的换行里。
 
-**4.7 更新**：改善上下标、技术单位、表格与图注边界，修复跨栏跨页断句造成的语义遗漏，并按原有彩线位置保留独立图例对应。作者：**wangdongwei**。详见 [4.7 更新记录](CHANGELOG.md#470--2026-10-30) 和 [验证范围](docs/RELEASE-4.7.0-VALIDATION.md)。
+**4.8 更新**：修复部分译文最后一行字形底部被裁掉一线的问题；放置检查按 Zotero 实际的像素渲染判断，任何滚动位置都不裁字，放不下时保留原文。作者：**wangdongwei**。详见 [4.8 更新记录](CHANGELOG.md#480--2026-11-09) 和 [验证范围](docs/RELEASE-4.8.0-VALIDATION.md)。
 
 ### 三种阅读模式
 
@@ -103,7 +103,7 @@ for paragraph. Figures, tables, equations, columns and running heads are kept
 from the rendered page exactly; only body text is replaced and re‑flowed, never
 crammed back into the original line breaks.
 
-**New in 4.7:** improved superscript, technical-unit, table and caption handling; shared complete-sentence translations across column and page breaks; and independently anchored legend labels that retain their correspondence with the original colored markers. Author: **wangdongwei**. See the [4.7 release notes](CHANGELOG.md#470--2026-10-30) and [validation scope](docs/RELEASE-4.7.0-VALIDATION.md).
+**New in 4.8:** fixes translated text whose last line lost the bottom edge of its glyphs. Placement is now checked against how Zotero actually rasterises text, so no scroll position clips a glyph; a block that cannot fit keeps the original text. Author: **wangdongwei**. See the [4.8 release notes](CHANGELOG.md#480--2026-11-09) and [validation scope](docs/RELEASE-4.8.0-VALIDATION.md).
 
 ### Three reading modes
 
