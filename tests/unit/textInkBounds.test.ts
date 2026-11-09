@@ -64,3 +64,50 @@ test('top inset stays inside the clip and rolls back when text no longer fits', 
  assert.equal(insetTextInk(node,clipped,4,()=>true),false);
  assert.equal(node.style.paddingTop,'');
 });
+
+
+// 4.8: rows measured in Zotero 10.0.8 (Gecko 140, macOS, DPR 2) on canvas:
+// [css font px, baseline phase in device px, ink ascent, ink descent (css px,
+// max of 静停表), first inked device row, row after the last inked row].
+const GECKO_RASTER = [[5.25, 0, 4.345, 0.5267, 41, 52], [5.25, 0.25, 4.345, 0.5267, 41, 52], [5.25, 0.5, 4.345, 0.5267, 42, 53], [5.25, 0.75, 4.345, 0.5267, 42, 53], [7, 0, 5.775, 0.7, 38, 52], [7, 0.25, 5.775, 0.7, 38, 52], [7, 0.5, 5.775, 0.7, 39, 53], [7, 0.75, 5.775, 0.7, 39, 53], [8, 0, 6.6, 0.8, 36, 52], [8, 0.25, 6.6, 0.8, 36, 52], [8, 0.5, 6.6, 0.8, 37, 53], [8, 0.75, 6.6, 0.8, 37, 53], [10.5, 0, 8.6625, 1.05, 32, 53], [10.5, 0.25, 8.6625, 1.05, 32, 53], [10.5, 0.5, 8.6625, 1.05, 33, 54], [10.5, 0.75, 8.6625, 1.05, 33, 54]] as const;
+
+test('raster ink bounds reproduce every Gecko device row measured in Zotero', async () => {
+ const { rasterInkBounds } = await import('../../src/ui/textInkBounds');
+ for (const [px, phase, ascent, descent, firstRow, endRow] of GECKO_RASTER) {
+  const ratio = 2, baseline = (50 + phase) / ratio, fontAscent = 1.2 * px, fontDescent = 0.3 * px;
+  const rect = { top: baseline - fontAscent, bottom: baseline + fontDescent };
+  const ink = rasterInkBounds(rect, { fontBoundingBoxAscent: fontAscent, fontBoundingBoxDescent: fontDescent,
+   actualBoundingBoxAscent: ascent, actualBoundingBoxDescent: descent }, { origin: 0, sign: 1, ratio })!;
+  assert.deepEqual([ink.top * ratio, ink.bottom * ratio], [firstRow, endRow], `${px}px phase ${phase}`);
+ }
+});
+
+test('exact outline touching the clip is rejected once its raster row crosses it', async () => {
+ const { rasterInkBounds, rasterClipBounds, verticalInkFits } = await import('../../src/ui/textInkBounds');
+ const axis = { origin: 100.1, sign: 1 as const, ratio: 2 };
+ // The outline ends 0.1px inside the clip; the baseline rounds down onto the
+ // next device row, the clip edge rounds up, and the last row is part-inked.
+ const rect = { top: .2, bottom: 10.2 }, metrics = { fontBoundingBoxAscent: 8, fontBoundingBoxDescent: 2,
+  actualBoundingBoxAscent: 6, actualBoundingBoxDescent: .7 };
+ const outline = { top: 2.2, bottom: 8.9 }, clip = { top: 0, bottom: 9 };
+ assert.equal(verticalInkFits(outline, clip), true, 'the 4.7 outline check accepted it');
+ const ink = rasterInkBounds(rect, metrics, axis)!;
+ assert.equal(verticalInkFits(ink, rasterClipBounds(clip, axis)), false);
+ assert.equal(verticalInkFits(ink, rasterClipBounds({ top: 0, bottom: 10 }, axis)), true);
+});
+
+test('raster bounds follow quarter-turned pages and keep untrusted metrics conservative', async () => {
+ const { rasterInkBounds, rasterClipBounds, deviceAxisFor } = await import('../../src/ui/textInkBounds');
+ const metrics = { fontBoundingBoxAscent: 8, fontBoundingBoxDescent: 2, actualBoundingBoxAscent: 6.3, actualBoundingBoxDescent: 0.7 };
+ const clientClip = { top: 10.3, bottom: 30.3, left: 5.1, right: 25.1 };
+ for (const rotation of [0, 90, 180, 270]) {
+  const axis = deviceAxisFor(clientClip, rotation, 2);
+  const ink = rasterInkBounds({ top: 4, bottom: 14 }, metrics, axis)!;
+  assert.ok(ink.top <= 12 - 6.3 + 1e-9 && ink.bottom >= 12 + 0.7 - 1e-9, 'never smaller than the outline at ' + rotation);
+  assert.ok(ink.bottom - ink.top <= 7 + 1.5, 'at most one device pixel per side plus the baseline shift');
+  const c = rasterClipBounds({ top: 0, bottom: 20 }, axis);
+  assert.ok(Math.abs(c.top) <= .25 && Math.abs(c.bottom - 20) <= .25);
+ }
+ assert.equal(rasterInkBounds({ top: 0, bottom: 30 }, metrics, deviceAxisFor(clientClip, 0, 2)), undefined, 'inconsistent font box');
+ assert.equal(rasterInkBounds({ top: 0, bottom: 10 }, undefined, deviceAxisFor(clientClip, 0, 2)), undefined);
+});

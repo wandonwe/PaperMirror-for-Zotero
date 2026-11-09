@@ -1,6 +1,6 @@
 /** Scroll height includes font whitespace; clipping must instead protect glyph ink. */
 export interface VerticalBounds { top: number; bottom: number }
-interface InkMetrics {
+export interface InkMetrics {
  fontBoundingBoxAscent: number;
  fontBoundingBoxDescent: number;
  actualBoundingBoxAscent: number;
@@ -14,6 +14,53 @@ export function inkVerticalBounds(rect: VerticalBounds, metrics?: InkMetrics): V
  if (fontHeight <= 0 || Math.abs(fontHeight - (rect.bottom - rect.top)) > 1) return rect;
  const baseline = rect.bottom - metrics.fontBoundingBoxDescent;
  return { top: baseline - metrics.actualBoundingBoxAscent, bottom: baseline + metrics.actualBoundingBoxDescent };
+}
+
+/**
+ * Where clip-relative upright coordinates sit on the device pixel grid:
+ * absolute = origin + sign * relative, in CSS px; `ratio` is devicePixelRatio.
+ */
+export interface DeviceAxis { origin: number; sign: 1 | -1; ratio: number }
+
+const toAbs = (v: number, axis: DeviceAxis): number => axis.origin + axis.sign * v;
+const toRel = (v: number, axis: DeviceAxis): number => axis.sign * (v - axis.origin);
+const validRatio = (r: number): number => (r > 0 && Number.isFinite(r) ? r : 1);
+
+/**
+ * Glyph ink as it is rasterised (4.8), not only its outline. Measured in Zotero
+ * (Gecko 140, macOS, DPR 2): the text baseline is rounded to a whole device
+ * pixel, and every device row the outline enters receives anti-aliased ink.
+ * The exact outline alone let 47 of 343 committed blocks lose their bottom
+ * pixel row behind overflow:hidden. Returns undefined when metrics cannot be
+ * trusted; callers then keep the conservative DOM bounds.
+ */
+export function rasterInkBounds(rect: VerticalBounds, metrics: InkMetrics | undefined, axis: DeviceAxis): VerticalBounds | undefined {
+ const outline = inkVerticalBounds(rect, metrics);
+ if (!metrics || outline === rect) return undefined;
+ const ratio = validRatio(axis.ratio), eps = 1e-3;
+ const baseline = toAbs(rect.bottom - metrics.fontBoundingBoxDescent, axis);
+ const snapped = Math.floor(baseline * ratio + 0.5) / ratio;
+ const shift = toRel(snapped, axis) - toRel(baseline, axis);
+ const a = toAbs(outline.top + shift, axis), b = toAbs(outline.bottom + shift, axis);
+ const lo = Math.floor(Math.min(a, b) * ratio + eps) / ratio, hi = Math.ceil(Math.max(a, b) * ratio - eps) / ratio;
+ const r1 = toRel(lo, axis), r2 = toRel(hi, axis);
+ return { top: Math.min(r1, r2), bottom: Math.max(r1, r2) };
+}
+
+/** overflow:hidden clips on whole device pixels: round both clip edges to the grid (pure). */
+export function rasterClipBounds(clip: VerticalBounds, axis: DeviceAxis): VerticalBounds {
+ const ratio = validRatio(axis.ratio);
+ const a = Math.round(toAbs(clip.top, axis) * ratio) / ratio, b = Math.round(toAbs(clip.bottom, axis) * ratio) / ratio;
+ const r1 = toRel(a, axis), r2 = toRel(b, axis);
+ return { top: Math.min(r1, r2), bottom: Math.max(r1, r2) };
+}
+
+/** Device axis for a node turned by a whole-page quarter rotation (pure). */
+export function deviceAxisFor(clip: VerticalBounds & {left:number;right:number}, rotation: number, ratio: number): DeviceAxis {
+ return rotation === 90 ? { origin: clip.right, sign: -1, ratio }
+  : rotation === 180 ? { origin: clip.bottom, sign: -1, ratio }
+   : rotation === 270 ? { origin: clip.left, sign: 1, ratio }
+    : { origin: clip.top, sign: 1, ratio };
 }
 
 export function verticalInkFits(ink: VerticalBounds, box: VerticalBounds): boolean {
@@ -63,6 +110,8 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
   const rotation=Number(node.closest?.('[data-pm-page-turn]')?.getAttribute('data-pm-page-turn') ?? 0);
   const clip=uprightVerticalBounds(clientClip,clientClip,rotation);
   const upright=(rect:DOMRect):VerticalBounds=>uprightVerticalBounds(rect,clientClip,rotation);
+  const axis=deviceAxisFor(clientClip,rotation,doc.defaultView?.devicePixelRatio || 1);
+  const rasterClip=rasterClipBounds(clip,axis);
   const walker = doc.createTreeWalker(node, 4 /* SHOW_TEXT */);
   const range = doc.createRange();
   let text: Node | null;
@@ -97,9 +146,16 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
     }
     return rects.every(rect => {
      if (rect.width <= 0) return true;
-     const ink = inkVerticalBounds(upright(rect),metrics);
-     if (verticalInkFits(ink,clip)) return true;
-     failures.set(node,{offset:offsets[start]!,topOverflow:Math.max(0,clip.top-ink.top),bottomOverflow:Math.max(0,ink.bottom-clip.bottom),
+     const box = upright(rect);
+     // Both contracts must hold: the 4.7 outline check (unchanged in every
+     // engine) and the device-raster check that Gecko actually paints.
+     const ink = inkVerticalBounds(box,metrics);
+     const raster = rasterInkBounds(box,metrics,axis);
+     const outlineFits = verticalInkFits(ink,clip), rasterFits = !raster || verticalInkFits(raster,rasterClip);
+     if (outlineFits && rasterFits) return true;
+     const top = Math.max(clip.top-ink.top, raster ? rasterClip.top-raster.top : 0);
+     const bottom = Math.max(ink.bottom-clip.bottom, raster ? raster.bottom-rasterClip.bottom : 0);
+     failures.set(node,{offset:offsets[start]!,topOverflow:Math.max(0,top),bottomOverflow:Math.max(0,bottom),
       rectTop:ink.top-clip.top,rectBottom:ink.bottom-clip.top,clipHeight:clip.bottom-clip.top,font:ctx?.font ?? '',
       metricsAvailable:!!metrics && Object.values(metrics).every(Number.isFinite)});
      return false;
