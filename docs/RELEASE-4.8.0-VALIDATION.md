@@ -50,6 +50,19 @@
 - `ink-clip-check.js`（布局稳定判据修正后）对 Kitagawa 2021 与 Gori 共 23 页：333 块中提交 315 块，与 `4.7.99.1` 逐页一致。
 - 该次运行中，Gori 第 6 页 `page-5-region-5`（817 px 高的跨栏长段，即 Gori C56 否定句所在段）只在第 4 个相位报出 1489 px，其余 3 个相位为 0。单独复核 3 轮 × 4 相位共 12 次均为 0，`scrollHeight` 等于盒高，判定为测量期间面板滚动同步造成的假读数。验收结论：**被裁块数 0**。
 
+## 发布后核对（2026-11-09）
+
+- GitHub Release `v4.8.0` 由 `main` 合并提交 `7f58b56` 触发的发布工作流创建，标记为 latest，非草稿、非预发布；CI 与 Release 工作流均成功。
+- 公开资产：`zotero-bilingual-reader-4.8.0.xpi`（2420317 字节）与 `updates.json`（382 字节）。公开 XPI 的 SHA256：
+
+```text
+dcca3024fd8c339197ee0d55fbf2af53e7c0ac1c9f499a4af452754991cf4015
+```
+
+- 公开 XPI 与上文本地包的 23 个条目逐文件内容完全相同，差别仅为 zip 时间戳与条目顺序，因此哈希不同；公开 XPI 通过 `verify-xpi`（23 个条目，版本 4.8.0）。
+- `updates.json` 的版本为 4.8.0，`update_link` 指向 `releases/download/v4.8.0/zotero-bilingual-reader-4.8.0.xpi`，适用 Zotero 9.0–10.0.*。
+- 公开 XPI 已安装到验收用 Zotero 10.0.8：插件版本 4.8.0、启用，已安装文件 SHA256 与公开资产一致，更新地址为 `releases/latest/download/updates.json`。实机像素验收使用的是内容逐文件相同的本地包。
+
 ## 已知边界
 
 - 修复针对 Gecko 实际光栅行为；Chromium 门槛不能代表 Zotero 的字形裁切，实机检查须保留在发布流程中。
