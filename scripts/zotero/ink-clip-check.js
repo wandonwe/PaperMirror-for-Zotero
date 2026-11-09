@@ -92,16 +92,20 @@
       const pages = item.pageIndexes ?? [...Array(item.pages ?? 1).keys()];
       for (const p of pages) {
         reader.navigate({ pageIndex: p });
-        let pageEl = null, last = -1, stable = 0;
-        for (let t = 0; t < 40; t++) {
+        // Settled = the same non-empty set of blocks with unchanged visibility,
+        // font size, line height and box height for six polls. A stable block
+        // COUNT is not enough: the fit passes keep restyling blocks after they
+        // appear, and measuring mid-pass reported thousands of phantom pixels.
+        let pageEl = null, last = '', stable = 0;
+        for (let t = 0; t < 60; t++) {
           await sleep(settleMs);
           pageEl = host.querySelector(`.pm-repage[data-pm-page="${p}"]`);
-          const n = pageEl ? [...pageEl.querySelectorAll('.pm-repage-block')].filter(visible).length : -1;
-          // An empty page right after a version switch or mode change is not
-          // settled yet: only a non-empty, unchanged block count counts.
-          if (n === last && n > 0) { if (++stable >= 3) break; } else stable = 0;
-          last = n;
+          const blocks = pageEl ? [...pageEl.querySelectorAll('.pm-repage-block')] : [];
+          const sig = blocks.map(n => [n.getAttribute('data-pm-block'), n.style.visibility, n.style.fontSize, n.style.lineHeight, n.style.height].join(':')).join('|');
+          if (blocks.length && sig === last) { if (++stable >= 6) break; } else stable = 0;
+          last = sig;
         }
+        await sleep(1000);
         const page = { pageIndex: p, found: !!pageEl, blocks: [], committed: [], clipped: [] };
         entry.pages.push(page);
         if (pageEl) {
