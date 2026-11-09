@@ -39,3 +39,25 @@ npm test                                      # 首跑自动生成 .snapshot.jso
 语料与快照都提交进 `tests/fixtures/layout/`。此后任何改动导致分段/阅读序/
 表格结构变化都会在 `layoutSnapshot.test.ts` 现形;有意的布局改进 → 删旧快照
 重新生成,把 diff 放进 PR 审阅。语料只含文本 span 与几何,不含图片。
+
+## 实机字形裁切检查 (4.8)
+
+浏览器门槛跑在 Chromium 上，而 Zotero 是 Gecko：两者的字形量测与光栅化不同
+（Chromium 把 `measureText` 墨迹边界取整到整像素，Gecko 给出精确小数并把基线
+对齐到设备像素）。字形是否被 `overflow:hidden` 裁掉，只能在 Zotero 里验证。
+
+`scripts/zotero/ink-clip-check.js` 在 Zotero「工具 → 开发者 → 运行 JavaScript」中运行
+（勾选「作为异步函数运行」）：
+
+```js
+const run = eval(await Zotero.File.getContentsAsync('/绝对路径/scripts/zotero/ink-clip-check.js'));
+return await run({
+  items: [{ label: 'Kitagawa 2021', attachmentID: 2699, pages: 13 }],
+  output: '/绝对路径/ink-clip-result.json'
+});
+```
+
+- `attachmentID` 是 PDF 附件的条目 ID（可用 `Zotero.Items.get(id)` 核对）；`pageIndexes` 可替代 `pages` 只测部分页。
+- 只从翻译缓存恢复页面。运行期间强制开启「仅本地模式」，缓存未命中或压缩重译都不会访问云端；结束后恢复原设置并关闭脚本打开的标签页。
+- 对每个已提交译文块，用 `drawWindow` 按设备分辨率分别栅格化「实际显示（overflow:hidden）」与「允许溢出」两种状态，灰度差 > 64 的像素计为被裁墨迹。截图起点重复 4 个亚像素相位，因为滚动位置不同，基线与裁切边落在设备像素网格上的位置也不同。
+- 结果的 `totals.clippedBlocks` 必须为 0；`committed` 与上一版本对比，记录落版变化。同一页两次运行的 `blocks` 列表不同（缓存或结构重建）时，不做逐块比较。
