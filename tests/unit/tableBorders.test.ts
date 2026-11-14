@@ -291,3 +291,32 @@ test('未知子操作码即使"猜 2 个坐标"恰好配平,也必须跳过 (2.1
 	assert.equal(segs.length, 0, '未知子操作码一出现就必须整条跳过,不许靠"账平了"放行');
 	assert.equal(stats.skipped, 1);
 });
+
+// ---- 4.9: 隔行底色、无外框的表 -------------------------------------------------
+
+test('row lines that agree on an outer end add the open outer columns (4.9)', async () => {
+	const { borderGrids } = await import('../../src/reader/tableBorders');
+	// Three inner column lines drawn full height; the outer edges (x=60, x=400)
+	// exist only on every other row, i.e. about half the table height.
+	const seg = (x0: number, y0: number, x1: number, y1: number): Segment => [x0, y0, x1, y1];
+	const segments: Segment[] = [];
+	const rowsY = [700, 680, 660, 640, 620, 600, 580];
+	for (const y of rowsY) segments.push(seg(60, y, 400, y));
+	for (const x of [150, 240, 330]) segments.push(seg(x, 580, x, 700));
+	for (let i = 0; i + 1 < rowsY.length; i += 2) for (const x of [60, 400]) segments.push(seg(x, rowsY[i + 1]!, x, rowsY[i]!));
+	const grids = borderGrids(segments, { pageHeight: 800 });
+	assert.equal(grids.length, 1);
+	assert.deepEqual(grids[0]!.columns.map(Math.round), [60, 150, 240, 330, 400]);
+});
+
+test('row lines that stop at the outermost column line add nothing (4.9)', async () => {
+	const { borderGrids } = await import('../../src/reader/tableBorders');
+	const seg = (x0: number, y0: number, x1: number, y1: number): Segment => [x0, y0, x1, y1];
+	const segments: Segment[] = [];
+	for (const y of [700, 680, 660, 640]) segments.push(seg(150, y, 330, y));
+	for (const x of [150, 240, 330]) segments.push(seg(x, 640, x, 700));
+	// One stray long rule must not move the table edge: ends have to agree.
+	segments.push(seg(40, 700, 330, 700));
+	const grids = borderGrids(segments, { pageHeight: 800 });
+	assert.deepEqual(grids[0]!.columns.map(Math.round), [150, 240, 330]);
+});
