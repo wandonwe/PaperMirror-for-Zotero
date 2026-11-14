@@ -340,3 +340,33 @@ test('3.1.8:mergeTwo 接一个多组的 b —— 首组续进 a 末组,其余组
 	assert.equal(whole.regionParagraphs![1]!.lineRectsPdf.length, 1, '末组 = 标签那一行');
 	assert.equal(whole.lineRectsPdf!.length, 4);
 });
+
+// ---- 4.9: 跨页续句不被上方/下方的小字区域吞并 (JAMA Neurology 2025 p2) ----------
+
+test('a body continuation set larger than a figure legend above it is not absorbed (4.9)', () => {
+	// 7pt legend column ending in a comma; 8.5pt body text continues from the
+	// previous page, so it opens in lowercase and looks like a torn-off shard.
+	const legend = block('legend', 'The 8-month follow-up angiography demonstrated increased caliber and number of collateral vessels (arrowheads),', { topY: 440, lines: 5, fontSize: 7 });
+	const body = block('body', 'bilateral ICA disease. In patients with chronic ICA occlusion, collateral pathways can also involve anastomoses.', { topY: 386, lines: 4, fontSize: 8.5 });
+	const regions = coalesceRegions([legend, body]);
+	assert.equal(regions.length, 2, 'legend and body stay separate regions');
+	assert.ok(regions[1]!.sourceText.startsWith('bilateral ICA disease.'));
+});
+
+test('a finished small-type fragment above a new capitalised sentence is not absorbed downwards (4.9)', () => {
+	// Right half of the same legend: lowercase start, ends its sentence, and
+	// sits above an 8.5pt paragraph that starts a new sentence.
+	const legendTail = block('tail', 'with more pronounced enhancement on the left side. L indicates left; R, right.', { topY: 440, lines: 5, fontSize: 7 });
+	const body = block('body', 'ECA-derived collateral vessels are crucial but often underestimated by DSA.', { topY: 386, lines: 6, fontSize: 8.5 });
+	const regions = coalesceRegions([legendTail, body]);
+	assert.equal(regions.length, 2);
+	assert.ok(regions[1]!.sourceText.startsWith('ECA-derived'));
+});
+
+test('a same-size or smaller torn-off continuation is still absorbed (4.9 keeps 2.x behaviour)', () => {
+	const a = block('a', 'The attenuation of the polarized beam is measured after the', { topY: 700 });
+	const same = block('b', 'ated light is isolated in the detector and then compared.', { topY: 686, fontSize: 10.5 });
+	assert.equal(coalesceRegions([a, same]).length, 1, 'within 10% larger');
+	const smaller = block('c', 'ated light is isolated in the detector and then compared.', { topY: 686, fontSize: 8 });
+	assert.equal(coalesceRegions([a, smaller]).length, 1, 'smaller fragments are superscript-dragged shards');
+});

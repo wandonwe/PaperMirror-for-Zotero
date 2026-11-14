@@ -749,45 +749,51 @@
 	},
 	{
 		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 84,
-		"text": "recommend coronary CT angiography as the"
-	},
-	{
-		"type": "heading",
-		"column": 1,
-		"readingIndex": 85,
-		"text": "These limitations derive from a combinat"
-	},
-	{
-		"type": "paragraph",
-		"column": 1,
-		"readingIndex": 86,
-		"text": "spatial resolution of EID CT and bloomin"
-	},
-	{
-		"type": "paragraph",
 		"column": -1,
-		"readingIndex": 87,
+		"readingIndex": 84,
 		"text": "Note.CdTe = cadmium telluride, CdZnTe ="
+	},
+	{
+		"type": "paragraph",
+		"column": 0,
+		"readingIndex": 85,
+		"text": "confirmed these in vitro results by dire"
 	},
 	{
 		"type": "heading",
 		"column": 0,
-		"readingIndex": 88,
+		"readingIndex": 86,
 		"text": "Coronary Artery Disease"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 89,
+		"readingIndex": 87,
 		"text": "Nowadays, CT is the imaging modality of "
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 90,
+		"readingIndex": 88,
 		"mode": "preserve",
 		"text": "Radiology: Volume 309: Number 1October "
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 89,
+		"text": "recommend coronary CT angiography as the"
+	},
+	{
+		"type": "heading",
+		"column": 1,
+		"readingIndex": 90,
+		"text": "These limitations derive from a combinat"
+	},
+	{
+		"type": "paragraph",
+		"column": 1,
+		"readingIndex": 91,
+		"text": "spatial resolution of EID CT and bloomin"
 	}
 ]

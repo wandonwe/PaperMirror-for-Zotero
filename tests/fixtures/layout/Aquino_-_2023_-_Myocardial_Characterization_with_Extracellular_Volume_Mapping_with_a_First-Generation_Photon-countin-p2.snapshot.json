@@ -55,51 +55,57 @@
 		"text": "■ Compared with cardiac MRI, dual- and s"
 	},
 	{
-		"type": "heading",
+		"type": "paragraph",
 		"column": 0,
 		"readingIndex": 9,
-		"text": "Materials and Methods"
+		"text": "temporal resolution for spectral acquisi"
 	},
 	{
 		"type": "heading",
 		"column": 0,
 		"readingIndex": 10,
+		"text": "Materials and Methods"
+	},
+	{
+		"type": "heading",
+		"column": 0,
+		"readingIndex": 11,
 		"text": "Study Participants"
 	},
 	{
 		"type": "paragraph",
 		"column": 0,
-		"readingIndex": 11,
+		"readingIndex": 12,
 		"text": "The protocol of this prospective, single"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 12,
+		"readingIndex": 13,
 		"text": "Exclusion criteria were (a) refusal to c"
 	},
 	{
 		"type": "heading",
 		"column": 1,
-		"readingIndex": 13,
+		"readingIndex": 14,
 		"text": "Cardiac MRI Acquisition"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 14,
+		"readingIndex": 15,
 		"text": "Study participants were scanned on a 1.5"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 15,
+		"readingIndex": 16,
 		"text": "Flowchart shows inclusion of patients sc"
 	},
 	{
 		"type": "paragraph",
 		"column": 1,
-		"readingIndex": 16,
+		"readingIndex": 17,
 		"mode": "preserve",
 		"text": "radiology.rsna.org ■ Radiology: Volume 3"
 	}

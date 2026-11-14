@@ -282,8 +282,12 @@ export function canAbsorb(host: SourceBlock, shard: SourceBlock, obstacles: Rect
 	// 也不许差到 40% 以上。8pt 碎片进 10pt 段落(角标拉低了主字号,差 20%)照旧放行。
 	const fh = host.fontSize ?? 0;
 	const fs = shard.fontSize ?? 0;
+	// 4.9 (JAMA Neurology 2025 p2 实证): 「不许比宿主大」原来容到 1.3 倍。跨页续句
+	// 「bilateral ICA disease. In patients…」(8.5pt 正文, 小写开头) 紧跟在 7pt 的
+	// 图注正文下面, 大 21%, 被图注整段吸收: 正文译文落进图注, 正文位置留白。
+	// 续句与宿主同段同字号; 角标/小型大写只会让碎片**更小**。收到 1.1 倍。
 	if (fh > 0 && fs > 0 && shard.sourceText.trim().length > 12
-		&& (fs > fh * 1.3 || Math.abs(fh - fs) > Math.max(fh, fs) * 0.4)) {
+		&& (fs > fh * 1.1 || Math.abs(fh - fs) > Math.max(fh, fs) * 0.4)) {
 		return false;
 	}
 	// Vertically adjacent or overlapping, up to 3em apart either way.
@@ -293,6 +297,15 @@ export function canAbsorb(host: SourceBlock, shard: SourceBlock, obstacles: Rect
 	// than a somewhat oversized request. Bounded at 1.5× the region cap so a
 	// pathological page can't build an unbounded block.
 	if ((host.sourceText.length + shard.sourceText.length) > MAX_REGION_CHARS * 1.5) {
+		return false;
+	}
+	// 4.9 (同页右栏): 图注的右半栏「with more pronounced … R, right.」(7pt) 小写开头,
+	// 排在 8.5pt 正文段「ECA-derived …」的上方, 被它当碎片向下吸收。向下吸收的依据是
+	// 碎片的句子流进宿主; 碎片自己已经收句、宿主又以大写另起一句、字号还差 10% 以上,
+	// 两者之间没有任何文本联系 —— 是两个版面区域。
+	if (fh > 0 && fs > 0 && shard.sourceText.trim().length > 12
+		&& Math.abs(fh - fs) > Math.max(fh, fs) * 0.1 && rs[1] >= rh[3] - em * 0.5
+		&& endsSentence(shard.sourceText) && /^\p{Lu}/u.test(host.sourceText.trim())) {
 		return false;
 	}
 	return gap <= em * 3;

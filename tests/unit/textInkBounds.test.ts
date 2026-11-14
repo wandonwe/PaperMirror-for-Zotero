@@ -136,3 +136,33 @@ test('a placement must survive every sub-pixel scroll phase', async () => {
  assert.deepEqual(roomy, { top: 0, bottom: 0 }, 'one and a half extra pixels hold at every phase');
  assert.equal(rasterOverflowAllPhases(rect, undefined, { top: 0, bottom: 15 }, axis), undefined);
 });
+
+test('device font box reproduces every line box height measured in Zotero (4.9)', async () => {
+ const { deviceFontBox } = await import('../../src/ui/textInkBounds');
+ // PingFang SC at 256px on Gecko canvas: 272 ascent, 88 descent. Laid-out
+ // heights were read from range rects in Zotero 10 at devicePixelRatio 2.
+ const A = 272 / 256, D = 88 / 256;
+ for (const [px, height] of [[5.25, 8], [7, 10], [9.6, 14], [10.5, 15.5], [12.2, 17.5], [15, 21.5]] as const) {
+  const box = deviceFontBox(A * px, D * px, height, 2);
+  assert.ok(box, `${px}px`);
+  assert.ok(Math.abs(box!.ascent + box!.descent - height) < 1e-9);
+  assert.equal(box!.ascent, Math.ceil(A * px * 2) / 2);
+ }
+ // 12.2px: canvas says 14+5=19, 1.5px above the 17.5px line box.
+ assert.deepEqual(deviceFontBox(A * 12.2, D * 12.2, 17.5, 2), { ascent: 13, descent: 4.5 });
+});
+
+test('device font box is refused when layout is not on the device grid or does not match', async () => {
+ const { deviceFontBox, inkVerticalBounds } = await import('../../src/ui/textInkBounds');
+ assert.equal(deviceFontBox(6.1, 1.5, 7.602, 2), undefined, 'unrounded layout height');
+ assert.equal(deviceFontBox(12.96, 4.19, 19, 2), undefined, 'different font box');
+ assert.equal(deviceFontBox(NaN, 4, 17.5, 2), undefined);
+ assert.equal(deviceFontBox(12.96, 4.19, 17.5, 0), undefined);
+ // With the proven box the first line of a 12.2px paragraph is measured, not
+ // replaced by its content box (top -1.07 would always "overflow").
+ const rect = { top: -1.0667, bottom: 16.4333 };
+ const canvas = { fontBoundingBoxAscent: 14, fontBoundingBoxDescent: 5, actualBoundingBoxAscent: 9.8747, actualBoundingBoxDescent: 1.2267 };
+ assert.equal(inkVerticalBounds(rect, canvas), rect, '4.8: inconsistent canvas box falls back');
+ const ink = inkVerticalBounds(rect, { ...canvas, fontBoundingBoxAscent: 13, fontBoundingBoxDescent: 4.5 });
+ assert.ok(ink.top > 2 && ink.top < 2.1 && ink.bottom > 13.1 && ink.bottom < 13.2);
+});

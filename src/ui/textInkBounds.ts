@@ -16,6 +16,28 @@ export function inkVerticalBounds(rect: VerticalBounds, metrics?: InkMetrics): V
  return { top: baseline - metrics.actualBoundingBoxAscent, bottom: baseline + metrics.actualBoundingBoxDescent };
 }
 
+/** Canvas reference size for font boxes; whole-pixel rounding is then <0.4%. */
+export const FONT_BOX_REFERENCE_PX = 256;
+
+/**
+ * The font box layout actually used (4.9), or undefined when it cannot be
+ * proven. Measured in Zotero (Gecko 140): layout rounds the ascent and the
+ * descent UP to whole device pixels separately, while canvas reports each
+ * rounded up to whole CSS pixels. At 12.2px that is 14+5=19 on canvas against
+ * a 17.5px line box, more than the 1px consistency tolerance, so every block
+ * at such a size fell back to the DOM box and failed on its first line.
+ * `ascent`/`descent` are the unrounded values (reference size, scaled); the
+ * result is accepted only when it reproduces the laid-out height exactly.
+ */
+export function deviceFontBox(ascent: number, descent: number, rectHeight: number, ratio: number): { ascent: number; descent: number } | undefined {
+ if (![ascent, descent, rectHeight, ratio].every(Number.isFinite) || ascent <= 0 || descent < 0 || rectHeight <= 0 || ratio <= 0) return undefined;
+ const eps = 1e-3;
+ // Only a layout that itself sits on the device grid can be matched this way.
+ if (Math.abs(rectHeight * ratio - Math.round(rectHeight * ratio)) > 0.02) return undefined;
+ const a = Math.ceil(ascent * ratio - eps) / ratio, d = Math.ceil(descent * ratio - eps) / ratio;
+ return Math.abs(a + d - rectHeight) <= 0.02 ? { ascent: a, descent: d } : undefined;
+}
+
 /**
  * Where clip-relative upright coordinates sit on the device pixel grid:
  * absolute = origin + sign * relative, in CSS px; `ratio` is devicePixelRatio.
@@ -167,15 +189,27 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
     }
     const glyph = glyphs[start]!;
     if (!glyph.trim()) return true;
-    let metrics: InkMetrics | undefined;
+    let measured: InkMetrics | undefined;
+    let reference: { ascent: number; descent: number } | undefined;
     if (ctx && style) {
      const m = ctx.measureText(glyph);
-     metrics = {fontBoundingBoxAscent:m.fontBoundingBoxAscent,fontBoundingBoxDescent:m.fontBoundingBoxDescent,
+     measured = {fontBoundingBoxAscent:m.fontBoundingBoxAscent,fontBoundingBoxDescent:m.fontBoundingBoxDescent,
       actualBoundingBoxAscent:m.actualBoundingBoxAscent,actualBoundingBoxDescent:m.actualBoundingBoxDescent};
+     const fontPx = parseFloat(style.fontSize);
+     if (Number.isFinite(fontPx) && fontPx > 0) {
+      const realFont = ctx.font;
+      ctx.font = `${style.fontStyle} ${style.fontWeight} ${FONT_BOX_REFERENCE_PX}px ${style.fontFamily}`;
+      const r = ctx.measureText(glyph), k = fontPx / FONT_BOX_REFERENCE_PX;
+      reference = { ascent: r.fontBoundingBoxAscent * k, descent: r.fontBoundingBoxDescent * k };
+      ctx.font = realFont;
+     }
     }
     return rects.every(rect => {
      if (rect.width <= 0) return true;
      const box = upright(rect);
+     // Prefer the font box layout provably used; otherwise the canvas box as before.
+     const exact = measured && reference ? deviceFontBox(reference.ascent, reference.descent, box.bottom - box.top, axis.ratio) : undefined;
+     const metrics = measured && exact ? {...measured, fontBoundingBoxAscent: exact.ascent, fontBoundingBoxDescent: exact.descent} : measured;
      // Both contracts must hold: the 4.7 outline check (unchanged in every
      // engine) and the device-raster check that Gecko actually paints.
      const ink = inkVerticalBounds(box,metrics);

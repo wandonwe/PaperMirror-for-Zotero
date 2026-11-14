@@ -146,8 +146,11 @@ function comparable(a: SourceBlock, b: SourceBlock): boolean {
 	if (!rects(a) || !rects(b)) return false;
 	const wa = width(a), wb = width(b);
 	const fa = fontSize(a), fb = fontSize(b);
+	// 4.9: one sentence is set in one size. 0.8 let a 7pt figure legend ending
+	// in a comma claim the 8.5pt body paragraph below it as its continuation
+	// (JAMA Neurology 2025 p2), so the legend's translation absorbed body text.
 	return Math.min(wa, wb) / Math.max(wa, wb) >= 0.75
-		&& Math.min(fa, fb) / Math.max(fa, fb) >= 0.8;
+		&& Math.min(fa, fb) / Math.max(fa, fb) >= 0.9;
 }
 
 function filledTail(block: SourceBlock): boolean {
