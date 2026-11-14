@@ -360,3 +360,13 @@ test('empty input, mixed-page current input and duplicate current IDs are conser
 	assert.equal(buildContinuityContexts([a, b]).size, 0);
 	assert.equal(buildContinuityContexts([a, { ...b, id: 'b', pageIndex: 1 }]).size, 0);
 });
+
+test('a legend in smaller type does not claim the body paragraph below as its sentence (4.9)', () => {
+	// 7pt against 8.5pt is a ratio of 0.82: accepted until 4.8, refused now.
+	const legend = body('legend', 'The follow-up study showed more collateral vessels (arrowheads),', { fontSize: 7 });
+	const text = below('text', 'bilateral disease was present in most patients.', 112, { fontSize: 8.5 });
+	assert.equal(buildContinuityContexts([legend, text]).size, 0);
+	// The same geometry in one size is a continuation; only the size differs above.
+	const sameLegend = body('legend', 'The follow-up study showed more collateral vessels (arrowheads),', { fontSize: 8.5 });
+	assert.equal(buildContinuityContexts([sameLegend, text]).size > 0, buildContinuityContexts([body('a', 'The follow-up study showed more collateral vessels (arrowheads),'), below('b', 'bilateral disease was present in most patients.', 112)]).size > 0);
+});

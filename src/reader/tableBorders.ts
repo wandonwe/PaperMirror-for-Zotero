@@ -225,6 +225,24 @@ export function borderGrids(segments: Segment[], options: BorderGridOptions): Bo
 		// 用**实际覆盖区间**,不把短线延长。
 		const cols = collapseThin(coverage(g.lines, spanY * 0.6));
 		const rowsUp = collapseThin(coverage(gh, spanX * 0.6));
+		// 4.9 (Siemens DCE-CT 白皮书 p4 实证): 隔行底色的表没有外框。外侧两条列边只由
+		// 有底色的那一半行画出, 覆盖约 50%, 过不了 60%; 内侧列线被相邻两格各画一次所以
+		// 过得了。结果网格只剩中间几列, 首列与末列落在网格外, 被当成正文纵向并块
+		// (三行「Renal cancer」与下一行并成一段, 译文与行错位)。行线本身是真实画出的:
+		// 多数行线一致地伸到同一个 x, 那里就是表的外边 —— 取行线端点, 不延长任何线。
+		const rowLines = gh.filter(l => rowsUp.some(y => Math.abs(l.pos - y) <= tol * 2));
+		const outerEdge = (side: 'from' | 'to'): number | undefined => {
+			if (rowLines.length < 3 || !cols.length) return undefined;
+			const ends = rowLines.map(l => l[side]).sort((a, b) => a - b);
+			const edge = side === 'from' ? ends[0]! : ends[ends.length - 1]!;
+			const agree = ends.filter(x => Math.abs(x - edge) <= tol * 2).length;
+			const outermost = side === 'from' ? cols[0]! : cols[cols.length - 1]!;
+			const beyond = side === 'from' ? outermost - edge : edge - outermost;
+			return agree >= rowLines.length * 0.6 && beyond >= minCell * 3 ? edge : undefined;
+		};
+		const leftEdge = outerEdge('from'), rightEdge = outerEdge('to');
+		if (leftEdge !== undefined) cols.unshift(leftEdge);
+		if (rightEdge !== undefined) cols.push(rightEdge);
 		// ≥2 列且 ≥2 行 = 各至少 3 条边界。以前只要 2 条线,于是一个单列的框
 		// (真机 p44 的 1×6)也成了"网格" —— 一个盒子不是需要分格归属的表。
 		if (cols.length < 3 || rowsUp.length < 3) { continue; }
