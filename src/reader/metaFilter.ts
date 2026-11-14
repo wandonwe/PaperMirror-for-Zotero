@@ -86,6 +86,29 @@ export function isFooterDate(text: string, rect: Rect, pageHeight: number): bool
  return /^(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|x{2,4})\.?\s+(?:\d{1,2}|x{2,4}),?\s+(?:19|20)\d{2}|\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(?:19|20)\d{2})$/i.test(text.trim());
 }
 
+/** A complete publication locator in a page margin is journal furniture, even
+ * when its small font made the layout classifier call it a title. Require the
+ * explicit volume/issue/date grammar: the word "volume", a domain, or a short
+ * title in the margin alone must never suppress article text. */
+export function isJournalFurniture(text: string, rect: Rect, pageHeight: number): boolean {
+	if (!Number.isFinite(pageHeight) || pageHeight <= 0 || !rect.every(Number.isFinite)
+		|| rect[3] <= rect[1] || rect[2] <= rect[0]
+		|| rect[3] - rect[1] > pageHeight * 0.04
+		|| !(rect[3] < pageHeight * 0.1 || rect[1] > pageHeight * 0.9)) return false;
+	let t = text.trim().replace(/\s+/g, ' ');
+	if (t.length > 220) return false;
+	// A domain and a page number may flank the complete locator. The square
+	// separator can arrive as n in old symbol fonts; this is only delimiter
+	// handling and is not evidence for replacing an ordinary letter in prose.
+	const edge = /^[\s|•▪■◼·]+|[\s|•▪■◼·]+$/g;
+	t = t.replace(/^\d{1,4}\s+/, '');
+	t = t.replace(/^(?:https?:\/\/)?[\w-]+(?:\.[\w-]+)+\s*(?:[|•▪■◼·]|n\b)?\s*/i, '')
+		.replace(/\s*(?:[|•▪■◼·]|\bn)?\s*(?:https?:\/\/)?[\w-]+(?:\.[\w-]+)+(?:\s+\d{1,4})?$/i, '').replace(edge, '');
+	// Recognize the record, not a particular publisher or article. Replacement
+	// and legacy dash characters are accepted only between issue and date.
+	return /^[\p{L}][\p{L}\p{M}\d &'’().,-]{1,100}:\s*Vol(?:ume|\.)?\s*\d{1,4}\s*[:;,]\s*(?:Number|No\.?|Issue)\s*\d{1,4}\s*[-–—\u0097\ufffd]\s*(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+)(?:19|20)\d{2}$/iu.test(t);
+}
+
 export function isRunningHeadOrFoot(
 	rect: Rect,
 	pageHeight: number,

@@ -39,7 +39,7 @@ import type { BlockType, SourceBlock } from '../types/models';
 import { detectTableRegions } from './tableGuard';
 import type { BorderGrid } from './tableBorders';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
-import { isFooterDate, isIdentifierLabel, classifyContent, endsMidSentence, isPublisherBoilerplateLine, isRunningHeadOrFoot, type PreserveReason } from './metaFilter';
+import { isFooterDate, isJournalFurniture, isIdentifierLabel, classifyContent, endsMidSentence, isPublisherBoilerplateLine, isRunningHeadOrFoot, type PreserveReason } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -612,7 +612,7 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 		}
 		if (semanticBoundary(lineText(line), lineText(next))) { flush(); continue; }
 		// Isolate page furniture before a full-width body line can absorb it.
-		const footer = (l: SpanLine): boolean => isFooterDate(lineText(l), l.rect, pageHeight) || pageHeight > 0 && l.rect[3] < pageHeight * 0.1
+		const footer = (l: SpanLine): boolean => isFooterDate(lineText(l), l.rect, pageHeight) || isJournalFurniture(lineText(l), l.rect, pageHeight) || pageHeight > 0 && l.rect[3] < pageHeight * 0.1
 			&& (/^\d{1,4}$/.test(lineText(l).trim()) || /^(?:[\w.-]+\.(?:org|com|edu)\b|Radiology:\s*Volume\b)/i.test(lineText(l).trim()));
 		if (footer(line) !== footer(next)) { flush(); continue; }
 		// 边框硬屏障: a figure between two lines separates layout regions.
@@ -1320,7 +1320,8 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			// cover page with no masthead the paper's own title can sit inside the
 			// band, and losing it is far worse than translating one running head.
 			// 2.12.13:保留为 preserve('running-head') 而不是丢弃 —— 墨迹几何进遮挡物,摘要里看得见。
-			if (p.type !== 'title' && isRunningHeadOrFoot(p.rect, options.pageHeight, p.group.length, p.text)) {
+			if (isJournalFurniture(p.text, p.rect, options.pageHeight)
+				|| p.type !== 'title' && isRunningHeadOrFoot(p.rect, options.pageHeight, p.group.length, p.text)) {
 				keepReason = keepReason ?? 'running-head';
 			}
 			// 字距拉开的标题 (2.7.2, 审核 C-2, jacc2020-p15 实证): "R E F E R E N C E S"
