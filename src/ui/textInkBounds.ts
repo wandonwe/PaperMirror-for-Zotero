@@ -207,14 +207,19 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
     return rects.every(rect => {
      if (rect.width <= 0) return true;
      const box = upright(rect);
-     // Prefer the font box layout provably used; otherwise the canvas box as before.
-     const exact = measured && reference ? deviceFontBox(reference.ascent, reference.descent, box.bottom - box.top, axis.ratio) : undefined;
+     // A canvas font box consistent with layout keeps the 4.8 check untouched.
+     // Only when it is not (and 4.8 fell back to the DOM box) is the font box
+     // layout provably used substituted. Substituting it everywhere passed six
+     // more blocks on device but gave one unconfirmed 1 px reading; not taken.
+     const consistent = !!measured && Math.abs(measured.fontBoundingBoxAscent + measured.fontBoundingBoxDescent - (box.bottom - box.top)) <= 1;
+     const exact = measured && reference && !consistent ? deviceFontBox(reference.ascent, reference.descent, box.bottom - box.top, axis.ratio) : undefined;
      const metrics = measured && exact ? {...measured, fontBoundingBoxAscent: exact.ascent, fontBoundingBoxDescent: exact.descent} : measured;
      // Both contracts must hold: the 4.7 outline check (unchanged in every
      // engine) and the device-raster check that Gecko actually paints.
      const ink = inkVerticalBounds(box,metrics);
      const raster = rasterOverflowAllPhases(box,metrics,clip,axis);
-     const outlineFits = verticalInkFits(ink,clip), rasterFits = !raster || (raster.top <= 0.01 && raster.bottom <= 0.01);
+     const outlineFits = verticalInkFits(ink,clip);
+     const rasterFits = !raster || (raster.top <= 0.01 && raster.bottom <= 0.01);
      if (outlineFits && rasterFits) return true;
      const top = Math.max(clip.top-ink.top, raster ? raster.top : 0);
      const bottom = Math.max(ink.bottom-clip.bottom, raster ? raster.bottom : 0);
