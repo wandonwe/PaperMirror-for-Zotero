@@ -11,7 +11,7 @@ import { insideObstacle, obstacleBetween } from './figureBarriers';
 import { isDecorativeTextRule } from './textRules';
 import { detectGlyphFormulaRuns } from './glyphFormula';
 import { detectStyleRuns } from './styleRuns';
-import { isIdentifierLabel, classifyContent, isPublisherBoilerplateLine } from './metaFilter';
+import { isIdentifierLabel, isJournalFurniture, classifyContent, isPublisherBoilerplateLine } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -530,7 +530,9 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 		const text = p.text.trim();
 		// 内容决策 (2.12.13):不再整块丢弃。标识(人名、日期、DOI、页码…)保留并带原因,
 		// 自然语言一律翻译。标题/小标题永远翻译。
-		const content = (type === 'title' || type === 'heading')
+		const content = isJournalFurniture(text, p.rect, pageHeight)
+			? { decision: 'preserve' as const, reason: 'running-head' as const }
+			: (type === 'title' || type === 'heading')
 			? { decision: 'translate' as const }
 			: classifyContent(text, p.rect, pageWidth, { fontSize: p.fontSize, bodySize });
 		if (content.decision === 'skip') {

@@ -1,4 +1,4 @@
-/** Only simple, filled relation glyphs are recognized. Font names, apparent
+/** Only simple, filled relation and square-marker glyphs are recognized. Font names, apparent
  * Unicode and surrounding prose are not evidence of what a PDF actually draws. */
 export interface GlyphPathCommand { command: string; args: number[] }
 type Point = [number, number];
@@ -94,8 +94,37 @@ export function relationFromGlyphPath(commands: readonly GlyphPathCommand[]): '=
  return undefined;
 }
 
+/** A solid square has one four-corner, axis-aligned contour. A hollow box,
+ * letter, diamond, malformed/retraced outline or curved shape is not evidence
+ * of a square bullet. Units, position, contour start and winding are irrelevant. */
+export function squareBulletFromGlyphPath(commands: readonly GlyphPathCommand[]): '▪' | undefined {
+ const contours = contoursFrom(commands);
+ if (!contours || contours.length !== 1) return undefined;
+ const c = contours[0]!, b = box(c);
+ if (c.curved || b.width <= 0 || b.height <= 0 || Math.min(b.width, b.height) / Math.max(b.width, b.height) < .99) return undefined;
+ const points = c.points.slice();
+ const same = (a: Point, z: Point): boolean => a[0] === z[0] && a[1] === z[1];
+ if (points.length === 5 && same(points[0]!, points[4]!)) points.pop();
+ if (points.length !== 4 || new Set(points.map(p => `${p[0]},${p[1]}`)).size !== 4) return undefined;
+ const eps = Math.max(b.width, b.height) * 1e-6;
+ if (!points.every((p, i) => {
+  const z = points[(i + 1) % points.length]!;
+  return (Math.abs(p[0] - b.left) <= eps || Math.abs(p[0] - b.right) <= eps)
+   && (Math.abs(p[1] - b.bottom) <= eps || Math.abs(p[1] - b.top) <= eps)
+   && (Math.abs(z[0] - p[0]) <= eps || Math.abs(z[1] - p[1]) <= eps);
+ })) return undefined;
+ return Math.abs(area(c) / (b.width * b.height) - 1) <= 1e-6 ? '▪' : undefined;
+}
+
+/** Avoid original-font reads for ordinary words containing the letter n.
+ * A font-separated marker is a standalone n in text-content / DOM spans;
+ * per-character reader data still reaches this with its individual n. */
+export function hasSymbolCandidate(text: string): boolean {
+ return /[$¼]|(?:^|\s)n(?:\s|$)/.test(text);
+}
+
 /** A map is already bound to a verified font and unambiguous source glyph.
- * Printable currency/fraction characters are never guessed from their context. */
+ * Printable characters are never guessed from their context. */
 export function repairSymbolText(text: string, repairs: ReadonlyMap<string, string>): string {
- return text.replace(/[$¼]/g, c => repairs.get(c) ?? c);
+ return text.replace(/[$¼n]/g, c => repairs.get(c) ?? c);
 }

@@ -1,6 +1,6 @@
 import { decodeLegacyText, legacyFontEncodings, resolvedPdfFont, repeatedImageRefs } from './legacyTextEncoding';
 import { embeddedSymbolRepairs, type SymbolGlyphObservation } from './embeddedFontSymbols';
-import { repairSymbolText } from './symbolFontSemantics';
+import { hasSymbolCandidate, repairSymbolText } from './symbolFontSemantics';
 import { onScrollIntent } from './scrollSynchronizer';
 import { canonicalPagePoint, pageQuarterTurn, type PageQuarterTurn } from './overlayGeometry';
 /**
@@ -241,7 +241,7 @@ function getPdfApplication(reader: ReaderLike): any {
 type SymbolRepairMap = { byFont: Map<string, Map<string, string>>; pageWide: Map<string, string>; repairedGlyphs: number };
 const symbolPages = new WeakMap<object, Map<number, Promise<SymbolRepairMap>>>();
 const emptySymbols = (): SymbolRepairMap => ({byFont: new Map(), pageWide: new Map(), repairedGlyphs: 0});
-const symbolCandidate = (text: string): boolean => /[$¼]/.test(text);
+const symbolCandidate = hasSymbolCandidate;
 
 /** Inspect the original glyph, not a font's often incorrect Unicode or name.
  * A page-wide fallback is safe only when EVERY drawing of that Unicode has
@@ -263,7 +263,7 @@ async function pageSymbolRepairs(reader: ReaderLike, pageIndex: number): Promise
   const ops = waive(waive(pdfWindow(reader))?.pdfjsLib)?.OPS as Record<string, number> | undefined;
   const fonts = new Map<string, string>();
   const used: {fontId: string; code: number; unicode: string}[] = [];
-  let drawingProofComplete = true;
+  let drawingProofComplete = true, squareProofComplete = true;
   let fontId = ''; const stack: string[] = [];
   for (let i = 0; i < list.fnArray.length; i++) {
    const fn = list.fnArray[i], args = waive(list.argsArray[i]) as any;
@@ -287,8 +287,11 @@ async function pageSymbolRepairs(reader: ReaderLike, pageIndex: number): Promise
      const glyph = waive(raw) as any;
      if (typeof glyph === 'number' && Number.isFinite(glyph)) continue;
      if (!glyph || typeof glyph.unicode !== 'string') {drawingProofComplete = false; continue;}
-     if (symbolCandidate(glyph.unicode) && glyph.unicode !== '$' && glyph.unicode !== '¼') drawingProofComplete = false;
-     if (glyph && (glyph.unicode === '$' || glyph.unicode === '¼')) {
+     if (/[$¼]/.test(glyph.unicode) && glyph.unicode !== '$' && glyph.unicode !== '¼') drawingProofComplete = false;
+     // A composite glyph containing n prevents a global letter repair, but
+     // cannot invalidate independent currency/fraction outline evidence.
+     if (glyph.unicode.includes('n') && glyph.unicode !== 'n') squareProofComplete = false;
+     if (glyph && ['$', '¼', 'n'].includes(glyph.unicode)) {
       used.push({fontId, code: typeof glyph.originalCharCode === 'number' ? glyph.originalCharCode : NaN, unicode: glyph.unicode});
      }
     }
@@ -304,6 +307,7 @@ async function pageSymbolRepairs(reader: ReaderLike, pageIndex: number): Promise
   }
   const observations: SymbolGlyphObservation[] = used.map(g => ({fontName: fonts.get(g.fontId) ?? '', originalCharCode: g.code, unicode: g.unicode}));
   const verified = await embeddedSymbolRepairs(doc, pageIndex, observations);
+  if (!squareProofComplete) for (const map of verified.values()) map.delete('n');
   const byFont = new Map<string, Map<string, string>>();
   for (const [id, name] of fonts) {
    const map = verified.get(name); if (map) {byFont.set(id, map); byFont.set(name, map);}

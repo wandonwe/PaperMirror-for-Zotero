@@ -4,6 +4,9 @@ export function semanticBoundary(before: string, after: string): boolean {
  const heading = /^(?:guideline writing group|writing (?:committee|group)|(?:peer )?review(?:er|ing)? (?:committee|group)|references|acknowledg(?:e)?ments|author contributions|disclosures|supplemental material)\b/i;
  const credentials = /\b(?:MD|PhD|MBBS|FAHA|FACC)\b/;
  const a=before.trim(),b=after.trim();
+ // A painted bullet starts a new item. Keep its hanging continuation lines,
+ // but never coalesce an explicit marker back into the preceding item/title.
+ if (/^[•▪◦‣]\s/.test(b)) return true;
  // A numbered table caption starts its own region, even when body prose
  // continues on the next page. Inline mentions are not at the block start.
  if (/^Table\s+\d+(?::\s*|\s+)[A-Z]/.test(b)) return true;

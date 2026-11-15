@@ -1,5 +1,5 @@
 import { preserveCollapsedPlotPanels } from '../reader/compositePlotGuard';
-import { createTextInkGuard, insetTextInk, type InkFailure } from './textInkBounds';
+import { createTextInkGuard, insetSideInk, insetTextInk, type InkFailure } from './textInkBounds';
 import { RenderMeasurementCache } from './measurementCache';
 import { pageContentKey } from '../export/pageArchive';
 /**
@@ -209,11 +209,21 @@ export interface FitFailure {
 	veto?: 'ink' | 'geometry';
 }
 
-/** 量测溢出方向 (pure): 与 ladderFits 同一套 1.5px 容差。 */
+/** Coarse legacy scroll-size diagnosis. Final placement also compares the
+ * actual integer client/scroll widths via layoutWidthFits, without slack. */
 export function fitOverflow(scrollW: number, scrollH: number, boxW: number, boxH: number): NonNullable<FitFailure['overflow']> {
 	const w = scrollW > boxW + 1.5;
 	const h = scrollH > boxH + 1.5;
 	return w && h ? 'both' : w ? 'width' : h ? 'height' : 'none';
+}
+
+/** CSSOM clientWidth and scrollWidth are both integer layout widths, measured
+ * before page rotation. Extra horizontal slack can hide real CJK strokes in a
+ * narrow box (Bae p21: 5.633px box/clientWidth 6, scrollWidth 7, clipped 于).
+ * This is a conservative fit check; it never enlarges the source rectangle. */
+export function layoutWidthFits(scrollWidth: number, clientWidth: number): boolean {
+ return Number.isInteger(scrollWidth) && Number.isInteger(clientWidth)
+  && scrollWidth >= 0 && clientWidth >= 0 && scrollWidth <= clientWidth;
 }
 
 /** 探针/诊断用的紧凑串: "expand-ink/width"。 */
@@ -1226,6 +1236,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	 */
 	const measurementCache = new RenderMeasurementCache();
 	const textInkFits = createTextInkGuard(doc);
+	const sideInset = new WeakSet<HTMLElement>();
 	const heightSlack = (item: StrictItem): number => Math.max(1.5, item.fontPx * 0.35);
 
 	/** Ladder-fit a hidden node; true when it fits its fixed rectangle. */
@@ -1251,6 +1262,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			for (const step of ladderFor(item.minLineHeight)) {
 				item.node.style.lineHeight = String(step.lineHeight);
 				item.node.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
+				// A side inset belongs to one tested layout; never carry it to the next.
+				if (sideInset.has(item.node)) { item.node.style.paddingLeft = ''; item.node.style.paddingRight = ''; sideInset.delete(item.node); }
 				if (item.flowBoxes) {
 					item.node.replaceChildren();
 					const nodes = item.flowBoxes.map(b => {
@@ -1263,14 +1276,14 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 					let glyphRejected = false;
 					const fitPiece = (text: string, b: PixelBox, index: number, offset: number): boolean => {
 						const child = nodes[index]!; fillSlice(child, offset, text.length);
-						child.style.paddingTop = ''; child.style.boxSizing = 'border-box';
-                        const sizeFitsNow = () => child.scrollHeight <= Math.round(b.height + heightSlack(item)) && child.scrollWidth <= b.width + 1.5;
+						child.style.paddingTop = ''; child.style.paddingLeft = ''; child.style.paddingRight = ''; child.style.boxSizing = 'border-box';
+                        const sizeFitsNow = () => child.scrollHeight <= Math.round(b.height + heightSlack(item)) && layoutWidthFits(child.scrollWidth, child.clientWidth);
                         const sizeFits = sizeFitsNow();
                         let inkFits = sizeFits && textInkFits(child);
                         if (sizeFits && !inkFits) {
                          const failure = textInkFits.failure(child);
                          if (failure) item.inkFailure = {...failure,flowIndex:index};
-                         inkFits = insetTextInk(child,textInkFits,item.fontPx * 0.5,sizeFitsNow);
+                         inkFits = insetTextInk(child,textInkFits,item.fontPx * 0.5,sizeFitsNow) || insetSideInk(child,textInkFits,item.fontPx * 0.25,sizeFitsNow);
                         }
 						if (sizeFits && !inkFits) glyphRejected = true;
 						return inkFits;
@@ -1290,17 +1303,28 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
     // CSSOM scroll sizes are integers; compare in the same rounded units.
     const measured = measurementCache.measure(item.node, markup, () => ({height:item.node.scrollHeight,width:item.node.scrollWidth}));
 				if (measured.height <= Math.round(item.box.height + heightSlack(item))
-					&& measured.width <= item.box.width + 1.5 && textInkFits(item.node)) {
+					&& layoutWidthFits(measured.width, item.node.clientWidth) && textInkFits(item.node)) {
 					item.lastOverflow = 'none';
 					return true;
 				}
 				const inkFailure = textInkFits.failure(item.node);
 				if (inkFailure) item.inkFailure = inkFailure;
+				// A glyph hanging over a side edge (a "j" starting a line): inset
+				// that side inside the same rectangle and re-test everything.
+				if (inkFailure && (inkFailure.leftOverflow || inkFailure.rightOverflow)
+					&& measured.height <= Math.round(item.box.height + heightSlack(item)) && layoutWidthFits(measured.width, item.node.clientWidth)
+					&& insetSideInk(item.node, textInkFits, item.fontPx * 0.25,
+						() => item.node.scrollHeight <= Math.round(item.box.height + heightSlack(item)) && layoutWidthFits(item.node.scrollWidth, item.node.clientWidth))) {
+					sideInset.add(item.node);
+					item.lastOverflow = 'none';
+					return true;
+				}
 			}
 			// 记下最后一档的溢出方向 (2.7.0): 放弃原因需要它。
 			if (!item.flowBoxes) {
 				item.lastOverflow = fitOverflow(item.node.scrollWidth, item.node.scrollHeight, item.box.width, item.box.height);
-				if (item.lastOverflow === 'none' && !textInkFits(item.node)) item.lastOverflow = 'glyph-bounds';
+				if (!layoutWidthFits(item.node.scrollWidth,item.node.clientWidth)) item.lastOverflow = item.lastOverflow === 'height' || item.lastOverflow === 'both' ? 'both' : 'width';
+				else if (item.lastOverflow === 'none' && !textInkFits(item.node)) item.lastOverflow = 'glyph-bounds';
 			}
 			return false;
 		}
@@ -1685,7 +1709,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				item.node.style.left = `${candidate.left}px`;
 				item.node.style.top = `${candidate.top}px`;
 				if (item.node.scrollHeight <= natural + 1.5
-					&& item.node.scrollWidth <= ob.width + 1.5
+					&& layoutWidthFits(item.node.scrollWidth, item.node.clientWidth)
 					&& !violatesGeometry(item)) {
 					// 另置提交: 不画遮罩 —— 原文标题保持可见,译文是附加而非替换。
 					item.node.setAttribute('data-pm-annex', 'true');

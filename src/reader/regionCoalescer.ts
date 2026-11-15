@@ -264,6 +264,9 @@ export function canAbsorb(host: SourceBlock, shard: SourceBlock, obstacles: Rect
 	}
 	const rh = unionRect(host.lineRectsPdf as Rect[]);
 	const rs = unionRect(shard.lineRectsPdf as Rect[]);
+	// A bullet marks the beginning of its item. A short heading directly
+	// above it is not a torn-off prefix, even when their font sizes match.
+	if (/^[•▪◦‣]\s/.test(host.sourceText.trim()) && rs[1] >= rh[3] - 0.01) return false;
 
 	if (obstacleBetween(rh, rs, [...obstacles,...(host.layoutBarriersPdf??[]),...(shard.layoutBarriersPdf??[])])) {
 		return false;

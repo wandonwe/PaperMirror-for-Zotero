@@ -4,7 +4,7 @@ import {
 	decodePDFRawStream
 } from 'pdf-lib';
 import { parsedDocument } from './legacyTextEncoding';
-import { relationFromGlyphPath } from './symbolFontSemantics';
+import { relationFromGlyphPath, squareBulletFromGlyphPath } from './symbolFontSemantics';
 
 // The browser entry exports the factory on its default object; Node's CJS
 // entry also has a named export, which must not hide a browser build failure.
@@ -18,7 +18,7 @@ export interface SymbolGlyphObservation {
 
 const MAX_FONT_BYTES = 2 * 1024 * 1024;
 const MAX_GLYPHS = 8192;
-const candidateUnicode = new Set(['$', '¼']);
+const candidateUnicode = new Set(['$', '¼', 'n']);
 const fontKey = PDFName.of('Font');
 const baseFontKey = PDFName.of('BaseFont');
 const subtypeKey = PDFName.of('Subtype');
@@ -150,7 +150,7 @@ function readEmbeddedFont(fontDict: PDFDict): EmbeddedFont | undefined {
 }
 
 /** PDF Encoding selects a glyph; its misleading name is not its meaning.
- * Only the two required WinAnsi slots are known here. Explicit Differences
+ * Only the three required WinAnsi slots are known here. Explicit Differences
  * remain usable with an otherwise unknown or absent base encoding. */
 function encodedGlyphName(font: PDFDict, code: number): string | undefined {
 	if (!Number.isInteger(code) || code < 0 || code > 255) return undefined;
@@ -181,7 +181,7 @@ function encodedGlyphName(font: PDFDict, code: number): string | undefined {
 		}
 	}
 	if (base !== 'WinAnsiEncoding') return undefined;
-	return code === 36 ? 'dollar' : code === 188 ? 'onequarter' : undefined;
+	return code === 36 ? 'dollar' : code === 188 ? 'onequarter' : code === 110 ? 'n' : undefined;
 }
 
 function relationForCode(fontDict: PDFDict, parsed: EmbeddedFont, code: number): { gid: number; relation: string } | undefined {
@@ -193,7 +193,7 @@ function relationForCode(fontDict: PDFDict, parsed: EmbeddedFont, code: number):
 			const path = parsed.font.getGlyph(gid).path as unknown as {
 				commands: Parameters<typeof relationFromGlyphPath>[0];
 			};
-			parsed.relations.set(gid, relationFromGlyphPath(path.commands) ?? undefined);
+			parsed.relations.set(gid, relationFromGlyphPath(path.commands) ?? squareBulletFromGlyphPath(path.commands));
 		} catch {
 			parsed.relations.set(gid, undefined);
 		}
@@ -203,7 +203,7 @@ function relationForCode(fontDict: PDFDict, parsed: EmbeddedFont, code: number):
 }
 
 /** Repair only an observed printable character whose original embedded glyph
- * has one unambiguous relation shape. Missing evidence always leaves it alone. */
+ * has one unambiguous relation or square-marker shape. Missing evidence always leaves it alone. */
 export async function embeddedSymbolRepairs(
 	doc: object & { getData?: () => Promise<Uint8Array> },
 	pageIndex: number,
