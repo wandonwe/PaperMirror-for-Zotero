@@ -1,5 +1,5 @@
 import { preserveCollapsedPlotPanels } from '../reader/compositePlotGuard';
-import { createTextInkGuard, insetTextInk, type InkFailure } from './textInkBounds';
+import { createTextInkGuard, insetSideInk, insetTextInk, type InkFailure } from './textInkBounds';
 import { RenderMeasurementCache } from './measurementCache';
 import { pageContentKey } from '../export/pageArchive';
 /**
@@ -1236,6 +1236,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	 */
 	const measurementCache = new RenderMeasurementCache();
 	const textInkFits = createTextInkGuard(doc);
+	const sideInset = new WeakSet<HTMLElement>();
 	const heightSlack = (item: StrictItem): number => Math.max(1.5, item.fontPx * 0.35);
 
 	/** Ladder-fit a hidden node; true when it fits its fixed rectangle. */
@@ -1261,6 +1262,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			for (const step of ladderFor(item.minLineHeight)) {
 				item.node.style.lineHeight = String(step.lineHeight);
 				item.node.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
+				// A side inset belongs to one tested layout; never carry it to the next.
+				if (sideInset.has(item.node)) { item.node.style.paddingLeft = ''; item.node.style.paddingRight = ''; sideInset.delete(item.node); }
 				if (item.flowBoxes) {
 					item.node.replaceChildren();
 					const nodes = item.flowBoxes.map(b => {
@@ -1273,14 +1276,14 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 					let glyphRejected = false;
 					const fitPiece = (text: string, b: PixelBox, index: number, offset: number): boolean => {
 						const child = nodes[index]!; fillSlice(child, offset, text.length);
-						child.style.paddingTop = ''; child.style.boxSizing = 'border-box';
+						child.style.paddingTop = ''; child.style.paddingLeft = ''; child.style.paddingRight = ''; child.style.boxSizing = 'border-box';
                         const sizeFitsNow = () => child.scrollHeight <= Math.round(b.height + heightSlack(item)) && layoutWidthFits(child.scrollWidth, child.clientWidth);
                         const sizeFits = sizeFitsNow();
                         let inkFits = sizeFits && textInkFits(child);
                         if (sizeFits && !inkFits) {
                          const failure = textInkFits.failure(child);
                          if (failure) item.inkFailure = {...failure,flowIndex:index};
-                         inkFits = insetTextInk(child,textInkFits,item.fontPx * 0.5,sizeFitsNow);
+                         inkFits = insetTextInk(child,textInkFits,item.fontPx * 0.5,sizeFitsNow) || insetSideInk(child,textInkFits,item.fontPx * 0.25,sizeFitsNow);
                         }
 						if (sizeFits && !inkFits) glyphRejected = true;
 						return inkFits;
@@ -1306,6 +1309,16 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				}
 				const inkFailure = textInkFits.failure(item.node);
 				if (inkFailure) item.inkFailure = inkFailure;
+				// A glyph hanging over a side edge (a "j" starting a line): inset
+				// that side inside the same rectangle and re-test everything.
+				if (inkFailure && (inkFailure.leftOverflow || inkFailure.rightOverflow)
+					&& measured.height <= Math.round(item.box.height + heightSlack(item)) && layoutWidthFits(measured.width, item.node.clientWidth)
+					&& insetSideInk(item.node, textInkFits, item.fontPx * 0.25,
+						() => item.node.scrollHeight <= Math.round(item.box.height + heightSlack(item)) && layoutWidthFits(item.node.scrollWidth, item.node.clientWidth))) {
+					sideInset.add(item.node);
+					item.lastOverflow = 'none';
+					return true;
+				}
 			}
 			// 记下最后一档的溢出方向 (2.7.0): 放弃原因需要它。
 			if (!item.flowBoxes) {

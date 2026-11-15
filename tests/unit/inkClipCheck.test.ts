@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm';
 
 const source = readFileSync(resolve('scripts/zotero/ink-clip-check.js'), 'utf8');
 
-function harness(options: { clipping?: boolean; drift?: boolean; moving?: boolean; missing?: boolean; throwCapture?: boolean; extentChanges?: boolean; moveWhenOpen?: boolean } = {}) {
+function harness(options: { originalShell?: boolean; clipping?: boolean; drift?: boolean; moving?: boolean; missing?: boolean; throwCapture?: boolean; extentChanges?: boolean; moveWhenOpen?: boolean } = {}) {
  let preference = false, reads = 0, rectReads = 0, fontsReady = false, closes = 0;
  const style = { visibility: 'visible', overflow: 'hidden', fontSize: '12px', fontFamily: 'test', fontStyle: 'normal', fontWeight: '400', lineHeight: '14px', display: 'block', transform: 'none', paddingTop: '0px', paddingBottom: '0px' };
  const node = { style, textContent: 'Test paragraph', parentElement: null, scrollTop: 0, scrollLeft: 0, clientHeight: 30, clientWidth: 100,
@@ -28,7 +28,7 @@ function harness(options: { clipping?: boolean; drift?: boolean; moving?: boolea
   File: { putContentsAsync: async () => {} }, Prefs: { get: () => preference, set: (_name: string, value: boolean) => { preference = value; } },
   Reader: { open: async () => {
    assert.equal(preference, true, 'local-only mode must precede opening readers');
-   return { tabID: 1, _initPromise: Promise.resolve(), navigate: () => {}, _tabContainer: { querySelector: () => options.missing ? null : page } };
+   return { tabID: 1, _initPromise: Promise.resolve(), navigate: () => {}, _tabContainer: { querySelector: (selector: string) => options.originalShell ? (selector.includes('data-pm-original') ? {} : null) : options.missing ? null : page } };
   } } };
  const run = runInNewContext(source, { Zotero });
  return { run: () => run({ items: [{ label: 'fixture', attachmentID: 1, pages: 1 }] }),
@@ -119,4 +119,13 @@ test('real clipping is never suppressed by a reversible scroll extent change', a
  assert.equal(result.totals.clippedBlocks, 1);
  assert.equal(result.totals.noisyBlocks, 0);
  assert.deepEqual(Array.from(result.items[0].pages[0].measurements[0].perPhase), [1, 1, 1, 1]);
+});
+
+test('a page left as its original bitmap is reported separately, not as missing', async () => {
+ const result = await harness({ originalShell: true }).run();
+ const page = result.items[0].pages[0];
+ assert.equal(page.found, true); assert.equal(page.settled, true); assert.equal(page.original, true);
+ assert.deepEqual(Array.from(page.blocks), []);
+ assert.equal(result.totals.originalPages, 1); assert.equal(result.totals.unverifiedPages, 0);
+ assert.deepEqual(Array.from(result.errors), []);
 });

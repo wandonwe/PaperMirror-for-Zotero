@@ -38,7 +38,7 @@
   const settleMs = config.settleMs ?? 500;
   const sleep = ms => new Promise(r => win.setTimeout(r, ms));
   const dpr = win.devicePixelRatio;
-  const result = { tool: 'ink-clip-check', schemaVersion: 3, version: Zotero.PaperMirror && Zotero.PaperMirror.version,
+  const result = { tool: 'ink-clip-check', schemaVersion: 4, version: Zotero.PaperMirror && Zotero.PaperMirror.version,
     zotero: Zotero.version, dpr, phases, threshold, started: new Date().toISOString(), items: [], errors: [] };
   const save = async () => { if (config.output) await Zotero.File.putContentsAsync(config.output, JSON.stringify(result)); };
   if (!Zotero.PaperMirror) { result.errors.push('PaperMirror is not installed'); await save(); return result; }
@@ -56,6 +56,16 @@
     let count = 0;
     for (let i = 0; i < a.length; i += 4) if (Math.abs(lum(a, i) - lum(b, i)) > threshold) count++;
     return count;
+  };
+  // Where the clipped ink is (device pixels from the capture origin), so a
+  // reading can be traced to a glyph and an edge. Diagnostic only.
+  const differingPixels = (a, b, width) => {
+    const out = [];
+    for (let i = 0; i < a.length && out.length < 64; i += 4) {
+      const d = Math.abs(lum(a, i) - lum(b, i));
+      if (d > threshold) out.push({ x: (i / 4) % width, y: Math.floor(i / 4 / width), difference: Math.round(d) });
+    }
+    return out;
   };
   const rectData = r => ({ left: r.left, top: r.top, width: r.width, height: r.height });
   // Include actual geometry and computed style: inline style alone misses
@@ -161,6 +171,7 @@
         phaseEvidence.push({ phase, beforePixels, afterPixels, closedDriftPixels, geometryStable, rawGeometryStable, geometryRestored,
           scrollExtentChanged, scrollExtents: scrollExtentChanged ? { closed: extents(beforeGeometry), open: extents(openGeometry), restored: extents(afterGeometry) } : undefined,
           geometryStates: !geometryStable ? { closed: beforeGeometry, open: openGeometry, restored: afterGeometry } : undefined,
+          pixels: beforePixels || afterPixels ? differingPixels(beforePixels >= afterPixels ? shown : restored, full, Math.ceil(w * dpr)) : undefined,
           capture: { x, y, w, h } });
       }
     } finally { pieces.forEach((p, i) => { p.style.overflow = saved[i]; }); }
@@ -182,28 +193,47 @@
       if (doc.fonts?.ready) await doc.fonts.ready;
       const host = reader._tabContainer;
       const pages = item.pageIndexes ?? [...Array(item.pages ?? 1).keys()];
-      for (const p of pages) {
+      // Settled = the same non-empty set of blocks with unchanged visibility,
+      // font size, line height and box height for `builtPolls` polls. A stable
+      // block COUNT is not enough: the fit passes keep restyling blocks after
+      // they appear, and measuring mid-pass reported thousands of phantom pixels.
+      //
+      // The plugin leaves a page as its original bitmap when it has nothing to
+      // show there (every block preserved, or no cached translation in
+      // local-only mode). That is a legitimate final state, but the same shell
+      // also precedes every translated page and the DOM cannot tell the two
+      // apart. Such a page is therefore reported separately (`original`),
+      // needs a much longer unchanged window, and is visited a second time
+      // after the rest of the paper; the caller must still show that the
+      // baseline committed nothing there. A page with neither shell fails.
+      const builtPolls = config.builtPolls ?? 10, shellPolls = config.shellPolls ?? 30;
+      const blockIDs = el => [...el.querySelectorAll('.pm-repage-block')].map(n => n.getAttribute('data-pm-block'));
+      const visit = async (p, patience) => {
         reader.navigate({ pageIndex: p });
-        // Settled = the same non-empty set of blocks with unchanged visibility,
-        // font size, line height and box height for six polls. A stable block
-        // COUNT is not enough: the fit passes keep restyling blocks after they
-        // appear, and measuring mid-pass reported thousands of phantom pixels.
-        let pageEl = null, last = '', stable = 0, settled = false;
-        for (let t = 0; t < 60; t++) {
+        let pageEl = null, last = '', stable = 0, settled = false, original = false;
+        for (let t = 0; t < 60 + patience; t++) {
           await sleep(settleMs);
           pageEl = host.querySelector(`.pm-repage[data-pm-page="${p}"]`);
           const blocks = pageEl ? [...pageEl.querySelectorAll('.pm-repage-block')] : [];
-          const sig = signature(blocks);
-          if (blocks.length && sig === last) { if (++stable >= 6) { settled = true; break; } } else stable = 0;
+          const shell = !pageEl && !!host.querySelector(`.pm-repage-slot[data-pm-slot="${p}"] > .pm-repage[data-pm-original]`);
+          const sig = shell ? 'original-shell' : signature(blocks);
+          if ((blocks.length || shell) && sig === last) { if (++stable >= (shell ? patience : builtPolls)) { settled = true; original = shell; break; } } else stable = 0;
           last = sig;
         }
         await sleep(1000);
-        const page = { pageIndex: p, found: !!pageEl, settled, blocks: [], committed: [], clipped: [], measurements: [] };
-        entry.pages.push(page);
-        if (!settled) result.errors.push(`${entry.label} p${p + 1}: ${pageEl ? 'layout did not settle' : 'page not found'}`);
+        const page = { pageIndex: p, found: !!pageEl || original, settled, original, blocks: [], committed: [], texts: {}, clipped: [], measurements: [] };
         if (pageEl) {
           const all = [...pageEl.querySelectorAll('.pm-repage-block')];
           page.blocks = all.map(n => n.getAttribute('data-pm-block'));
+          // Block ids renumber when the structure changes; the text makes a
+          // before/after comparison possible without guessing from ids.
+          for (const n of all) page.texts[n.getAttribute('data-pm-block')] = (n.textContent || '').slice(0, 80);
+          // Why a block is not shown: the plugin's own placement record.
+          try {
+            page.unplaced = (typeof pageEl.pmProbe === 'function' ? pageEl.pmProbe(false) : [])
+              .filter(row => row.state !== 'committed').map(row => ({ id: row.id, state: row.state, reason: row.abandonReason,
+                measurement: row.measurement, inkFailure: row.inkFailure, width: row.width, height: row.height }));
+          } catch (e) { page.unplaced = [{ error: String(e) }]; }
           const shown = all.filter(visible);
           page.committed = shown.map(n => n.getAttribute('data-pm-block'));
           for (const node of shown) {
@@ -211,10 +241,33 @@
               const m = settled ? await measure(node) : { skipped: 'unsettled-page' };
               page.measurements.push({ id: node.getAttribute('data-pm-block'), ...m });
               if (m.skipped || m.clippedPixels > 0) page.clipped.push({ id: node.getAttribute('data-pm-block'), text: (node.textContent || '').slice(0, 24), ...m });
-            } catch (e) { result.errors.push(`${entry.label} p${p + 1}: ${e}`); }
+            } catch (e) { page.fault = String(e); }
           }
+          // The page must still be the one that was measured: a rebuild during
+          // the measurement (late translations) invalidates the whole reading.
+          const now = host.querySelector(`.pm-repage[data-pm-page="${p}"]`);
+          page.rebuilt = now !== pageEl || JSON.stringify(now ? blockIDs(now) : []) !== JSON.stringify(page.blocks);
         }
+        return page;
+      };
+      for (const p of pages) {
+        let page = await visit(p, shellPolls);
+        for (let retry = 0; retry < 2 && page.rebuilt; retry++) { page = await visit(p, shellPolls); page.retries = retry + 1; }
+        entry.pages.push(page);
         await save();
+      }
+      // Second look at pages that were still original bitmaps.
+      for (let i = 0; i < entry.pages.length; i++) {
+        if (!entry.pages[i].original) continue;
+        let page = await visit(entry.pages[i].pageIndex, shellPolls);
+        for (let retry = 0; retry < 2 && page.rebuilt; retry++) page = await visit(entry.pages[i].pageIndex, shellPolls);
+        page.secondLook = true; entry.pages[i] = page;
+        await save();
+      }
+      for (const page of entry.pages) {
+        if (!page.settled) result.errors.push(`${entry.label} p${page.pageIndex + 1}: ${page.found ? 'layout did not settle' : 'page not found'}`);
+        if (page.rebuilt) result.errors.push(`${entry.label} p${page.pageIndex + 1}: page was rebuilt during measurement`);
+        if (page.fault) result.errors.push(`${entry.label} p${page.pageIndex + 1}: ${page.fault}`);
       }
       try { await Zotero.PaperMirror.setMode('original'); } catch (e) { /* tab closes below */ }
     }
@@ -232,7 +285,8 @@
       clippedPixels: pages.reduce((s, p) => s + p.clipped.reduce((t, c) => t + (c.clippedPixels || 0), 0), 0),
       skipped: pages.reduce((s, p) => s + p.clipped.filter(c => c.skipped).length, 0),
       noisyBlocks: pages.reduce((s, p) => s + p.measurements.filter(m => m.noisy).length, 0),
-      unverifiedPages: pages.filter(p => !p.found || !p.settled).length
+      originalPages: pages.filter(p => p.original).length,
+      unverifiedPages: pages.filter(p => !p.found || !p.settled || p.rebuilt).length
     };
     result.localOnlyRestored = Zotero.Prefs.get(PREF, true) === previous;
     result.auditPass = pages.length > 0 && !result.errors.length && !result.totals.clippedBlocks &&
