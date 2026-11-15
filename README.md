@@ -24,7 +24,7 @@
 
 **PaperMirror(文镜)** —— 文字之镜,原文与译文两相映照。在 Zotero 自带的 PDF 阅读器里直接对照阅读外文文献:一边是**原版 PDF**(排版、图表、公式原封不动),另一边是**按版面重排的整页译文**,大小与原文一致、逐段对齐。图表、表格、公式、分栏、页眉页脚等都从原页原样保留,只有正文被替换并重新排版,不会被硬塞进原文的换行里。
 
-**4.10 候选**：根据内嵌字体轮廓恢复方块项目符号并保留列表边界；完整期刊页脚保留原文；收紧窄框横向放置检查。字体框换算继续保留 4.9 的范围。候选尚待最终实机验收，当前正式版仍为 4.9.0。详见 [4.10 更新记录](CHANGELOG.md#4100--2026-11-15) 和 [验证状态](docs/RELEASE-4.10.0-VALIDATION.md)。
+**4.10**：根据内嵌字体轮廓恢复方块项目符号并保留列表边界；完整期刊页脚保留原文；修复窄框和行首西文字形的横向裁切。字体框换算继续保留 4.9 的范围。详见 [4.10 更新记录](CHANGELOG.md#4100--2026-11-15) 和 [验证记录](docs/RELEASE-4.10.0-VALIDATION.md)。
 
 ### 三种阅读模式
 
@@ -103,7 +103,7 @@ for paragraph. Figures, tables, equations, columns and running heads are kept
 from the rendered page exactly; only body text is replaced and re‑flowed, never
 crammed back into the original line breaks.
 
-**4.10 candidate:** restores square bullets only when embedded glyph outlines prove them, preserves list boundaries and complete journal footer records, and tightens horizontal placement in narrow boxes. Font-box conversion retains the 4.9 scope. Final device validation is pending; the current public release remains 4.9.0. See the [4.10 notes](CHANGELOG.md#4100--2026-11-15) and [validation status](docs/RELEASE-4.10.0-VALIDATION.md).
+**4.10:** restores square bullets only when embedded glyph outlines prove them, preserves list boundaries and complete journal footer records, and fixes horizontal clipping in narrow boxes and of Latin glyphs that hang over a line edge. Font-box conversion retains the 4.9 scope. See the [4.10 notes](CHANGELOG.md#4100--2026-11-15) and [validation record](docs/RELEASE-4.10.0-VALIDATION.md).
 
 ### Three reading modes
 
