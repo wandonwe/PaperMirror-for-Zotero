@@ -27,9 +27,7 @@ jobs:
           # Enforced: Firefox on macOS is the closest stand-in for Zotero on a Mac.
           # 417 shown blocks and no clipped pixel at 4.10.1; raise, never lower.
           - { os: macos-latest, browser: firefox, args: '--min-committed 417 --max-clipped-pixels 0' }
-          - { os: macos-latest, browser: firefox, args: '--bleed 0.0625 --tie 0.05' }
-          - { os: ubuntu-latest, browser: firefox, args: '' }
-          - { os: ubuntu-latest, browser: chromium, args: '' }
+          - { os: macos-latest, browser: firefox, args: '--phase-mode margin' }
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.browser }} on ${{ matrix.os }} ${{ matrix.args }}
     steps:

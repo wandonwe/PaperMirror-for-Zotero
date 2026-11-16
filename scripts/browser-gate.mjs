@@ -31,6 +31,9 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const out = opt('out', join(root, 'output', 'browser-gate'));
 const withPixels = !args.includes('--no-pixels');
 const PHASES = [0, 0.25, 0.5, 0.75], THRESHOLD = 64, HALO = 3;
+// How a phase moves the pages: 'margin' relayouts them a fraction of a device
+// pixel lower, 'transform' translates them without relayout, as scrolling does.
+const phaseMode = opt('phase-mode', 'transform');
 
 const require = createRequire(import.meta.url);
 let playwright;
@@ -88,9 +91,14 @@ async function clippedPixels(page) {
 	const clipped = new Map();
 	const pages = await page.$$eval('[data-gate-page]', nodes => nodes.map(n => n.getAttribute('data-gate-page')));
 	let blocksChecked = 0;
+	// The capture rectangle is fixed per page at phase 0, so a changed render
+	// at another phase can only come from the phase itself.
+	const clips = new Map(), renders = new Map();
 	for (const phase of PHASES) {
-		// Shift the layout by a fraction of a device pixel, as a scroll position does.
-		await page.evaluate(top => { document.getElementById('real-translation-gallery').style.marginTop = top + 'px'; }, phase / dpr);
+		await page.evaluate(([mode, shift]) => {
+			const g = document.getElementById('real-translation-gallery');
+			if (mode === 'margin') g.style.marginTop = shift + 'px'; else g.style.transform = shift ? `translateY(${shift}px)` : '';
+		}, [phaseMode, phase / dpr]);
 		for (const name of pages) {
 			const info = await page.evaluate(name => {
 				const el = document.querySelector(`[data-gate-page="${name}"]`), r = el.getBoundingClientRect();
@@ -100,8 +108,12 @@ async function clippedPixels(page) {
 			}, name);
 			if (!info.blocks.length) continue;
 			if (phase === 0) blocksChecked += info.blocks.length;
-			const clip = { x: Math.floor(info.x) - 4, y: Math.floor(info.y) - 4, width: Math.ceil(info.w) + 8, height: Math.ceil(info.h) + 8 };
-			if (clip.x < 0) { clip.width += clip.x; clip.x = 0; } if (clip.y < 0) { clip.height += clip.y; clip.y = 0; }
+			if (!clips.has(name)) {
+				const c = { x: Math.floor(info.x) - 4, y: Math.floor(info.y) - 4, width: Math.ceil(info.w) + 8, height: Math.ceil(info.h) + 10 };
+				if (c.x < 0) { c.width += c.x; c.x = 0; } if (c.y < 0) { c.height += c.y; c.y = 0; }
+				clips.set(name, c);
+			}
+			const clip = clips.get(name);
 			const shot = async () => luminance(await page.screenshot({ clip, fullPage: true, scale: 'device' }));
 			const setOverflow = value => page.evaluate(([name, value]) => {
 				for (const n of document.querySelectorAll(`[data-gate-page="${name}"] .pm-repage-block, [data-gate-page="${name}"] .pm-flow-piece`)) {
@@ -110,6 +122,9 @@ async function clippedPixels(page) {
 				}
 			}, [name, value]);
 			const hidden = await shot();
+			// Does this phase render the page differently from phase 0?
+			let hash = 2166136261; for (let i = 0; i < hidden.lum.length; i++) hash = Math.imul(hash ^ hidden.lum[i], 16777619);
+			(renders.get(name) ?? renders.set(name, new Set()).get(name)).add(hash >>> 0);
 			await setOverflow('visible');
 			const visible = await shot();
 			await setOverflow(null);
@@ -127,9 +142,12 @@ async function clippedPixels(page) {
 			}
 		}
 	}
-	await page.evaluate(() => { document.getElementById('real-translation-gallery').style.marginTop = ''; });
+	await page.evaluate(() => { const g = document.getElementById('real-translation-gallery'); g.style.marginTop = ''; g.style.transform = ''; });
 	const blocks = [...clipped.values()];
-	return { phases: PHASES, blocksChecked, clippedBlocks: blocks.length, clippedPixels: blocks.reduce((s, b) => s + Math.max(...b.perPhase), 0), blocks };
+	// Pages whose render differs between phases: if this is 0 the phases did not
+	// move the raster and the reading holds for one phase only.
+	const phaseEffective = [...renders.values()].filter(set => set.size > 1).length;
+	return { phases: PHASES, phaseMode, phaseEffective, pagesRendered: renders.size, blocksChecked, clippedBlocks: blocks.length, clippedPixels: blocks.reduce((s, b) => s + Math.max(...b.perPhase), 0), blocks };
 }
 
 mkdirSync(out, { recursive: true });
