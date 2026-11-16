@@ -187,16 +187,20 @@ export function mayOverhangSide(glyph: string): boolean {
 }
 
 /**
- * Columns of painted ink outside a glyph's advance box (4.10, pure): `alpha`
+ * Where a glyph's painted ink ends relative to its advance box (pure): `alpha`
  * is a width x height alpha map with the origin at column `origin` and the
- * advance ending at column `end`. Returns whole device columns on each side.
+ * advance ending at column `end`. Each side is in columns, positive when the
+ * ink hangs over the advance box and negative when it starts inside it; a
+ * glyph without ink reports -Infinity. The ink need not hang over to be cut:
+ * overflow:hidden snaps the clip to the device grid, which can move it up to
+ * half a pixel into a box whose edge is fractional (4.10.1).
  */
 export function paintedSideOverhang(alpha: ArrayLike<number>, width: number, height: number, origin: number, end: number, threshold = SIDE_INK_ALPHA): { left: number; right: number } {
  let first = width, last = -1;
  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
   if (alpha[y * width + x]! >= threshold) { if (x < first) first = x; if (x > last) last = x; }
  }
- return last < 0 ? { left: 0, right: 0 } : { left: Math.max(0, origin - first), right: Math.max(0, last + 1 - end) };
+ return last < 0 ? { left: -Infinity, right: -Infinity } : { left: origin - first, right: last + 1 - end };
 }
 
 /**
@@ -262,15 +266,16 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
  // Paint the glyph and read where its ink really is. Any failure (no canvas,
  // a test double, a tainted read) leaves the glyph unchecked, as before 4.10.
  let sideCanvas: HTMLCanvasElement | undefined, sideCtx: CanvasRenderingContext2D | null | undefined;
+ const unknownSide = { left: -Infinity, right: -Infinity };
  const paintedOverhang = (glyph: string, font: string, ratio: number): { left: number; right: number } => {
   try {
    sideCanvas ??= doc.createElementNS('http://www.w3.org/1999/xhtml', 'canvas') as HTMLCanvasElement;
    sideCtx ??= sideCanvas.getContext('2d', { willReadFrequently: true } as CanvasRenderingContext2DSettings);
-   if (!sideCtx || typeof sideCtx.fillText !== 'function' || typeof sideCtx.getImageData !== 'function') return { left: 0, right: 0 };
+   if (!sideCtx || typeof sideCtx.fillText !== 'function' || typeof sideCtx.getImageData !== 'function') return unknownSide;
    sideCtx.font = font;
    const size = parseFloat(font.match(/(\d+(?:\.\d+)?)px/)?.[1] ?? '0');
    const advance = sideCtx.measureText(glyph).width;
-   if (!(size > 0) || !Number.isFinite(advance)) return { left: 0, right: 0 };
+   if (!(size > 0) || !Number.isFinite(advance)) return unknownSide;
    const zoom = ratio * SIDE_OVERSAMPLE;
    const pad = Math.ceil(size * zoom), width = Math.ceil(advance * zoom) + pad * 2, height = Math.ceil(size * zoom * 3);
    sideCanvas.width = width; sideCanvas.height = height;
@@ -281,7 +286,7 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
    for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3]!;
    const cols = paintedSideOverhang(alpha, width, height, pad, pad + Math.round(advance * zoom));
    return { left: cols.left / zoom, right: cols.right / zoom };
-  } catch { return { left: 0, right: 0 }; }
+  } catch { return unknownSide; }
  };
  const guard = (node: HTMLElement): boolean => {
   failures.delete(node);
@@ -372,7 +377,10 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
      const key = ratio + '\u0000' + ctx.font + '\u0000' + glyph;
      let side = overhangs.get(key);
      if (!side) { side = paintedOverhang(glyph, ctx.font, ratio); overhangs.set(key, side); }
-     if (!side.left && !side.right) continue;
+     // The clip can move at most half a device pixel into the box, so ink
+     // that starts further inside than that can never be reached.
+     const reach = (0.5 - SIDE_OVERHANG_TOLERANCE_DEVICE_PX) / ratio;
+     if (side.left <= -reach && side.right <= -reach) continue;
      range.setStart(text, offsets[i]!); range.setEnd(text, offsets[i+1]!);
      for (const rect of Array.from(range.getClientRects())) {
       if (rect.width <= 0) continue;

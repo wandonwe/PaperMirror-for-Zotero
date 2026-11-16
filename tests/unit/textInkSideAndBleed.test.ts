@@ -54,7 +54,10 @@ test('painted overhang counts whole device columns outside the advance box', () 
  assert.deepEqual(paintedSideOverhang(alpha, 8, 2, 3, 6), { left: 1, right: 1 });
  alpha[8 + 1] = 100; // below half coverage: outside the outline
  assert.deepEqual(paintedSideOverhang(alpha, 8, 2, 3, 6), { left: 1, right: 1 });
- assert.deepEqual(paintedSideOverhang(new Uint8Array(16), 8, 2, 3, 6), { left: 0, right: 0 });
+ assert.deepEqual(paintedSideOverhang(new Uint8Array(16), 8, 2, 3, 6), { left: -Infinity, right: -Infinity });
+ // Ink that starts inside the advance box reports a negative side.
+ const inside = new Uint8Array(8 * 2); for (const x of [4, 5]) inside[x] = 200;
+ assert.deepEqual(paintedSideOverhang(inside, 8, 2, 3, 7), { left: -1, right: -1 });
 });
 
 // A canvas double that paints `columns` device columns of ink left of the origin
@@ -109,4 +112,14 @@ test('a side inset cures the overhang inside the same box and rolls back when th
  const large = fixture(1555, 12);
  assert.equal(large.guard(large.node), false);
  assert.equal(insetSideInk(large.node, large.guard, 4.8, () => true), false);
+});
+
+test('ink flush with a fractional box edge is cut when the clip snaps inward', () => {
+ // Firefox gate, fixture page 22: reference entries in a box whose left edge
+ // is fractional lost a faint column although no glyph hangs over.
+ assert.ok(horizontalInkOverflow(1555.3, 1560, 1555.3, 2074.2, 2).left > 0, 'clip rounds up 0.4 device px past the ink');
+ assert.deepEqual(horizontalInkOverflow(1555.4, 1560, 1555.4, 2074.2, 2), { left: 0, right: 0 });
+ assert.deepEqual(horizontalInkOverflow(1555.2, 1560, 1555.2, 2074.2, 2), { left: 0, right: 0 });
+ // Ink that starts half a device pixel inside is out of the clip's reach.
+ assert.deepEqual(horizontalInkOverflow(1555.3 + 0.25, 1560, 1555.3, 2074.2, 2), { left: 0, right: 0 });
 });
