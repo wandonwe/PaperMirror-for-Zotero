@@ -2,6 +2,7 @@
 //
 //   node scripts/browser-gate.mjs [--browser firefox|chromium] [--dpr 2]
 //        [--bleed 0.0625] [--tie 0.05] [--no-pixels] [--out DIR]
+//        [--min-committed N] [--max-clipped-pixels N]   fail below / above these
 //
 // Zotero is built on Firefox, so Firefox is the engine whose numbers count;
 // Chromium rounds canvas text metrics differently and is kept for comparison.
@@ -161,3 +162,8 @@ if (rows) console.log(`GATE matrix-rows ${JSON.stringify(rows.map(r => `${r.page
 if (report.matrix?.unplaced) for (const u of report.matrix.unplaced) console.log(`GATE unplaced ${u}`);
 if (report.pixels) { const { blocks, ...pixels } = report.pixels; console.log(`GATE pixels ${JSON.stringify(pixels)}`); for (const b of blocks.slice(0, 40)) console.log(`GATE clipped ${JSON.stringify(b)}`); }
 console.log(`GATE suite ${JSON.stringify(report.suite)}`);
+// Enforced only where asked: the numbers depend on the engine and its fonts.
+const minCommitted = opt('min-committed'), maxClipped = opt('max-clipped-pixels'), failures = [];
+if (minCommitted !== undefined && !(report.matrix?.committed >= Number(minCommitted))) failures.push(`committed ${report.matrix?.committed} < ${minCommitted}`);
+if (maxClipped !== undefined && !(report.pixels?.clippedPixels <= Number(maxClipped))) failures.push(`clipped pixels ${report.pixels?.clippedPixels} > ${maxClipped}`);
+if (failures.length) { console.error('GATE FAILED ' + failures.join('; ')); process.exit(1); }

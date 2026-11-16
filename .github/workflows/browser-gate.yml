@@ -1,10 +1,11 @@
 name: Browser gate
 
 # Real layout and real text rasterisation of the placement code, in the engine
-# Zotero is built on. Report only for now: the numbers are printed as `GATE`
-# lines and uploaded; the job fails only when the gate itself cannot run.
-# The macOS job uses the same system fonts (PingFang SC) and text rasteriser
-# as the Zotero the on-device acceptance runs in.
+# Zotero is built on. The numbers are printed as `GATE` lines and uploaded.
+# The first macOS job uses the same system fonts (PingFang SC) and text
+# rasteriser as the Zotero the on-device acceptance runs in, and is enforced.
+# The others are report only: Linux has different fonts, Chromium a different
+# engine, and the tuned run measures two corrections that are not enabled.
 
 on:
   workflow_dispatch:
@@ -23,7 +24,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-latest, browser: firefox, args: '' }
+          # Enforced: Firefox on macOS is the closest stand-in for Zotero on a Mac.
+          # 417 shown blocks and no clipped pixel at 4.10.1; raise, never lower.
+          - { os: macos-latest, browser: firefox, args: '--min-committed 417 --max-clipped-pixels 0' }
           - { os: macos-latest, browser: firefox, args: '--bleed 0.0625 --tie 0.05' }
           - { os: ubuntu-latest, browser: firefox, args: '' }
           - { os: ubuntu-latest, browser: chromium, args: '' }
