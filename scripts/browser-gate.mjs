@@ -118,8 +118,11 @@ async function clippedPixels(page) {
 				const px = clip.x + ((i % hidden.width) + 0.5) / dpr, py = clip.y + (Math.floor(i / hidden.width) + 0.5) / dpr;
 				const block = info.blocks.find(b => px >= b.x - HALO && px <= b.x + b.w + HALO && py >= b.y - HALO && py <= b.y + b.h + HALO);
 				const key = name + ' ' + (block ? block.id : '(outside any block)');
-				const entry = clipped.get(key) ?? { page: name, id: block?.id, text: block?.text, perPhase: PHASES.map(() => 0) };
-				entry.perPhase[PHASES.indexOf(phase)]++; clipped.set(key, entry);
+				const entry = clipped.get(key) ?? { page: name, id: block?.id, text: block?.text, perPhase: PHASES.map(() => 0), box: block && [block.w, block.h].map(v => Math.round(v * 100) / 100), at: [] };
+				entry.perPhase[PHASES.indexOf(phase)]++;
+				// Where the lost pixel is, relative to the block's box (CSS px): which edge, and how far along it.
+				if (block && entry.at.length < 6) entry.at.push({ phase, x: Math.round((px - block.x) * 100) / 100, y: Math.round((py - block.y) * 100) / 100, difference: Math.abs(hidden.lum[i] - visible.lum[i]) });
+				clipped.set(key, entry);
 			}
 		}
 	}
@@ -137,7 +140,8 @@ const report = { browser: browserName, dpr, tuning };
 	if (pass) {
 		const rows = JSON.parse(text);
 		report.matrix = { scenes: rows.length, committed: rows.reduce((s, r) => s + (r.stats.committed ?? 0), 0), belowMinimum: rows.filter(r => r.fail).length,
-			inkBlocked: rows.reduce((s, r) => s + (r.stats.inkBlocked ?? 0), 0), rows: rows.map(r => ({ page: r.page, scale: r.scale, minimum: r.minimum, committed: r.stats.committed, fail: r.fail })) };
+			inkBlocked: rows.reduce((s, r) => s + (r.stats.inkBlocked ?? 0), 0), rows: rows.map(r => ({ page: r.page, scale: r.scale, minimum: r.minimum, committed: r.stats.committed, fail: r.fail })),
+			unplaced: rows.filter(r => r.unplaced.length).map(r => `${r.page}@${Math.round(r.scale * 100) / 100} ` + r.unplaced.map(u => `${u.id}:${u.reason}`).join(' ')) };
 		writeFileSync(join(out, `matrix-${tag}.json`), JSON.stringify(rows));
 		if (withPixels) { report.pixels = await clippedPixels(page); writeFileSync(join(out, `pixels-${tag}.json`), JSON.stringify(report.pixels)); }
 	} else report.matrix = { error: text.slice(0, 600), pageErrors: errors.slice(0, 5) };
@@ -150,9 +154,10 @@ const report = { browser: browserName, dpr, tuning };
 	await browser.close();
 }
 writeFileSync(join(out, `report-${tag}.json`), JSON.stringify(report, null, 1));
-const { rows, ...matrix } = report.matrix ?? {};
+const { rows, unplaced: _unplaced, ...matrix } = report.matrix ?? {};
 console.log(`GATE engine ${JSON.stringify({ browser: browserName, version: report.version, dpr, tuning })}`);
 console.log(`GATE matrix ${JSON.stringify(matrix)}`);
 if (rows) console.log(`GATE matrix-rows ${JSON.stringify(rows.map(r => `${r.page}@${Math.round(r.scale * 100) / 100}:${r.committed}/${r.minimum}${r.fail ? '!' : ''}`))}`);
+if (report.matrix?.unplaced) for (const u of report.matrix.unplaced) console.log(`GATE unplaced ${u}`);
 if (report.pixels) { const { blocks, ...pixels } = report.pixels; console.log(`GATE pixels ${JSON.stringify(pixels)}`); for (const b of blocks.slice(0, 40)) console.log(`GATE clipped ${JSON.stringify(b)}`); }
 console.log(`GATE suite ${JSON.stringify(report.suite)}`);
