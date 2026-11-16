@@ -73,6 +73,8 @@ const validRatio = (r: number): number => (r > 0 && Number.isFinite(r) ? r : 1);
  */
 export const INK_BLEED_DEVICE_PX = 0.0625;
 export const RASTER_TIE_DEVICE_PX = 0.05;
+/** What the guard actually applies. Zero in production; the browser gate sets it to measure the effect in Firefox. */
+export const rasterGuardTuning = { bleed: 0, tie: 0 };
 const snaps = (value: number, tie: number): number[] => {
  const base = Math.floor(value + 0.5), frac = value + 0.5 - base;
  return tie > 0 && frac < tie ? [base, base - 1] : tie > 0 && frac > 1 - tie ? [base, base + 1] : [base];
@@ -335,7 +337,7 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
      // Both contracts must hold: the 4.7 outline check (unchanged in every
      // engine) and the device-raster check that Gecko actually paints.
      const ink = inkVerticalBounds(box,metrics);
-     const raster = rasterOverflowAllPhases(box,metrics,clip,axis);
+     const raster = rasterOverflowAllPhases(box,metrics,clip,axis,rasterGuardTuning.bleed,rasterGuardTuning.tie);
      const outlineFits = verticalInkFits(ink,clip);
      const rasterFits = !raster || (raster.top <= 0.01 && raster.bottom <= 0.01);
      if (outlineFits && rasterFits) return true;
