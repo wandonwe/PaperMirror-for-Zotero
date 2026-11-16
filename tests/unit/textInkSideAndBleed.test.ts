@@ -35,8 +35,8 @@ test('side overflow is measured against the device-snapped clip', () => {
  // its hook is painted left of the origin.
  assert.deepEqual(horizontalInkOverflow(1555 - 0.5, 1560.13, 1555, 2074.2, 2), { left: 0.5, right: 0 });
  assert.deepEqual(horizontalInkOverflow(1555.4, 1560.13, 1555, 2074.2, 2), { left: 0, right: 0 });
- // Less than a quarter of a device pixel outside stays invisible.
- assert.deepEqual(horizontalInkOverflow(1555 - 0.1, 1560.13, 1555, 2074.2, 2), { left: 0, right: 0 });
+ // An eighth of a device pixel outside stays invisible.
+ assert.deepEqual(horizontalInkOverflow(1555 - 0.05, 1560.13, 1555, 2074.2, 2), { left: 0, right: 0 });
  // A third of a device pixel is what the Firefox gate saw lost.
  assert.ok(horizontalInkOverflow(1555 - 0.17, 1560.13, 1555, 2074.2, 2).left > 0);
  const over = horizontalInkOverflow(2070, 2074.2 + 0.5, 1555, 2074.2, 2);
@@ -118,7 +118,7 @@ test('ink flush with a fractional box edge is cut when the clip snaps inward', (
  // Firefox gate, fixture page 22: reference entries in a box whose left edge
  // is fractional lost a faint column although no glyph hangs over.
  assert.ok(horizontalInkOverflow(1555.3, 1560, 1555.3, 2074.2, 2).left > 0, 'clip rounds up 0.4 device px past the ink');
- assert.deepEqual(horizontalInkOverflow(1555.4, 1560, 1555.4, 2074.2, 2), { left: 0, right: 0 });
+ assert.deepEqual(horizontalInkOverflow(1555.45, 1560, 1555.45, 2074.2, 2), { left: 0, right: 0 });
  assert.deepEqual(horizontalInkOverflow(1555.2, 1560, 1555.2, 2074.2, 2), { left: 0, right: 0 });
  // Ink that starts half a device pixel inside is out of the clip's reach.
  assert.deepEqual(horizontalInkOverflow(1555.3 + 0.25, 1560, 1555.3, 2074.2, 2), { left: 0, right: 0 });

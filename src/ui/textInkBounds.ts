@@ -169,10 +169,12 @@ export const SIDE_INK_ALPHA = 128;
  * are fractional, it reached a third of full intensity in the column outside
  * the clip (Firefox gate, reference list on fixture page 22). */
 export const SIDE_OVERSAMPLE = 4;
-/** Device pixels of side overflow that stay invisible (4.10.1): the on-device
- * audit counts a pixel as lost at a quarter of the text contrast, which is a
- * quarter of a pixel column covered. */
-export const SIDE_OVERHANG_TOLERANCE_DEVICE_PX = 0.25;
+/** Device pixels of side overflow that stay invisible (4.10.1). The on-device
+ * audit counts a pixel as lost at a quarter of the text contrast, a quarter of
+ * a column covered; text is painted slightly wider than its outline, so half
+ * of that is left as margin. Firefox gate on macOS, fixture page 22: at 0.25
+ * two of three faint left-edge losses remained. */
+export const SIDE_OVERHANG_TOLERANCE_DEVICE_PX = 0.125;
 
 /**
  * Glyphs designed inside their em box: CJK ideographs, kana, hangul and their
