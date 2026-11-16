@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createTextInkGuard, horizontalInkOverflow, insetSideInk, mayOverhangSide, paintedSideOverhang, rasterClipBounds, rasterOverflowAllPhases, INK_BLEED_DEVICE_PX, RASTER_TIE_DEVICE_PX } from '../../src/ui/textInkBounds';
+import { createTextInkGuard, horizontalInkOverflow, insetSideInk, mayOverhangSide, paintedSideOverhang, SIDE_OVERSAMPLE, rasterClipBounds, rasterOverflowAllPhases, INK_BLEED_DEVICE_PX, RASTER_TIE_DEVICE_PX } from '../../src/ui/textInkBounds';
 
 // Zotero 10.0.9, Gecko 140, macOS, DPR 2, measured 2026-11-15 on Bongartz 2015
 // (random audit, pages 6 and 8) with scripts/zotero/ink-clip-check.js.
@@ -35,8 +35,10 @@ test('side overflow is measured against the device-snapped clip', () => {
  // its hook is painted left of the origin.
  assert.deepEqual(horizontalInkOverflow(1555 - 0.5, 1560.13, 1555, 2074.2, 2), { left: 0.5, right: 0 });
  assert.deepEqual(horizontalInkOverflow(1555.4, 1560.13, 1555, 2074.2, 2), { left: 0, right: 0 });
- // Less than half a device pixel outside stays invisible.
- assert.deepEqual(horizontalInkOverflow(1555 - 0.2, 1560.13, 1555, 2074.2, 2), { left: 0, right: 0 });
+ // Less than a quarter of a device pixel outside stays invisible.
+ assert.deepEqual(horizontalInkOverflow(1555 - 0.1, 1560.13, 1555, 2074.2, 2), { left: 0, right: 0 });
+ // A third of a device pixel is what the Firefox gate saw lost.
+ assert.ok(horizontalInkOverflow(1555 - 0.17, 1560.13, 1555, 2074.2, 2).left > 0);
  const over = horizontalInkOverflow(2070, 2074.2 + 0.5, 1555, 2074.2, 2);
  assert.equal(over.left, 0); assert.ok(Math.abs(over.right - 0.7) < 1e-6);
 });
@@ -50,12 +52,13 @@ test('painted overhang counts whole device columns outside the advance box', () 
  // 8 columns, origin at 3, advance ends at 6; ink in columns 2..6.
  const alpha = new Uint8Array(8 * 2); for (const x of [2, 3, 4, 5, 6]) alpha[8 + x] = 200;
  assert.deepEqual(paintedSideOverhang(alpha, 8, 2, 3, 6), { left: 1, right: 1 });
- alpha[8 + 1] = 40; // a faint fringe below the audit threshold is not ink
+ alpha[8 + 1] = 100; // below half coverage: outside the outline
  assert.deepEqual(paintedSideOverhang(alpha, 8, 2, 3, 6), { left: 1, right: 1 });
  assert.deepEqual(paintedSideOverhang(new Uint8Array(16), 8, 2, 3, 6), { left: 0, right: 0 });
 });
 
-// A canvas double that paints `columns` device columns of ink left of the origin.
+// A canvas double that paints `columns` device columns of ink left of the origin
+// (the guard draws the glyph SIDE_OVERSAMPLE times larger).
 function fixture(glyphLeft: number, columns: number, glyph = 'j') {
  const text = { textContent: glyph, parentElement: {} };
  const style: Record<string, string> = { paddingLeft: '', paddingRight: '', boxSizing: '' };
@@ -64,8 +67,8 @@ function fixture(glyphLeft: number, columns: number, glyph = 'j') {
   measureText: () => ({ fontBoundingBoxAscent: 21, fontBoundingBoxDescent: 7, actualBoundingBoxAscent: 13.7, actualBoundingBoxDescent: 3.8, width: 5 }),
   setTransform: () => {}, fillText: () => {},
   getImageData: (_x: number, _y: number, w: number, h: number) => {
-   const data = new Uint8ClampedArray(w * h * 4), pad = Math.ceil(19.23 * 2);
-   for (let x = pad - columns; x < pad + 8; x++) data[(w * 5 + x) * 4 + 3] = 255;
+   const data = new Uint8ClampedArray(w * h * 4), pad = Math.ceil(19.23 * 2 * SIDE_OVERSAMPLE);
+   for (let x = pad - columns * SIDE_OVERSAMPLE; x < pad + 8; x++) data[(w * 5 + x) * 4 + 3] = 255;
    return { data };
   } };
  const element = Object.assign(canvas, { getContext: () => canvas });

@@ -160,12 +160,19 @@ export function uprightVerticalBounds(
     : {top:rect.top-clip.top,bottom:rect.bottom-clip.top};
 }
 
-/** Painted intensity (0-255) from which a pixel counts as ink. The on-device
- * audit counts a pixel as lost at a quarter of the text contrast. */
-export const SIDE_INK_ALPHA = 64;
-/** Device pixels of side overflow that stay invisible (4.10): less than half
- * of the first painted column. */
-export const SIDE_OVERHANG_TOLERANCE_DEVICE_PX = 0.5;
+/** Canvas alpha that marks the outline edge when the glyph is drawn enlarged:
+ * half coverage. */
+export const SIDE_INK_ALPHA = 128;
+/** The glyph is drawn this many times larger than on screen, so its overhang
+ * is known to a fraction of a device pixel. At screen size a 0.3 px overhang
+ * paints nothing at an integer origin, yet in the page, where glyph origins
+ * are fractional, it reached a third of full intensity in the column outside
+ * the clip (Firefox gate, reference list on fixture page 22). */
+export const SIDE_OVERSAMPLE = 4;
+/** Device pixels of side overflow that stay invisible (4.10.1): the on-device
+ * audit counts a pixel as lost at a quarter of the text contrast, which is a
+ * quarter of a pixel column covered. */
+export const SIDE_OVERHANG_TOLERANCE_DEVICE_PX = 0.25;
 
 /**
  * Glyphs designed inside their em box: CJK ideographs, kana, hangul and their
@@ -264,15 +271,16 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
    const size = parseFloat(font.match(/(\d+(?:\.\d+)?)px/)?.[1] ?? '0');
    const advance = sideCtx.measureText(glyph).width;
    if (!(size > 0) || !Number.isFinite(advance)) return { left: 0, right: 0 };
-   const pad = Math.ceil(size * ratio), width = Math.ceil(advance * ratio) + pad * 2, height = Math.ceil(size * ratio * 3);
+   const zoom = ratio * SIDE_OVERSAMPLE;
+   const pad = Math.ceil(size * zoom), width = Math.ceil(advance * zoom) + pad * 2, height = Math.ceil(size * zoom * 3);
    sideCanvas.width = width; sideCanvas.height = height;
-   sideCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+   sideCtx.setTransform(zoom, 0, 0, zoom, 0, 0);
    sideCtx.font = font; sideCtx.textBaseline = 'alphabetic'; sideCtx.fillStyle = '#000';
-   sideCtx.fillText(glyph, pad / ratio, (size * 2 * ratio) / ratio);
+   sideCtx.fillText(glyph, pad / zoom, size * 2);
    const data = sideCtx.getImageData(0, 0, width, height).data, alpha = new Uint8Array(width * height);
    for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3]!;
-   const cols = paintedSideOverhang(alpha, width, height, pad, pad + Math.round(advance * ratio));
-   return { left: cols.left / ratio, right: cols.right / ratio };
+   const cols = paintedSideOverhang(alpha, width, height, pad, pad + Math.round(advance * zoom));
+   return { left: cols.left / zoom, right: cols.right / zoom };
   } catch { return { left: 0, right: 0 }; }
  };
  const guard = (node: HTMLElement): boolean => {
