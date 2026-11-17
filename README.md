@@ -24,7 +24,7 @@
 
 **PaperMirror(文镜)** —— 文字之镜,原文与译文两相映照。在 Zotero 自带的 PDF 阅读器里直接对照阅读外文文献:一边是**原版 PDF**(排版、图表、公式原封不动),另一边是**按版面重排的整页译文**,大小与原文一致、逐段对齐。图表、表格、公式、分栏、页眉页脚等都从原页原样保留,只有正文被替换并重新排版,不会被硬塞进原文的换行里。
 
-**4.10**：根据内嵌字体轮廓恢复方块项目符号并保留列表边界；完整期刊页脚保留原文；修复窄框和行首西文字形的横向裁切。字体框换算继续保留 4.9 的范围。详见 [4.10 更新记录](CHANGELOG.md#4100--2026-11-15) 和 [验证记录](docs/RELEASE-4.10.0-VALIDATION.md)。
+**4.10.1**：浏览器门槛改在 Zotero 的内核 Firefox 上运行，并修复贴近框边的西文字形被切掉一丝的问题。4.10 起：根据内嵌字体轮廓恢复方块项目符号并保留列表边界；完整期刊页脚保留原文；修复窄框和行首西文字形的横向裁切。详见 [更新记录](CHANGELOG.md#4101--2026-11-16) 和 [验证记录](docs/RELEASE-4.10.1-VALIDATION.md)。
 
 ### 三种阅读模式
 
@@ -103,7 +103,7 @@ for paragraph. Figures, tables, equations, columns and running heads are kept
 from the rendered page exactly; only body text is replaced and re‑flowed, never
 crammed back into the original line breaks.
 
-**4.10:** restores square bullets only when embedded glyph outlines prove them, preserves list boundaries and complete journal footer records, and fixes horizontal clipping in narrow boxes and of Latin glyphs that hang over a line edge. Font-box conversion retains the 4.9 scope. See the [4.10 notes](CHANGELOG.md#4100--2026-11-15) and [validation record](docs/RELEASE-4.10.0-VALIDATION.md).
+**4.10.1:** the browser gate now runs in Firefox, the engine Zotero is built on, and Latin glyphs flush with a box edge are no longer shaved. Since 4.10: square bullets restored only when embedded glyph outlines prove them, list boundaries and complete journal footer records preserved, and horizontal clipping fixed in narrow boxes and at line edges. See the [notes](CHANGELOG.md#4101--2026-11-16) and [validation record](docs/RELEASE-4.10.1-VALIDATION.md).
 
 ### Three reading modes
 

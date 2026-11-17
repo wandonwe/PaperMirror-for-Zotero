@@ -73,6 +73,8 @@ const validRatio = (r: number): number => (r > 0 && Number.isFinite(r) ? r : 1);
  */
 export const INK_BLEED_DEVICE_PX = 0.0625;
 export const RASTER_TIE_DEVICE_PX = 0.05;
+/** What the guard actually applies. Zero in production; the browser gate sets it to measure the effect in Firefox. */
+export const rasterGuardTuning = { bleed: 0, tie: 0 };
 const snaps = (value: number, tie: number): number[] => {
  const base = Math.floor(value + 0.5), frac = value + 0.5 - base;
  return tie > 0 && frac < tie ? [base, base - 1] : tie > 0 && frac > 1 - tie ? [base, base + 1] : [base];
@@ -158,12 +160,21 @@ export function uprightVerticalBounds(
     : {top:rect.top-clip.top,bottom:rect.bottom-clip.top};
 }
 
-/** Painted intensity (0-255) from which a pixel counts as ink. The on-device
- * audit counts a pixel as lost at a quarter of the text contrast. */
-export const SIDE_INK_ALPHA = 64;
-/** Device pixels of side overflow that stay invisible (4.10): less than half
- * of the first painted column. */
-export const SIDE_OVERHANG_TOLERANCE_DEVICE_PX = 0.5;
+/** Canvas alpha that marks the outline edge when the glyph is drawn enlarged:
+ * half coverage. */
+export const SIDE_INK_ALPHA = 128;
+/** The glyph is drawn this many times larger than on screen, so its overhang
+ * is known to a fraction of a device pixel. At screen size a 0.3 px overhang
+ * paints nothing at an integer origin, yet in the page, where glyph origins
+ * are fractional, it reached a third of full intensity in the column outside
+ * the clip (Firefox gate, reference list on fixture page 22). */
+export const SIDE_OVERSAMPLE = 4;
+/** Device pixels of side overflow that stay invisible (4.10.1). The on-device
+ * audit counts a pixel as lost at a quarter of the text contrast, a quarter of
+ * a column covered; text is painted slightly wider than its outline, so half
+ * of that is left as margin. Firefox gate on macOS, fixture page 22: at 0.25
+ * two of three faint left-edge losses remained. */
+export const SIDE_OVERHANG_TOLERANCE_DEVICE_PX = 0.125;
 
 /**
  * Glyphs designed inside their em box: CJK ideographs, kana, hangul and their
@@ -178,16 +189,20 @@ export function mayOverhangSide(glyph: string): boolean {
 }
 
 /**
- * Columns of painted ink outside a glyph's advance box (4.10, pure): `alpha`
+ * Where a glyph's painted ink ends relative to its advance box (pure): `alpha`
  * is a width x height alpha map with the origin at column `origin` and the
- * advance ending at column `end`. Returns whole device columns on each side.
+ * advance ending at column `end`. Each side is in columns, positive when the
+ * ink hangs over the advance box and negative when it starts inside it; a
+ * glyph without ink reports -Infinity. The ink need not hang over to be cut:
+ * overflow:hidden snaps the clip to the device grid, which can move it up to
+ * half a pixel into a box whose edge is fractional (4.10.1).
  */
 export function paintedSideOverhang(alpha: ArrayLike<number>, width: number, height: number, origin: number, end: number, threshold = SIDE_INK_ALPHA): { left: number; right: number } {
  let first = width, last = -1;
  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
   if (alpha[y * width + x]! >= threshold) { if (x < first) first = x; if (x > last) last = x; }
  }
- return last < 0 ? { left: 0, right: 0 } : { left: Math.max(0, origin - first), right: Math.max(0, last + 1 - end) };
+ return last < 0 ? { left: -Infinity, right: -Infinity } : { left: origin - first, right: last + 1 - end };
 }
 
 /**
@@ -253,25 +268,27 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
  // Paint the glyph and read where its ink really is. Any failure (no canvas,
  // a test double, a tainted read) leaves the glyph unchecked, as before 4.10.
  let sideCanvas: HTMLCanvasElement | undefined, sideCtx: CanvasRenderingContext2D | null | undefined;
+ const unknownSide = { left: -Infinity, right: -Infinity };
  const paintedOverhang = (glyph: string, font: string, ratio: number): { left: number; right: number } => {
   try {
    sideCanvas ??= doc.createElementNS('http://www.w3.org/1999/xhtml', 'canvas') as HTMLCanvasElement;
    sideCtx ??= sideCanvas.getContext('2d', { willReadFrequently: true } as CanvasRenderingContext2DSettings);
-   if (!sideCtx || typeof sideCtx.fillText !== 'function' || typeof sideCtx.getImageData !== 'function') return { left: 0, right: 0 };
+   if (!sideCtx || typeof sideCtx.fillText !== 'function' || typeof sideCtx.getImageData !== 'function') return unknownSide;
    sideCtx.font = font;
    const size = parseFloat(font.match(/(\d+(?:\.\d+)?)px/)?.[1] ?? '0');
    const advance = sideCtx.measureText(glyph).width;
-   if (!(size > 0) || !Number.isFinite(advance)) return { left: 0, right: 0 };
-   const pad = Math.ceil(size * ratio), width = Math.ceil(advance * ratio) + pad * 2, height = Math.ceil(size * ratio * 3);
+   if (!(size > 0) || !Number.isFinite(advance)) return unknownSide;
+   const zoom = ratio * SIDE_OVERSAMPLE;
+   const pad = Math.ceil(size * zoom), width = Math.ceil(advance * zoom) + pad * 2, height = Math.ceil(size * zoom * 3);
    sideCanvas.width = width; sideCanvas.height = height;
-   sideCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+   sideCtx.setTransform(zoom, 0, 0, zoom, 0, 0);
    sideCtx.font = font; sideCtx.textBaseline = 'alphabetic'; sideCtx.fillStyle = '#000';
-   sideCtx.fillText(glyph, pad / ratio, (size * 2 * ratio) / ratio);
+   sideCtx.fillText(glyph, pad / zoom, size * 2);
    const data = sideCtx.getImageData(0, 0, width, height).data, alpha = new Uint8Array(width * height);
    for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3]!;
-   const cols = paintedSideOverhang(alpha, width, height, pad, pad + Math.round(advance * ratio));
-   return { left: cols.left / ratio, right: cols.right / ratio };
-  } catch { return { left: 0, right: 0 }; }
+   const cols = paintedSideOverhang(alpha, width, height, pad, pad + Math.round(advance * zoom));
+   return { left: cols.left / zoom, right: cols.right / zoom };
+  } catch { return unknownSide; }
  };
  const guard = (node: HTMLElement): boolean => {
   failures.delete(node);
@@ -335,7 +352,7 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
      // Both contracts must hold: the 4.7 outline check (unchanged in every
      // engine) and the device-raster check that Gecko actually paints.
      const ink = inkVerticalBounds(box,metrics);
-     const raster = rasterOverflowAllPhases(box,metrics,clip,axis);
+     const raster = rasterOverflowAllPhases(box,metrics,clip,axis,rasterGuardTuning.bleed,rasterGuardTuning.tie);
      const outlineFits = verticalInkFits(ink,clip);
      const rasterFits = !raster || (raster.top <= 0.01 && raster.bottom <= 0.01);
      if (outlineFits && rasterFits) return true;
@@ -362,7 +379,10 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
      const key = ratio + '\u0000' + ctx.font + '\u0000' + glyph;
      let side = overhangs.get(key);
      if (!side) { side = paintedOverhang(glyph, ctx.font, ratio); overhangs.set(key, side); }
-     if (!side.left && !side.right) continue;
+     // The clip can move at most half a device pixel into the box, so ink
+     // that starts further inside than that can never be reached.
+     const reach = (0.5 - SIDE_OVERHANG_TOLERANCE_DEVICE_PX) / ratio;
+     if (side.left <= -reach && side.right <= -reach) continue;
      range.setStart(text, offsets[i]!); range.setEnd(text, offsets[i+1]!);
      for (const rect of Array.from(range.getClientRects())) {
       if (rect.width <= 0) continue;

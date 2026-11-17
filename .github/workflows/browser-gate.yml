@@ -1,0 +1,62 @@
+name: Browser gate
+
+# Real layout and real text rasterisation of the placement code, in the engine
+# Zotero is built on. The numbers are printed as `GATE` lines and uploaded.
+# The first macOS job uses the same system fonts (PingFang SC) and text
+# rasteriser as the Zotero the on-device acceptance runs in, and is enforced.
+# The others are report only: Linux has different fonts, Chromium a different
+# engine, and the tuned run measures two corrections that are not enabled.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - src/ui/**
+      - src/reader/**
+      - tests/browser/**
+      - tests/fixtures/regression/**
+      - scripts/browser-gate.mjs
+      - .github/workflows/browser-gate.yml
+
+jobs:
+  gate:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Enforced: Firefox on macOS is the closest stand-in for Zotero on a Mac.
+          # 417 shown blocks and no clipped pixel at 4.10.1; raise, never lower.
+          - { os: macos-latest, browser: firefox, args: '--min-committed 417 --max-clipped-pixels 0' }
+          - { os: macos-latest, browser: firefox, args: '--bleed 0.0625 --tie 0.05' }
+          - { os: ubuntu-latest, browser: firefox, args: '' }
+          - { os: ubuntu-latest, browser: chromium, args: '' }
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.browser }} on ${{ matrix.os }} ${{ matrix.args }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - name: CJK fonts (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
+
+      - name: Install Playwright and ${{ matrix.browser }}
+        run: |
+          npm i --no-save playwright
+          npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Run the gate
+        run: node scripts/browser-gate.mjs --browser ${{ matrix.browser }} --dpr 2 ${{ matrix.args }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-gate-${{ matrix.os }}-${{ matrix.browser }}-${{ strategy.job-index }}
+          path: output/browser-gate
+          if-no-files-found: warn
