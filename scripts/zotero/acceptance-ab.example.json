@@ -1,0 +1,138 @@
+{
+ "tag": "example",
+ "phases": [
+  0,
+  0.25,
+  0.5,
+  0.75
+ ],
+ "items": [
+  {
+   "label": "Kitagawa 2021",
+   "attachmentID": 2699,
+   "pages": 13
+  },
+  {
+   "label": "Gori",
+   "attachmentID": 3281,
+   "pages": 10
+  },
+  {
+   "label": "Siemens DCE-CT",
+   "attachmentID": 3098,
+   "pages": 10
+  },
+  {
+   "label": "Bae 2010",
+   "attachmentID": 3145,
+   "pageIndexes": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+   ]
+  },
+  {
+   "label": "Mets 2013",
+   "attachmentID": 2609,
+   "pages": 5
+  },
+  {
+   "label": "Stroke guideline 2026",
+   "attachmentID": 2855,
+   "pageIndexes": [
+    10,
+    20,
+    21
+   ]
+  },
+  {
+   "label": "He 2025",
+   "attachmentID": 3251,
+   "pageIndexes": [
+    0,
+    1
+   ]
+  },
+  {
+   "label": "Bongartz 2015",
+   "attachmentID": 3035,
+   "pageIndexes": [
+    0,
+    5,
+    7
+   ]
+  },
+  {
+   "label": "CIE image",
+   "attachmentID": 3247,
+   "pageIndexes": [
+    0,
+    1,
+    2,
+    4
+   ]
+  },
+  {
+   "label": "MTF",
+   "attachmentID": 3082,
+   "pageIndexes": [
+    5,
+    6,
+    7,
+    8
+   ]
+  }
+ ],
+ "steps": [
+  {
+   "name": "pub-r1",
+   "xpi": "public.xpi",
+   "version": "4.10.1"
+  },
+  {
+   "name": "cand-r1",
+   "xpi": "candidate.xpi",
+   "version": "4.10.2"
+  },
+  {
+   "name": "pub-r2",
+   "xpi": "public.xpi",
+   "version": "4.10.1"
+  },
+  {
+   "name": "cand-r2",
+   "xpi": "candidate.xpi",
+   "version": "4.10.2"
+  }
+ ],
+ "finalXpi": "public.xpi",
+ "finalVersion": "4.10.1",
+ "warmup": {
+  "attachmentID": 3098,
+  "pageIndex": 3
+ },
+ "shellPolls": 60,
+ "originalPages": [
+  {
+   "attachmentID": 3145,
+   "pageIndex": 7
+  },
+  {
+   "attachmentID": 3145,
+   "pageIndex": 18
+  }
+ ]
+}
