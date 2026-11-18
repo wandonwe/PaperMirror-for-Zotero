@@ -23,10 +23,6 @@
 //   original page outside cfg.originalPages is treated as invalid and retried;
 // - create output/STOP to abort; the finally block still restores everything.
 (async () => {
-  // 4.10.1 acceptance harness (b: warm-up after install, unexpected original pages retried). One paper at a time; after each paper it checks
-  // that Zotero is still painting (requestAnimationFrame fires). When the screen
-  // locks, rendering stops and every reading is void, so the harness waits for
-  // painting to resume and measures that paper again. Create output/STOP to abort.
   // Repository root: the folder that holds scripts/ and output/.
   const ROOT = '/Users/wangdongwei/Documents/Developer/PaperMirror for Zotero/', DIR = ROOT + 'output/';
   const cfg = JSON.parse(await Zotero.File.getContentsAsync(DIR + 'pm-run.config.json'));
