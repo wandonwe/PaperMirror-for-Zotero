@@ -242,10 +242,17 @@ export function planContinuationRequest(request: TranslationRequest): {
 				rows.set(row.id, group);
 			}
 			const translations: TranslationResponse['translations'] = [];
+			const provisionalParts = new Set(response.provisionalIds ?? []);
+			const provisional: string[] = [];
 			for (const original of request.blocks) {
     if (deferred.has(original.id)) continue;
 				const plan = plans.get(original.id);
-				if (!plan) { translations.push(...(rows.get(original.id) ?? [])); continue; }
+				if (!plan) {
+					translations.push(...(rows.get(original.id) ?? []));
+					if (provisionalParts.has(original.id)) provisional.push(original.id);
+					continue;
+				}
+				if (plan.requiredIds.some(id => provisionalParts.has(id))) provisional.push(original.id);
 				// Every joint part, including the borrowed side, must actually have
 				// been translated once. Incomplete units fall into the existing retry
 				// chain; their target fragments must not masquerade as a full parent.
@@ -255,7 +262,8 @@ export function planContinuationRequest(request: TranslationRequest): {
 					(index ? plan.separators[index - 1] : '') + rows.get(id)![0]!.translatedText.trim()).join('');
 				if (text) translations.push({ id: original.id, translatedText: text });
 			}
-			return { ...response, translations };
+			const { provisionalIds: _parts, ...rest } = response;
+			return { ...rest, translations, ...(provisional.length ? { provisionalIds: provisional } : {}) };
 		}
 	};
 }

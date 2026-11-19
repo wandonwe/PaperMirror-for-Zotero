@@ -99,7 +99,9 @@ function unitKey(group: Group, request: TranslationRequest, glossary: GlossaryRu
 }
 
 function numericInventory(text: string): string {
-	return JSON.stringify((canonical(text).match(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\d+(?:[.,]\d+)*(?:[eE][+−-]?\d+)?/g) ?? []).sort());
+	// 千分位不算差异: 中文译文常把 "12,500" 写成 "12500"。
+	const plain = canonical(text).replace(/(\d),(?=\d{3}(?!\d))/g, '$1');
+	return JSON.stringify((plain.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\d+(?:[.,]\d+)*(?:[eE][+−-]?\d+)?/g) ?? []).sort());
 }
 
 type IntegrityReason = 'part-count' | 'empty-or-invalid-text' | 'raw-placeholder-residue'
@@ -112,14 +114,18 @@ function validateRawTexts(group: Group, registries: PlaceholderRegistry[], texts
 		return false;
 	};
 	if (!Array.isArray(texts) || texts.length !== group.parts.length) return reject('part-count', -1);
+	// 数字、单位、幂按**整句**核对 (5.0, 真机 Vitamin E 一文): 中文会调整语序,
+	// 数字从一栏挪到另一栏是正常的;逐栏要求数字一致,让跨页句子反复判废、
+	// 整段留英文。整句里一个不少、一个不多才是要守的底线。占位符(上标等)
+	// 仍逐栏校验 —— 它们的编号本来就属于各自那一栏。
+	if (texts.some(text => typeof text !== 'string' || !text.trim())) return reject('empty-or-invalid-text', texts.findIndex(text => typeof text !== 'string' || !text.trim()));
+	const sourceJoined = group.parts.map(rawText).join(' '), textJoined = (texts as string[]).join(' ');
+	if (numericInventory(sourceJoined) !== numericInventory(textJoined)) return reject('numeric-inventory', -1);
+	const technical = technicalUnitIssue(sourceJoined, textJoined);
+	if (technical) return reject(technical, -1);
+	if (numericPowerIssue(sourceJoined, textJoined)) return reject('numeric-power', -1);
 	return texts.every((text, index) => {
-		if (typeof text !== 'string' || !text.trim()) return reject('empty-or-invalid-text', index);
 		if (/⟦PM\d+⟧/.test(text)) return reject('raw-placeholder-residue', index);
-		const source = rawText(group.parts[index]!);
-		if (numericInventory(source) !== numericInventory(text)) return reject('numeric-inventory', index);
-		const technical = technicalUnitIssue(source, text);
-		if (technical) return reject(technical, index);
-		if (numericPowerIssue(source, text)) return reject('numeric-power', index);
 		const registry = registries[index]!;
 		try {
 			const encoded = encodeForCaller(text, { id: '', type: 'paragraph', text: registry.text, protectedLiterals: registry.entries });
@@ -156,13 +162,23 @@ function encodeForCaller(text: string, block: Block): string {
 	return encoded;
 }
 
+const MAX_DEGRADED = 512;
+
 export class ContinuationUnitStore {
 	private units = new Map<string, Entry>();
+	/** 本会话内整句校验失败过的句子;只影响本会话,下次打开重新尝试整句。 */
+	private degraded = new Set<string>();
+
+	private markDegraded(key: string): void {
+		this.degraded.delete(key); this.degraded.add(key);
+		if (this.degraded.size > MAX_DEGRADED) this.degraded.delete(this.degraded.values().next().value as string);
+	}
 	private lifecycle = new AbortController();
 	private generation = 0;
 
 	clear(): void {
 		this.generation++;
+		this.degraded.clear();
 		this.lifecycle.abort(); this.lifecycle = new AbortController();
 		for (const entry of this.units.values()) entry.controller.abort();
 		this.units.clear();
@@ -305,11 +321,25 @@ export class ContinuationUnitStore {
 			usage.inputTokens += value.inputTokens; usage.outputTokens += value.outputTokens; usage.cachedInputTokens += value.cachedInputTokens;
 		};
 		const translated: TranslationResponse['translations'] = [];
+		// 整句失败的降级 (5.0): 此前一句判废就抛错,整个请求(含同批的普通段落)
+		// 一起作废,补救链路走的还是同一条整句校验 —— 结果整段留英文、同批段落
+		// 反复重发。现在: 这一句改为各栏分开翻译,和普通段落同批发出;结果标为
+		// 临时(provisionalIds),调用方据此不写缓存,下次打开再试整句。本会话内
+		// 同一句不再重试整句,免得每次补救都先白花一次请求。
+		const fallback: Block[] = [];
 		for (const group of groups) {
 			checkSignal(signal);
 			if (generation !== this.generation) throw cancelled();
+			const key = unitKey(group, plan.request, matchingGlossary(plan.request, group.source, options), options, namespace);
+			if (this.degraded.has(key)) { fallback.push(...group.parts); continue; }
 			const entry = this.entry(group, plan.request, freshTranslate, owner, signal, namespace, options);
-			const result = await this.wait(entry, signal, owner);
+			let result: UnitResult;
+			try { result = await this.wait(entry, signal, owner); }
+			catch (error) {
+				if (!(error instanceof PaperMirrorError) || error.code !== 'BAD_RESPONSE' || signal.aborted) throw error;
+				if (entry.owner === owner && !entry.usageDelivered) usageMissing = true;
+				this.markDegraded(key); fallback.push(...group.parts); continue;
+			}
 			progress(options);
 			if (entry.owner === owner && !entry.usageDelivered) { entry.usageDelivered = true; if (!result.fromDisk) addUsage(result.usage); }
 			try {
@@ -317,7 +347,11 @@ export class ContinuationUnitStore {
 			}
 			catch (error) { if (this.units.get(entry.key) === entry) this.units.delete(entry.key); throw error; }
 		}
-		const ordinary = plan.request.blocks.filter(block => !block.continuationUnit);
+		const fallbackIds = new Set(fallback.map(part => part.id));
+		const ordinary = [
+			...plan.request.blocks.filter(block => !block.continuationUnit),
+			...fallback.map(({ continuationUnit: _unit, ...part }) => part)
+		];
 		if (ordinary.length) {
 			const response = await this.enqueue({ ...plan.request, blocks: ordinary }, freshTranslate, signal, generation);
 			progress(options);
@@ -326,6 +360,7 @@ export class ContinuationUnitStore {
 		checkSignal(signal);
 		if (generation !== this.generation) throw cancelled();
 		return plan.restore({ translations: translated,
+			...(fallbackIds.size ? { provisionalIds: [...fallbackIds] } : {}),
 			...(freshRawCalls === 0 ? { cacheOnly: true, usage: zeroUsage() } : { usage: usageMissing ? undefined : usage }) });
 	}
 }

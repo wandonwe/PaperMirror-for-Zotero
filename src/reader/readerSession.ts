@@ -21,7 +21,7 @@ import { getApiKey, providersWithSavedKeys } from '../security/credentialStore';
 import { configuredProviderIds } from '../translation/providerAvailability';
 import { registerUrlCredentials } from '../security/logSanitizer';
 import { getProvider, listProviders } from '../translation/providers/registry';
-import { buildPool, pickProviderForPage, pickWeightedProviderForPage, rankProvidersForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
+import { buildPool, pickProviderForPage, routeProviderForPage, fastestProvider, rankProvidersForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
 import { endpointHost, supportsCharBudget } from '../translation/providers/types';
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
 import { TranslationManager, type PageTranslationState, type TranslateHooks } from '../translation/translationManager';
@@ -336,7 +336,9 @@ export class ReaderSession {
 				//
 				// 只在 offset === 0 时加权:offset 非零意味着熔断/手动轮换正在
 				// 让这一页退让,那时要的是"下一名"这个确定的序,不是重新按权重挑。
-				return pickWeightedProviderForPage(this.pool, pageIndex, this.manager?.providerWeights() ?? {});
+				// 5.0: 当前页给最快的引擎,临近页避开慢引擎(routeProviderForPage)。
+				return routeProviderForPage(this.pool, pageIndex,
+					this.manager?.currentPageIndex() ?? pageIndex, this.manager?.providerThroughput() ?? {});
 			}
 			const rank = rankProvidersForPage(this.pool, pageIndex);
 			return rank[offset % rank.length]!;
@@ -784,7 +786,10 @@ export class ReaderSession {
 				// Each page's provider LANE — lets the scheduler cap providers
 				// independently and reserve a foreground slot for the current one.
 				laneFor: (pageIndex: number) => this.providerForPage(pageIndex),
-				poolSize: () => this.pool.length
+				poolSize: () => this.pool.length,
+				// 5.0 对冲: 只找测得最快、且不是当前这家的大模型;没有数据就不对冲。
+				hedgeProviderFor: (_pageIndex: number, current: string) =>
+					this.pool.length > 1 ? fastestProvider(this.pool, this.manager?.providerThroughput() ?? {}, current) : ''
 			},
 			{
 				onPageUpdate: state => this.onPageUpdate(state),
@@ -995,9 +1000,11 @@ export class ReaderSession {
 	}
 
 	private async translateRequest(request: TranslationRequest, signal: AbortSignal, hooks?: TranslateHooks): Promise<TranslationResponse> {
-		const chosen = typeof request.pageIndex === 'number'
-			? this.providerForPage(request.pageIndex)
-			: getPref<string>('provider', 'bing-free');
+		const chosen = hooks?.provider && this.pool.includes(hooks.provider)
+			? hooks.provider
+			: typeof request.pageIndex === 'number'
+				? this.providerForPage(request.pageIndex)
+				: getPref<string>('provider', 'bing-free');
 		const settings = await this.providerSettingsFor(chosen);
 		const provider = getProvider(settings.providerId);
 		if (provider.requiresApiKey && !settings.apiKey) {

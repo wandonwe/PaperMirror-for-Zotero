@@ -161,8 +161,12 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
     // GPT-6 (2026-11-19): no 'minimal' level. Terra/Luna accept 'none';
     // Astra/Sol bottom out at 'low'. Same slugs behind OpenRouter's openai/.
     const gpt6=/^(?:openai\/)?gpt-6(?:\.\d+)?-(astra|sol|terra|luna)(?:$|-)/.exec(model);
-    if(gpt6 && (providerId === 'openai' || providerId === 'openrouter') && out.reasoning_effort === 'minimal') {
-        out.reasoning_effort=gpt6[1] === 'terra' || gpt6[1] === 'luna' ? 'none' : 'low';
+    if(gpt6 && (providerId === 'openai' || providerId === 'openrouter')) {
+        const floor=gpt6[1] === 'terra' || gpt6[1] === 'luna' ? 'none' : 'low';
+        // 5.0 (真机: gpt-6-luna 默认推理,单请求 22–28 秒,吞吐 87 字/秒,
+        // 同池 DeepSeek 392、Gemini 318): 与 DeepSeek 默认关思考同理 ——
+        // 翻译只要最终译文。用户没设强度时取该型号的最低档。
+        if(!eff || eff === 'minimal' || eff === 'disabled') out.reasoning_effort=floor;
     }
     if(providerId === 'groq' && /^openai\/gpt-oss-/.test(model)) {
         out.reasoning_effort=eff === 'high' || eff === 'xhigh' ? 'high' : eff === 'medium' ? 'medium' : 'low';

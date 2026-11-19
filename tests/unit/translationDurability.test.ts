@@ -116,3 +116,19 @@ test('older persistence cannot authorise eviction while a compressed replacement
   assert.equal(m.getPageState(0)?.cached,false,'failed compressed persistence keeps the only copy in memory');
  } finally {initialWrite.resolve();compressedWrite.resolve();m.dispose();}
 });
+
+test('5.0: provisional (degraded shared-sentence) translations are shown but never cached', async()=>{
+ let pageWrites=0;const segWrites:string[]=[];
+ const m=manager(deps({
+  writeCache:async()=>{pageWrites++;return true;},
+  writeSegments:async(_p,entries)=>{segWrites.push(...entries.map(e=>e.translatedText));},
+  translateRequest:async request=>({translations:request.blocks.map(b=>({id:b.id,translatedText:'Traduction par colonne.'})),provisionalIds:request.blocks.map(b=>b.id)})
+ }));
+ try {
+  await m.ensurePage(0,10);
+  const state=m.getPageState(0)!;
+  assert.equal(state.translations.get('b0'),'Traduction par colonne.','临时译文照常显示');
+  assert.equal(pageWrites,0,'页缓存不写,下次打开重试整句');
+  assert.deepEqual(segWrites,[],'段落库也不写');
+ } finally {m.dispose();}
+});

@@ -538,6 +538,10 @@ const PAGE_IDLE_MS = 150000;
  *  the old whole-page scheduler retry. Small and local so one blip doesn't fail
  *  a chunk, without ever re-running extraction. */
 const REQUEST_RETRIES = 2;
+/** 5.0: 当前页请求多久没回来就对冲(毫秒)。快引擎 1–2 秒一页,8 秒已是明显异常。 */
+let HEDGE_AFTER_MS = 8000;
+/** 测试用: 调整对冲等待。 */
+export function setHedgeAfterMs(ms: number): void { HEDGE_AFTER_MS = ms; }
 /** Chunks of ONE page dispatched concurrently. Audit-verified: nothing in a
  *  chunk's request depends on a previous chunk's RESPONSE (context comes from
  *  SOURCE text), so limited parallelism is safe and roughly halves page time. */
@@ -745,6 +749,8 @@ export interface TranslateHooks {
 	onUsage?: (usage: TokenUsage) => void;
 	onParamHeal?: (param: RejectedParam) => void;
  onProgress?: () => void;
+	/** 5.0 对冲请求: 指定由哪个服务商发出(不传 = 按页分配)。 */
+	provider?: string;
 }
 
 export interface TranslationDeps {
@@ -792,6 +798,11 @@ export interface TranslationDeps {
 	laneFor?(pageIndex: number): string;
 	/** 2.11.1: 当前服务商池大小 —— 1 表示根本没走按页分配。 */
 	poolSize?(): number;
+	/**
+	 * 5.0 对冲: 当前页的请求迟迟不回时,另找一家(测得最快、且不是 `current`)
+	 * 同时再发一次。返回 '' 表示没有合适的备选。
+	 */
+	hedgeProviderFor?(pageIndex: number, current: string): string;
 	/** Config snapshot getters. */
 	getLanguages(sampleText: string): { source: string; target: string };
 	getDocumentTitle(): string;
@@ -984,7 +995,7 @@ export class TranslationManager {
 	 * 经计量的服务商调用 (2.7.0): 两条请求路径(整页运行与压缩重译/单块重译)
 	 * 都从这里出去,响应里的用量按页累加。只碰数字,响应正文原样透传。
 	 */
-	private async meteredTranslate(request: TranslationRequest, signal: AbortSignal, onAttempts?: (n: number) => void, heartbeat?:()=>void): Promise<TranslationResponse> {
+	private async meteredTranslate(request: TranslationRequest, signal: AbortSignal, onAttempts?: (n: number) => void, heartbeat?:()=>void, provider?: string): Promise<TranslationResponse> {
   // Centralized here so missing-ID, slow-lane, residue, plain, compression and
   // single-block retries all retain the same immutable source evidence.
   const sourceById = new Map(this.pages.get(request.pageIndex ?? -1)?.blocks.map(b => [b.id, b]));
@@ -1027,7 +1038,8 @@ export class TranslationManager {
             },
 			onUsage: record,
 			onParamHeal: param => bump(this.paramHeals, param),
-   onProgress: heartbeat
+   onProgress: heartbeat,
+			...(provider ? { provider } : {})
 		};
 		try {
 			const response = await this.deps.translateRequest(request, signal, hooks);
@@ -1308,6 +1320,70 @@ export class TranslationManager {
 	}
 
 	/** 当前生效的分页权重 (2.12.0) —— 样本不足时全是 1,即与 2.11.2 行为一致。 */
+	/** 对冲统计: 发了几次、备选先回来几次。 */
+	private hedges = { launched: 0, won: 0 };
+
+	/**
+	 * 当前页请求的对冲 (5.0)。主请求超过 HEDGE_AFTER_MS 还没回来、池里有更快
+	 * 的另一家时,同时让那家也翻一次,先拿到合格响应的用,另一个取消。
+	 * 只对当前页、每个请求最多一次;代价是偶尔多花一次请求的额度。
+	 * 主请求在定时器之前就失败 → 照常抛出,交给原有重试链;两个都失败 →
+	 * 抛主请求的错误。
+	 */
+	private async hedgedTranslate(pageIndex: number, lane: string, request: TranslationRequest, sig: AbortSignal,
+		onAttempts: (n: number) => void, beat: () => void): Promise<TranslationResponse> {
+		const hedgeProvider = this.deps.hedgeProviderFor;
+		if (!hedgeProvider || (this.deps.poolSize?.() ?? 1) < 2) {
+			return this.meteredTranslate(request, sig, onAttempts, beat);
+		}
+		const link = (): AbortController => {
+			const c = new AbortController();
+			if (sig.aborted) c.abort();
+			else sig.addEventListener('abort', () => c.abort(), { once: true });
+			return c;
+		};
+		const primaryCtl = link();
+		const primary = this.meteredTranslate(request, primaryCtl.signal, onAttempts, beat);
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const fired = new Promise<'hedge'>(resolve => { timer = setTimeout(() => resolve('hedge'), HEDGE_AFTER_MS); });
+		const settledPrimary = primary.then(r => ({ ok: true as const, r }), e => ({ ok: false as const, e }));
+		const first = await Promise.race([settledPrimary, fired]);
+		if (first !== 'hedge') {
+			clearTimeout(timer);
+			if (first.ok) return first.r;
+			throw first.e;
+		}
+		const backup = hedgeProvider(pageIndex, lane);
+		if (!backup || backup === lane || sig.aborted || pageIndex !== this.currentPage) {
+			const r = await settledPrimary;
+			if (r.ok) return r.r;
+			throw r.e;
+		}
+		this.hedges.launched++;
+		logger.info(MODULE, `Page ${pageIndex + 1}: request slow after ${HEDGE_AFTER_MS} ms on ${sanitizeProviderId(lane)} → hedging on ${sanitizeProviderId(backup)}`);
+		const backupCtl = link();
+		const settledBackup = this.meteredTranslate(request, backupCtl.signal, onAttempts, beat, backup)
+			.then(r => ({ ok: true as const, r }), e => ({ ok: false as const, e }));
+		const winner = await Promise.race([settledPrimary.then(x => ({ who: 'primary' as const, x })), settledBackup.then(x => ({ who: 'backup' as const, x }))]);
+		if (winner.x.ok) {
+			(winner.who === 'primary' ? backupCtl : primaryCtl).abort();
+			if (winner.who === 'backup') this.hedges.won++;
+			return winner.x.r;
+		}
+		const other = await (winner.who === 'primary' ? settledBackup : settledPrimary);
+		if (other.ok) {
+			if (winner.who === 'primary') this.hedges.won++;
+			return other.r;
+		}
+		const p = await settledPrimary;
+		throw p.ok ? other.e : p.e;
+	}
+
+	/** 当前阅读页(0 起)。供会话按「当前页优先」改派引擎。 */
+	currentPageIndex(): number {
+		return this.currentPage;
+	}
+
 	providerWeights(): Record<string, number> {
 		return weightsFromThroughput(this.providerThroughput());
 	}
@@ -2029,6 +2105,9 @@ export class TranslationManager {
 				// 2.7.7: 真实 HTTP 尝试 (含适配器自愈重试) 与校验失败次数。
 				httpAttempts: this.httpAttempts,
 				validationFailures: this.validationFailures,
+				// 5.0: 当前页对冲请求次数 / 备选先回来的次数。
+				hedgesLaunched: this.hedges.launched,
+				hedgesWon: this.hedges.won,
 				// 2.8.4 (性能第五批): 此刻还持有完整内容的页数("热页面")。
 				// 它与 pageRetention 的上限一起看 —— 上限是否合适,先看这个数字。
 				hotPages: [...this.pages.values()].filter(p => p.evicted !== true).length,
@@ -2718,6 +2797,16 @@ export class TranslationManager {
 		};
 		// 止损轮次序号 (P3): 本运行的发起顺序,见 failedSegments 注释。
 		const runId = ++this.runSeq;
+		// 5.0: 整句降级为分栏翻译的段落 —— 显示,但不进段落库/页缓存,
+		// 下次打开重新尝试整句(见 ContinuationUnitStore 的降级说明)。
+		const provisional = new Set<string>();
+		const noteProvisional = (response: TranslationResponse): void => {
+			const marked = new Set(response.provisionalIds ?? []);
+			for (const row of response.translations) {
+				if (marked.has(row.id)) provisional.add(row.id);
+				else provisional.delete(row.id);
+			}
+		};
 		const countedTranslate = async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
 			request = { ...request, referenceContent: request.blocks.some(b => refById.has(b.id)) };
 			metrics.requestCount++;
@@ -2742,7 +2831,9 @@ export class TranslationManager {
 					const response = await this.requestGate.run(
 						lane, foreground,
 						async () => {
-							const r = await this.meteredTranslate(request, sig, n => { metrics.attemptCount += n; }, beat);
+							const r = foreground
+								? await this.hedgedTranslate(pageIndex, lane, request, sig, n => { metrics.attemptCount += n; }, beat)
+								: await this.meteredTranslate(request, sig, n => { metrics.attemptCount += n; }, beat);
 							succeeded = true;
 							return r;
 						}, sig,
@@ -2771,6 +2862,7 @@ export class TranslationManager {
 						});
 					beat(); // progress: a request finished → re-arm the idle watchdog
 					this.laneFeedback(lane, 'success');
+					noteProvisional(response);
 					return response;
 				}
 				catch (e) {
@@ -3319,10 +3411,11 @@ export class TranslationManager {
 		// fire-and-forget —— 任务解绕后这笔写仍悬在队列里,resetAllAndWait
 		// 等不到它,「刷新全部」的清盘与它竞态,被丢弃的译文复活。
 		const persistPartial = (): Promise<void> => {
-			if (!this.deps.writeSegments || !results.length) {
+			const durable = results.filter(r => !provisional.has(r.id));
+			if (!this.deps.writeSegments || !durable.length) {
 				return Promise.resolve();
 			}
-			return this.deps.writeSegments(pageIndex, results.map(r => ({
+			return this.deps.writeSegments(pageIndex, durable.map(r => ({
 				hash: segmentHash(sourceById.get(r.id) ?? '', source, target, sourceBlockById.get(r.id)?.continuationContext),
 				translatedText: r.translatedText
 			}))).catch(() => { /* best-effort */ });
@@ -3527,16 +3620,20 @@ export class TranslationManager {
 			// 登记而不等待 (2.5.9): 这一笔坐在调度槽里,await 它就是白占半秒
 			// 以上(落盘有 500ms 合并窗口)。登记后 resetAllAndWait/dispose 仍
 			// 等得到,2.0.7 的清盘竞态防线不受影响。
-			this.trackWrite(this.deps.writeSegments(pageIndex, results
-				.map(r => ({ hash: segHash(byId.get(r.id)!), translatedText: r.translatedText }))
-			).catch(e => { logger.warn(MODULE, 'segment write failed', e); }));
+			const durable = results.filter(r => !provisional.has(r.id));
+			if (durable.length) {
+				this.trackWrite(this.deps.writeSegments(pageIndex, durable
+					.map(r => ({ hash: segHash(byId.get(r.id)!), translatedText: r.translatedText }))
+				).catch(e => { logger.warn(MODULE, 'segment write failed', e); }));
+			}
 		}
 		// Only a COMPLETE page enters the cache. Caching a partial page would
 		// freeze the mixed-language rendering: every revisit would hit the
 		// cache and never retry the missing blocks. Left uncached, the next
 		// visit (or 重新翻译) runs the whole pipeline again — with the segment
 		// store still saving the segments that DID succeed.
-		if (untranslatedCount === 0 && keepOrigin.size === 0) {
+		const provisionalShown = activeBlocks.filter(b => provisional.has(b.id) && state.translations.has(b.id)).length;
+		if (untranslatedCount === 0 && keepOrigin.size === 0 && provisionalShown === 0) {
 			// keepOrigin pages stay OUT of the page cache (审核 P1): caching one
 			// froze its English segments forever — every revisit hit the cache and
 			// the repair chain never ran again. Uncached, the segment store still
@@ -3548,7 +3645,7 @@ export class TranslationManager {
 			await this.persistPage(state, all);
 		}
 		else {
-			logger.warn(MODULE, `Page ${pageIndex + 1} left uncached (${untranslatedCount} untranslated block(s)) so a revisit retries`);
+			logger.warn(MODULE, `Page ${pageIndex + 1} left uncached (${untranslatedCount} untranslated, ${provisionalShown} provisional block(s)) so a revisit retries`);
 		}
 	}
 }

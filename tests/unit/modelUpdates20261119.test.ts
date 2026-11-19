@@ -58,7 +58,9 @@ test('GPT-6 没有 minimal: Luna/Terra → none,Astra/Sol → low(含 OpenRouter
 	assert.equal(openaiChatExtras(settings('openai/gpt-6.2-astra', { reasoning: 'minimal' }), 'openrouter').reasoning_effort, 'low');
 	assert.equal(openaiChatExtras(settings('gpt-6.2-sol', { reasoning: 'high' }), 'openai').reasoning_effort, 'high');
 	assert.equal(openaiChatExtras(settings('gpt-5.4-mini', { reasoning: 'minimal' }), 'openai').reasoning_effort, 'minimal');
-	assert.equal(openaiChatExtras(settings('gpt-6-luna'), 'openai').reasoning_effort, undefined, '未设置不发');
+	assert.equal(openaiChatExtras(settings('gpt-6-luna'), 'openai').reasoning_effort, 'none', '未设置时翻译默认不推理');
+	assert.equal(openaiChatExtras(settings('gpt-6.2-sol'), 'openai').reasoning_effort, 'low');
+	assert.equal(openaiChatExtras(settings('gpt-5.6-luna'), 'openai').reasoning_effort, undefined, '旧型号不变');
 });
 
 test('Kimi K3.1 Pro 与 K3 同一契约: 温度不发、effort low、max_completion_tokens', () => {
