@@ -418,7 +418,53 @@ export class ReaderSession {
 		const item = adapter.getReaderItem(this.reader);
 		const title = item?.getDisplayTitle?.() ?? (item ? String(item.getField('title') ?? '') : '') ?? 'PDF';
 
-		this.pane = new TranslationPane(this.split.paneHost, title || 'PDF', paneStrings(), {
+		const pane = this.createPaneAndOverlay(this.split, title);
+
+		this.sync = createSyncController({
+			scrollPaneToPage: pageIndex => this.pane?.scrollToPage(pageIndex),
+			scrollPaneToPosition: (pageIndex, fraction) => this.pane?.setPdfScrollFraction(pageIndex, fraction),
+			scrollPdfToPosition: (pageIndex, fraction) => { adapter.setPageScrollFraction(this.reader, pageIndex, fraction); },
+			navigatePdfToPage: pageIndex => adapter.navigateToPage(this.reader, pageIndex)
+		});
+		this.sync.enabled = getPref<boolean>('syncScroll', true);
+
+		// Resolve the file hash for cache keys (item.attachmentHash is md5)
+		try {
+			this.fileHash = item?.attachmentHash ? await item.attachmentHash : '';
+		}
+		catch {
+			this.fileHash = '';
+		}
+		// open()×destroy 竞态闸 (2.0.7, 审核 P1-1): 上面的 await(以及下面的
+		// prime,可达数秒)期间用户关标签/关窗口/禁用插件都会 destroy()。
+		// 此前 open() 继续执行: 在销毁**之后**注册 disposePdfEvents 与
+		// startPolling —— eventBus 监听与兜底轮询永不解除(tick 首行的
+		// destroyed 检查只让它空转,不停止),每次「打开后迅速关闭」泄漏一条;
+		// 隐私未接受分支还会对已置 null 的 split/pane 直接调用抛 TypeError。
+		if (this.destroyed) {
+			return;
+		}
+
+		await this.extractor.prime();
+		if (this.destroyed) {
+			return; // 同上: prime 期间被销毁,后续注册一律不做
+		}
+		this.watchAutomaticExplanation();
+
+		if (!await this.showPrivacyOrStart(this.split, pane)) {
+			return;
+		}
+
+		this.subscribePdfEvents();
+
+		this.installIdentityPrefObservers();
+		this.startPolling();
+		logger.info(MODULE, `Session opened for tab ${this.reader.tabID}`);
+	}
+
+	/** open() 拆出: 建译文面板与覆盖层,接好回调、主题、偏好与引擎菜单。 */
+	private createPaneAndOverlay(split: SplitViewHandles, title: string): TranslationPane {
+		this.pane = new TranslationPane(split.paneHost, title || 'PDF', paneStrings(), {
 			onExplainBlock: (pageIndex, blockId) => {
 				const state = this.manager?.getPageState(pageIndex);
 				const source = state?.blocks.find(b => b.id === blockId)?.sourceText ?? '';
@@ -508,47 +554,23 @@ export class ReaderSession {
 			this.pane.setLanguageCodes(prefSource, prefTarget);
 			this.pane.setLanguagePair(languageLabel(prefSource), languageLabel(prefTarget));
 		}
+		return this.pane;
+	}
 
-		this.sync = createSyncController({
-			scrollPaneToPage: pageIndex => this.pane?.scrollToPage(pageIndex),
-			scrollPaneToPosition: (pageIndex, fraction) => this.pane?.setPdfScrollFraction(pageIndex, fraction),
-			scrollPdfToPosition: (pageIndex, fraction) => { adapter.setPageScrollFraction(this.reader, pageIndex, fraction); },
-			navigatePdfToPage: pageIndex => adapter.navigateToPage(this.reader, pageIndex)
-		});
-		this.sync.enabled = getPref<boolean>('syncScroll', true);
-
-		// Resolve the file hash for cache keys (item.attachmentHash is md5)
-		try {
-			this.fileHash = item?.attachmentHash ? await item.attachmentHash : '';
-		}
-		catch {
-			this.fileHash = '';
-		}
-		// open()×destroy 竞态闸 (2.0.7, 审核 P1-1): 上面的 await(以及下面的
-		// prime,可达数秒)期间用户关标签/关窗口/禁用插件都会 destroy()。
-		// 此前 open() 继续执行: 在销毁**之后**注册 disposePdfEvents 与
-		// startPolling —— eventBus 监听与兜底轮询永不解除(tick 首行的
-		// destroyed 检查只让它空转,不停止),每次「打开后迅速关闭」泄漏一条;
-		// 隐私未接受分支还会对已置 null 的 split/pane 直接调用抛 TypeError。
-		if (this.destroyed) {
-			return;
-		}
-
-		await this.extractor.prime();
-		if (this.destroyed) {
-			return; // 同上: prime 期间被销毁,后续注册一律不做
-		}
-		this.watchAutomaticExplanation();
-
+	/**
+	 * open() 拆出: 隐私说明未接受时先展示说明,否则应用视图并开始翻译。
+	 * 返回 false 表示等待期间会话已被销毁,调用方必须停止后续注册。
+	 */
+	private async showPrivacyOrStart(split: SplitViewHandles, pane: TranslationPane): Promise<boolean> {
 		if (!getPref<boolean>('privacyNoticeAccepted', false)) {
 			const settings = await this.providerSettings();
 			if (this.destroyed) {
-				return; // P1-1: providerSettings 查密钥库最长 4s,期间可被销毁
+				return false; // P1-1: providerSettings 查密钥库最长 4s,期间可被销毁
 			}
 			const provider = getProvider(getPref<string>('provider', 'bing-free'));
 			// The notice lives in the pane, so it must be on screen to be read.
-			this.split.setPaneVisible(true);
-			this.pane.showPrivacyNotice(endpointHost(settings, provider.defaultBaseURL));
+			split.setPaneVisible(true);
+			pane.showPrivacyNotice(endpointHost(settings, provider.defaultBaseURL));
 		}
 		else {
 			this.applyViewMode();
@@ -563,7 +585,11 @@ export class ReaderSession {
 			});
 			this.startTranslating();
 		}
+		return true;
+	}
 
+	/** open() 拆出: 订阅 PDF.js 的滚动、渲染与文本层事件。 */
+	private subscribePdfEvents(): void {
 		// PDF.js events: the pane renders its pages itself now, so left-side
 		// re-renders and zooms no longer force a rebuild. The stream drives
 		// 同步滚动 (following the reader's position continuously) AND — 2.2.9,
@@ -608,10 +634,6 @@ export class ReaderSession {
 			}
 			this.manager?.onPageRendered(pageIndex);
 		}, ['textlayerrendered']);
-
-		this.installIdentityPrefObservers();
-		this.startPolling();
-		logger.info(MODULE, `Session opened for tab ${this.reader.tabID}`);
 	}
 
 	/**
