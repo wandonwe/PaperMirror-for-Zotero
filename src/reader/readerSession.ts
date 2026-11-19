@@ -2015,49 +2015,13 @@ export class ReaderSession {
   this.placementKeys.set(pageIndex, pageContentKey(state.blocks,state.translations));
   this.placementProbe.delete(pageIndex);
 
-		// 几何安全复核 (1.1.0 目标架构第 5 步): FINAL 状态下审计一次;违例的
-		// 块回退扩展/缩字重试,仍不适配则保留原文——处置结果反映进随后的
-		// stats/tally,所以必须先审计后取数。
-		try {
-			const audit = auditStrictGeometry(element);
-			if (audit) {
-				this.geometryAudits.set(pageIndex, audit);
-			}
-			if (audit && audit.violations > 0) {
-				logger.info(
-					MODULE,
-					`page ${pageIndex + 1} geometry audit: ${audit.violations} violation(s) → `
-					+ `${audit.adjusted} re-fit within original box, ${audit.reverted} kept original`
-				);
-			}
-		}
-		catch (e) {
-			logger.warn(MODULE, `geometry audit failed on page ${pageIndex + 1} (ignored)`, e);
-		}
+		this.auditFinalGeometry(pageIndex, element);
 		const s = strictPageStats(element);
 		if (!s) {
 			return;
 		}
 		this.placementStats.set(pageIndex, s); // P3 (2.0.10): 供诊断导出
-		// 放弃清单 (2.7.0): 不采样像素、零成本,无论是否开调试日志都收。
-		try {
-			const abandoned = strictAbandonedBlocks(element);
-			if (abandoned) {
-				this.abandonedBlocks.set(pageIndex, abandoned);
-			}
-		}
-		catch (e) {
-			logger.debug(MODULE, `abandoned list failed on page ${pageIndex + 1} (ignored)`, e);
-		}
-		// Always archive lightweight placement measurements. Pixel sampling is
-		// still debug-only; bitmapSampled=false distinguishes omitted samples.
-		try {
-			const probe = probeStrictPlacement(element, getPref<boolean>('debugLogging', false));
-			if (probe) this.placementProbe.set(pageIndex, probe);
-		}
-		catch (e) {
-			logger.debug(MODULE, `placement probe failed on page ${pageIndex + 1} (ignored)`, e);
-		}
+		this.collectPlacementDiagnostics(pageIndex, element);
 		this.archivePage(state, true);
 		logger.info(
 			MODULE,
@@ -2104,6 +2068,52 @@ export class ReaderSession {
 			segPlaced: placed,
 			kept
 		});
+	}
+
+	/** reportPlacement 拆出: 终版几何安全复核(违例块回退或保留原文),必须先于取数。 */
+	private auditFinalGeometry(pageIndex: number, element: HTMLElement): void {
+		// 几何安全复核 (1.1.0 目标架构第 5 步): FINAL 状态下审计一次;违例的
+		// 块回退扩展/缩字重试,仍不适配则保留原文——处置结果反映进随后的
+		// stats/tally,所以必须先审计后取数。
+		try {
+			const audit = auditStrictGeometry(element);
+			if (audit) {
+				this.geometryAudits.set(pageIndex, audit);
+			}
+			if (audit && audit.violations > 0) {
+				logger.info(
+					MODULE,
+					`page ${pageIndex + 1} geometry audit: ${audit.violations} violation(s) → `
+					+ `${audit.adjusted} re-fit within original box, ${audit.reverted} kept original`
+				);
+			}
+		}
+		catch (e) {
+			logger.warn(MODULE, `geometry audit failed on page ${pageIndex + 1} (ignored)`, e);
+		}
+	}
+
+	/** reportPlacement 拆出: 收放弃清单与轻量排版探针,供诊断导出。 */
+	private collectPlacementDiagnostics(pageIndex: number, element: HTMLElement): void {
+		// 放弃清单 (2.7.0): 不采样像素、零成本,无论是否开调试日志都收。
+		try {
+			const abandoned = strictAbandonedBlocks(element);
+			if (abandoned) {
+				this.abandonedBlocks.set(pageIndex, abandoned);
+			}
+		}
+		catch (e) {
+			logger.debug(MODULE, `abandoned list failed on page ${pageIndex + 1} (ignored)`, e);
+		}
+		// Always archive lightweight placement measurements. Pixel sampling is
+		// still debug-only; bitmapSampled=false distinguishes omitted samples.
+		try {
+			const probe = probeStrictPlacement(element, getPref<boolean>('debugLogging', false));
+			if (probe) this.placementProbe.set(pageIndex, probe);
+		}
+		catch (e) {
+			logger.debug(MODULE, `placement probe failed on page ${pageIndex + 1} (ignored)`, e);
+		}
 	}
 
 	/**
