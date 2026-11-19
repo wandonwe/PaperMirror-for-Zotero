@@ -1647,28 +1647,9 @@ export class ReaderSession {
 		// viewer turns happen AFTER strict fitting, so they may reuse this raster.
 		// Keep exact widths: rounding could reuse a slightly different viewport
 		// and leave masks out of alignment at fractional zoom levels.
-		const intrinsicRotation = adapter.getPageIntrinsicRotation(this.reader, pageIndex);
-		const bitmapKey = `${pageIndex}@${width}#${intrinsicRotation}`;
-		let render = this.baseBitmaps.get(bitmapKey) ?? null;
-		if (!render) {
-			// Supersample within a fixed pixel budget: sharp text without letting a
-			// tall page allocate an enormous canvas.
-			const oversample = Math.max(1, Math.min(1.8, Math.sqrt(3_200_000 / Math.max(1, width * width * 1.4))));
-			render = await adapter.renderPageBitmap(this.reader, pageIndex, width, oversample);
-			if (!current()) {
-				return false;
-			}
-			if (render) {
-				this.baseBitmaps.set(bitmapKey, render); // 只缓存独立 raster
-			}
-		}
-		if (!render) {
-			// Core rendering unavailable (compartment quirk, worker busy):
-			// fall back to copying the LEFT viewer's canvas. It only exists for
-			// pages near the left viewport, and comes at the left zoom rather
-			// than the pane width — the element is scaled to fit below. 不缓存
-			// (它是左视图 live canvas、宽度/缩放都不对,复用会错位)。
-			render = adapter.getPageRender(this.reader, pageIndex);
+		const render = await this.pageBitmap(pageIndex, width, current);
+		if (render === 'stale') {
+			return false;
 		}
 		if (!render || this.destroyed) {
 			return false;
@@ -1773,48 +1754,7 @@ export class ReaderSession {
 					}
 					this.resolveStrictUnfit(pageIndex, element, unfit, token);
 				});
-				// A single click on translated text must be INERT reading behaviour:
-				// it only moves the focus highlight. The old handler ran 深度讲解 +
-				// a scroll-to-top + a PDF navigation on every innocent click — the
-				// reader clicked a paragraph and the whole layout convulsed.
-				// 深度讲解 is now a deliberate DOUBLE-click.
-				for (const node of Array.from(built.element.querySelectorAll('[data-pm-block]'))) {
-					const focusBlock = (): void => {
-						const scope = slot.closest('.pm-scroll') ?? built.element;
-						for (const other of Array.from(scope.querySelectorAll('.pm-repage-block.pm-focused'))) {
-							other.classList.remove('pm-focused');
-						}
-						node.classList.add('pm-focused');
-					};
-					node.addEventListener('click', focusBlock);
-					node.addEventListener('dblclick', () => {
-						focusBlock();
-						const id = node.getAttribute('data-pm-block');
-						const block = state.blocks.find(b => b.id === id)
-							?? state.blocks.find(b => b.id === id?.replace(/::p\d+$/, ''));
-						if (block?.sourceText.trim()) void this.explainSelection(block.sourceText);
-					});
-					// 右键 = 重译此段 (单段 replay, 参照 retain-pdf item replay):
-					// one foreground request for exactly this block, keep-origin
-					// and 止损 cleared so the retry is real.
-					node.addEventListener('contextmenu', (event) => {
-						event.preventDefault();
-						event.stopPropagation();
-						focusBlock();
-						const id = node.getAttribute('data-pm-block')?.split('::')[0];  // 段落拆分块 id 形如 <region>::pN,取区域 id
-						if (!id || !this.manager) {
-							return;
-						}
-						node.classList.add('pm-retranslating');
-						this.flashNotice('正在重译此段…');
-						void this.manager.retranslateBlock(pageIndex, id).then((ok) => {
-							node.classList.remove('pm-retranslating');
-							// Neutral failure text: a scroll-cancel and a rejected response
-							// look the same from here — don't claim a reason we don't know.
-							this.flashNotice(ok ? '此段已重译' : '此段重译未完成,可再试或换服务商');
-						});
-					});
-				}
+				this.wireBlockInteractions(built.element, slot, state, pageIndex);
 				return partial ? 'partial' : 'translated';
 			}
 		}
@@ -1827,6 +1767,84 @@ export class ReaderSession {
 		}
 		slot.replaceChildren(applyFit(buildOriginalPage(doc, render)));
 		return degraded ? 'degraded' : 'original';
+	}
+
+	/**
+	 * renderDocPage 拆出: 取这一页的底图。优先用本会话缓存的独立 raster(按页、宽度、
+	 * 固有旋转区分),否则让内核渲染;内核不可用时退回复制左侧视图的画布。
+	 * 'stale' 表示渲染期间这一趟已被更新的渲染或取消取代。
+	 */
+	private async pageBitmap(pageIndex: number, width: number, current: () => boolean): Promise<adapter.PageRender | null | 'stale'> {
+		const intrinsicRotation = adapter.getPageIntrinsicRotation(this.reader, pageIndex);
+		const bitmapKey = `${pageIndex}@${width}#${intrinsicRotation}`;
+		let render = this.baseBitmaps.get(bitmapKey) ?? null;
+		if (!render) {
+			// Supersample within a fixed pixel budget: sharp text without letting a
+			// tall page allocate an enormous canvas.
+			const oversample = Math.max(1, Math.min(1.8, Math.sqrt(3_200_000 / Math.max(1, width * width * 1.4))));
+			render = await adapter.renderPageBitmap(this.reader, pageIndex, width, oversample);
+			if (!current()) {
+				return 'stale';
+			}
+			if (render) {
+				this.baseBitmaps.set(bitmapKey, render); // 只缓存独立 raster
+			}
+		}
+		if (!render) {
+			// Core rendering unavailable (compartment quirk, worker busy):
+			// fall back to copying the LEFT viewer's canvas. It only exists for
+			// pages near the left viewport, and comes at the left zoom rather
+			// than the pane width — the element is scaled to fit below. 不缓存
+			// (它是左视图 live canvas、宽度/缩放都不对,复用会错位)。
+			render = adapter.getPageRender(this.reader, pageIndex);
+		}
+		return render;
+	}
+
+	/** renderDocPage 拆出: 译文块的单击(聚焦)、双击(深度讲解)、右键(重译此段)。 */
+	private wireBlockInteractions(element: HTMLElement, slot: HTMLElement, state: PageTranslationState, pageIndex: number): void {
+		// A single click on translated text must be INERT reading behaviour:
+		// it only moves the focus highlight. The old handler ran 深度讲解 +
+		// a scroll-to-top + a PDF navigation on every innocent click — the
+		// reader clicked a paragraph and the whole layout convulsed.
+		// 深度讲解 is now a deliberate DOUBLE-click.
+		for (const node of Array.from(element.querySelectorAll('[data-pm-block]'))) {
+			const focusBlock = (): void => {
+				const scope = slot.closest('.pm-scroll') ?? element;
+				for (const other of Array.from(scope.querySelectorAll('.pm-repage-block.pm-focused'))) {
+					other.classList.remove('pm-focused');
+				}
+				node.classList.add('pm-focused');
+			};
+			node.addEventListener('click', focusBlock);
+			node.addEventListener('dblclick', () => {
+				focusBlock();
+				const id = node.getAttribute('data-pm-block');
+				const block = state.blocks.find(b => b.id === id)
+					?? state.blocks.find(b => b.id === id?.replace(/::p\d+$/, ''));
+				if (block?.sourceText.trim()) void this.explainSelection(block.sourceText);
+			});
+			// 右键 = 重译此段 (单段 replay, 参照 retain-pdf item replay):
+			// one foreground request for exactly this block, keep-origin
+			// and 止损 cleared so the retry is real.
+			node.addEventListener('contextmenu', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				focusBlock();
+				const id = node.getAttribute('data-pm-block')?.split('::')[0];  // 段落拆分块 id 形如 <region>::pN,取区域 id
+				if (!id || !this.manager) {
+					return;
+				}
+				node.classList.add('pm-retranslating');
+				this.flashNotice('正在重译此段…');
+				void this.manager.retranslateBlock(pageIndex, id).then((ok) => {
+					node.classList.remove('pm-retranslating');
+					// Neutral failure text: a scroll-cancel and a rejected response
+					// look the same from here — don't claim a reason we don't know.
+					this.flashNotice(ok ? '此段已重译' : '此段重译未完成,可再试或换服务商');
+				});
+			});
+		}
 	}
 
 	/**
