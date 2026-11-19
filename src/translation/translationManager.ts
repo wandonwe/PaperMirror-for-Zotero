@@ -2642,78 +2642,18 @@ export class TranslationManager {
 		run.sourceById = new Map(activeBlocks.map(b => [b.id, b.sourceText]));
 		run.sourceBlockById = new Map(activeBlocks.map(b => [b.id, b]));
 		run.refById = new Set(activeBlocks.filter(b => b.isReference).map(b => b.id));
-		const accept = run.accept;
 
-		// 2. Cache — a hit is only COMPLETE when every active block has a usable
-		// translation (审核 P1): the file being valid never meant it covered the
-		// page. A partial entry (e.g. written by the compress path while some
-		// blocks were keep-origin) used to flip the page straight to done with
-		// blocks silently left in English. Now: cached ids that no longer exist
-		// are dropped, every entry must still pass the same accept() gate as a
-		// live response, and an incomplete hit only PREFILLS — the rest of the
-		// pipeline translates the missing blocks (toTranslate skips prefilled).
-		if (!bypass.bypassPageCache) {
-			this.usage.pageCacheLookups++;
-			const cached = await this.deps.readCache(pageIndex, blocks);
-			if (cached) {
-				const cachedById = new Map(cached.map(t => [t.id, t.translatedText]));
-				let usable = 0;
-				for (const block of activeBlocks) {
-					const text = cachedById.get(block.id);
-					if (typeof text === 'string' && accept(block.id, text)) {
-						state.translations.set(block.id, text);
-						usable++;
-					}
-				}
-				if (usable === activeBlocks.length) {
-					this.usage.pageCacheFullHits++;
-					state.status = 'done';
-					state.fromCache = true;
-					// 整页缓存命中 = 译文就在缓存里 (2.8.3): 这一页当然可以再被
-					// 卸掉。漏了这一条,"翻回旧页"复原出来的页会被永久钉在内存
-					// 里,来回翻几次就把上限彻底架空。
-					state.cached = true;
-					state.diagnostics = {
-						requests: 0, salvage: 0, rateLimited: 0, timeouts: 0,
-						segmentHits: 0, durationMs: Date.now() - metrics.startedAt, fromCache: true
-					};
-					this.notify(state);
-					return false;
-				}
-				if (usable) {
-					this.usage.pageCachePartialHits++;
-					logger.info(MODULE, `Page ${pageIndex + 1}: partial cache (${usable}/${activeBlocks.length}) — prefilled, translating the rest`);
-					this.notify(state); // show reused blocks immediately
-				}
-			}
+		if (!bypass.bypassPageCache && await this.prefillFromPageCache(run)) {
+			return false;
 		}
 
 		// 3. Translate chunk by chunk
 		state.status = 'translating';
 		this.notify(state);
 
-		// 2.5 段落级缓存: prefill whatever segments this context has already
-		// translated (content+language hash; provider/model scoping lives in the
-		// store the host injects). 普通刷新 re-enters here with the page cache
-		// bypassed but segments live, so only the segments that actually failed
-		// or changed cost a request. 'force' skips this entirely.
 		const segHash = run.segHash = (b: SourceBlock): string => segmentHash(b.sourceText, source, target, b.continuationContext);
-		if (!bypass.bypassSegments && this.deps.readSegments) {
-			this.usage.segmentLookups += activeBlocks.length;
-			const cached = await this.deps.readSegments(pageIndex, activeBlocks.map(segHash)).catch(() => null);
-			if (cached?.size) {
-				for (const block of activeBlocks) {
-					const hit = cached.get(segHash(block));
-					if (hit !== undefined && accept(block.id, hit)) {
-						state.translations.set(block.id, hit);
-						run.segmentHits++;
-					}
-				}
-				if (run.segmentHits) {
-					this.usage.segmentHits += run.segmentHits;
-					this.notify(state); // show reused segments immediately
-				}
-			}
+		if (!bypass.bypassSegments) {
+			await this.prefillFromSegments(run);
 		}
 		// keep-origin 止损: segments that already failed two whole runs are left
 		// in the original language instead of burning the same requests again.
@@ -2774,6 +2714,80 @@ export class TranslationManager {
 			return false;
 		}
 		return true;
+	}
+
+	// 2. Cache — a hit is only COMPLETE when every active block has a usable
+	// translation (审核 P1): the file being valid never meant it covered the
+	// page. A partial entry (e.g. written by the compress path while some
+	// blocks were keep-origin) used to flip the page straight to done with
+	// blocks silently left in English. Now: cached ids that no longer exist
+	// are dropped, every entry must still pass the same accept() gate as a
+	// live response, and an incomplete hit only PREFILLS — the rest of the
+	// pipeline translates the missing blocks (toTranslate skips prefilled).
+	/** 返回 true 表示整页缓存完整命中,这一页已完成。 */
+	private async prefillFromPageCache(run: PageRun): Promise<boolean> {
+		const { state, metrics, pageIndex, blocks, activeBlocks, accept } = run;
+		this.usage.pageCacheLookups++;
+		const cached = await this.deps.readCache(pageIndex, blocks);
+		if (cached) {
+			const cachedById = new Map(cached.map(t => [t.id, t.translatedText]));
+			let usable = 0;
+			for (const block of activeBlocks) {
+				const text = cachedById.get(block.id);
+				if (typeof text === 'string' && accept(block.id, text)) {
+					state.translations.set(block.id, text);
+					usable++;
+				}
+			}
+			if (usable === activeBlocks.length) {
+				this.usage.pageCacheFullHits++;
+				state.status = 'done';
+				state.fromCache = true;
+				// 整页缓存命中 = 译文就在缓存里 (2.8.3): 这一页当然可以再被
+				// 卸掉。漏了这一条,"翻回旧页"复原出来的页会被永久钉在内存
+				// 里,来回翻几次就把上限彻底架空。
+				state.cached = true;
+				state.diagnostics = {
+					requests: 0, salvage: 0, rateLimited: 0, timeouts: 0,
+					segmentHits: 0, durationMs: Date.now() - metrics.startedAt, fromCache: true
+				};
+				this.notify(state);
+				return true;
+			}
+			if (usable) {
+				this.usage.pageCachePartialHits++;
+				logger.info(MODULE, `Page ${pageIndex + 1}: partial cache (${usable}/${activeBlocks.length}) — prefilled, translating the rest`);
+				this.notify(state); // show reused blocks immediately
+			}
+		}
+		return false;
+	}
+
+	// 2.5 段落级缓存: prefill whatever segments this context has already
+	// translated (content+language hash; provider/model scoping lives in the
+	// store the host injects). 普通刷新 re-enters here with the page cache
+	// bypassed but segments live, so only the segments that actually failed
+	// or changed cost a request. 'force' skips this entirely.
+	private async prefillFromSegments(run: PageRun): Promise<void> {
+		const { state, pageIndex, activeBlocks, accept, segHash } = run;
+		if (!this.deps.readSegments) {
+			return;
+		}
+		this.usage.segmentLookups += activeBlocks.length;
+		const cached = await this.deps.readSegments(pageIndex, activeBlocks.map(segHash)).catch(() => null);
+		if (cached?.size) {
+			for (const block of activeBlocks) {
+				const hit = cached.get(segHash(block));
+				if (hit !== undefined && accept(block.id, hit)) {
+					state.translations.set(block.id, hit);
+					run.segmentHits++;
+				}
+			}
+			if (run.segmentHits) {
+				this.usage.segmentHits += run.segmentHits;
+				this.notify(state); // show reused segments immediately
+			}
+		}
 	}
 
 	/** 第 3 步: 占位符保护与请求分批(快道 / 慢道),定出本页请求上限。 */
