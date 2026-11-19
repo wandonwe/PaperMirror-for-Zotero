@@ -2160,91 +2160,11 @@ export class TranslationManager {
 			// getPageData used to occupy a provider slot for up to ~58s without a
 			// single network request in flight). A small local semaphore (2,
 			// current page first) bounds concurrent extractions instead.
-			let blocks: SourceBlock[];
-			try {
-				const zombie = this.extractZombies.get(pageIndex);
-				if (resume) { blocks = resume.blocks; }
-				else if (zombie && this.deps.extractRenderedPage) {
-					// Never start a second PDF-worker extraction while the timed-out
-					// one is still alive. The visible page can still be recovered from
-					// its rendered text layer (timeout-guarded like any extraction).
-					if (pageIndex !== this.currentPage) {
-						this.releasePage(pageIndex, state, 'extract-zombie');
-						return;
-					}
-					blocks = await this.renderedWithRetry(pageIndex);
-					if (!blocks.length) {
-						// 1.0.3 修复 (到页仍要点圆环): the user often ARRIVES at the
-						// page before its text layer exists — the old code marked the
-						// empty result "done" and the page could never auto-translate
-						// again. Surface a retryable error instead.
-						state.status = 'error';
-						state.error = new PaperMirrorError('EXTRACTION_FAILED',
-							`第 ${pageIndex + 1} 页文字层尚未就绪,稍后自动重试或点击刷新。`, { retryable: true });
-						this.notify(state);
-						return;
-					}
-				}
-				else {
-					blocks = await this.withExtractionSlot(pageIndex,
-						() => this.withExtractTimeout(this.deps.extractPage(pageIndex), pageIndex));
-				}
+			const extracted = await this.extractForPage(pageIndex, state, resume);
+			if (!extracted) {
+				return;
 			}
-			catch (extractError) {
-				const err = extractError instanceof PaperMirrorError
-					? extractError
-					: new PaperMirrorError('UNKNOWN', String(extractError));
-				if (err.code === 'TIMEOUT') {
-					// If this is the visible page, recover immediately from the DOM
-					// text layer. Otherwise forget the prefetch state; a later visit
-					// will use the DOM without duplicating the live worker request.
-					if (pageIndex === this.currentPage && this.deps.extractRenderedPage) {
-						const rendered = await this.renderedWithRetry(pageIndex);
-						if (rendered.length) {
-							blocks = rendered;
-							logger.info(MODULE, `Page ${pageIndex + 1}: recovered timed-out extraction from rendered text layer`);
-						}
-						else {
-							// The VISIBLE page has neither worker result nor text layer:
-							// surface a retryable error instead of silently going idle
-							// (审核 P2 — the silent delete re-created the "点击圆环" limbo
-							// for exactly this page).
-							state.status = 'error';
-							state.error = new PaperMirrorError('EXTRACTION_FAILED',
-								`第 ${pageIndex + 1} 页读取超时且文字层不可用,可用刷新重试。`, { retryable: true });
-							this.notify(state);
-							return;
-						}
-					}
-					else {
-						logger.warn(MODULE, `Page ${pageIndex + 1}: extraction timed out after ${this.extractTimeoutMs} ms`);
-						this.releasePage(pageIndex, state, 'extract-timeout');
-						return;
-					}
-				}
-				else if (err.code === 'EXTRACTION_FAILED' && err.retryable) {
-					// 文本层还没渲染 (2.8.13 真机)。这**不是**"这页没有可译内容",
-					// 而是"现在看不见" —— 区别在于前者该标完成、后者必须重来。
-					//
-					// 真机 19 页里有 6 页栽在这上面: 预取在页面渲染之前抽了一次,
-					// 抽到空,页面被永久标成"已完成",用户翻过去一个字都没译,也
-					// 不会自动重试。导出时那几页重解析出 12–14 个块 —— 文字一直都在。
-					if (pageIndex === this.currentPage) {
-						state.status = 'error';
-						state.error = err;
-						this.notify(state);
-						return;
-					}
-					// 预取页: 忘掉这次结果,但**记账并主动补回** (2.9.0) —— 2.8.13 写的
-					// 是"用户真翻过去时会重抽",而单向顺读时用户只经过一次,释放若发生
-					// 在他走过之后就没有第二次。真机第 36/41/45 页正是这么整页消失的。
-					this.releasePage(pageIndex, state, 'text-layer-not-rendered');
-					return;
-				}
-				else {
-					throw err; // real extraction errors keep their error/no-text-layer states
-				}
-			}
+			let blocks = extracted;
 			if (this.disposed || this.pages.get(pageIndex) !== state) {
 				return; // superseded while extracting
 			}
@@ -2297,54 +2217,9 @@ export class TranslationManager {
    }
 			state.blocks = blocks;
 
-			await this.scheduler.enqueue(`page-${pageIndex}`, priority, async (signal) => {
-				// 排队时间 = 抽取完到调度器真正让这页开跑 (2.8.4)。
-				const timing = this.pageTiming.get(pageIndex);
-				if (timing) {
-					timing.queuedMs = Date.now() - extractedAt;
-				}
-				// IDLE watchdog with a REAL abort. The old Promise.race watchdog had
-				// two structural bugs: (a) it measured TOTAL page time, so a big page
-				// whose every request succeeded could still be killed; (b) it only
-				// rejected the race — translatePage kept running as a zombie, issuing
-				// requests past the freed scheduler slot, immune to 取消, and later
-				// flipping the errored page back to done. Now: a LOCAL controller is
-				// aborted either by the parent signal or when NO request completes
-				// for PAGE_IDLE_MS — progress (each finished attempt / extraction)
-				// re-arms the clock, so long pages live as long as they keep moving,
-				// and a genuine hang dies quickly AND STOPS FOR REAL.
-				const local = new AbortController();
-				const onParentAbort = (): void => local.abort();
-				signal.addEventListener('abort', onParentAbort, { once: true } as AddEventListenerOptions);
-				let lastBeat = Date.now();
-				let idleFired = false;
-				const heartbeat = (): void => { lastBeat = Date.now(); };
-				const idleTimer = setInterval(() => {
-					if (Date.now() - lastBeat > PAGE_IDLE_MS) {
-						idleFired = true;
-						local.abort();
-					}
-				}, 5000);
-				try {
-					await this.translatePage(state, local.signal, { bypassPageCache: options?.bypassCache ?? false, bypassSegments: options?.bypassSegments ?? false }, heartbeat, blocks);
-				}
-				catch (e) {
-					// An idle-abort must surface as TIMEOUT, not CANCELLED (which
-					// would silently reset the page as if the user navigated away).
-					if (idleFired && !signal.aborted && e instanceof PaperMirrorError && e.code === 'CANCELLED') {
-						throw new PaperMirrorError(
-							'TIMEOUT',
-							`Page ${pageIndex + 1} made no progress for ${PAGE_IDLE_MS / 1000} s. Use 重新翻译 to retry.`,
-							{ retryable: true }
-						);
-					}
-					throw e;
-				}
-				finally {
-					clearInterval(idleTimer);
-					signal.removeEventListener('abort', onParentAbort);
-				}
-			}, {
+			const bypass = { bypassPageCache: options?.bypassCache ?? false, bypassSegments: options?.bypassSegments ?? false };
+			await this.scheduler.enqueue(`page-${pageIndex}`, priority,
+				signal => this.translateWithIdleWatchdog(pageIndex, state, signal, bypass, blocks, extractedAt), {
 				foreground: options?.foreground ?? false,
 				lane: this.laneFor(pageIndex),
 				// A page task runs at MOST once. A retryable failure must NOT re-run
@@ -2378,6 +2253,150 @@ export class TranslationManager {
 			state.status = error.code === 'NO_TEXT_LAYER' ? 'no-text-layer' : 'error';
 			state.error = error;
 			this.notify(state);
+		}
+	}
+
+	/**
+	 * 抽取一页 (ensurePage 拆出): PDF 抽取跑在服务商 lane 之外,由本地小信号量
+	 * (2 路,当前页优先) 限流;超时/文本层未渲染时按当前页或预取页分别处理。
+	 * 返回 null 表示这一页已被处理(报错、释放待补回),调用方直接结束。
+	 */
+	private async extractForPage(pageIndex: number, state: PageTranslationState, resume: { blocks: SourceBlock[] } | undefined): Promise<SourceBlock[] | null> {
+		try {
+			const zombie = this.extractZombies.get(pageIndex);
+			if (resume) { return resume.blocks; }
+			else if (zombie && this.deps.extractRenderedPage) {
+				// Never start a second PDF-worker extraction while the timed-out
+				// one is still alive. The visible page can still be recovered from
+				// its rendered text layer (timeout-guarded like any extraction).
+				if (pageIndex !== this.currentPage) {
+					this.releasePage(pageIndex, state, 'extract-zombie');
+					return null;
+				}
+				const rendered = await this.renderedWithRetry(pageIndex);
+				if (!rendered.length) {
+					// 1.0.3 修复 (到页仍要点圆环): the user often ARRIVES at the
+					// page before its text layer exists — the old code marked the
+					// empty result "done" and the page could never auto-translate
+					// again. Surface a retryable error instead.
+					state.status = 'error';
+					state.error = new PaperMirrorError('EXTRACTION_FAILED',
+						`第 ${pageIndex + 1} 页文字层尚未就绪,稍后自动重试或点击刷新。`, { retryable: true });
+					this.notify(state);
+					return null;
+				}
+				return rendered;
+			}
+			return await this.withExtractionSlot(pageIndex,
+				() => this.withExtractTimeout(this.deps.extractPage(pageIndex), pageIndex));
+		}
+		catch (extractError) {
+			const err = extractError instanceof PaperMirrorError
+				? extractError
+				: new PaperMirrorError('UNKNOWN', String(extractError));
+			if (err.code === 'TIMEOUT') {
+				// If this is the visible page, recover immediately from the DOM
+				// text layer. Otherwise forget the prefetch state; a later visit
+				// will use the DOM without duplicating the live worker request.
+				if (pageIndex === this.currentPage && this.deps.extractRenderedPage) {
+					const rendered = await this.renderedWithRetry(pageIndex);
+					if (rendered.length) {
+						logger.info(MODULE, `Page ${pageIndex + 1}: recovered timed-out extraction from rendered text layer`);
+						return rendered;
+					}
+					else {
+						// The VISIBLE page has neither worker result nor text layer:
+						// surface a retryable error instead of silently going idle
+						// (审核 P2 — the silent delete re-created the "点击圆环" limbo
+						// for exactly this page).
+						state.status = 'error';
+						state.error = new PaperMirrorError('EXTRACTION_FAILED',
+							`第 ${pageIndex + 1} 页读取超时且文字层不可用,可用刷新重试。`, { retryable: true });
+						this.notify(state);
+						return null;
+					}
+				}
+				else {
+					logger.warn(MODULE, `Page ${pageIndex + 1}: extraction timed out after ${this.extractTimeoutMs} ms`);
+					this.releasePage(pageIndex, state, 'extract-timeout');
+					return null;
+				}
+			}
+			else if (err.code === 'EXTRACTION_FAILED' && err.retryable) {
+				// 文本层还没渲染 (2.8.13 真机)。这**不是**"这页没有可译内容",
+				// 而是"现在看不见" —— 区别在于前者该标完成、后者必须重来。
+				//
+				// 真机 19 页里有 6 页栽在这上面: 预取在页面渲染之前抽了一次,
+				// 抽到空,页面被永久标成"已完成",用户翻过去一个字都没译,也
+				// 不会自动重试。导出时那几页重解析出 12–14 个块 —— 文字一直都在。
+				if (pageIndex === this.currentPage) {
+					state.status = 'error';
+					state.error = err;
+					this.notify(state);
+					return null;
+				}
+				// 预取页: 忘掉这次结果,但**记账并主动补回** (2.9.0) —— 2.8.13 写的
+				// 是"用户真翻过去时会重抽",而单向顺读时用户只经过一次,释放若发生
+				// 在他走过之后就没有第二次。真机第 36/41/45 页正是这么整页消失的。
+				this.releasePage(pageIndex, state, 'text-layer-not-rendered');
+				return null;
+			}
+			else {
+				throw err; // real extraction errors keep their error/no-text-layer states
+			}
+		}
+	}
+
+	/**
+	 * 调度器里的一页任务: 带「空闲看门狗」的 translatePage (ensurePage 拆出)。
+	 */
+	private async translateWithIdleWatchdog(pageIndex: number, state: PageTranslationState, signal: AbortSignal,
+		bypass: { bypassPageCache: boolean; bypassSegments: boolean }, blocks: SourceBlock[], extractedAt: number): Promise<void> {
+		// 排队时间 = 抽取完到调度器真正让这页开跑 (2.8.4)。
+		const timing = this.pageTiming.get(pageIndex);
+		if (timing) {
+			timing.queuedMs = Date.now() - extractedAt;
+		}
+		// IDLE watchdog with a REAL abort. The old Promise.race watchdog had
+		// two structural bugs: (a) it measured TOTAL page time, so a big page
+		// whose every request succeeded could still be killed; (b) it only
+		// rejected the race — translatePage kept running as a zombie, issuing
+		// requests past the freed scheduler slot, immune to 取消, and later
+		// flipping the errored page back to done. Now: a LOCAL controller is
+		// aborted either by the parent signal or when NO request completes
+		// for PAGE_IDLE_MS — progress (each finished attempt / extraction)
+		// re-arms the clock, so long pages live as long as they keep moving,
+		// and a genuine hang dies quickly AND STOPS FOR REAL.
+		const local = new AbortController();
+		const onParentAbort = (): void => local.abort();
+		signal.addEventListener('abort', onParentAbort, { once: true } as AddEventListenerOptions);
+		let lastBeat = Date.now();
+		let idleFired = false;
+		const heartbeat = (): void => { lastBeat = Date.now(); };
+		const idleTimer = setInterval(() => {
+			if (Date.now() - lastBeat > PAGE_IDLE_MS) {
+				idleFired = true;
+				local.abort();
+			}
+		}, 5000);
+		try {
+			await this.translatePage(state, local.signal, bypass, heartbeat, blocks);
+		}
+		catch (e) {
+			// An idle-abort must surface as TIMEOUT, not CANCELLED (which
+			// would silently reset the page as if the user navigated away).
+			if (idleFired && !signal.aborted && e instanceof PaperMirrorError && e.code === 'CANCELLED') {
+				throw new PaperMirrorError(
+					'TIMEOUT',
+					`Page ${pageIndex + 1} made no progress for ${PAGE_IDLE_MS / 1000} s. Use 重新翻译 to retry.`,
+					{ retryable: true }
+				);
+			}
+			throw e;
+		}
+		finally {
+			clearInterval(idleTimer);
+			signal.removeEventListener('abort', onParentAbort);
 		}
 	}
 
