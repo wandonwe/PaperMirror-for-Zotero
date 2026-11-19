@@ -2886,7 +2886,7 @@ export class TranslationManager {
 	 * 收下的译文还原占位符后立即渲染。
 	 */
 	private async runChunk(run: PageRun, plan: PlannedChunk, chunkIndex: number): Promise<void> {
-		const { state, signal, pageIndex, source, target, glossary, sourceById, protectedBlocks, canSpend, acceptResponse } = run;
+		const { signal, pageIndex, source, target, glossary, sourceById, protectedBlocks, acceptResponse } = run;
 		const chunk = plan.blocks;
 		if (signal.aborted) {
 			throw new PaperMirrorError('CANCELLED', 'cancelled');
@@ -2916,6 +2916,36 @@ export class TranslationManager {
 		const acceptChunk = (id: string, text: string): boolean =>
 			acceptResponse(id, text)
 			&& !(id === chunk[0]!.id && looksContextBleed(sourceById.get(id) ?? '', text, hadContext));
+		await this.requestChunkOnce(run, request, chunk, received, acceptChunk);
+
+		// 熔断信号: the batch + retry still left over a quarter of the chunk
+		// missing or invalid — this engine is systematically dropping ids or
+		// echoing. Tell the host ONCE per page so it can reroute the page's
+		// remaining requests to the backup engine before we spend a pile of
+		// salvage requests on a misbehaving service.
+		const afterRetry = chunk.filter(b => !received.has(b.id));
+		this.reportUnstableEngine(pageIndex, afterRetry.length, chunk.length);
+
+		await this.salvageGrouped(run, request, afterRetry, received);
+		await this.salvageSingles(run, request, chunk.filter(b => !received.has(b.id)), received);
+
+		const unrecovered = chunk.filter(b => !received.has(b.id));
+		if (unrecovered.length) {
+			run.untranslatedCount += unrecovered.length;
+			logger.warn(
+				MODULE,
+				`Page ${pageIndex + 1}: ${unrecovered.length} block(s) untranslated after salvage: ${unrecovered.map(b => b.id).join(', ')}`
+			);
+		}
+
+		this.applyChunkResults(run, chunk, received);
+		this.notify(run.state); // progressive rendering per chunk
+	}
+
+	/** runChunk 拆出: 整批请求一次,缺失的 id 再整批重试一次(spec 4.3)。 */
+	private async requestChunkOnce(run: PageRun, request: TranslationRequest, chunk: SourceBlock[], received: Map<string, string>,
+		acceptChunk: (id: string, text: string) => boolean): Promise<void> {
+		const { signal, pageIndex, protectedBlocks, canSpend } = run;
 		let response: TranslationResponse = { translations: [] };
 		try {
 			response = await this.requestWithRetry(run, request, signal);
@@ -2962,34 +2992,22 @@ export class TranslationManager {
 				logger.warn(MODULE, 'Missing-id retry failed', e);
 			}
 		}
+	}
 
-		// 熔断信号: the batch + retry still left over a quarter of the chunk
-		// missing or invalid — this engine is systematically dropping ids or
-		// echoing. Tell the host ONCE per page so it can reroute the page's
-		// remaining requests to the backup engine before we spend a pile of
-		// salvage requests on a misbehaving service.
-		const afterRetry = chunk.filter(b => !received.has(b.id));
-		if (afterRetry.length && afterRetry.length / chunk.length > UNSTABLE_MISSING_RATIO
-			&& !this.unstableFired.has(pageIndex)) {
+	/** runChunk 拆出: 一批里超过四分之一缺失或不合格时,每页通知宿主一次以便换引擎。 */
+	private reportUnstableEngine(pageIndex: number, missing: number, total: number): void {
+		if (missing && missing / total > UNSTABLE_MISSING_RATIO && !this.unstableFired.has(pageIndex)) {
 			this.unstableFired.add(pageIndex);
 			try {
-				this.events.onProviderUnstable?.(pageIndex, afterRetry.length / chunk.length);
+				this.events.onProviderUnstable?.(pageIndex, missing / total);
 			}
 			catch { /* host handler must not break translation */ }
 		}
+	}
 
-		await this.salvageGrouped(run, request, afterRetry, received);
-		await this.salvageSingles(run, request, chunk.filter(b => !received.has(b.id)), received);
-
-		const unrecovered = chunk.filter(b => !received.has(b.id));
-		if (unrecovered.length) {
-			run.untranslatedCount += unrecovered.length;
-			logger.warn(
-				MODULE,
-				`Page ${pageIndex + 1}: ${unrecovered.length} block(s) untranslated after salvage: ${unrecovered.map(b => b.id).join(', ')}`
-			);
-		}
-
+	/** runChunk 拆出: 收下的译文还原占位符、写入页面状态、共享给同文块、学习术语。 */
+	private applyChunkResults(run: PageRun, chunk: SourceBlock[], received: Map<string, string>): void {
+		const { state, protectedBlocks } = run;
 		for (const block of chunk) {
 			const raw = received.get(block.id);
 			if (raw === undefined) {
@@ -3003,7 +3021,6 @@ export class TranslationManager {
 			// 术语记忆: harvest 「中文术语(ABBR)」 pairs this page established.
 			this.docMemory.learn(extractTermPairs(block.sourceText, restored));
 		}
-		this.notify(run.state); // progressive rendering per chunk
 	}
 
 	// 分级补救 tier 1: still-missing blocks are retried in SMALL batches
