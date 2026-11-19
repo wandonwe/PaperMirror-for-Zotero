@@ -45,7 +45,7 @@ test('openaiChatExtras: max tokens key differs for the official OpenAI endpoint'
 	assert.deepEqual(openaiChatExtras(base({ maxOutputTokens: 0 }), 'openai'), {});
 });
 
-test('gemini 深度思考 (native adapter): disabled→budget 0, auto→budget -1, default→omitted', () => {
+test('gemini 深度思考 (native adapter): disabled→budget 0, auto→budget -1, default→最低档', () => {
 	assert.deepEqual(
 		geminiGenerationConfig(base({ model: 'gemini-2.5-flash', reasoning: 'disabled' })),
 		{ temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
@@ -59,10 +59,13 @@ test('gemini 深度思考 (native adapter): disabled→budget 0, auto→budget -
 		geminiGenerationConfig(base({ reasoning: 'disabled' })),
 		{ temperature: 0, thinkingConfig: { thinkingLevel: 'low' } }
 	);
-	assert.deepEqual(geminiGenerationConfig(base({})), { temperature: 0 });
+	// 5.0 审核: 3.x/4 没设强度也取最低档;2.5 未设置仍交给服务端默认。
+	assert.deepEqual(geminiGenerationConfig(base({})), { temperature: 0, thinkingConfig: { thinkingLevel: 'low' } });
+	assert.deepEqual(geminiGenerationConfig(base({ model: 'gemini-3.6-flash' })), { temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } });
+	assert.deepEqual(geminiGenerationConfig(base({ model: 'gemini-2.5-flash' })), { temperature: 0 });
 	// json mode + user-set advanced values flow into generationConfig
 	assert.deepEqual(
-		geminiGenerationConfig(base({ temperature: 0.5, maxOutputTokens: 4096 }), { json: true }),
+		geminiGenerationConfig(base({ model: 'gemini-2.5-flash', temperature: 0.5, maxOutputTokens: 4096 }), { json: true }),
 		{ temperature: 0.5, maxOutputTokens: 4096, responseMimeType: 'application/json' }
 	);
 	// disabled/auto are Gemini-only vocabulary — OpenAI/OpenRouter never emit them.

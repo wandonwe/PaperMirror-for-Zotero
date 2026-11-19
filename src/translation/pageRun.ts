@@ -35,8 +35,10 @@ export class PageRun {
 		startedAt: Date.now(),
 		requestTimings: [] as RequestTiming[]
 	};
-	/** 5.0: 整句降级为分栏翻译的段落 —— 显示,但不进段落库/页缓存。 */
-	readonly provisional = new Set<string>();
+	/** 5.0: 整句降级为分栏翻译的段落 —— 显示,但不进段落库/页缓存(存于页状态)。 */
+	get provisional(): Set<string> {
+		return this.state.provisional ?? (this.state.provisional = new Set());
+	}
 	/** 本次运行新得到的译文(写段落库用)。 */
 	readonly results: TranslatedBlock[] = [];
 	untranslatedCount = 0;
@@ -85,10 +87,11 @@ export class PageRun {
 
 	/** 响应里标了 provisionalIds 的段落记为临时;同一段后来拿到正式译文则撤销。 */
 	readonly noteProvisional = (response: TranslationResponse): void => {
+		const set = this.provisional;
 		const marked = new Set(response.provisionalIds ?? []);
 		for (const row of response.translations) {
-			if (marked.has(row.id)) this.provisional.add(row.id);
-			else this.provisional.delete(row.id);
+			if (marked.has(row.id)) set.add(row.id);
+			else set.delete(row.id);
 		}
 	};
 

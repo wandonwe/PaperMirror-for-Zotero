@@ -65,9 +65,11 @@ export function geminiGenerationConfig(settings: ProviderSettings, opts?: { json
 		// Gemini 3+/4 use thinkingLevel (thinkingBudget is deprecated and 400s on
 		// gemini-4-argon). Models that cannot turn thinking off take their
 		// documented minimum: 'low' for Gemini 4, 3.7/3.8 Flash and Pro.
-		if (r && r !== 'auto') {
+		// 5.0 审核: 没设强度时也取最低档(与 GPT-6、DeepSeek 一致) —— 3.x/4 默认
+		// 会先思考,对翻译只是更慢更贵;'auto' 才交给模型自行决定。
+		if (r !== 'auto') {
 			const minimum = /^gemini-(?:[4-9]|\d{2})/.test(model) || /^gemini-3\.[78]-flash/.test(model) || /pro/.test(model) ? 'low' : 'minimal';
-			config.thinkingConfig = { thinkingLevel: r === 'disabled' || r === 'minimal' ? minimum : r === 'xhigh' ? 'high' : r };
+			config.thinkingConfig = { thinkingLevel: !r || r === 'disabled' || r === 'minimal' ? minimum : r === 'xhigh' ? 'high' : r };
 		}
 	}
 	else if (r === 'disabled' || r === 'minimal') {

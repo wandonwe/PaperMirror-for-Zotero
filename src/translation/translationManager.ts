@@ -33,6 +33,27 @@ import {
 	hasEnglishResidue,
 	looksLikeReferenceEntry
 } from './translationValidation';
+/**
+ * 5.0: 按响应更新页状态上的临时(分栏降级)标记: 响应里标了的加入,同一段拿到
+ * 正式译文则移出。所有收译文的路径(主流程、压缩重译、单段重译)都走这里。
+ */
+export function noteProvisionalIn(state: Pick<PageTranslationState, 'provisional'>, response: TranslationResponse, ids?: Iterable<string>): void {
+	const set = state.provisional ?? (state.provisional = new Set());
+	const marked = new Set(response.provisionalIds ?? []);
+	for (const id of ids ?? response.translations.map(t => t.id)) {
+		if (marked.has(id)) set.add(id);
+		else set.delete(id);
+	}
+}
+
+/** 5.0: 页面里还有正在显示的临时译文 → 不写页缓存。 */
+export function hasShownProvisional(state: Pick<PageTranslationState, 'provisional' | 'translations'>): boolean {
+	for (const id of state.provisional ?? []) {
+		if (state.translations.has(id)) return true;
+	}
+	return false;
+}
+
 /** 兼容旧导入路径: 验收函数已移到 translationValidation.ts。 */
 export {
 	looksTranslated,
@@ -264,6 +285,11 @@ export interface PageTranslationState {
 	 * ('repeated-failure'). 强制重译 clears the memory and tries again.
 	 */
 	keepOrigin?: Map<string, string>;
+	/**
+	 * 5.0: 跨页整句降级为分栏翻译的段落(显示但不进缓存,下次打开重试整句)。
+	 * 挂在页状态上而不是单次运行上: 压缩重译、单段重译、续跑都要看到它。
+	 */
+	provisional?: Set<string>;
 	/** 最近一次验收拒绝的原因 (仅原因码,无文本): validator | placeholder。 */
 	rejectReasons?: Map<string, string>;
 	rejectHistory?: Map<string, string[]>;
@@ -1049,7 +1075,9 @@ export class TranslationManager {
 		this.hedges.launched++;
 		logger.info(MODULE, `Page ${pageIndex + 1}: request slow after ${HEDGE_AFTER_MS} ms on ${sanitizeProviderId(lane)} → hedging on ${sanitizeProviderId(backup)}`);
 		const backupCtl = link();
-		const settledBackup = this.meteredTranslate(request, backupCtl.signal, onAttempts, beat, backup)
+		// 5.0 审核: 备选请求同样占备选服务商的请求名额(前台优先),不额外超出它的并发上限。
+		const settledBackup = this.requestGate.run(backup, true,
+			() => this.meteredTranslate(request, backupCtl.signal, onAttempts, beat, backup), backupCtl.signal)
 			.then(r => ({ ok: true as const, r }), e => ({ ok: false as const, e }));
 		const winner = await Promise.race([settledPrimary.then(x => ({ who: 'primary' as const, x })), settledBackup.then(x => ({ who: 'backup' as const, x }))]);
 		if (winner.x.ok) {
@@ -1289,6 +1317,7 @@ export class TranslationManager {
 					glossary: this.glossaryFor(blocks.map(b => b.sourceText))
 				};
 				const response = await this.requestGate.run(this.laneFor(pageIndex), true, () => this.meteredTranslate(request, signal), signal);
+				const marked = new Set(response.provisionalIds ?? []);
 				for (const t of response.translations) {
 					const pb = protectedBlocks.find(p => p.block.id === t.id);
 					if (!pb || !t.translatedText.trim()) {
@@ -1306,6 +1335,8 @@ export class TranslationManager {
 					state.translations.set(t.id, restored);
 					accepted.set(t.id, restored);
 				}
+				// 5.0 审核: 压缩结果同样可能是分栏降级的临时译文;临时的不进缓存。
+				noteProvisionalIn(state, { translations: [], provisionalIds: [...marked] }, accepted.keys());
 				if (accepted.size) {
 					// 孤儿 compress 不落盘 (2.0.7, 审核 P2-2): 压缩请求可飞 120s,
 					// 期间用户可能已「刷新本页」—— 新运行接管该页并写入了新缓存。
@@ -1326,7 +1357,7 @@ export class TranslationManager {
 					// and went straight to done with those blocks left in English.
 					const complete = state.blocks.every(b =>
 						b.translationMode === 'preserve' || state.translations.has(b.id));
-					if (complete) {
+					if (complete && !hasShownProvisional(state)) {
 						await this.persistPage(state, all);
 					}
 					// The SHORTER (fitting) version replaces the long one in the
@@ -1337,7 +1368,7 @@ export class TranslationManager {
 						// 同上 (2.5.9): 压缩任务跑在**前台 lane** 上,更不该拿
 						// 槽位去等落盘。
 						this.trackWrite(this.deps.writeSegments(pageIndex, [...accepted]
-							.filter(([id]) => byId.has(id))
+							.filter(([id]) => byId.has(id) && !state.provisional?.has(id))
 							.map(([id, text]) => ({
 								hash: segmentHash(byId.get(id)!.sourceText, source, target, byId.get(id)!.continuationContext),
 								translatedText: text
@@ -1457,10 +1488,12 @@ export class TranslationManager {
 				const restored = reg.restore(hit.translatedText);
 				state.cached = false; // The replacement is not durable yet.
 				state.translations.set(blockId, restored);
+				noteProvisionalIn(state, resp, [blockId]);
+				const provisional = state.provisional?.has(blockId) ?? false;
 				state.keepOrigin?.delete(blockId);
 				this.docMemory.learn(extractTermPairs(block.sourceText, restored));
 				this.notify(state);
-				if (this.deps.writeSegments) {
+				if (this.deps.writeSegments && !provisional) {
 					await this.deps.writeSegments(pageIndex, [{
 						hash: segmentHash(block.sourceText, source, target, block.continuationContext),
 						translatedText: restored
@@ -1475,7 +1508,7 @@ export class TranslationManager {
 				// 与 compressBlocks 路径的判据保持一致。
 				const pageComplete = state.blocks.every(b =>
 					b.translationMode === 'preserve' || state.translations.has(b.id));
-				if (pageComplete) {
+				if (pageComplete && !hasShownProvisional(state)) {
 					await this.persistPage(state, state.blocks
 						.filter(b => state.translations.has(b.id))
 						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })));
@@ -2126,6 +2159,7 @@ export class TranslationManager {
 			status: 'extracting',
 			blocks: resume?.blocks ?? [],
 			translations: new Map(resume?.translations),
+			provisional: new Set(resume?.provisional),
 			extractingSince: Date.now()
 		};
 		const navigationAtStart = this.navigationGeneration;
