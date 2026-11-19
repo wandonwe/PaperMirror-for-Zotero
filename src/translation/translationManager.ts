@@ -2842,7 +2842,7 @@ export class TranslationManager {
 	 * 收下的译文还原占位符后立即渲染。
 	 */
 	private async runChunk(run: PageRun, plan: PlannedChunk, chunkIndex: number): Promise<void> {
-		const { state, signal, pageIndex, metrics, source, target, glossary, sourceById, protectedBlocks, canSpend, acceptResponse, noteReject, rejectedResponse } = run;
+		const { state, signal, pageIndex, source, target, glossary, sourceById, protectedBlocks, canSpend, acceptResponse } = run;
 		const chunk = plan.blocks;
 		if (signal.aborted) {
 			throw new PaperMirrorError('CANCELLED', 'cancelled');
@@ -2934,10 +2934,40 @@ export class TranslationManager {
 			catch { /* host handler must not break translation */ }
 		}
 
-		// 分级补救 tier 1: still-missing blocks are retried in SMALL batches
-		// (3–5 blocks — id drift is rare at this size) instead of jumping
-		// straight to one request per block. Only the leftovers of the
-		// grouped pass fall through to single-block salvage.
+		await this.salvageGrouped(run, request, afterRetry, received);
+		await this.salvageSingles(run, request, chunk.filter(b => !received.has(b.id)), received);
+
+		const unrecovered = chunk.filter(b => !received.has(b.id));
+		if (unrecovered.length) {
+			run.untranslatedCount += unrecovered.length;
+			logger.warn(
+				MODULE,
+				`Page ${pageIndex + 1}: ${unrecovered.length} block(s) untranslated after salvage: ${unrecovered.map(b => b.id).join(', ')}`
+			);
+		}
+
+		for (const block of chunk) {
+			const raw = received.get(block.id);
+			if (raw === undefined) {
+				continue;
+			}
+			const pb = protectedBlocks.find(p => p.block.id === block.id)!;
+			const restored = pb.reg.restore(raw);
+			run.results.push({ id: block.id, translatedText: restored });
+			state.translations.set(block.id, restored);
+			run.mirrorDuplicates(block.id); // API-2: 同文块同帧共享
+			// 术语记忆: harvest 「中文术语(ABBR)」 pairs this page established.
+			this.docMemory.learn(extractTermPairs(block.sourceText, restored));
+		}
+		this.notify(run.state); // progressive rendering per chunk
+	}
+
+	// 分级补救 tier 1: still-missing blocks are retried in SMALL batches
+	// (3–5 blocks — id drift is rare at this size) instead of jumping
+	// straight to one request per block. Only the leftovers of the
+	// grouped pass fall through to single-block salvage.
+	private async salvageGrouped(run: PageRun, request: TranslationRequest, afterRetry: SourceBlock[], received: Map<string, string>): Promise<void> {
+		const { signal, pageIndex, metrics, protectedBlocks, canSpend, acceptResponse } = run;
 		if (afterRetry.length >= 3 && canSpend()) {
 			for (let i = 0; i < afterRetry.length; i += SALVAGE_BATCH_SIZE) {
 				if (signal.aborted) {
@@ -2974,12 +3004,14 @@ export class TranslationManager {
 				}
 			}
 		}
+	}
 
-		// 分级补救 tier 2: any id STILL missing gets its own single-block
-		// request. With exactly one block in the request the answer cannot
-		// misalign. Without this pass the block silently stayed English and
-		// the page rendered mixed-language (the JACC report).
-		const stillMissing = chunk.filter(b => !received.has(b.id));
+	// 分级补救 tier 2: any id STILL missing gets its own single-block
+	// request. With exactly one block in the request the answer cannot
+	// misalign. Without this pass the block silently stayed English and
+	// the page rendered mixed-language (the JACC report).
+	private async salvageSingles(run: PageRun, request: TranslationRequest, stillMissing: SourceBlock[], received: Map<string, string>): Promise<void> {
+		const { signal, pageIndex, metrics, target, protectedBlocks, canSpend, noteReject, rejectedResponse } = run;
 		if (stillMissing.length && canSpend()) {
 			logger.warn(MODULE, `Salvaging ${stillMissing.length} block(s) on page ${pageIndex} (concurrency ${SALVAGE_CONCURRENCY})`);
 			if (stillMissing.length > SALVAGE_WARN_THRESHOLD) {
@@ -3045,30 +3077,6 @@ export class TranslationManager {
 				}
 			}
 		}
-
-		const unrecovered = chunk.filter(b => !received.has(b.id));
-		if (unrecovered.length) {
-			run.untranslatedCount += unrecovered.length;
-			logger.warn(
-				MODULE,
-				`Page ${pageIndex + 1}: ${unrecovered.length} block(s) untranslated after salvage: ${unrecovered.map(b => b.id).join(', ')}`
-			);
-		}
-
-		for (const block of chunk) {
-			const raw = received.get(block.id);
-			if (raw === undefined) {
-				continue;
-			}
-			const pb = protectedBlocks.find(p => p.block.id === block.id)!;
-			const restored = pb.reg.restore(raw);
-			run.results.push({ id: block.id, translatedText: restored });
-			state.translations.set(block.id, restored);
-			run.mirrorDuplicates(block.id); // API-2: 同文块同帧共享
-			// 术语记忆: harvest 「中文术语(ABBR)」 pairs this page established.
-			this.docMemory.learn(extractTermPairs(block.sourceText, restored));
-		}
-		this.notify(run.state); // progressive rendering per chunk
 	}
 
 	// 增量持久化: whatever this page has ALREADY translated survives a
