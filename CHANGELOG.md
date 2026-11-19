@@ -34,6 +34,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - 译文验收函数（是否真译、回声、截断、残留、参考文献条目、拒绝原因码）拆到 `translationValidation.ts`，旧导入路径仍可用。
 - 原来近 900 行的 `translatePage` 拆成一个运行状态对象 `PageRun` 和若干阶段方法：抽取与缓存（preparePage）、分批（planPage）、批次执行（runChunks / runChunk）、两级补救（salvageGrouped / salvageSingles）、纯文本兜底（recoverPlain）、收尾（finalizePage）、带重试的请求（requestWithRetry）。`ensurePage` 拆出抽取（extractForPage）和空闲看门狗（translateWithIdleWatchdog）。最长的方法从 896 行降到 170 行以内。
 - 验证：全部测试通过；排版检查结果不变；在 Zotero 里屏蔽网络、只用缓存打开一篇 121 页的指南，7 页全部从缓存显示，0 次请求。
+- 第二轮：`ensurePage` 再拆出 pageAlreadyActive / recordExtraction，`preparePage` 拆出整页缓存与段落缓存两步，`runChunk` 拆出 requestChunkOnce / reportUnstableEngine / applyChunkResults；阅读会话 `readerSession.ts` 的 open、renderDocPage、startTranslatingWithPool、resolveStrictUnfit、reportPlacement 各拆成若干具名步骤（建面板、隐私说明、订阅 PDF 事件、取底图、块交互、管理器依赖、跨服务商读缓存、压缩重译、终版几何复核、诊断收集）。同样屏蔽网络验证：7 页缓存命中、0 次请求，引擎菜单正常。
 
 ### 各翻译引擎按 2026-11-19 官方文档更新
 
