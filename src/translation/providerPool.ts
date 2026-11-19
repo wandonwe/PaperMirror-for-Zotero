@@ -270,11 +270,6 @@ function providerType(cap: ProviderCapability): 'free' | 'paid-mt' | 'local' | '
 
 export type ProviderKind = 'free' | 'paid-mt' | 'local' | 'llm' | 'unknown';
 
-/** The provider "kind" that decides its band and its custom-range limits. */
-export function providerKind(cap: ProviderCapability): ProviderKind {
-	return providerType(cap);
-}
-
 /**
  * The custom-mode range for a provider: the min/max a user may set, whether the
  * field is LOCKED (free engines are fixed at 1), and the default value for a

@@ -49,10 +49,6 @@ export function setDebugEnabled(enabled: boolean): void {
 	debugEnabled = enabled;
 }
 
-export function isDebugEnabled(): boolean {
-	return debugEnabled;
-}
-
 function emit(level: 'debug' | 'warn' | 'error', module: string, message: string, extra?: unknown): void {
 	const time = new Date().toISOString();
 	let line = `${PREFIX} ${time} [${module}] ${message}`;

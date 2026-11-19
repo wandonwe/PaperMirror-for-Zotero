@@ -124,14 +124,6 @@ export function getReaderBrowser(reader: ReaderLike): Element {
 	return iframe as Element;
 }
 
-export function getMainWindowForReader(reader: ReaderLike): Window {
-	const win = reader._window ?? Zotero.getMainWindow();
-	if (!win) {
-		throw new PaperMirrorError('READER_API_CHANGED', 'No main window available for reader.');
-	}
-	return win;
-}
-
 /**
  * 归属判定专用 (2.0.10, 审核 P3): 不经 getMainWindow() 兜底。缺 _window 的
  * reader 被兜底归到「碰巧的窗口」时,disposeWindow 可能误杀在用会话或漏杀
@@ -1782,15 +1774,6 @@ export function getSelectedText(reader: ReaderLike): string {
  */
 export function registerToolbarListener(pluginID: string, handler: (event: ZoteroReaderEvent) => void): void {
 	Zotero.Reader.registerEventListener('renderToolbar', handler, pluginID);
-}
-
-/**
- * Official text-selection popup hook (documented event type in 9.0.6
- * registerEventListener JSDoc). event.params.annotation.text carries the
- * selected text. Cleanup happens via pluginID on shutdown, same as toolbar.
- */
-export function registerSelectionPopupListener(pluginID: string, handler: (event: ZoteroReaderEvent) => void): void {
-	Zotero.Reader.registerEventListener('renderTextSelectionPopup', handler, pluginID);
 }
 
 /**

@@ -14,6 +14,7 @@
 
 import type { ProviderSettings } from '../../types/models';
 import { PaperMirrorError } from '../../types/models';
+import { gpt6MinimumEffort, gpt6Tier, isGlm53, isGptOss, isKimiK26, isKimiK3 } from './modelFamilies';
 
 /**
  * 'minimal'…'xhigh' are OpenAI-style effort levels; 'disabled'/'auto' are the
@@ -126,52 +127,59 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
 		out.reasoning_effort = eff;
 	}
 	const level = deepseekEffort(eff);
+	const model = (settings.model || '').trim();
 	if (THINKING_OBJECT_PROVIDERS.has(providerId)) {
 		// 默认关闭(见上方证据):翻译只要最终译文,而它们默认就思考,
 		// 输出 token 是译文的十几倍 —— 时间和钱都白烧。
-		out.thinking = level ? { type: 'enabled' } : { type: 'disabled' };
-        if (providerId === 'deepseek' && level) out.reasoning_effort = level;
+		out.thinking = { type: level ? 'enabled' : 'disabled' };
+		if (providerId === 'deepseek' && level) {
+			out.reasoning_effort = level;
+		}
 	}
 	else if (ENABLE_THINKING_PROVIDERS.has(providerId)) {
 		out.enable_thinking = level !== null;
 	}
-	else if (providerId === 'moonshot' && /^kimi-k2\.6(?:$|-)/i.test(settings.model || '')) {
-        out.thinking = {type: level ? 'enabled' : 'disabled'};
-    }
-    else if (ALWAYS_THINKS_PROVIDERS.has(providerId)) {
+	else if (providerId === 'moonshot' && isKimiK26(model)) {
+		out.thinking = { type: level ? 'enabled' : 'disabled' };
+	}
+	else if (ALWAYS_THINKS_PROVIDERS.has(providerId)) {
 		// 关不掉就取最低档。默认是 max —— 对翻译是纯浪费。
 		out.reasoning_effort = level ?? 'low';
 	}
-    const model=(settings.model || '').trim();
-    // Hosted GLM-5.3 always reasons; do not send the generic off switch.
-    if(providerId === 'siliconflow' && model === 'zai-org/GLM-5.3') delete out.enable_thinking;
-    if(providerId === 'zhipu' && /^glm-5\.3(?:$|-)/i.test(model)) {
-        out.thinking={type:'enabled'};
-        out.reasoning_effort=level ?? 'low';
-    }
-    if(providerId === 'moonshot' && /^kimi-k(?:3(?:\.\d+)?|2\.6)(?:$|-)/i.test(model)) {
-        const expected=/^kimi-k3/i.test(model) || level ? 1 : .6;
-        if(typeof settings.temperature === 'number' && settings.temperature !== expected)
-            throw new PaperMirrorError('UNKNOWN', `当前 Kimi 模型温度固定为 ${expected}，请清除高级设置中的自定义温度。`);
-        delete out.temperature;
-        if(/^kimi-k3/i.test(model) && 'max_tokens' in out) {
-            out.max_completion_tokens=out.max_tokens;delete out.max_tokens;
-        }
-    }
-    // GPT-6 (2026-11-19): no 'minimal' level. Terra/Luna accept 'none';
-    // Astra/Sol bottom out at 'low'. Same slugs behind OpenRouter's openai/.
-    const gpt6=/^(?:openai\/)?gpt-6(?:\.\d+)?-(astra|sol|terra|luna)(?:$|-)/.exec(model);
-    if(gpt6 && (providerId === 'openai' || providerId === 'openrouter')) {
-        const floor=gpt6[1] === 'terra' || gpt6[1] === 'luna' ? 'none' : 'low';
-        // 5.0 (真机: gpt-6-luna 默认推理,单请求 22–28 秒,吞吐 87 字/秒,
-        // 同池 DeepSeek 392、Gemini 318): 与 DeepSeek 默认关思考同理 ——
-        // 翻译只要最终译文。用户没设强度时取该型号的最低档。
-        if(!eff || eff === 'minimal' || eff === 'disabled') out.reasoning_effort=floor;
-    }
-    if(providerId === 'groq' && /^openai\/gpt-oss-/.test(model)) {
-        out.reasoning_effort=eff === 'high' || eff === 'xhigh' ? 'high' : eff === 'medium' ? 'medium' : 'low';
-    }
 
+	// ---- 型号级覆盖(优先于上面的服务商级规则) ----
+	// SiliconFlow 托管的 GLM-5.3 总是思考,不发通用的关闭开关。
+	if (providerId === 'siliconflow' && model === 'zai-org/GLM-5.3') {
+		delete out.enable_thinking;
+	}
+	if (providerId === 'zhipu' && isGlm53(model)) {
+		out.thinking = { type: 'enabled' };
+		out.reasoning_effort = level ?? 'low';
+	}
+	if (providerId === 'moonshot' && (isKimiK3(model) || isKimiK26(model))) {
+		// 温度由服务端固定: K3/K3.1 恒为 1.0;K2.6 思考时 1.0、不思考时 0.6。
+		const expected = isKimiK3(model) || level ? 1 : 0.6;
+		if (typeof settings.temperature === 'number' && settings.temperature !== expected) {
+			throw new PaperMirrorError('UNKNOWN', `当前 Kimi 模型温度固定为 ${expected}，请清除高级设置中的自定义温度。`);
+		}
+		delete out.temperature;
+		if (isKimiK3(model) && 'max_tokens' in out) {
+			out.max_completion_tokens = out.max_tokens;
+			delete out.max_tokens;
+		}
+	}
+	const tier = gpt6Tier(model);
+	if (tier && (providerId === 'openai' || providerId === 'openrouter')) {
+		// GPT-6 没有 minimal 档。5.0 (真机: gpt-6-luna 默认推理,单请求 22–28 秒,
+		// 吞吐 87 字/秒,同池 DeepSeek 392、Gemini 318): 与 DeepSeek 默认关思考
+		// 同理 —— 用户没设强度时取该型号的最低档。
+		if (!eff || eff === 'minimal' || eff === 'disabled') {
+			out.reasoning_effort = gpt6MinimumEffort(tier);
+		}
+	}
+	if (providerId === 'groq' && isGptOss(model)) {
+		out.reasoning_effort = eff === 'high' || eff === 'xhigh' ? 'high' : eff === 'medium' ? 'medium' : 'low';
+	}
 	return out;
 }
 

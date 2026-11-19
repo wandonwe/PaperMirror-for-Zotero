@@ -567,13 +567,6 @@ export async function writeSegments(parts: SegmentContextParts, entries: { hash:
 	return p.promise;
 }
 
-export async function clearAttachment(attachmentKey: string, fileHash: string): Promise<void> {
-	const dir = PathUtils.join(cacheRootDir(), attachmentDirName(attachmentKey, fileHash));
-	dropPendingSegments(dir); // 删目录前丢弃其未落盘 pending,防止 flush 复活已删文件
-	dropStoreCache(dir);      // 解析缓存同样要丢 —— 否则会拿着已删文件的内容继续命中
-	await IOUtils.remove(dir, { recursive: true, ignoreAbsent: true });
-}
-
 /** Remove every cache dir for this attachment key regardless of file hash. */
 export async function clearAttachmentAllVersions(attachmentKey: string): Promise<void> {
 	const root = cacheRootDir();

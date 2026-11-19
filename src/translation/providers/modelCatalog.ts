@@ -21,13 +21,6 @@ export type ModelGroup = 'recommended' | 'quality' | 'fast' | 'preview' | 'legac
 
 /** Display order and headers for the grouped picker. */
 export const MODEL_GROUP_ORDER: ModelGroup[] = ['recommended', 'quality', 'fast', 'preview', 'legacy'];
-export const MODEL_GROUP_LABELS: Record<ModelGroup, string> = {
-	recommended: '推荐',
-	quality: '高质量',
-	fast: '快速 / 低成本',
-	preview: '预览版',
-	legacy: '旧版兼容'
-};
 
 export interface CatalogModel {
 	/** Exact model string passed to the API. */

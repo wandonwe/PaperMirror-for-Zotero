@@ -486,7 +486,6 @@ export class ReaderSession {
 		this.overlay.setPageRenderer((pageIndex, host, width, signal) => this.renderDocPage(pageIndex, host, width, signal));
 		this.overlay.setDisplayMode(getPref<OverlayDisplayMode>('overlayDisplayMode', 'dim-original'));
 		this.overlay.setPeekOnHover(getPref<boolean>('overlayPeekHover', true));
-		this.overlay.setFitMode(getPref<'strict' | 'expand'>('overlayFitMode', 'expand'));
 		this.pane.setArticleFontSize(getPref<number>('articleFontSize', 16));
 		// 整页对照: the pane shows the whole document; each page renders as
 		// the original until its translation completes, then swaps.

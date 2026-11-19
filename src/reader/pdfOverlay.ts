@@ -40,7 +40,6 @@ import {
 	rectToCssBox,
 	type PdfRect
 } from './overlayLayout';
-import type { FitMode } from './textFitter';
 import * as adapter from './zoteroReaderAdapter';
 import type { ReaderLike } from './zoteroReaderAdapter';
 import { overlayGeometry, type OverlayGeometry } from './overlayGeometry';
@@ -127,7 +126,6 @@ export class PdfOverlay {
 	private reader: ReaderLike;
 	private enabled = false;
 	private displayMode: OverlayDisplayMode = 'translation-only';
-	private fitMode: FitMode = 'expand';
 	/** Sampled paper colour per page, so masks match the page (and the theme). */
 	private paperColour = new Map<number, string>();
 	private disposeEvents: (() => void) | null = null;
@@ -267,14 +265,6 @@ export class PdfOverlay {
 		catch {
 			// reader may be gone
 		}
-	}
-
-	/**
-	 * 3.1.0 起无效:扩边由严格页自己的阶梯决定(先无损扩进邻近空白,再压缩、
-	 * 缩字、保留原文),不再有"严格/扩展"两档。保留接口免得偏好读取处报错。
-	 */
-	setFitMode(mode: FitMode): void {
-		this.fitMode = mode;
 	}
 
 	setPageData(pageIndex: number, data: OverlayPageData): void {

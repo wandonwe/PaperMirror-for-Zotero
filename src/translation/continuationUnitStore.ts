@@ -1,5 +1,5 @@
 /** Session-local, bounded shared translations of complete source sentences. */
-import { PaperMirrorError, type GlossaryRule, type PlaceholderEntry, type TranslationRequest, type TranslationResponse } from '../types/models';
+import { PaperMirrorError, type GlossaryRule, type TranslationRequest, type TranslationResponse } from '../types/models';
 import { planContinuationRequest } from './continuationRequest';
 import { PlaceholderRegistry } from './placeholderRegistry';
 import { fnv1a64 } from '../cache/cacheSchema';

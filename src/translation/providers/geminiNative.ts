@@ -60,20 +60,22 @@ export function geminiGenerationConfig(settings: ProviderSettings, opts?: { json
 		config.responseMimeType = 'application/json';
 	}
 	const r = settings.reasoning;
-    const model=(settings.model || DEFAULT_MODEL).replace(/^models\//,'');
-    if (/^gemini-(?:[3-9]|\d{2})(?:[.-]|$)/.test(model)) {
-        // Gemini 3+/4 use thinkingLevel (thinkingBudget is deprecated and 400s on
-        // gemini-4-argon). Models that cannot turn thinking off take their
-        // documented minimum: 'low' for Gemini 4, 3.7/3.8 Flash and Pro.
-        if(r && r !== 'auto') {
-            const minimum=/^gemini-(?:[4-9]|\d{2})/.test(model) || /^gemini-3\.[78]-flash/.test(model) || /pro/.test(model) ? 'low' : 'minimal';
-            config.thinkingConfig={thinkingLevel:r === 'disabled' || r === 'minimal' ? minimum : r === 'xhigh' ? 'high' : r};
-        }
-    } else if (r === 'disabled' || r === 'minimal') {
-        config.thinkingConfig = { thinkingBudget: /^gemini-2\.5-pro/.test(model) ? 128 : 0 };
-    } else if (r === 'auto') {
-        config.thinkingConfig = { thinkingBudget: -1 };
-    }
+	const model = (settings.model || DEFAULT_MODEL).replace(/^models\//, '');
+	if (/^gemini-(?:[3-9]|\d{2})(?:[.-]|$)/.test(model)) {
+		// Gemini 3+/4 use thinkingLevel (thinkingBudget is deprecated and 400s on
+		// gemini-4-argon). Models that cannot turn thinking off take their
+		// documented minimum: 'low' for Gemini 4, 3.7/3.8 Flash and Pro.
+		if (r && r !== 'auto') {
+			const minimum = /^gemini-(?:[4-9]|\d{2})/.test(model) || /^gemini-3\.[78]-flash/.test(model) || /pro/.test(model) ? 'low' : 'minimal';
+			config.thinkingConfig = { thinkingLevel: r === 'disabled' || r === 'minimal' ? minimum : r === 'xhigh' ? 'high' : r };
+		}
+	}
+	else if (r === 'disabled' || r === 'minimal') {
+		config.thinkingConfig = { thinkingBudget: /^gemini-2\.5-pro/.test(model) ? 128 : 0 };
+	}
+	else if (r === 'auto') {
+		config.thinkingConfig = { thinkingBudget: -1 };
+	}
 	return config;
 }
 
@@ -104,11 +106,6 @@ export function isThinkingRejection(e: unknown): boolean {
 	return e instanceof PaperMirrorError
 		&& e.httpStatus === 400
 		&& (e.rejectedParam === 'thinking' || /think|budget/i.test(e.message));
-}
-
-/** 测试可重置的自愈记忆。 */
-export function resetThinkingHeal(): void {
-	thinkingRejected.clear();
 }
 
 /**

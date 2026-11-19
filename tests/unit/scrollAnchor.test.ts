@@ -24,7 +24,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { anchorFractionOf, anchorScrollTarget, toScrollTop, PageOffsetIndex } from '../../src/ui/pageOffsetIndex';
-import { SYNC_ECHO_MS, SyncGuard } from '../../src/reader/scrollSynchronizer';
+import { SyncGuard } from '../../src/reader/scrollSynchronizer';
 
 const read = (p: string): string => readFileSync(join(process.cwd(), p), 'utf8');
 
