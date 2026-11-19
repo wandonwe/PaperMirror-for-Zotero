@@ -2115,20 +2115,7 @@ export class TranslationManager {
 		if (this.disposed) return;
 		const existing = this.pages.get(pageIndex);
 		this.touchPage(pageIndex);
-		// 2.8.3: 被卸过内容的已完成页必须能重新装载 —— 否则用户翻回去只剩原文。
-		// 走的是与"从未翻过的页"完全相同的路径: 重新抽取 + 读页面缓存,零 API。
-		if (existing && (existing.status === 'done' || existing.status === 'translating')
-			&& existing.evicted !== true) {
-			return;
-		}
-		// A page may legitimately be mid-extraction — but a state STUCK there
-		// past twice the extraction timeout is a zombie (the bug behind 每页必点
-		// 圆环): fall through and replace it instead of early-returning forever.
-		if (existing?.status === 'extracting'
-			&& Date.now() - (existing.extractingSince ?? Date.now()) < this.extractTimeoutMs * 2) {
-			return;
-		}
-		if (this.scheduler.isScheduled(jobKey)) {
+		if (this.pageAlreadyActive(existing, jobKey)) {
 			return;
 		}
 
@@ -2176,28 +2163,7 @@ export class TranslationManager {
 				this.releasePage(pageIndex, state, 'navigation-superseded');
 				return;
 			}
-			state.blocks = blocks;
-			// 2.8.5 (P0): 记下这一页走的抽取路径 —— 语料重解析对不上时,
-			// "路径不同"是最可能的原因,此前连问都问不出来。
-			try {
-				const path = this.deps.extractPathOf?.(pageIndex);
-				if (path) {
-					state.extractPath = path;
-				}
-			}
-			catch { /* 记不到就不记,绝不影响翻译 */ }
-			extractedAt = Date.now();
-			let extractPhases: NonNullable<PageDiagnostics['extractPhases']> | undefined;
-			try {
-				extractPhases = this.deps.extractPhasesOf?.(pageIndex);
-			}
-			catch { /* 量不到就不量,绝不影响翻译 */ }
-			this.pageTiming.set(pageIndex, {
-				requestedAt,
-				extractMs: extractedAt - requestedAt,
-				firstTextAt: 0,
-				...(extractPhases ? { extractPhases } : {})
-			});
+			extractedAt = this.recordExtraction(pageIndex, state, blocks, requestedAt);
 			if (!blocks.length) {
 				state.status = 'done';
 				this.notify(state);
@@ -2254,6 +2220,51 @@ export class TranslationManager {
 			state.error = error;
 			this.notify(state);
 		}
+	}
+
+	/** ensurePage 拆出: 这一页已经完成、正在抽取或已在排队时不重复发起。 */
+	private pageAlreadyActive(existing: PageTranslationState | undefined, jobKey: string): boolean {
+		// 2.8.3: 被卸过内容的已完成页必须能重新装载 —— 否则用户翻回去只剩原文。
+		// 走的是与"从未翻过的页"完全相同的路径: 重新抽取 + 读页面缓存,零 API。
+		if (existing && (existing.status === 'done' || existing.status === 'translating')
+			&& existing.evicted !== true) {
+			return true;
+		}
+		// A page may legitimately be mid-extraction — but a state STUCK there
+		// past twice the extraction timeout is a zombie (the bug behind 每页必点
+		// 圆环): fall through and replace it instead of early-returning forever.
+		if (existing?.status === 'extracting'
+			&& Date.now() - (existing.extractingSince ?? Date.now()) < this.extractTimeoutMs * 2) {
+			return true;
+		}
+		return this.scheduler.isScheduled(jobKey);
+	}
+
+	/** ensurePage 拆出: 记下抽取路径、抽取分阶段耗时与计时起点;返回抽取完成时刻。 */
+	private recordExtraction(pageIndex: number, state: PageTranslationState, blocks: SourceBlock[], requestedAt: number): number {
+		state.blocks = blocks;
+		// 2.8.5 (P0): 记下这一页走的抽取路径 —— 语料重解析对不上时,
+		// "路径不同"是最可能的原因,此前连问都问不出来。
+		try {
+			const path = this.deps.extractPathOf?.(pageIndex);
+			if (path) {
+				state.extractPath = path;
+			}
+		}
+		catch { /* 记不到就不记,绝不影响翻译 */ }
+		const extractedAt = Date.now();
+		let extractPhases: NonNullable<PageDiagnostics['extractPhases']> | undefined;
+		try {
+			extractPhases = this.deps.extractPhasesOf?.(pageIndex);
+		}
+		catch { /* 量不到就不量,绝不影响翻译 */ }
+		this.pageTiming.set(pageIndex, {
+			requestedAt,
+			extractMs: extractedAt - requestedAt,
+			firstTextAt: 0,
+			...(extractPhases ? { extractPhases } : {})
+		});
+		return extractedAt;
 	}
 
 	/**
