@@ -29,6 +29,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - 各服务商按型号区分参数的判断集中到 `modelFamilies.ts`（Kimi K3/K2.6、GLM-5.3、GPT-6 档位、GPT-OSS），请求构造不再各写一份正则；`advancedParams`、Gemini 思考参数的缩进与写法统一。
 - 删除没有任何调用方的代码约 130 行（旧排版页的常量与导入、已失效的覆盖层"适配模式"开关、9 个无人调用的导出函数），并在 TypeScript 配置里打开 `noUnusedLocals`，以后再留下未使用的代码会直接编译报错。
 
+### 翻译管理器重构（不改变行为）
+
+- 译文验收函数（是否真译、回声、截断、残留、参考文献条目、拒绝原因码）拆到 `translationValidation.ts`，旧导入路径仍可用。
+- 原来近 900 行的 `translatePage` 拆成一个运行状态对象 `PageRun` 和若干阶段方法：抽取与缓存（preparePage）、分批（planPage）、批次执行（runChunks / runChunk）、两级补救（salvageGrouped / salvageSingles）、纯文本兜底（recoverPlain）、收尾（finalizePage）、带重试的请求（requestWithRetry）。`ensurePage` 拆出抽取（extractForPage）和空闲看门狗（translateWithIdleWatchdog）。最长的方法从 896 行降到 170 行以内。
+- 验证：全部测试通过；排版检查结果不变；在 Zotero 里屏蔽网络、只用缓存打开一篇 121 页的指南，7 页全部从缓存显示，0 次请求。
+
 ### 各翻译引擎按 2026-11-19 官方文档更新
 
 - 新默认型号（只影响没有手动选过型号的用户）：OpenAI `gpt-6-luna`，Claude `claude-sonnet-5-5`，Gemini `gemini-3.8-flash`。其余服务默认不变。
