@@ -1920,12 +1920,20 @@ export class ReaderSession {
 			}
 			return;
 		}
+		this.runStrictCompress(pageIndex, element, remaining, plan.compress, token, live, this.manager);
+	}
+
+	/**
+	 * resolveStrictUnfit 拆出: 对这些块发一次页级压缩重译(同页最多一个在飞),
+	 * 结果就地套用;仍放不下的进入下一轮,全部处理完做最终清点。
+	 */
+	private runStrictCompress(pageIndex: number, element: HTMLElement, remaining: UnfitBlock[], compressIds: string[], token: number, live: () => boolean, manager: TranslationManager): void {
 		this.compressPending.add(pageIndex);
-		for (const id of plan.compress) {
+		for (const id of compressIds) {
 			this.compressRounds.set(id, (this.compressRounds.get(id) ?? 0) + 1);
 		}
-		const entries = remaining.filter(u => plan.compress.includes(u.id));
-		void this.manager.compressBlocks(pageIndex, entries)
+		const entries = remaining.filter(u => compressIds.includes(u.id));
+		void manager.compressBlocks(pageIndex, entries)
 			.then((accepted) => {
 				if (!live()) {
 					// 注意: compressPending 的清理在下面的 finally,不在这里 ——
