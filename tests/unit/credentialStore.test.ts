@@ -231,3 +231,31 @@ test('P2 (2.1.1): getApiKey 查库期间被 setApiKey 抢先,旧值不得回填�
 		delete (globalThis as Record<string, any>).Components;
 	}
 });
+
+test('5.0: providersWithSavedKeys 合并凭据库用户名与明文回退,不返回密钥本身', async () => {
+	const p = installPlatform({});
+	try {
+		const { setApiKey, providersWithSavedKeys, clearKeyCache } = await import('../../src/security/credentialStore');
+		clearKeyCache(); // 模块级会话缓存跨测试共享
+		await setApiKey('openai', 'sk-listed-1');
+		p.prefs.set('bilingualReader.apiKeyFallback', JSON.stringify({ deepl: 'dl-x', gemini: '' }));
+		const ids = await providersWithSavedKeys();
+		assert.deepEqual([...ids].sort(), ['deepl', 'openai'], '空回退值不算已设置');
+		for (const id of ids) {
+			assert.ok(!id.includes('sk-'), '只返回服务商 id');
+		}
+	}
+	finally { p.teardown(); }
+});
+
+test('5.0: 凭据库抛错时 providersWithSavedKeys 退回明文回退,不抛出', async () => {
+	const p = installPlatform({});
+	try {
+		(globalThis as Record<string, any>).Services.logins.searchLoginsAsync = async () => { throw new Error('locked'); };
+		p.prefs.set('bilingualReader.apiKeyFallback', JSON.stringify({ moonshot: 'k' }));
+		const { providersWithSavedKeys, clearKeyCache } = await import('../../src/security/credentialStore');
+		clearKeyCache();
+		assert.deepEqual([...await providersWithSavedKeys()], ['moonshot']);
+	}
+	finally { p.teardown(); }
+});

@@ -7,6 +7,20 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+5.0.0 草稿（尚未发布）。
+
+### 菜单栏「翻译服务」只列出已设置的引擎
+
+- 以前菜单列出全部 16 个服务，包括从没填过密钥、点了只会报错的那些。现在只列：微软、谷歌两个免费引擎；已保存密钥的服务；填了地址的 OpenAI 兼容 / 自定义端点；配置过的 Ollama；以及当前正在用的引擎。其余服务在「设置…」里配置后自动出现，不用重开阅读器。
+
+### 各翻译引擎按 2026-11-19 官方文档更新
+
+- 新默认型号（只影响没有手动选过型号的用户）：OpenAI `gpt-6-luna`，Claude `claude-sonnet-5-5`，Gemini `gemini-3.8-flash`。其余服务默认不变。
+- 模型列表加入 GPT-6 系列、Claude Opus 5.5 / Haiku 5.5 / Fable 5.2、Gemini 4 Argon、Kimi K3.1 Pro、Qwen4 Max、GLM-5.3-FlashX 等；即将停用的型号不再推荐，移到「旧版兼容」。
+- 修复几类会被服务商直接拒绝（HTTP 400）的请求：Claude Haiku 5.5 收到预算式思考和温度、Sonnet 5.5 收到「关闭思考」、Gemini 4 收到 thinkingBudget、Kimi K3.1 收到温度 0、GPT-6 收到不存在的 minimal 档。
+- 已停用或被服务商自动改路由的型号会换成官方替代型号（如 Gemini 3.7 Flash → 3.8 Flash）；已公告但还没到停用日的（如 gpt-5-mini 12 月 11 日、claude-sonnet-4-5 11 月 30 日）到期当天才换。代理、网关和聚合平台上的型号名不改。
+- 核对记录与官方链接见 [docs/LLM-PROVIDERS-2026-11-19.md](docs/LLM-PROVIDERS-2026-11-19.md)。
+
 ## [4.10.2] — 2026-11-18
 
 整理版：插件代码与 4.10.1 完全相同，安装包里只有版本号不同；阅读、翻译和缓存的行为都不变，升级后不需要重新翻译。

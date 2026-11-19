@@ -47,12 +47,17 @@ test('openaiChatExtras: max tokens key differs for the official OpenAI endpoint'
 
 test('gemini 深度思考 (native adapter): disabled→budget 0, auto→budget -1, default→omitted', () => {
 	assert.deepEqual(
-		geminiGenerationConfig(base({ reasoning: 'disabled' })),
+		geminiGenerationConfig(base({ model: 'gemini-2.5-flash', reasoning: 'disabled' })),
 		{ temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
 	);
 	assert.deepEqual(
-		geminiGenerationConfig(base({ reasoning: 'auto' })),
+		geminiGenerationConfig(base({ model: 'gemini-2.5-flash', reasoning: 'auto' })),
 		{ temperature: 0, thinkingConfig: { thinkingBudget: -1 } }
+	);
+	// 5.0: 默认型号 gemini-3.8-flash 走 thinkingLevel,最低 low
+	assert.deepEqual(
+		geminiGenerationConfig(base({ reasoning: 'disabled' })),
+		{ temperature: 0, thinkingConfig: { thinkingLevel: 'low' } }
 	);
 	assert.deepEqual(geminiGenerationConfig(base({})), { temperature: 0 });
 	// json mode + user-set advanced values flow into generationConfig

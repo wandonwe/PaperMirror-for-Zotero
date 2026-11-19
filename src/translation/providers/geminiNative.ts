@@ -23,7 +23,9 @@ import { requestJSON } from './httpClient';
 import type { TranslateOptions, TranslationProvider } from './types';
 
 const DEFAULT_BASE = 'https://generativelanguage.googleapis.com';
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+// Google recommends 3.8 Flash for new projects; the 2.5 family is limited to
+// prior users (2026-10-28 models page). Kept in sync w/ modelCatalog.
+const DEFAULT_MODEL = 'gemini-3.8-flash';
 
 export function geminiGenerateURL(settings: ProviderSettings, defaultModel = DEFAULT_MODEL): string {
 	const base = (settings.apiBaseURL || DEFAULT_BASE).replace(/\/+$/, '');
@@ -59,9 +61,12 @@ export function geminiGenerationConfig(settings: ProviderSettings, opts?: { json
 	}
 	const r = settings.reasoning;
     const model=(settings.model || DEFAULT_MODEL).replace(/^models\//,'');
-    if (/^gemini-3/.test(model)) {
+    if (/^gemini-(?:[3-9]|\d{2})(?:[.-]|$)/.test(model)) {
+        // Gemini 3+/4 use thinkingLevel (thinkingBudget is deprecated and 400s on
+        // gemini-4-argon). Models that cannot turn thinking off take their
+        // documented minimum: 'low' for Gemini 4, 3.7/3.8 Flash and Pro.
         if(r && r !== 'auto') {
-            const minimum=/^gemini-3\.[78]-flash/.test(model) || /pro/.test(model) ? 'low' : 'minimal';
+            const minimum=/^gemini-(?:[4-9]|\d{2})/.test(model) || /^gemini-3\.[78]-flash/.test(model) || /pro/.test(model) ? 'low' : 'minimal';
             config.thinkingConfig={thinkingLevel:r === 'disabled' || r === 'minimal' ? minimum : r === 'xhigh' ? 'high' : r};
         }
     } else if (r === 'disabled' || r === 'minimal') {

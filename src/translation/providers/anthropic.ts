@@ -12,10 +12,29 @@ import type { TranslateOptions, TranslationProvider } from './types';
 import { anthropicMessagesURL } from './urls';
 
 const DEFAULT_BASE = 'https://api.anthropic.com';
-// claude-sonnet-5 is the current recommended Sonnet for translation (balanced
-// quality/latency; 2026-08-10, platform.claude.com). Kept in sync w/ modelCatalog.
-const DEFAULT_MODEL = 'claude-sonnet-5';
+// claude-sonnet-5-5 is the current Sonnet — balanced quality/latency for
+// translation (2026-11-19, platform.claude.com). Kept in sync w/ modelCatalog.
+const DEFAULT_MODEL = 'claude-sonnet-5-5';
+// 2026-10-21 exists, but its only change for our requests is that sampling
+// parameters always 400 — we already omit them on every current model, and
+// staying on 2023-06-01 keeps x-api-key gateways and older models (where we
+// still send temperature 0) working unchanged.
 const API_VERSION = '2023-06-01';
+
+/**
+ * Claude thinking contract per model family (platform.claude.com, 2026-11-19):
+ *  - adaptive models: Claude 5.x, Opus 4.7/4.8 — budget_tokens returns 400 and a
+ *    custom temperature returns 400;
+ *  - cannot disable thinking: Fable 5.x, Mythos 5.x, Opus 5.5+ → keep adaptive at
+ *    effort low when the user asks for 「禁用」;
+ *  - Sonnet 5.5+ rejects `disabled`; `between_tools` (effort ≤ high) is the
+ *    no-thinking equivalent for a single-turn request;
+ *  - everything else in the adaptive set accepts `disabled`.
+ */
+const ADAPTIVE_MODEL = /^claude-(?:(?:sonnet|opus|haiku)-5|opus-4-[78]|(?:fable|mythos)-5)/;
+const ALWAYS_THINKS_MODEL = /^claude-(?:(?:fable|mythos)-5|opus-5-(?:[5-9]|[1-9]\d)(?:$|-))/;
+const BETWEEN_TOOLS_MODEL = /^claude-sonnet-5-(?:[5-9]|[1-9]\d)(?:$|-)/;
+const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
 function headers(settings: ProviderSettings): Record<string, string> {
 	return {
@@ -40,18 +59,33 @@ export function advancedBody(settings: ProviderSettings, defaultMax: number): Re
 		? Math.floor(settings.maxOutputTokens)
 		: defaultMax;
 	const out: Record<string, unknown> = { max_tokens: maxTokens };
-    const model=settings.model || DEFAULT_MODEL;
-    const modern=/^claude-(?:(?:sonnet|opus)-5|opus-4-[78]|(?:fable|mythos)-5)/.test(model);
-    if(modern) {
-        if(typeof settings.temperature === 'number' && settings.temperature !== 1)
-            throw new PaperMirrorError('UNKNOWN', '当前 Claude 模型不支持自定义温度，请清除高级设置中的温度。');
-        const r=settings.reasoning;
-        const always=/^claude-(?:fable|mythos)-5/.test(model);
-        const enabled=always || (!!r && r !== 'disabled');
-        out.thinking={type:enabled ? 'adaptive' : 'disabled'};
-        if(enabled && r !== 'auto') out.output_config={effort:r === 'high' || r === 'xhigh' ? 'high' : r === 'medium' ? 'medium' : 'low'};
-        return out;
-    }
+	const model = (settings.model || DEFAULT_MODEL).trim();
+	if (ADAPTIVE_MODEL.test(model)) {
+		if (typeof settings.temperature === 'number' && settings.temperature !== 1) {
+			throw new PaperMirrorError('UNKNOWN', '当前 Claude 模型不支持自定义温度，请清除高级设置中的温度。');
+		}
+		const r = settings.reasoning || '';
+		const off = !r || r === 'disabled';
+		if (off && ALWAYS_THINKS_MODEL.test(model)) {
+			out.thinking = { type: 'adaptive' };
+			out.output_config = { effort: 'low' };
+		}
+		else if (off && BETWEEN_TOOLS_MODEL.test(model)) {
+			out.thinking = { type: 'between_tools' };
+			out.output_config = { effort: 'low' };
+		}
+		else if (off) {
+			out.thinking = { type: 'disabled' };
+		}
+		else {
+			out.thinking = { type: 'adaptive' };
+			if (r !== 'auto') {
+				const effort = r === 'minimal' ? 'low' : r;
+				out.output_config = { effort: EFFORTS.has(effort) ? effort : 'low' };
+			}
+		}
+		return out;
+	}
 
 	if (settings.reasoning === 'high' || settings.reasoning === 'xhigh') {
 		// The thinking budget is ADDED ON TOP of the output allowance — carving

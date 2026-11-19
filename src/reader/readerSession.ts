@@ -17,7 +17,8 @@ import {
 	saveExplanationNote,
 	saveTranslationNote
 } from '../notes/noteService';
-import { getApiKey } from '../security/credentialStore';
+import { getApiKey, providersWithSavedKeys } from '../security/credentialStore';
+import { configuredProviderIds } from '../translation/providerAvailability';
 import { registerUrlCredentials } from '../security/logSanitizer';
 import { getProvider, listProviders } from '../translation/providers/registry';
 import { buildPool, pickProviderForPage, pickWeightedProviderForPage, rankProvidersForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
@@ -449,6 +450,7 @@ export class ReaderSession {
 			onToggleViewKind: kind => this.applyPaneViewKind(kind, { persist: true }),
 			onPickLanguages: (source, target) => this.applyLanguagePick(source, target),
 			onPickProvider: providerId => this.applyProviderPick(providerId),
+			loadProviderChoices: () => this.configuredProviderChoices(),
 			onClose: () => this.close(),
 			onSwapSides: () => this.swapSides(),
 			onBlockClick: (pageIndex, _blockId) => this.sync?.onPaneNavigated(pageIndex),
@@ -493,10 +495,12 @@ export class ReaderSession {
 		this.pane.setViewKind(getPref<'page' | 'article'>('paneView', 'page'));
 		{
 			const providerId = getPref<string>('provider', 'bing-free');
-			this.pane.setProviderChoices(
-				listProviders().map(p => ({ id: p.id, displayName: p.displayName })),
-				providerId
-			);
+			// 5.0: 菜单只列已设置的引擎。先用同步可得的信息(免费引擎 + 当前
+			// 引擎 + 端点/本地配置)占位,凭据库查完再替换;每次打开菜单还会重取。
+			this.pane.setProviderChoices(this.providerChoicesFrom(new Set()), providerId);
+			void this.configuredProviderChoices().then(choices => {
+				this.pane?.setProviderChoices(choices, getPref<string>('provider', 'bing-free'));
+			}).catch(() => { /* 保留占位清单 */ });
 			this.pane.setProviderInfo(getProvider(providerId).displayName, providerId);
 			const prefSource = getPref<string>('sourceLanguage', 'auto');
 			const prefTarget = getPref<string>('targetLanguage', 'auto');
@@ -2335,6 +2339,22 @@ export class ReaderSession {
 			this.pane?.setLanguageCodes(source, target);
 			this.pane?.setLanguagePair(languageLabel(source), languageLabel(target));
 		});
+	}
+
+	/** 菜单栏「翻译服务」的候选: 只含已设置的引擎(见 providerAvailability)。 */
+	private providerChoicesFrom(withKey: ReadonlySet<string>): { id: string; displayName: string }[] {
+		const all = listProviders();
+		const ids = new Set(configuredProviderIds({
+			providers: all.map(p => ({ id: p.id, requiresApiKey: p.requiresApiKey })),
+			withKey,
+			profiles: parseProviderProfiles(getPref<string>('providerProfiles', '{}')),
+			current: getPref<string>('provider', 'bing-free')
+		}));
+		return all.filter(p => ids.has(p.id)).map(p => ({ id: p.id, displayName: p.displayName }));
+	}
+
+	private async configuredProviderChoices(): Promise<{ id: string; displayName: string }[]> {
+		return this.providerChoicesFrom(await providersWithSavedKeys());
 	}
 
 	/** 菜单栏直接切换翻译服务 — same restart contract as a language switch. */

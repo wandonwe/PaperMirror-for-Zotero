@@ -24,7 +24,8 @@ export type ReasoningLevel = '' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh
 
 /** OpenAI-compatible providers whose chat endpoint accepts `reasoning_effort`.
  *  Values follow OpenAI's official levels (minimal/low/medium/high/xhigh —
- *  xhigh exists on gpt-5.4+; unsupported levels are the model's own 400).
+ *  xhigh exists on gpt-5.4+; GPT-6 drops minimal, see the override below;
+ *  other unsupported levels are the model's own 400).
  *  Gemini is NOT here anymore: it runs on the native generateContent API and
  *  handles 深度思考 via thinkingConfig in its own adapter (geminiNative). */
 const REASONING_EFFORT_PROVIDERS = new Set(['openai', 'openrouter']);
@@ -63,10 +64,10 @@ const REASONING_EFFORT_PROVIDERS = new Set(['openai', 'openrouter']);
  * 翻译不需要思维链:我们只要最终译文,推理过程读都不读。默认关掉。
  * 用户在高级设置里显式要了思考强度,就按他要的发 —— 那是他的决定。
  */
-/* Checked 2026-09-16: controls differ by provider AND model family.
+/* Checked 2026-11-19 (5.0): controls differ by provider AND model family.
  * DeepSeek uses thinking plus top-level reasoning_effort; GLM-5.3 and Kimi K3
  * always think, while K2.6 and older GLM can disable it. Model-specific
- * overrides below take precedence. Sources: docs/LLM-PROVIDERS-2026-09-16.md.
+ * overrides below take precedence. Sources: docs/LLM-PROVIDERS-2026-11-19.md.
  */
 const THINKING_OBJECT_PROVIDERS = new Set(['deepseek', 'zhipu']);
 
@@ -148,7 +149,7 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
         out.thinking={type:'enabled'};
         out.reasoning_effort=level ?? 'low';
     }
-    if(providerId === 'moonshot' && /^kimi-k(?:3|2\.6)(?:$|-)/i.test(model)) {
+    if(providerId === 'moonshot' && /^kimi-k(?:3(?:\.\d+)?|2\.6)(?:$|-)/i.test(model)) {
         const expected=/^kimi-k3/i.test(model) || level ? 1 : .6;
         if(typeof settings.temperature === 'number' && settings.temperature !== expected)
             throw new PaperMirrorError('UNKNOWN', `当前 Kimi 模型温度固定为 ${expected}，请清除高级设置中的自定义温度。`);
@@ -157,8 +158,11 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
             out.max_completion_tokens=out.max_tokens;delete out.max_tokens;
         }
     }
-    if(providerId === 'openai' && /^gpt-6-astra(?:$|-)/.test(model)) {
-        if(eff === 'minimal' || eff === 'disabled') out.reasoning_effort='low';
+    // GPT-6 (2026-11-19): no 'minimal' level. Terra/Luna accept 'none';
+    // Astra/Sol bottom out at 'low'. Same slugs behind OpenRouter's openai/.
+    const gpt6=/^(?:openai\/)?gpt-6(?:\.\d+)?-(astra|sol|terra|luna)(?:$|-)/.exec(model);
+    if(gpt6 && (providerId === 'openai' || providerId === 'openrouter') && out.reasoning_effort === 'minimal') {
+        out.reasoning_effort=gpt6[1] === 'terra' || gpt6[1] === 'luna' ? 'none' : 'low';
     }
     if(providerId === 'groq' && /^openai\/gpt-oss-/.test(model)) {
         out.reasoning_effort=eff === 'high' || eff === 'xhigh' ? 'high' : eff === 'medium' ? 'medium' : 'low';
