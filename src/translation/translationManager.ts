@@ -182,6 +182,16 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 		|| /^[A-Z][A-Za-z .&-]{1,70}\s+(?:19|20)\d{2}\s*;\s*\d+[\d:()–—-]*[.:]?\s*$/.test(source.trim()))) {
 		return true;
 	}
+	// 参考文献条目原样(或标题照抄)返回 (5.0, 真机 Frontiers 一文第 9/12/13/14 页):
+	// 作者、期刊、英文标题原样保留是正当的,以前判为没翻、每条补救 2–3 次后
+	// 仍留英文,还触发「引擎不稳定」换引擎。现在当作「保持原文」接受。只对
+	// 结构上确实是参考文献条目的块生效(looksLikeReferenceEntry: 年份 + 至少两种
+	// 书目特征),正文即使被误标为参考文献区,也不会因此被放过不翻。
+	if (opts?.isReference && looksLikeReferenceEntry(source)
+		&& !isTruncatedTranslation(stripProtectable(source), stripProtectable(t))
+		&& (isEcho(source, t) || hasMixedCopiedResidue(source, t))) {
+		return true;
+	}
 	// PROSE-ONLY scoring (审核项: 统计密集行被误拒): citations, p-values, CIs and
 	// formulas are byte-identical in source and translation BY DESIGN — counting
 	// them as "untranslated Latin" rejected perfect translations of stats-dense
@@ -361,6 +371,25 @@ const CJK_RE = /[㐀-鿿豈-﫿]/g;
 const PROSE_WORD_GATE = 6;
 
 /** 内容相同(忽略大小写、标点、空白)= 回声。 */
+/**
+ * 结构上像一条参考文献 (5.0)。必须有年份,并且至少具备两种书目特征: 编号开头、
+ * 作者缩写名、et al.、DOI/PMID、卷(期):页码、期刊式「年;卷」。正文段落偶尔
+ * 带一个引用年份或 et al.,但很少同时凑齐两种,而且限长,长段正文直接排除。
+ */
+export function looksLikeReferenceEntry(source: string): boolean {
+	const text = source.replace(/\s+/g, ' ').trim();
+	if (!text || text.length > 600 || !/\b(?:19|20)\d{2}[a-z]?\b/.test(text)) return false;
+	const features = [
+		/^\[?\d{1,3}[\].)]\s/.test(text),
+		/\b[A-Z][A-Za-z'’-]+,?\s+(?:[A-Z]\.?\s?){1,3}[,.]/.test(text),
+		/\bet al\b/i.test(text),
+		/\b(?:doi|pmid|pmcid)\b|10\.\d{4,9}\//i.test(text),
+		/\b\d+\s*(?:\(\s*\d+[–-]?\d*\s*\))?\s*:\s*[eE]?\d+(?:[–-][eE]?\d+)?\b/.test(text),
+		/\b(?:19|20)\d{2}\s*[;,]\s*\d+/.test(text)
+	].filter(Boolean).length;
+	return features >= 2;
+}
+
 function isEcho(source: string, translated: string): boolean {
 	const norm = (x: string): string => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 	const a = norm(source);
@@ -2716,6 +2745,8 @@ export class TranslationManager {
 			return; // the detector is English-into-Chinese specific
 		}
 		const suspects = blocks
+			// 5.0: 已按「保持原文」接受的参考文献条目不再当残留重译。
+			.filter(b => !(b.isReference && looksLikeReferenceEntry(b.sourceText)))
 			.filter(b => hasEnglishResidue(state.translations.get(b.id) ?? ''))
 			.slice(0, RESIDUE_MAX_PER_PAGE);
 		if (!suspects.length) {

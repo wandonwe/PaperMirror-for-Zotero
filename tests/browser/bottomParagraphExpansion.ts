@@ -15,8 +15,12 @@ export function checkBottomParagraphExpansion():void {
   const probe=probeStrictPlacement(built.element,false)!.find(b=>b.id===target)!;
   if(probe.bitmapSampled!==false)throw Error('Lightweight probe sampled pixels');
   if(blocked && pg.page===5) {
-   if(probe.state!=='abandoned')throw Error('Expansion covered ink');
-   if(!probe.abandonReason)throw Error('Missing placement failure');
+   const node=built.element.querySelector(`[data-pm-block="${target}"]`) as HTMLElement;
+   // 5.0: 留在原盒内放下(原字号,或差一点时的小幅缩字)不算压墨迹;只有越过下方墨迹才算。
+   // (此前这条在 1.2 倍从未执行到: 循环先在第 4 页 1.2 倍失败。)
+   const gentle=parseFloat(node.style.top)+parseFloat(node.style.height)<=edge+.1;
+   if(probe.state!=='abandoned' && !gentle)throw Error('Expansion covered ink at '+scale);
+   if(!gentle && !probe.abandonReason)throw Error('Missing placement failure');
   } else {
    if(probe.state!=='committed')throw Error(`Page ${pg.page} not placed at ${scale}`);
    if(probe.inkFailure)throw Error('Committed text retains stale failure');

@@ -18,7 +18,9 @@ export async function checkSourceMaskExpansion():Promise<void> {
    const node=built.element.querySelector(`[data-pm-block="${target}"]`) as HTMLElement;
    const inkTop=(b.boundingBox!.y+b.boundingBox!.height)*scale+1.05;
    if(probe.state==='committed' && parseFloat(node.style.top)+parseFloat(node.style.height)>inkTop)throw Error('Outside-mask ink was covered at '+scale);
-   if(scale===1 && probe.state!=='abandoned')throw Error('Blocked expansion must be rejected');
+   // 5.0: 差一点的正文可在原盒内小幅缩字放回(data-pm-gentle-shrink);仍不许扩边压墨迹。
+   const gentle=node.getAttribute('data-pm-gentle-shrink')==='1' && parseFloat(node.style.height)<=b.boundingBox!.height*scale+1.05;
+   if(scale===1 && probe.state!=='abandoned' && !gentle)throw Error('Blocked expansion must be rejected');
   }
   else {
    if(probe.state!=='committed')throw Error('Real PDF bottom paragraph not placed at '+scale);
