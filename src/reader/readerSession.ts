@@ -24,7 +24,7 @@ import { getProvider, listProviders } from '../translation/providers/registry';
 import { buildPool, pickProviderForPage, routeProviderForPage, fastestProvider, rankProvidersForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
 import { endpointHost, supportsCharBudget } from '../translation/providers/types';
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
-import { TranslationManager, type PageTranslationState, type TranslateHooks } from '../translation/translationManager';
+import { TranslationManager, type ManagerEvents, type PageTranslationState, type TranslateHooks, type TranslationDeps } from '../translation/translationManager';
 import { PROMPT_VERSION } from '../translation/promptBuilder';
 import { joinPlacementOutcome } from './diagnosticsJoin';
 import { engineExportRow, type EngineExportRow } from '../export/endpointKind';
@@ -42,7 +42,7 @@ import {
 } from '../export/fileSink';
 import { parseGlossaryJSON, serializeGlossary, dedupeLearnedTerms } from '../translation/glossary';
 import { parseProviderProfiles, effectiveProviderConfig } from '../translation/providerProfiles';
-import type { GlossaryRule, ProviderSettings, SourceBlock, TranslationRequest, TranslationResponse } from '../types/models';
+import type { GlossaryRule, ProviderSettings, SourceBlock, TranslatedBlock, TranslationRequest, TranslationResponse } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PageRenderResult, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
@@ -717,117 +717,8 @@ export class ReaderSession {
 			return;
 		}
 		this.manager = new TranslationManager(
-			{
-				extractPage: pageIndex => this.extractor.extractPage(pageIndex),
-				extractRenderedPage: pageIndex => this.extractor.extractRenderedPage(pageIndex),
-				extractPathOf: pageIndex => this.extractor.extractPathFor(pageIndex),
-				extractPhasesOf: pageIndex => this.extractor.extractPhasesFor(pageIndex),
-				translateRequest: (request, signal, hooks) => this.translateRequest(request, signal, hooks),
-                restoreSnapshot: async pageIndex => {
-                    const saved = await this.pageArchive.get(pageIndex);
-                    if (!saved?.blocks?.length || !saved.translations?.length) return null;
-                    const diagnostics = saved.diagnostics as {status?: string; metrics?: PageTranslationState['diagnostics']} | undefined;
-                    const translations = new Map(saved.translations.map(t => [t.id, t.translatedText]));
-                    const blocks = saved.blocks as SourceBlock[];
-                    return {pageIndex, blocks, translations,
-                        status:diagnostics?.status === 'done' ? 'done' : 'idle',
-                        diagnostics:diagnostics?.metrics,
-                        cached:blocks.every(b => b.translationMode === 'preserve' || translations.has(b.id))};
-                },
-				readCache: async (pageIndex, blocks) => {
-					const texts = blocks.map(contextualSourceText);
-     const sample = blocks.map(b=>b.sourceText).join('\n').slice(0,2000);
-					const parts = await this.cacheKey(pageIndex, texts, undefined, sample);
-					if (parts) {
-						const hit = await cacheManager.readPage(parts);
-						if (hit) {
-							return hit;
-						}
-					}
-					// 发送前查全服务商缓存 (2.2.1, 计划 第三批 item1 · Codex API-P1):
-					// 规范键 miss 后,遍历池内其余已启用服务商各自的完整页缓存 ——
-					// 只要**任一**服务商曾译过这页(上个会话主译的引擎、池变动前的
-					// 拥有者、熔断换过的引擎),就直接复用、绝不重付费。跨会话/增删
-					// 服务商后最常见的「白重译一整篇」由此根治。命中键与规范键不同
-					// 不回写(读写键仍恒等,下次仍靠这层探测,成本只是几次文件存在性
-					// 检查;getApiKey 已 memoize,构键几乎零开销)。
-					if (this.pool.length > 1) {
-						const canonical = parts?.provider;
-						for (const pid of this.pool) {
-							const alt = await this.cacheKey(pageIndex, texts, pid, sample);
-							if (!alt || alt.provider === canonical) {
-								continue;
-							}
-							const hit = await cacheManager.readPage(alt);
-							if (hit) {
-								return hit;
-							}
-						}
-					}
-					return null;
-				},
-				writeCache: async (pageIndex, blocks, translations) => {
-					const parts = await this.cacheKey(pageIndex, blocks.map(contextualSourceText), undefined, blocks.map(b=>b.sourceText).join('\n').slice(0,2000));
-					if (parts) {
-						// producedBy = 运行时引擎 (P3, 2.0.10, 仅诊断): 键是规范引擎的。
-						return await cacheManager.writePage(parts, translations, this.providerForPage(pageIndex));
-					}
-					return false;
-				},
-				// 段落级缓存: per-segment store scoped by provider/model/prompt/
-				// glossary, beneath the page cache. 普通刷新 (圆环) reuses it.
-				readSegments: async (pageIndex, hashes) => {
-					const parts = await this.segmentContext(pageIndex);
-					return parts ? cacheManager.readSegments(parts, hashes) : null;
-				},
-				writeSegments: async (pageIndex, entries) => {
-					const parts = await this.segmentContext(pageIndex);
-					if (parts) {
-						await cacheManager.writeSegments(parts, entries);
-					}
-				},
-				getLanguages: sample => this.resolveLanguages(sample),
-				getDocumentTitle: () => {
-					const item = adapter.getReaderItem(this.reader);
-					return item?.getDisplayTitle?.() ?? '';
-				},
-				getGlossary: () => this.loadGlossary(),
-				getNoTranslate: () => readNoTranslateList(),
-				// 内存淘汰的"在用"判据 (2.8.3, 性能第四批): 当前阅读页、面板上
-				// 仍挂着内容的页、以及正在重建的页,都不许被卸掉完整内容。
-				isPageInUse: (pageIndex: number) =>
-					pageIndex === adapter.getCurrentPageIndex(this.reader)
-					|| this.pane?.hasMountedPage(pageIndex) === true
-					// 2.8.6 (导出方案 P1): 导出器正在读的那一页也算在用 —— 逐页短时
-					// 保护,读完立即释放,不在整个导出期间全局暂停淘汰。
-					|| this.exportPins.has(pageIndex),
-				useContext: () => getPref<boolean>('useContext', true),
-    continuityIdentity: () => this.continuityNamespace(),
-				pageCount: () => adapter.getPageCount(this.reader),
-				// Each page's provider LANE — lets the scheduler cap providers
-				// independently and reserve a foreground slot for the current one.
-				laneFor: (pageIndex: number) => this.providerForPage(pageIndex),
-				poolSize: () => this.pool.length,
-				// 5.0 对冲: 只找测得最快、且不是当前这家的大模型;没有数据就不对冲。
-				hedgeProviderFor: (_pageIndex: number, current: string) =>
-					this.pool.length > 1 ? fastestProvider(this.pool, this.manager?.providerThroughput() ?? {}, current) : ''
-			},
-			{
-				onPageUpdate: state => this.onPageUpdate(state),
-				// 熔断: this page's engine keeps dropping/echoing ids → deal its
-				// REMAINING requests to the next engine in the pool. With a single
-				// configured provider there is no backup — log and continue.
-				onProviderUnstable: (pageIndex, missingRatio) => {
-					const pct = Math.round(missingRatio * 100);
-					if (this.pool.length > 1) {
-						this.pageProviderOffset.set(pageIndex, ((this.pageProviderOffset.get(pageIndex) ?? 0) + 1) % this.pool.length);
-						logger.warn(MODULE, `page ${pageIndex + 1}: engine unstable (${pct}% missing) → switching to ${this.providerForPage(pageIndex)}`);
-					}
-					else {
-						logger.warn(MODULE, `page ${pageIndex + 1}: engine unstable (${pct}% missing); no backup provider configured`);
-					}
-				}
-			},
+			this.translationDeps(),
+			this.translationEvents(),
 			{
 				// The global cap is set properly by applyConcurrencyPlan() below
 				// (sum of each enabled provider's own lane cap); this initial value
@@ -844,6 +735,131 @@ export class ReaderSession {
 		if (!this.quiescing) { // P3 (2.0.10): quiesce 封口
 			this.manager.setCurrentPage(page);
 		}
+	}
+
+	/** startTranslatingWithPool 拆出: 翻译管理器依赖的宿主能力(抽取、请求、缓存、调度)。 */
+	private translationDeps(): TranslationDeps {
+		return {
+			extractPage: pageIndex => this.extractor.extractPage(pageIndex),
+			extractRenderedPage: pageIndex => this.extractor.extractRenderedPage(pageIndex),
+			extractPathOf: pageIndex => this.extractor.extractPathFor(pageIndex),
+			extractPhasesOf: pageIndex => this.extractor.extractPhasesFor(pageIndex),
+			translateRequest: (request, signal, hooks) => this.translateRequest(request, signal, hooks),
+                restoreSnapshot: async pageIndex => {
+                    const saved = await this.pageArchive.get(pageIndex);
+                    if (!saved?.blocks?.length || !saved.translations?.length) return null;
+                    const diagnostics = saved.diagnostics as {status?: string; metrics?: PageTranslationState['diagnostics']} | undefined;
+                    const translations = new Map(saved.translations.map(t => [t.id, t.translatedText]));
+                    const blocks = saved.blocks as SourceBlock[];
+                    return {pageIndex, blocks, translations,
+                        status:diagnostics?.status === 'done' ? 'done' : 'idle',
+                        diagnostics:diagnostics?.metrics,
+                        cached:blocks.every(b => b.translationMode === 'preserve' || translations.has(b.id))};
+                },
+			readCache: (pageIndex, blocks) => this.readPageCacheAnyProvider(pageIndex, blocks),
+			writeCache: async (pageIndex, blocks, translations) => {
+				const parts = await this.cacheKey(pageIndex, blocks.map(contextualSourceText), undefined, blocks.map(b=>b.sourceText).join('\n').slice(0,2000));
+				if (parts) {
+					// producedBy = 运行时引擎 (P3, 2.0.10, 仅诊断): 键是规范引擎的。
+					return await cacheManager.writePage(parts, translations, this.providerForPage(pageIndex));
+				}
+				return false;
+			},
+			// 段落级缓存: per-segment store scoped by provider/model/prompt/
+			// glossary, beneath the page cache. 普通刷新 (圆环) reuses it.
+			readSegments: async (pageIndex, hashes) => {
+				const parts = await this.segmentContext(pageIndex);
+				return parts ? cacheManager.readSegments(parts, hashes) : null;
+			},
+			writeSegments: async (pageIndex, entries) => {
+				const parts = await this.segmentContext(pageIndex);
+				if (parts) {
+					await cacheManager.writeSegments(parts, entries);
+				}
+			},
+			getLanguages: sample => this.resolveLanguages(sample),
+			getDocumentTitle: () => {
+				const item = adapter.getReaderItem(this.reader);
+				return item?.getDisplayTitle?.() ?? '';
+			},
+			getGlossary: () => this.loadGlossary(),
+			getNoTranslate: () => readNoTranslateList(),
+			// 内存淘汰的"在用"判据 (2.8.3, 性能第四批): 当前阅读页、面板上
+			// 仍挂着内容的页、以及正在重建的页,都不许被卸掉完整内容。
+			isPageInUse: (pageIndex: number) =>
+				pageIndex === adapter.getCurrentPageIndex(this.reader)
+				|| this.pane?.hasMountedPage(pageIndex) === true
+				// 2.8.6 (导出方案 P1): 导出器正在读的那一页也算在用 —— 逐页短时
+				// 保护,读完立即释放,不在整个导出期间全局暂停淘汰。
+				|| this.exportPins.has(pageIndex),
+			useContext: () => getPref<boolean>('useContext', true),
+    continuityIdentity: () => this.continuityNamespace(),
+			pageCount: () => adapter.getPageCount(this.reader),
+			// Each page's provider LANE — lets the scheduler cap providers
+			// independently and reserve a foreground slot for the current one.
+			laneFor: (pageIndex: number) => this.providerForPage(pageIndex),
+			poolSize: () => this.pool.length,
+			// 5.0 对冲: 只找测得最快、且不是当前这家的大模型;没有数据就不对冲。
+			hedgeProviderFor: (_pageIndex: number, current: string) =>
+				this.pool.length > 1 ? fastestProvider(this.pool, this.manager?.providerThroughput() ?? {}, current) : ''
+		};
+	}
+
+	/** startTranslatingWithPool 拆出: 管理器回调(页面更新、引擎熔断)。 */
+	private translationEvents(): ManagerEvents {
+		return {
+			onPageUpdate: state => this.onPageUpdate(state),
+			// 熔断: this page's engine keeps dropping/echoing ids → deal its
+			// REMAINING requests to the next engine in the pool. With a single
+			// configured provider there is no backup — log and continue.
+			onProviderUnstable: (pageIndex, missingRatio) => {
+				const pct = Math.round(missingRatio * 100);
+				if (this.pool.length > 1) {
+					this.pageProviderOffset.set(pageIndex, ((this.pageProviderOffset.get(pageIndex) ?? 0) + 1) % this.pool.length);
+					logger.warn(MODULE, `page ${pageIndex + 1}: engine unstable (${pct}% missing) → switching to ${this.providerForPage(pageIndex)}`);
+				}
+				else {
+					logger.warn(MODULE, `page ${pageIndex + 1}: engine unstable (${pct}% missing); no backup provider configured`);
+				}
+			}
+		};
+	}
+
+	/**
+	 * 读页缓存: 先用规范引擎的键;没有再探测池里其他服务商各自的整页缓存
+	 * (2.2.1, 发送前查全服务商缓存),任一家译过就直接复用。
+	 */
+	private async readPageCacheAnyProvider(pageIndex: number, blocks: SourceBlock[]): Promise<TranslatedBlock[] | null> {
+			const texts = blocks.map(contextualSourceText);
+     const sample = blocks.map(b=>b.sourceText).join('\n').slice(0,2000);
+			const parts = await this.cacheKey(pageIndex, texts, undefined, sample);
+			if (parts) {
+				const hit = await cacheManager.readPage(parts);
+				if (hit) {
+					return hit;
+				}
+			}
+			// 发送前查全服务商缓存 (2.2.1, 计划 第三批 item1 · Codex API-P1):
+			// 规范键 miss 后,遍历池内其余已启用服务商各自的完整页缓存 ——
+			// 只要**任一**服务商曾译过这页(上个会话主译的引擎、池变动前的
+			// 拥有者、熔断换过的引擎),就直接复用、绝不重付费。跨会话/增删
+			// 服务商后最常见的「白重译一整篇」由此根治。命中键与规范键不同
+			// 不回写(读写键仍恒等,下次仍靠这层探测,成本只是几次文件存在性
+			// 检查;getApiKey 已 memoize,构键几乎零开销)。
+			if (this.pool.length > 1) {
+				const canonical = parts?.provider;
+				for (const pid of this.pool) {
+					const alt = await this.cacheKey(pageIndex, texts, pid, sample);
+					if (!alt || alt.provider === canonical) {
+						continue;
+					}
+					const hit = await cacheManager.readPage(alt);
+					if (hit) {
+						return hit;
+					}
+				}
+			}
+			return null;
 	}
 
 	/**
