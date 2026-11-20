@@ -100,3 +100,17 @@ export function technicalUnitIssue(source:string,translated:string):'technical-u
 function splitKey(k:string):[string,string] {
  const i=k.lastIndexOf(':');return [k.slice(0,i),k.slice(i+1)];
 }
+
+/**
+ * Text-free detail for a technical-unit rejection (5.0 diagnostics): unit
+ * labels with source→translation counts, and how many unit-qualified values
+ * the translation lost or gained. No source or translated prose.
+ */
+export function technicalUnitDetail(source:string,translated:string):string {
+ source=stripStyleMarkers(source);translated=stripStyleMarkers(translated);
+ const a=inventory(source),b=inventory(translated);
+ const units=[...new Set([...a.keys(),...b.keys()])].map(u=>`${u}:${a.get(u)??0}>${b.get(u)??0}`);
+ const va=measuredValues(source),vb=measuredValues(translated);
+ const lost=[...va.keys()].filter(k=>!vb.has(k)).length, gained=[...vb.keys()].filter(k=>!va.has(k)).length;
+ return `${units.join(',')};v-${lost}+${gained}`;
+}

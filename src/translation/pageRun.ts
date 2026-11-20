@@ -16,6 +16,7 @@ import type { PlaceholderRegistry } from './placeholderRegistry';
 import type { PlannedChunk } from './segmenter';
 import type { PageTranslationState, RequestTiming } from './translationManager';
 import { looksTranslated, referenceRejectReason, translationRejectReason } from './translationValidation';
+import { technicalUnitDetail } from './technicalUnits';
 
 export interface ProtectedBlock {
 	block: SourceBlock;
@@ -110,7 +111,11 @@ export class PageRun {
 
 	readonly rejectedResponse = (id: string, text: string, phase: string): string => {
 		const source = this.sourceById.get(id) ?? '';
-		if (!this.refById.has(id)) return `${phase}:${translationRejectReason(source, text, this.target) ?? 'integrity'}`;
+		if (!this.refById.has(id)) {
+			const reason = translationRejectReason(source, text, this.target) ?? 'integrity';
+			// 5.0: which unit went wrong, by label and count only (no text).
+			return reason.startsWith('technical-unit') ? `${phase}:${reason}[${technicalUnitDetail(source, text)}]` : `${phase}:${reason}`;
+		}
 		return referenceRejectReason(source, text, phase);
 	};
 

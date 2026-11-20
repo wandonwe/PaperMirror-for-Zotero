@@ -3148,7 +3148,11 @@ export class TranslationManager {
 						received.set(block.id, first.translatedText);
 					}
 					else if (single.translations.length) {
-						noteReject(block.id, rejectedResponse(block.id, single.translations[0]?.translatedText ?? '', 'salvage-validator'));
+						// 5.0: the reason is computed on the RESTORED text, as acceptance
+						// is. On the masked text every protected keV/kVp looked missing, so
+						// the diagnostics reported 'technical-unit' for unrelated failures.
+						const raw = single.translations[0]?.translatedText ?? '';
+						noteReject(block.id, pb.reg.ok(raw) ? rejectedResponse(block.id, pb.reg.restore(raw), 'salvage-validator') : 'salvage-placeholder');
 					}
 					else {
 						// 死分支修复 (1.1.8): 这里原本是与上面条件完全相同的
@@ -3268,7 +3272,8 @@ export class TranslationManager {
 					}
 				}
 				else if (resp.translations.length) {
-					noteReject(block.id, rejectedResponse(block.id, resp.translations[0]?.translatedText ?? '', 'plain-validator'));
+					const raw = resp.translations[0]?.translatedText ?? '';
+					noteReject(block.id, rejectedResponse(block.id, pb.reg.restore(raw), 'plain-validator'));
 				}
 				else {
 					// 同一处死分支 (1.1.8): 见上面 salvage 的说明。
