@@ -1,5 +1,5 @@
 import { preserveCollapsedPlotPanels } from '../reader/compositePlotGuard';
-import { createTextInkGuard, insetSideInk, insetTextInk, setInkBleed, tryInkBleed, type InkFailure } from './textInkBounds';
+import { createTextInkGuard, insetSideInk, insetTextInk, maxInkBleed, setInkBleed, tryInkBleed, type InkFailure } from './textInkBounds';
 import { RenderMeasurementCache } from './measurementCache';
 import { pageContentKey } from '../export/pageArchive';
 /**
@@ -1256,7 +1256,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 			&& Math.min(strip.top + strip.height, b.top + b.height) - Math.max(strip.top, b.top) > 0.01;
 		if (imageBoxes.some(hits) || inkObstacles.some(o => hits(o.box))) return false;
 		const room = (other: StrictItem, b: PixelBox): number =>
-			Math.min(2, other.fontPx * (Math.max(0, (other.minLineHeight || 1) - 1) / 2 + 0.06)) - Math.max(0, strip.top - b.top);
+			Math.min(2, other.fontPx * (Math.max(0, (other.minLineHeight || 1) - 1) / 2 + 0.06)) + (b.top - strip.top);
 		const inside = strip.top + strip.height <= item.box.top + item.box.height + 0.01;
 		if (inside) {
 			// Between this block's own lines (a flow piece above the next one;
@@ -1332,7 +1332,14 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
                          // 5.0: a g/p/comma 1-3px below the piece — bleed into blank space below.
                          // The last piece's bleed leaves the block, so the block's own clip opens too.
                          const last = index === item.flowBoxes!.length - 1;
-                         if (!inkFits) inkFits = tryInkBleed(child,textInkFits,item.fontPx,px => bleedStripFree(item,b,px),last ? [item.node] : []);
+                         // Between two of this block's own lines the bleed may use the
+                         // whole line gap (a one-line piece is exactly 1em tall: a g/p
+                         // reaches ~0.22em below it — 联网校验 2757 "94. Casanova F").
+                         const next = item.flowBoxes![index + 1];
+                         const lineGapMax = next && next.top > b.top + b.height
+                          ? next.top - (b.top + b.height) + Math.min(2, item.fontPx * (Math.max(0, (item.minLineHeight || 1) - 1) / 2 + 0.06))
+                          : 0;
+                         if (!inkFits) inkFits = tryInkBleed(child,textInkFits,item.fontPx,px => bleedStripFree(item,b,px),last ? [item.node] : [],Math.max(maxInkBleed(item.fontPx),lineGapMax) || undefined);
                         }
 						if (sizeFits && !inkFits) glyphRejected = true;
 						return inkFits;

@@ -115,3 +115,14 @@ test('a shrink-only render blocked by an in-flight compress still gets its final
 	assert.match(fin, /blocked\.unfit\.length/);
 	assert.match(fin, /this\.renderToken\.get\(pageIndex\) === blocked\.token\) \{\s*this\.reportPlacement\(pageIndex, blocked\.element\);/);
 });
+
+test('between a block\'s own lines the bleed may use the whole line gap', () => {
+	// 校验 2757: a one-line piece is exactly 1em tall; "g" in "Adingupu" reaches ~3.1px below it.
+	const piece = new FakeNode() as unknown as HTMLElement;
+	const guard = guardNeeding(3.1);
+	guard(piece);
+	assert.equal(tryInkBleed(piece, guard, 14.41, () => true), false, 'beyond the default cap');
+	const piece2 = new FakeNode() as unknown as HTMLElement;
+	guard(piece2);
+	assert.equal(tryInkBleed(piece2, guard, 14.41, () => true, [], 2.88 + 2), true, 'within line gap + half-leading');
+});

@@ -290,8 +290,8 @@ export function setInkBleed(node: HTMLElement, px: number): void {
  * over the guard). Only a bottom-only failure qualifies; `stripFree(px)` must
  * confirm nothing else lives in the strip below. Rolls back on failure.
  */
-export function tryInkBleed(node: HTMLElement, guard: TextInkGuard, fontPx: number, stripFree: (px: number) => boolean, extraNodes: HTMLElement[] = []): boolean {
- const max = maxInkBleed(fontPx);
+export function tryInkBleed(node: HTMLElement, guard: TextInkGuard, fontPx: number, stripFree: (px: number) => boolean, extraNodes: HTMLElement[] = [], maxPx?: number): boolean {
+ const max = maxPx ?? maxInkBleed(fontPx);
  let px = 0;
  for (let i = 0; i < 4; i++) {
   const f = guard.failure(node);
