@@ -1247,8 +1247,8 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	/**
 	 * May a descender bleed of `px` go below `piece` (5.0)? The strip must be
 	 * blank on the page bitmap (this block's own source lines excepted, they
-	 * are masked), clear of figures and preserved ink, and outside every other
-	 * block's box and this block's column band.
+	 * are masked), clear of figures and preserved ink, inside this block's
+	 * column band, and above where a neighbouring block's first line can paint.
 	 */
 	const bleedStripFree = (item: StrictItem, piece: PixelBox, px: number): boolean => {
 		const strip = { left: piece.left, top: piece.top + piece.height, width: piece.width, height: px };
@@ -1257,9 +1257,17 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		if (imageBoxes.some(hits) || inkObstacles.some(o => hits(o.box))) return false;
 		const inside = strip.top + strip.height <= item.box.top + item.box.height + 0.01;
 		if (!inside) {
-			// Never into another block's box (its source text, or a translation
-			// that may be revealed there), nor across the block's own column band.
-			if (items.some(other => other !== item && !other.abandoned && (other.flowBoxes ?? [other.box]).some(hits))) return false;
+			// Into another block's box only within its top half-leading (plus
+			// 0.06em, at most 2px): its first line's glyph ink starts below that.
+			// Reference entries stacked without a gap miss by 0.5-2.5px exactly so.
+			for (const other of items) {
+				if (other === item || other.abandoned) continue;
+				for (const b of other.flowBoxes ?? [other.box]) {
+					if (!hits(b)) continue;
+					const room = Math.min(2, other.fontPx * (Math.max(0, (other.minLineHeight || 1) - 1) / 2 + 0.06)) - Math.max(0, strip.top - b.top);
+					if (px > room) return false;
+				}
+			}
 			if (geometric.some(b => !byId.has(b.id) && pxOf.get(b.id) && hits(pxOf.get(b.id)!))) return false;
 			if (item.bodyRegion && strip.top + px > item.bodyRegion.top + item.bodyRegion.height + 0.01) return false;
 			if (strip.top + px > canvas.height / BITMAP_SCALE) return false;

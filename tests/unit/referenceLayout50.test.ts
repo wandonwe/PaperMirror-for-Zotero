@@ -100,3 +100,18 @@ test('the last flow piece opens its block clip too', () => {
 	assert.equal(tryInkBleed(piece, guard, 14.73, () => true, [block]), true);
 	assert.ok(inkBleedOf(block) >= inkBleedOf(piece));
 });
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+// 联网校验 3064/3384: a shrink-only render that met an older render's in-flight
+// compress left the capsule on 「正在适配 · 排版 0/N」 forever.
+test('a shrink-only render blocked by an in-flight compress still gets its final placement report (结构性回归闸)', () => {
+	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const resolve = src.slice(src.indexOf('private resolveStrictUnfit('), src.indexOf('private runStrictCompress('));
+	assert.match(resolve, /else if \(this\.compressPending\.has\(pageIndex\)\) \{\s*this\.compressBlocked\.set\(pageIndex, \{ element, unfit: \[\], token \}\);/);
+	const run = src.slice(src.indexOf('private runStrictCompress('));
+	const fin = run.slice(run.indexOf('.finally('));
+	assert.match(fin, /blocked\.unfit\.length/);
+	assert.match(fin, /this\.renderToken\.get\(pageIndex\) === blocked\.token\) \{\s*this\.reportPlacement\(pageIndex, blocked\.element\);/);
+});

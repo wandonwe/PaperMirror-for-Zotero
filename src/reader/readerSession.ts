@@ -1918,6 +1918,12 @@ export class ReaderSession {
 			else if (plan.compress.length && this.compressPending.has(pageIndex)) {
 				this.compressBlocked.set(pageIndex, { element, unfit: remaining, token });
 			}
+			// 5.0 (联网校验 3064/3384: 胶囊停在「正在适配 · 排版 0/N」): 这一趟只剩
+			// 缩字/保留原文、却撞上一个属于旧渲染的在飞压缩 —— 两条分支都不成立,
+			// 最终清点无人执行。登记一个空待办,压缩收尾时替这次渲染做清点。
+			else if (this.compressPending.has(pageIndex)) {
+				this.compressBlocked.set(pageIndex, { element, unfit: [], token });
+			}
 			return;
 		}
 		this.runStrictCompress(pageIndex, element, remaining, plan.compress, token, live, this.manager);
@@ -1982,8 +1988,11 @@ export class ReaderSession {
 				const blocked = this.compressBlocked.get(pageIndex);
 				if (blocked) {
 					this.compressBlocked.delete(pageIndex);
-					if (!this.destroyed) {
+					if (!this.destroyed && blocked.unfit.length) {
 						this.resolveStrictUnfit(pageIndex, blocked.element, blocked.unfit, blocked.token);
+					}
+					else if (!this.destroyed && blocked.element.isConnected && this.renderToken.get(pageIndex) === blocked.token) {
+						this.reportPlacement(pageIndex, blocked.element);
 					}
 				}
 			});
