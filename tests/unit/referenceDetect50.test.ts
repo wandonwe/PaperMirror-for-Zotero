@@ -116,3 +116,10 @@ test('a U+FFFD the source already had is not an invalid character in the transla
 	assert.equal(looksTranslated(src, '在所有接受治疗的患者和病灶中,以 � 单位测量肿瘤的碘浓度摄取。', 'zh-CN'), true);
 	assert.equal(looksTranslated('Plain source sentence with several words in it for the test.', '这是一个�测试句子,包含若干词语用于测试。', 'zh-CN'), false);
 });
+
+test('5.0 校验 3332: an author cited by number in a table cell may stay as it is', () => {
+	for (const cell of ['Cademartiri [44]', 'Rist [19]', 'Kim et al. [50]', 'Smith and Jones (2019)']) {
+		assert.equal(looksTranslated(cell, cell, 'zh-CN'), true, cell);
+	}
+	assert.equal(looksTranslated('Contrast volume [ml]', 'Contrast volume [ml]', 'zh-CN'), false);
+});

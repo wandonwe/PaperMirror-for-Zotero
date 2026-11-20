@@ -1255,8 +1255,17 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		const hits = (b: PixelBox): boolean => Math.min(strip.left + strip.width, b.left + b.width) - Math.max(strip.left, b.left) > 0.5
 			&& Math.min(strip.top + strip.height, b.top + b.height) - Math.max(strip.top, b.top) > 0.01;
 		if (imageBoxes.some(hits) || inkObstacles.some(o => hits(o.box))) return false;
+		const room = (other: StrictItem, b: PixelBox): number =>
+			Math.min(2, other.fontPx * (Math.max(0, (other.minLineHeight || 1) - 1) / 2 + 0.06)) - Math.max(0, strip.top - b.top);
 		const inside = strip.top + strip.height <= item.box.top + item.box.height + 0.01;
-		if (!inside) {
+		if (inside) {
+			// Between this block's own lines (a flow piece above the next one;
+			// 联网校验 2757 "94. Casanova F / , Adingupu"): the area is this
+			// block's own and its source ink is masked or already there, so no
+			// bitmap test — only keep clear of the next piece's first line.
+			return !(item.flowBoxes ?? []).some(b => b.top > piece.top + 0.5 && hits(b) && px > room(item, b));
+		}
+		{
 			// Into another block's box only within its top half-leading (plus
 			// 0.06em, at most 2px): its first line's glyph ink starts below that.
 			// Reference entries stacked without a gap miss by 0.5-2.5px exactly so.
@@ -1264,8 +1273,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				if (other === item || other.abandoned) continue;
 				for (const b of other.flowBoxes ?? [other.box]) {
 					if (!hits(b)) continue;
-					const room = Math.min(2, other.fontPx * (Math.max(0, (other.minLineHeight || 1) - 1) / 2 + 0.06)) - Math.max(0, strip.top - b.top);
-					if (px > room) return false;
+					if (px > room(other, b)) return false;
 				}
 			}
 			if (geometric.some(b => !byId.has(b.id) && pxOf.get(b.id) && hits(pxOf.get(b.id)!))) return false;

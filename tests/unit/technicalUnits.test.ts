@@ -184,3 +184,14 @@ test('old unit-power cache entries and raw recovery cannot accept a flattened le
   assert.match(m.getPageState(0)?.rejectReasons?.get('b')??'',/technical-unit/);assert.ok(calls>0&&calls<12);}
  finally {m.dispose();}
 });
+
+test('5.0 校验: a shared unit distributed over each value is not a unit change', () => {
+	const s = 'Virtual monoenergetic images at 40, 50 and 60 keV were reconstructed at 120 kVp.';
+	assert.equal(technicalUnitIssue(s, '在 120 kVp 下重建了 40 keV、50 keV 和 60 keV 的虚拟单能图像。'), null);
+	assert.equal(technicalUnitIssue(s, '在 120 kVp 下重建了 40、50 和 60 keV 的虚拟单能图像。'), null);
+	// Still caught: a value moved to the other unit, a dropped unit, a unit the source never had.
+	assert.equal(technicalUnitIssue(s, '在 120 keV 下重建了 40 keV、50 keV 和 60 keV 的虚拟单能图像。'), 'technical-unit');
+	assert.equal(technicalUnitIssue(s, '在 120 kVp 下重建了 40 kVp、50 keV 和 60 keV 的虚拟单能图像。'), 'technical-unit-value');
+	assert.equal(technicalUnitIssue(s, '在 120 下重建了 40、50 和 60 keV 的虚拟单能图像。'), 'technical-unit');
+	assert.equal(technicalUnitIssue(s, '在 120 kVp 下重建了 40 keV、50 keV 和 70 keV 的虚拟单能图像。'), 'technical-unit-value');
+});

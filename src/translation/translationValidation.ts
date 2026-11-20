@@ -78,7 +78,7 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 		// "允许原样保留"与"译文合格"是两件事:数字、缩写、人名、单位原样返回是正当的;
 		// 一句自然语言原样返回就是没译。这里只拦**内容相同**的回声,不要求短块必含中文 ——
 		// 否则 CT / MRI / p < 0.05 全会被推进无效重试。
-		if (isEcho(source, t) && !mayStayUntranslated(proseSource)) {
+		if (isEcho(source, t) && !mayStayUntranslated(proseSource) && !isAuthorCitation(source)) {
 			return false;
 		}
 		return true; // label / acronym / numeric cell — may legitimately be CJK-free
@@ -257,6 +257,14 @@ function isEcho(source: string, translated: string): boolean {
  * 专名(药名、机构名)会被算成普通词而进入重试;重试链有上限,最终失败仍显示原文。
  * 这是有意的取舍:把没译的标为已译、写进缓存,比多花一两次请求坏得多。
  */
+/**
+ * An author cited by number or year (5.0, 校验 3332: 系统综述表格首列 100 格):
+ * "Cademartiri [44]", "Kim et al. [50]", "Smith and Jones (2019)".
+ */
+function isAuthorCitation(source: string): boolean {
+	return /^[A-Z][\p{L}'’-]+(?:\s+(?:et\s+al\.?|and|&)(?:\s+[A-Z][\p{L}'’-]+)?)?\s*(?:\[\d+(?:\s*[,–-]\s*\d+)*\]|\(\d{4}[a-z]?\))\.?$/u.test(source.trim());
+}
+
 function mayStayUntranslated(proseSource: string): boolean {
 	let t = proseSource.trim();
 	if (!t) { return true; }
@@ -266,6 +274,7 @@ function mayStayUntranslated(proseSource: string): boolean {
 	// models rightly return both unchanged.
 	t = t.replace(/\b[\w.+-]*[A-Za-z][\w-]*\.(?:[A-Za-z]{2,}\.)*[A-Za-z]{2,}\b(?:\/\S*)?/g, m => /^[A-Z][a-z]+\.\s?[A-Z]/.test(m) ? m : ' ').trim();
 	if (!t || !/[A-Za-z]{3}/.test(t)) { return true; }
+
 	if (/\b(?:19|20)\d{2}\s*[;:]\s*\d+/.test(t) && !/\b[a-z][a-z'’-]{3,}\b/.test(t.replace(/\b(?:doi|pmid|et al)\b/gi, ''))) { return true; }
 	const words = (t.match(/[A-Za-z][A-Za-z'’-]*/g) ?? [])
 		.filter(w => w.replace(/[^A-Za-z]/g, '').length >= 3 && (w.match(/[a-z]/g) ?? []).length >= 2);

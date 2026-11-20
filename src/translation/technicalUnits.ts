@@ -50,19 +50,49 @@ function measuredValues(text:string):Map<string,number> {
  }
  return result;
 }
-function equal(a:Map<string,number>,b:Map<string,number>):boolean {
- return a.size===b.size && [...a].every(([key,count])=>b.get(key)===count);
-}
 /** Validate restored/plain output, including cached translations. Never guess
  * a repair when a source contains both energy and voltage units. */
 export function technicalUnitIssue(source:string,translated:string):'technical-unit'|'technical-unit-value'|null {
  source=stripStyleMarkers(source);translated=stripStyleMarkers(translated);
  const original=inventory(source);
  if(!original.size)return null;
- if(!equal(original,inventory(translated)))return 'technical-unit';
+ // 5.0 (校验 2638/3285: 1938/1860 字的段落整段留英文): 比较的是「有哪些
+ // 单位」而不是「出现几次」。"40, 50 and 60 keV" 译成 "40 keV、50 keV 和
+ // 60 keV" 单位次数变了,意思没变。真正的风险 —— keV↔kVp 互换、单位丢失、
+ // 凭空多出原文没有的单位 —— 都还会被拦下。
+ // 次数只许变多(把共用的单位分配到每个数值上),不许变少: "low-keV" 被换
+ // 成 "低kVp" 时 keV 少一次、kVp 多一次,照样拦下。
+ const translatedUnits=inventory(translated);
+ if(!sameKeys(original,translatedUnits) || [...original].some(([u,n])=>(translatedUnits.get(u)??0)<n))return 'technical-unit';
  const values=measuredValues(source);
  // Only unit-qualified numeric values are compared; ordinary translated
  // numbers, words and hyphens are outside this unit-integrity contract.
- if(values.size && !equal(values,measuredValues(translated)))return 'technical-unit-value';
+ // Every source value keeps its unit; a value the translation attaches a
+ // unit to must exist in the source and must not belong to another unit there.
+ if(values.size) {
+  const out=measuredValues(translated);
+  if(![...values.keys()].every(k=>out.has(k)))return 'technical-unit-value';
+  const sourceNumbers=new Set((source.match(/\d+(?:[.,]\d+)*/g)??[]).map(n=>numberIdentity(n)));
+  // Owners include every number of a list that shares one unit ("40, 50 and
+  // 60 keV" → 40, 50, 60 all keV), so "40 kVp" in the translation is caught.
+  const owner=new Map<string,string>();
+  const own=(n:string,u:string)=>owner.set(n,owner.has(n)&&owner.get(n)!==u?'*':u);
+  for(const k of values.keys()){const [n,u]=splitKey(k);own(n,u);}
+  for(const match of source.matchAll(pattern())) {
+   const run=source.slice(Math.max(0,(match.index??0)-80),match.index).match(/(\d[\d.]*(?:\s*(?:,|，|、|;|and|or|to|–|-)\s*\d[\d.]*)*)\s*$/)?.[1];
+   if(run)for(const n of run.match(/\d+(?:\.\d+)?/g)??[])own(numberIdentity(n),canonical(match[0]));
+  }
+  for(const k of out.keys()) {
+   if(values.has(k))continue;
+   const [n,u]=splitKey(k);
+   if(!sourceNumbers.has(n) || (owner.has(n) && owner.get(n)!==u))return 'technical-unit-value';
+  }
+ }
  return null;
+}
+function sameKeys(a:Map<string,number>,b:Map<string,number>):boolean {
+ return a.size===b.size && [...a.keys()].every(k=>b.has(k));
+}
+function splitKey(k:string):[string,string] {
+ const i=k.lastIndexOf(':');return [k.slice(0,i),k.slice(i+1)];
 }

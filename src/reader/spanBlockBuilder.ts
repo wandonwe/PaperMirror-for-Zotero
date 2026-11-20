@@ -1,4 +1,4 @@
-import { looksLikeReferencePage, looksLikeReferenceText } from './referenceDetect';
+import { looksLikeReferencePage, looksLikeReferenceText, startsReferenceEntry } from './referenceDetect';
 import {extractPanelTitles} from './panelTitles';
 import {removeCollapsedTextCopies} from './collapsedTextCopies';
 import {extractTwoColumnTables} from './twoColumnTable';
@@ -1375,7 +1375,14 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		// 落在第 0 栏底部;正文第 1 栏在 merged 序里排在标题之后,却在页面上位于
 		// 标题上方 —— 按"序后即文献"会把整栏正文冻成 preserve。分带页上:标题所在
 		// 带内只有顶边不高于标题顶边的块算文献,后面的带整体算文献。均匀页不变。
+		// 5.0 (校验 3358 p12 / 2757 p8): on a page that carries the References
+		// heading, entries sitting in a column read BEFORE the heading (Radiology
+		// side columns, BMC declarations above the list) were missed and the
+		// coalescer welded "9." … "14." into one 1413-character block. A block
+		// that itself starts like a numbered entry and carries a year is one.
+		const entryByContent = !!referencesHeadingRect && !p.isTableLine && startsReferenceEntry(p.text) && /\b(?:19|20)\d{2}\b/.test(p.text);
 		const isRef = p.isTableLine ? false
+			: entryByContent ? true
 			: referencesHeadingRect && bandedStamp
 				? referenceByGeometry(p.rect, referencesHeadingRect, bandedStamp)
 				: referencesStarted;
