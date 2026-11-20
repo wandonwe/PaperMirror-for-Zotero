@@ -7,7 +7,7 @@
  */
 
 import { numericPowerIssue } from './numericPowers';
-import { technicalUnitIssue } from './technicalUnits';
+import { technicalUnitIssue, protectTechnicalUnits } from './technicalUnits';
 import { referenceAlignmentIssue } from './referenceAlignment';
 import { stripProtectable } from '../reader/formulaGuard';
 import {
@@ -273,6 +273,8 @@ function mayStayUntranslated(proseSource: string): boolean {
 	// locator ("Curr Opin Nephrol Hypertens. 2019;28:316-320.") is a citation —
 	// models rightly return both unchanged.
 	t = t.replace(/\b[\w.+-]*[A-Za-z][\w-]*\.(?:[A-Za-z]{2,}\.)*[A-Za-z]{2,}\b(?:\/\S*)?/g, m => /^[A-Z][a-z]+\.\s?[A-Z]/.test(m) ? m : ' ').trim();
+	// "40 keV" / "120 kVp" in a table header is a value with its unit (校验 2638).
+	t = protectTechnicalUnits(t, () => ' ').trim();
 	if (!t || !/[A-Za-z]{3}/.test(t)) { return true; }
 
 	if (/\b(?:19|20)\d{2}\s*[;:]\s*\d+/.test(t) && !/\b[a-z][a-z'’-]{3,}\b/.test(t.replace(/\b(?:doi|pmid|et al)\b/gi, ''))) { return true; }

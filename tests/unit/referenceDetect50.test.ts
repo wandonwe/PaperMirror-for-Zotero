@@ -128,3 +128,8 @@ test('5.0 校验 2757 p10: a three-digit reference number starts a new entry', (
 	assert.equal(looksLikeListStart('101. Strain WD, Chaturvedi N, Leggetter S, Nihoyannopoulos P,'), true);
 	assert.equal(looksLikeListStart('120 patients were enrolled in the study.'), false);
 });
+
+test('5.0 校验 2638: a value with its unit in a table header may come back unchanged', () => {
+	assert.equal(looksTranslated('40 keV', '40 keV', 'zh-CN'), true);
+	assert.equal(looksTranslated('120 kVp', '120 kVp', 'zh-CN'), true);
+});
