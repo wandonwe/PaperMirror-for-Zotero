@@ -1,3 +1,4 @@
+import { looksLikeReferencePage, looksLikeReferenceText } from './referenceDetect';
 import {extractPanelTitles} from './panelTitles';
 import {removeCollapsedTextCopies} from './collapsedTextCopies';
 import {extractTwoColumnTables} from './twoColumnTable';
@@ -80,6 +81,8 @@ export interface SpanLine {
 
 // 字间空格标题 (2.7.2, 审核 C-2): jacc2020-p15 "R E F E R E N C E S" 排成字距体,
 // 原正则不认,整段三栏参考文献被当正文切碎翻译。
+/** A References heading anywhere in the raw page text, letter-spaced or not (5.0). */
+const REFERENCES_HEADING_HINT = /(?:^|\s)(?:R\s?E\s?F\s?E\s?R\s?E\s?N\s?C\s?E\s?S|References|Bibliography|Literature\s+Cited|参考文献|參考文獻|引用文献)(?=\s|$)/;
 const REFERENCES_HEADINGS = /^(r\s*e\s*f\s*e\s*r\s*e\s*n\s*c\s*e\s*s|bibliography|literature\s+cited|参考文献|參考文獻|引用文献)\s*$/i;
 
 /**
@@ -412,7 +415,7 @@ export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
  * `pageWidth` lets the gutter vote work; without it a conservative gap
  * threshold is used instead.
  */
-export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 0): SpanLine[] {
+export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 0, referenceList = false): SpanLine[] {
 	const rows = groupIntoRows(items);
 	if (!rows.length) {
 		return [];
@@ -453,19 +456,29 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 	// 一行,而 2.6.3 前不限 y 的全局沟是切开它的。折中: 通道外的行只在间隙
 	// ≥1.05em 时按全局沟切 —— 词间隙 (p5 "Figure 3:" 后 0.9em) 保持一行,
 	// 真栏沟 (≥1.1em) 照切。
-	const weakGutterXs: number[] = bandedActive ? [] : detectGutters(rowRects, pageWidth);
+	const pageGutterXs: number[] = detectGutters(rowRects, pageWidth);
+	const weakGutterXs: number[] = bandedActive ? [] : pageGutterXs;
 
 	// Short multi-column bands can be outvoted by full-width figures/captions.
 	// Require three nearby rows with matching gap edges, not a page-wide vote.
-	const localGaps = rows.flatMap(row => row.slice(1).flatMap((item, i) => {
+	const localGaps = rows.flatMap(row => {
+		// 5.0 (联网校验 3384 p10, reference lists only): a justified line spreads ALL its word gaps
+		// to ~1.4em. Three such rows can line up by chance and pass the 1.05em
+		// test, splitting a reference entry into nine "columns". A gutter is
+		// wide compared with the row's own word spacing; a justified gap is not.
+		const gaps = row.slice(1).map((item, i) => item.rect[0] - row[i]!.rect[2]).filter(g => g > 0).sort((a, b) => a - b);
+		const wordGap = referenceList && gaps.length >= 4 ? gaps[Math.floor(gaps.length / 2)]! : 0;
+		return row.slice(1).flatMap((item, i) => {
 		const prev = row[i]!;
 		const size = fontSizeOf(prev) || 10;
 		return Math.abs(fontSizeOf(item) - size) <= size * 0.15
 			&& prev.rect[2] - row[0]!.rect[0] >= size * 8
 			&& row[row.length - 1]!.rect[2] - item.rect[0] >= size * 8
 			&& item.rect[0] - prev.rect[2] >= size * 1.05
+			&& item.rect[0] - prev.rect[2] >= wordGap * 1.8
 			? [{ left: prev.rect[2], right: item.rect[0], y: (item.rect[1] + item.rect[3]) / 2 }] : [];
-	}));
+		});
+	});
 	// Track a genuinely wide caption band, without imposing its geometry on
 	// body rows or a caption printed beside another column.
 	const captionRows=new Set<SpanItem[]>();
@@ -491,6 +504,13 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 		// Only the gutters whose vertical channel spans this row apply (2pt
 		// tolerance so a row exactly at a band edge still counts).
 		const rowGutters = gutters.filter(g => rowMid <= g.top + 2 && rowMid >= g.bottom - 2);
+		// 5.0 (联网校验 3384 p10): banded detection can find "gutters" in a
+		// few heavily justified rows whose word gaps line up by chance. Away
+		// from the page-wide gutters, a split must beat the row's own word
+		// spacing clearly.
+		const rowGaps = row.slice(1).map((it, i) => it.rect[0] - row[i]!.rect[2]).filter(g => g > 0).sort((a, b) => a - b);
+		const rowWordGap = referenceList && rowGaps.length >= 4 ? rowGaps[Math.floor(rowGaps.length / 2)]! : 0;
+		const beatsWordGap = (g: BandedGutter, gap: number): boolean => rowWordGap === 0 || pageGutterXs.some(x => Math.abs(x - g.x) <= 20) || gap >= rowWordGap * 1.8;
 		let current: SpanItem[] = [];
 		const flush = (): void => {
 			if (current.length) {
@@ -508,7 +528,7 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 				// strictly before the gutter centre let that single line bridge the
 				// two columns into one scrambled line (三栏页连字符悬垂焊行).
 				const slack = Math.min(6, size * 0.6);
-				const crossesGutter = ((!captionRows.has(row) || gap >= size * 0.8) && rowGutters.some(g => crossesLineGutter(previous.rect[2], item.rect[0], g, slack, size)))
+				const crossesGutter = ((!captionRows.has(row) || gap >= size * 0.8) && rowGutters.some(g => crossesLineGutter(previous.rect[2], item.rect[0], g, slack, size) && beatsWordGap(g, gap)))
 					|| (gap >= size * 1.05
 						&& weakGutterXs.some(x => previous.rect[2] <= x + slack && item.rect[0] >= x));
 				const repeatedLocalGap = gap >= size * 1.05
@@ -519,7 +539,11 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 					Math.abs(g.y - rowMid) <= size * 4
 					&& Math.abs(g.left - previous.rect[2]) <= 2
 					&& Math.abs(g.right - item.rect[0]) <= 2).length >= 3;
-				if (crossesGutter || repeatedLocalGap || gap > columnGapThreshold(size)) {
+				// A wide gap in a heavily justified row is word spacing, unless it
+				// spans a page-wide gutter or clearly beats the row's spacing (5.0).
+				const spansPageGutter = pageGutterXs.some(x => previous.rect[2] <= x + slack && item.rect[0] >= x - slack);
+				const wideGap = gap > columnGapThreshold(size) && (rowWordGap === 0 || spansPageGutter || gap >= rowWordGap * 1.8);
+				if (crossesGutter || repeatedLocalGap || wideGap) {
 					flush();
 				}
 			}
@@ -1022,7 +1046,12 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		}
 		const list=buckets.get(key) ?? [];list.push(item);buckets.set(key,list);
 	}
-	const lines=[...buckets.values()].flatMap(items=>groupIntoLines(items,pageWidth,options.pageHeight));
+	// 5.0: on a reference list, wide justified word gaps are not gutters (see groupIntoLines).
+	// Only continuation pages: a page carrying its own References heading keeps
+	// the heading-driven behaviour (body above, list below).
+	const pageRawText = filteredItems.map(i => i.text).join(' ');
+	const referenceText = !REFERENCES_HEADING_HINT.test(pageRawText) && looksLikeReferenceText(pageRawText);
+	const lines=[...buckets.values()].flatMap(items=>groupIntoLines(items,pageWidth,options.pageHeight,referenceText));
 
 	// 页面正文字号 = 行字号的众数,不是中位数 (1.2.5)。封面页的前置件
 	// (7pt 作者单位 17 行 + 8.5pt 摘要 18 行) 在行数上压过 10pt 正文 (28 行),
@@ -1038,7 +1067,15 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// 里的行整条摘出散文分组,各自成一行块,交给下游 structureTableCells 重新组网格
 	// (标签列作 tableCol=0)。非表格页探不到区域 → 摘出集为空 → 行为与从前逐字节
 	// 一致,不影响任何非表格版面。
-	const tableLineIdx = detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10), obstacles,options.panelAnchors);
+	// 5.0 (联网校验 3384 p10): a reference list is never a table. Justified
+	// entries leave aligned word gaps that the table detector reads as columns
+	// and split entry 36 into nine cells. The page is a reference list when an
+	// earlier page started the references, or when its own lines say so.
+	const lineTexts = lines.map(lineText);
+	const referenceHeadingHere = lineTexts.some(t => REFERENCES_HEADINGS.test(t.trim()));
+	const referenceListByContent = !referenceHeadingHere && referenceText && looksLikeReferencePage(lineTexts);
+	const referenceListPage = !!options.referencesAlreadyStarted || referenceListByContent;
+	const tableLineIdx = referenceListByContent ? new Set<number>() : detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10), obstacles,options.panelAnchors);
 	const proseLines = tableLineIdx.size ? lines.filter((_, i) => !tableLineIdx.has(i)) : lines;
  // After isolating numbered panels, order prose using prose columns, not
  // numeric table columns: a short paragraph tail must stay between its lines.
@@ -1234,7 +1271,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		};
 	}).filter(p => p.text.length >= 1);
 
-	let referencesStarted = !!options.referencesAlreadyStarted;
+	let referencesStarted = referenceListPage;
 	// 字距拉开的标题 (2.7.2, 审核 C-2, jacc2020-p15 实证): "R E F E R E N C E S"
 	// 由单字母 span 拼成,字号与正文同,分类落成 paragraph —— 只认 heading/title
 	// 就永远认不出它。整块只有一行、且整行就是这个词时,类型不再是门槛。

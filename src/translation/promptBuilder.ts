@@ -31,7 +31,10 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 	// 样式标记/上下文的请求,不再携带对应规则 —— 大多数请求省 ~50–120 输入 token,
 	// 且对确实携带这些标记的请求一字不变(无需 bump PROMPT_VERSION、不作废缓存)。
 	const hasPlaceholders = request.blocks.some(b => b.text.includes('⟦PM'));
-	const referenceRule = 'In bibliography entries, translate the article or book TITLE into the target language. Translate author and journal names too; keep years, volumes, pages and DOIs unchanged. A reference title is natural language, not an identifier; do not copy the entire entry unchanged.';
+	// 5.0 (联网校验 3384/3132): author names were transliterated ("Simsek ME" →
+	// "西姆谢克 ME") and journal abbreviations paraphrased ("J Imaging Inf Med" →
+	// 《影像信息医学》), which breaks looking the reference up. Only the title translates.
+	const referenceRule = 'In bibliography entries (this overrides the general rule about names), translate ONLY the article or book TITLE into the target language. Copy author names (including "et al."), journal names and abbreviations, years, volumes, issues, pages, DOIs and URLs exactly as written in the source; never transliterate or translate them. A reference title is natural language, not an identifier; do not copy the entire entry unchanged.';
 	const hasStyleTags = request.blocks.some(b => b.text.includes('⟦b⟧') || b.text.includes('⟦i⟧'));
  const hasContinuation = request.blocks.some(b => b.continuationContext);
  const hasContinuationUnits = request.blocks.some(b => b.continuationUnit);

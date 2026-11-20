@@ -1,5 +1,5 @@
 import { preserveCollapsedPlotPanels } from '../reader/compositePlotGuard';
-import { createTextInkGuard, insetSideInk, insetTextInk, type InkFailure } from './textInkBounds';
+import { createTextInkGuard, insetSideInk, insetTextInk, setInkBleed, tryInkBleed, type InkFailure } from './textInkBounds';
 import { RenderMeasurementCache } from './measurementCache';
 import { pageContentKey } from '../export/pageArchive';
 /**
@@ -1244,6 +1244,28 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const textInkFits = createTextInkGuard(doc);
 	const sideInset = new WeakSet<HTMLElement>();
 	const heightSlack = (item: StrictItem): number => Math.max(1.5, item.fontPx * 0.35);
+	/**
+	 * May a descender bleed of `px` go below `piece` (5.0)? The strip must be
+	 * blank on the page bitmap (this block's own source lines excepted, they
+	 * are masked), clear of figures and preserved ink, and outside every other
+	 * block's box and this block's column band.
+	 */
+	const bleedStripFree = (item: StrictItem, piece: PixelBox, px: number): boolean => {
+		const strip = { left: piece.left, top: piece.top + piece.height, width: piece.width, height: px };
+		const hits = (b: PixelBox): boolean => Math.min(strip.left + strip.width, b.left + b.width) - Math.max(strip.left, b.left) > 0.5
+			&& Math.min(strip.top + strip.height, b.top + b.height) - Math.max(strip.top, b.top) > 0.01;
+		if (imageBoxes.some(hits) || inkObstacles.some(o => hits(o.box))) return false;
+		const inside = strip.top + strip.height <= item.box.top + item.box.height + 0.01;
+		if (!inside) {
+			// Never into another block's box (its source text, or a translation
+			// that may be revealed there), nor across the block's own column band.
+			if (items.some(other => other !== item && !other.abandoned && (other.flowBoxes ?? [other.box]).some(hits))) return false;
+			if (geometric.some(b => !byId.has(b.id) && pxOf.get(b.id) && hits(pxOf.get(b.id)!))) return false;
+			if (item.bodyRegion && strip.top + px > item.bodyRegion.top + item.bodyRegion.height + 0.01) return false;
+			if (strip.top + px > canvas.height / BITMAP_SCALE) return false;
+		}
+		return !regionHasInk(strip, 0.005, 3, lineBoxesFor.get(item.id) ?? []);
+	};
 
 	/** Ladder-fit a hidden node; true when it fits its fixed rectangle. */
 	const ladderFits = (item: StrictItem): boolean => {
@@ -1270,6 +1292,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				item.node.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
 				// A side inset belongs to one tested layout; never carry it to the next.
 				if (sideInset.has(item.node)) { item.node.style.paddingLeft = ''; item.node.style.paddingRight = ''; sideInset.delete(item.node); }
+				setInkBleed(item.node, 0);
 				if (item.flowBoxes) {
 					item.node.replaceChildren();
 					const nodes = item.flowBoxes.map(b => {
@@ -1290,6 +1313,10 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
                          const failure = textInkFits.failure(child);
                          if (failure) item.inkFailure = {...failure,flowIndex:index};
                          inkFits = insetTextInk(child,textInkFits,item.fontPx * 0.5,sizeFitsNow) || insetSideInk(child,textInkFits,item.fontPx * 0.25,sizeFitsNow);
+                         // 5.0: a g/p/comma 1-3px below the piece — bleed into blank space below.
+                         // The last piece's bleed leaves the block, so the block's own clip opens too.
+                         const last = index === item.flowBoxes!.length - 1;
+                         if (!inkFits) inkFits = tryInkBleed(child,textInkFits,item.fontPx,px => bleedStripFree(item,b,px),last ? [item.node] : []);
                         }
 						if (sizeFits && !inkFits) glyphRejected = true;
 						return inkFits;
@@ -1315,6 +1342,13 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				}
 				const inkFailure = textInkFits.failure(item.node);
 				if (inkFailure) item.inkFailure = inkFailure;
+				// 5.0: only descenders reach below the box — bleed into blank space below it.
+				if (inkFailure && inkFailure.bottomOverflow > 0 && !inkFailure.topOverflow && !inkFailure.leftOverflow && !inkFailure.rightOverflow
+					&& measured.height <= Math.round(item.box.height + heightSlack(item)) && layoutWidthFits(measured.width, item.node.clientWidth)
+					&& tryInkBleed(item.node, textInkFits, item.fontPx, px => bleedStripFree(item, item.box, px))) {
+					item.lastOverflow = 'none';
+					return true;
+				}
 				// A glyph hanging over a side edge (a "j" starting a line): inset
 				// that side inside the same rectangle and re-test everything.
 				if (inkFailure && (inkFailure.leftOverflow || inkFailure.rightOverflow)

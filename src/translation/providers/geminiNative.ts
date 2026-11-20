@@ -72,7 +72,10 @@ export function geminiGenerationConfig(settings: ProviderSettings, opts?: { json
 			config.thinkingConfig = { thinkingLevel: !r || r === 'disabled' || r === 'minimal' ? minimum : r === 'xhigh' ? 'high' : r };
 		}
 	}
-	else if (r === 'disabled' || r === 'minimal') {
+	else if (r === 'disabled' || r === 'minimal' || (!r && /^gemini-2\.5-/.test(model))) {
+		// 5.0 (联网校验: 2.5 Flash 41–130 字/秒,Flash-Lite 255–531): 2.5 Flash 未设
+		// 强度时默认动态思考,思考 token 按输出价计费。未设强度与「禁用」一样:
+		// Flash/Flash-Lite 关闭,2.5 Pro 关不掉取最低 128。
 		config.thinkingConfig = { thinkingBudget: /^gemini-2\.5-pro/.test(model) ? 128 : 0 };
 	}
 	else if (r === 'auto') {

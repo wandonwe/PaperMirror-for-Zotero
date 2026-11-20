@@ -47,6 +47,19 @@ export function noteProvisionalIn(state: Pick<PageTranslationState, 'provisional
 }
 
 /** 5.0: 页面里还有正在显示的临时译文 → 不写页缓存。 */
+/**
+ * Page-cache rows for the blocks that have a translation (5.0): provisional
+ * (per-part) translations are kept, flagged, so a revisit shows them without
+ * paying again; the flag keeps them out of the segment store after restore.
+ */
+export function pageCacheRows(state: Pick<PageTranslationState, 'provisional' | 'translations'>, blocks: { id: string }[]): TranslatedBlock[] {
+	return blocks
+		.filter(b => state.translations.has(b.id))
+		.map(b => state.provisional?.has(b.id)
+			? { id: b.id, translatedText: state.translations.get(b.id)!, provisional: true as const }
+			: { id: b.id, translatedText: state.translations.get(b.id)! });
+}
+
 export function hasShownProvisional(state: Pick<PageTranslationState, 'provisional' | 'translations'>): boolean {
 	for (const id of state.provisional ?? []) {
 		if (state.translations.has(id)) return true;
@@ -1348,16 +1361,14 @@ export class TranslationManager {
 						return;
 					}
 					logger.info(MODULE, `Page ${pageIndex + 1}: ${accepted.size} block(s) re-translated shorter under budget`);
-					const all: TranslatedBlock[] = state.blocks
-						.filter(b => state.translations.has(b.id))
-						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! }));
+					const all: TranslatedBlock[] = pageCacheRows(state, state.blocks);
 					// Only a COMPLETE page enters the page cache (审核 P1): this
 					// path can run while some blocks are keep-origin — writing the
 					// partial set used to freeze the page as a cache entry that hit
 					// and went straight to done with those blocks left in English.
 					const complete = state.blocks.every(b =>
 						b.translationMode === 'preserve' || state.translations.has(b.id));
-					if (complete && !hasShownProvisional(state)) {
+					if (complete) {
 						await this.persistPage(state, all);
 					}
 					// The SHORTER (fitting) version replaces the long one in the
@@ -1508,10 +1519,8 @@ export class TranslationManager {
 				// 与 compressBlocks 路径的判据保持一致。
 				const pageComplete = state.blocks.every(b =>
 					b.translationMode === 'preserve' || state.translations.has(b.id));
-				if (pageComplete && !hasShownProvisional(state)) {
-					await this.persistPage(state, state.blocks
-						.filter(b => state.translations.has(b.id))
-						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })));
+				if (pageComplete) {
+					await this.persistPage(state, pageCacheRows(state, state.blocks));
 				}
 				return live();
 			}, { foreground: true, lane: this.laneFor(pageIndex), maxRetries: 0 });
@@ -2752,9 +2761,7 @@ export class TranslationManager {
 			// 采用,被跳过的段落即使止损记忆早已清空也永远不再重试。与主路径
 			// 「a page with unrecovered blocks is NOT cached」同一条规则。
 			if (keepOrigin.size === 0) {
-				await this.persistPage(state, activeBlocks
-					.filter(b => state.translations.has(b.id))
-					.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })));
+				await this.persistPage(state, pageCacheRows(state, activeBlocks));
 			}
 			return false;
 		}
@@ -2776,11 +2783,14 @@ export class TranslationManager {
 		const cached = await this.deps.readCache(pageIndex, blocks);
 		if (cached) {
 			const cachedById = new Map(cached.map(t => [t.id, t.translatedText]));
+			const cachedProvisional = new Set(cached.filter(t => t.provisional).map(t => t.id));
 			let usable = 0;
 			for (const block of activeBlocks) {
 				const text = cachedById.get(block.id);
 				if (typeof text === 'string' && accept(block.id, text)) {
 					state.translations.set(block.id, text);
+					// Still provisional: never promoted into the segment store.
+					if (cachedProvisional.has(block.id)) run.provisional.add(block.id);
 					usable++;
 				}
 			}
@@ -3365,16 +3375,20 @@ export class TranslationManager {
 		// visit (or 重新翻译) runs the whole pipeline again — with the segment
 		// store still saving the segments that DID succeed.
 		const provisionalShown = activeBlocks.filter(b => run.provisional.has(b.id) && state.translations.has(b.id)).length;
-		if (untranslatedCount === 0 && keepOrigin.size === 0 && provisionalShown === 0) {
+		// 5.0 (联网校验: 9 篇里 8 篇、约 30 页): a page whose only flaw is
+		// provisional (per-part) translations used to stay uncached, and every
+		// revisit paid for the whole page again to get the same parts back.
+		// It is cached now with those blocks flagged: shown on revisit, still
+		// kept out of the segment store, replaced by 刷新本页.
+		if (untranslatedCount === 0 && keepOrigin.size === 0) {
 			// keepOrigin pages stay OUT of the page cache (审核 P1): caching one
 			// froze its English segments forever — every revisit hit the cache and
 			// the repair chain never ran again. Uncached, the segment store still
 			// serves the good segments and the skipped ones get their chance the
 			// moment 普通刷新 clears the 止损 memory below.
-			const all: TranslatedBlock[] = activeBlocks
-				.filter(b => state.translations.has(b.id))
-				.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! }));
+			const all: TranslatedBlock[] = pageCacheRows(state, activeBlocks);
 			await this.persistPage(state, all);
+			if (provisionalShown) logger.info(MODULE, `Page ${pageIndex + 1} cached with ${provisionalShown} provisional block(s)`);
 		}
 		else {
 			logger.warn(MODULE, `Page ${pageIndex + 1} left uncached (${untranslatedCount} untranslated, ${provisionalShown} provisional block(s)) so a revisit retries`);

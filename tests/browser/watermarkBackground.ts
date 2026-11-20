@@ -10,7 +10,8 @@ export async function checkWatermarkBackground(keep=false):Promise<void>{
  const failed=p.targets.filter(id=>{const group=probes.filter(b=>b.id===id||b.id.startsWith(id+'::p'));return !group.length||group.some(b=>b.state!=='committed');});
  console.log(JSON.stringify({page:p.page,scale,failed,probes:probes.filter(b=>failed.some(id=>b.id===id||b.id.startsWith(id+'::p')))}));
  if(keep&&scale===1)built.element.dataset.watermarkPage=String(p.page);else built.element.remove();
- const expected:Record<string,string[]>={'1:1.2':['page-0-region-8','page-0-region-9'],'11:1':['page-10-region-26'],'11:1.2':['page-10-region-26']};
+ // 5.0: page-10-region-26 at scale 1 only missed by a descender; the bounded ink bleed (blank strip below, no other box) now places it.
+ const expected:Record<string,string[]>={'1:1.2':['page-0-region-8','page-0-region-9'],'11:1.2':['page-10-region-26']};
  if(JSON.stringify(failed)!==JSON.stringify(expected[p.page+':'+scale]??[]))throw Error('Unexpected watermark replay failure '+p.page+':'+scale+' '+JSON.stringify(failed));
  for(const id of p.targets)if(!probes.some(b=>b.id===id||b.id.startsWith(id+'::p')))throw Error('Background still excluded a target');
 

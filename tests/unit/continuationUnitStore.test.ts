@@ -310,3 +310,13 @@ test('5.0: cancellation during a shared sentence is still a cancellation, not a 
 	controller.abort();
 	await assert.rejects(pending, cancelled);
 });
+
+test('5.0 联网校验: citation lists survive either comma reading in the whole-sentence number check', async () => {
+	const { sameNumericInventory } = await import('../../src/translation/continuationUnitStore');
+	assert.equal(sameNumericInventory('the scan delay (113,197) was used', '扫描延迟(113, 197)'), true);
+	assert.equal(sameNumericInventory('cited (44,193,194)', '引用(44，193，194)'), true);
+	assert.equal(sameNumericInventory('a dose of 12,500 IU', '剂量 12500 IU'), true);
+	assert.equal(sameNumericInventory('values 3, 4 and 5', '数值 3、4 和 5'), true);
+	assert.equal(sameNumericInventory('the scan delay (113,197) was used', '扫描延迟(113, 198)'), false, 'a changed number is still caught');
+	assert.equal(sameNumericInventory('10–20 mL in 2 groups', '10–20 mL'), false, 'a dropped number is still caught');
+});

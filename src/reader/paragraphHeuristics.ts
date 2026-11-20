@@ -21,6 +21,7 @@
  * which rejoins a fragment that ends mid-sentence with the one that follows.
  */
 
+import { isReferenceTailLine } from './referenceDetect';
 import { endsMidSentence } from './metaFilter';
 
 /** [x1, y1, x2, y2] in PDF coordinates (origin bottom-left, y grows upward). */
@@ -894,6 +895,8 @@ export function startsContinuation(text: string): boolean {
  * starts a new block even when the text before it looks unfinished.
  */
 export function looksLikeListStart(text: string): boolean {
+	// 5.0: "93. doi: 10.1007/…" is the tail of a reference entry, not item 93.
+	if (isReferenceTailLine(text)) return false;
 	return /^(\[\d{1,3}\]|[•▪◦‣·*–—-]\s|\(?\d{1,2}[.)]\s|[（(]\d{1,2}[）)]|[ivxIVX]{1,4}[.)]\s)/.test(text.trim());
 }
 

@@ -98,10 +98,21 @@ function unitKey(group: Group, request: TranslationRequest, glossary: GlossaryRu
 		namespace === undefined ? [...(options.noTranslate ?? [])].sort() : null]));
 }
 
-function numericInventory(text: string): string {
+function numericInventory(text: string, commas: 'thousands' | 'join' = 'thousands'): string {
 	// 千分位不算差异: 中文译文常把 "12,500" 写成 "12500"。
-	const plain = canonical(text).replace(/(\d),(?=\d{3}(?!\d))/g, '$1');
+	// 'join' (5.0, 联网校验 3145/3386): 引用编号 "(113,197)" 会被千分位规则并成
+	// 113197,而译文写成 "(113, 197)" 就成了两个数 —— 整句被判废、页面不进缓存。
+	// 第二种读法把数字间的逗号(连同空格)全部并掉,两种读法任一一致即可。
+	const c = canonical(text);
+	const plain = commas === 'join'
+		? c.replace(/(\d)\s*[,，、]\s*(?=\d)/g, '$1')
+		: c.replace(/(\d),(?=\d{3}(?!\d))/g, '$1');
 	return JSON.stringify((plain.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\d+(?:[.,]\d+)*(?:[eE][+−-]?\d+)?/g) ?? []).sort());
+}
+
+/** Same numbers in source and translation, under either comma reading (5.0). */
+export function sameNumericInventory(source: string, text: string): boolean {
+	return numericInventory(source) === numericInventory(text) || numericInventory(source, 'join') === numericInventory(text, 'join');
 }
 
 type IntegrityReason = 'part-count' | 'empty-or-invalid-text' | 'raw-placeholder-residue'
@@ -120,7 +131,7 @@ function validateRawTexts(group: Group, registries: PlaceholderRegistry[], texts
 	// 仍逐栏校验 —— 它们的编号本来就属于各自那一栏。
 	if (texts.some(text => typeof text !== 'string' || !text.trim())) return reject('empty-or-invalid-text', texts.findIndex(text => typeof text !== 'string' || !text.trim()));
 	const sourceJoined = group.parts.map(rawText).join(' '), textJoined = (texts as string[]).join(' ');
-	if (numericInventory(sourceJoined) !== numericInventory(textJoined)) return reject('numeric-inventory', -1);
+	if (!sameNumericInventory(sourceJoined, textJoined)) return reject('numeric-inventory', -1);
 	const technical = technicalUnitIssue(sourceJoined, textJoined);
 	if (technical) return reject(technical, -1);
 	if (numericPowerIssue(sourceJoined, textJoined)) return reject('numeric-power', -1);

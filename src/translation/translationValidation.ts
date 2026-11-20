@@ -28,7 +28,7 @@ import {
 export function looksTranslated(source: string, translated: string, targetLang: string, opts?: { isReference?: boolean }): boolean {
 	const t = translated.trim();
 	if (technicalUnitIssue(source, t) || numericPowerIssue(source, t)) return false;
-	if (/[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFD]/.test(t)) return false;
+	if (introducesInvalidCharacters(source, t)) return false;
 	if (referenceAlignmentIssue(source, t)) return false;
 	if (!t) {
 		return false;
@@ -44,6 +44,9 @@ export function looksTranslated(source: string, translated: string, targetLang: 
   && sourceParts.some(p=>looksLikeAuthorNameList(p)||looksLikePersonNames(p))) {
   return sourceParts.every((p,i)=>looksTranslated(p,targetParts[i]!,targetLang,opts));
  }
+	// 5.0 (联网校验 3384): authors stay in their source spelling — "Simsek ME"
+	// must not come back as "西姆谢克 ME".
+	if (opts?.isReference && referenceAuthorsChanged(source, t)) return false;
 	// Preserve only identifiable author/journal fragments, never all reference prose.
 	if (opts?.isReference && isEcho(source, t) && (looksLikeAuthorNameList(source.replace(/^\d+\.\s*/, ''))
 		|| looksLikePersonNames(source.replace(/^\d+\.\s*/, ''))
@@ -208,6 +211,35 @@ export function looksLikeReferenceEntry(source: string): boolean {
 	return features >= 2;
 }
 
+/**
+ * The leading authors of a reference entry, by surname (5.0): Vancouver
+ * "Simsek ME, Akkaya M" or initials-first "J. Smith, A. Brown". Only the first
+ * two are taken, so a capitalised title word is never mistaken for one.
+ */
+export function referenceLeadSurnames(source: string): string[] {
+	if (!looksLikeReferenceEntry(source)) return [];
+	const head = source.replace(/\s+/g, ' ').trim().replace(/^\[?\d{1,3}[\].)]?\s*/, '').slice(0, 140);
+	const out: string[] = [];
+	const vancouver = /(?:^|,\s*)([A-Z][\p{L}'’-]+(?:\s+[A-Z][\p{L}'’-]+)?)\s+(?:[A-Z]{1,3}|(?:[A-Z]\.\s?){1,3})(?=[,.\s]|$)/gu;
+	const initialsFirst = /(?:^|,\s*)(?:[A-Z]\.\s?){1,3}\s?([A-Z][\p{L}'’-]+)/gu;
+	for (const re of [vancouver, initialsFirst]) {
+		re.lastIndex = 0;
+		let m: RegExpExecArray | null;
+		while ((m = re.exec(head)) && out.length < 2) {
+			if (m.index > 0 && out.length === 0) break; // must start the entry
+			out.push(m[1]!);
+		}
+		if (out.length) break;
+	}
+	return out;
+}
+
+/** True when a translated reference entry lost a leading author's source spelling. */
+export function referenceAuthorsChanged(source: string, translated: string): boolean {
+	const names = referenceLeadSurnames(source);
+	return names.length > 0 && names.some(n => !translated.includes(n));
+}
+
 function isEcho(source: string, translated: string): boolean {
 	const norm = (x: string): string => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 	const a = norm(source);
@@ -226,8 +258,15 @@ function isEcho(source: string, translated: string): boolean {
  * 这是有意的取舍:把没译的标为已译、写进缓存,比多花一两次请求坏得多。
  */
 function mayStayUntranslated(proseSource: string): boolean {
-	const t = proseSource.trim();
+	let t = proseSource.trim();
 	if (!t) { return true; }
+	// 5.0 (联网校验 3064/3132: 表格单元格回声被拒 3–4 次): domain names and
+	// e-mail-like tokens ("uclouvain.be") are identifiers, and a bare journal
+	// locator ("Curr Opin Nephrol Hypertens. 2019;28:316-320.") is a citation —
+	// models rightly return both unchanged.
+	t = t.replace(/\b[\w.+-]*[A-Za-z][\w-]*\.(?:[A-Za-z]{2,}\.)*[A-Za-z]{2,}\b(?:\/\S*)?/g, m => /^[A-Z][a-z]+\.\s?[A-Z]/.test(m) ? m : ' ').trim();
+	if (!t || !/[A-Za-z]{3}/.test(t)) { return true; }
+	if (/\b(?:19|20)\d{2}\s*[;:]\s*\d+/.test(t) && !/\b[a-z][a-z'’-]{3,}\b/.test(t.replace(/\b(?:doi|pmid|et al)\b/gi, ''))) { return true; }
 	const words = (t.match(/[A-Za-z][A-Za-z'’-]*/g) ?? [])
 		.filter(w => w.replace(/[^A-Za-z]/g, '').length >= 3 && (w.match(/[a-z]/g) ?? []).length >= 2);
 	if (words.length === 0) { return true; }
@@ -371,11 +410,22 @@ function targetLanguageRatio(text: string): number {
 	return denom === 0 ? 0 : cjk / denom;
 }
 
+/**
+ * Control characters / U+FFFD the source did not have (5.0, 联网校验 2958 p3):
+ * a paragraph whose PDF font could not be decoded carries U+FFFD itself, and a
+ * faithful translation copies it — rejecting that failed the block four times.
+ */
+function introducesInvalidCharacters(source: string, translated: string): boolean {
+	const bad = /[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFD]/g;
+	return (translated.match(bad) ?? []).length > (source.match(bad) ?? []).length;
+}
+
 /** Reason codes contain no source or response text and are safe for diagnostics. */
 export function referenceRejectReason(source: string, translated: string, phase: string): string {
  const alignment = referenceAlignmentIssue(source, translated);
  if (alignment) return `${phase}:${alignment}`;
  if(!translated.trim()) return `${phase}:empty`;
+ if(referenceAuthorsChanged(source,translated)) return `${phase}:reference-authors`;
  if(isEcho(source,translated)) return `${phase}:reference-echo`;
  if(isTruncatedTranslation(stripProtectable(source),stripProtectable(translated))) return `${phase}:reference-truncated`;
  return `${phase}:reference-${translationRejectReason(source,translated,'zh-CN') ?? 'integrity'}`;
@@ -383,7 +433,7 @@ export function referenceRejectReason(source: string, translated: string, phase:
 
 /** Same validator, with a stable, text-free explanation for its rejection. */
 export function translationRejectReason(source: string, translated: string, target: string): string | null {
- if (/[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFD]/.test(translated)) return 'invalid-character';
+ if (introducesInvalidCharacters(source, translated)) return 'invalid-character';
  const alignment = referenceAlignmentIssue(source, translated);
  if (alignment) return alignment;
  const unitIssue = technicalUnitIssue(source, translated) || numericPowerIssue(source, translated);

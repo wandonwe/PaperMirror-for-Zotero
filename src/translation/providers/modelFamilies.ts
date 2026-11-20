@@ -36,3 +36,15 @@ export function gpt6MinimumEffort(tier: Gpt6Tier): 'none' | 'low' {
 export function isGptOss(model: string): boolean {
 	return /^openai\/gpt-oss-/.test(model.trim());
 }
+
+/**
+ * OpenAI reasoning models that THINK BY DEFAULT (5.0): the original GPT-5 /
+ * mini / nano (default medium, lowest minimal) and the o-series (default
+ * medium, lowest low). GPT-5.1 and later default to none and need nothing.
+ */
+export function openaiDefaultThinkingFloor(model: string): 'minimal' | 'low' | null {
+	const m = model.trim().replace(/^openai\//, '');
+	if (/^gpt-5(?:-mini|-nano)?(?:-\d{4}-\d{2}-\d{2})?$/.test(m)) return 'minimal';
+	if (/^o[134](?:-mini|-pro)?(?:$|-)/.test(m)) return 'low';
+	return null;
+}

@@ -150,6 +150,8 @@ export interface PlaceholderEntry {
 export interface TranslatedBlock {
 	id: string;
 	translatedText: string;
+	/** 5.0: a per-part (degraded continuation) translation kept in the page cache for display only. */
+	provisional?: true;
 }
 
 export type LanguageCode = 'en' | 'zh-CN' | 'zh-TW' | 'auto' | string;

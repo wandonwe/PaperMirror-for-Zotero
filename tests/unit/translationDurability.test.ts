@@ -117,10 +117,10 @@ test('older persistence cannot authorise eviction while a compressed replacement
  } finally {initialWrite.resolve();compressedWrite.resolve();m.dispose();}
 });
 
-test('5.0: provisional (degraded shared-sentence) translations are shown but never cached', async()=>{
- let pageWrites=0;const segWrites:string[]=[];
+test('5.0: provisional translations are shown and page-cached with a flag, never put in the segment store', async()=>{
+ const pageRows:TranslatedBlock[][]=[];const segWrites:string[]=[];
  const m=manager(deps({
-  writeCache:async()=>{pageWrites++;return true;},
+  writeCache:async(_p,_blocks,rows)=>{pageRows.push(rows);return true;},
   writeSegments:async(_p,entries)=>{segWrites.push(...entries.map(e=>e.translatedText));},
   translateRequest:async request=>({translations:request.blocks.map(b=>({id:b.id,translatedText:'Traduction par colonne.'})),provisionalIds:request.blocks.map(b=>b.id)})
  }));
@@ -128,12 +128,29 @@ test('5.0: provisional (degraded shared-sentence) translations are shown but nev
   await m.ensurePage(0,10);
   const state=m.getPageState(0)!;
   assert.equal(state.translations.get('b0'),'Traduction par colonne.','临时译文照常显示');
-  assert.equal(pageWrites,0,'页缓存不写,下次打开重试整句');
-  assert.deepEqual(segWrites,[],'段落库也不写');
+  assert.equal(pageRows.length,1,'联网校验: 回访不再整页重付费 —— 页缓存写入');
+  assert.ok(pageRows[0]!.every(r=>r.provisional===true),'带临时标记');
+  assert.deepEqual(segWrites,[],'段落库不写');
  } finally {m.dispose();}
 });
 
-test('5.0 审核: 临时标记挂在页状态上 —— 单段重译拿到正式译文后才写缓存;压缩重译不把临时译文写进缓存', async()=>{
+test('5.0: a cached provisional row is restored as provisional and stays out of the segment store', async()=>{
+ const segWrites:string[]=[];
+ const m=manager(deps({
+  readCache:async()=>[{id:'b0',translatedText:'Traduction par colonne.',provisional:true}],
+  writeSegments:async(_p,entries)=>{segWrites.push(...entries.map(e=>e.translatedText));},
+  translateRequest:async()=>{throw new Error('a full cache hit must not request');}
+ }));
+ try {
+  await m.ensurePage(0,10);
+  const state=m.getPageState(0)!;
+  assert.equal(state.translations.get('b0'),'Traduction par colonne.');
+  assert.equal(state.provisional?.has('b0'),true);
+  assert.deepEqual(segWrites,[]);
+ } finally {m.dispose();}
+});
+
+test('5.0 审核: 临时标记挂在页状态上 —— 压缩重译的临时译文带标记进页缓存、不进段落库;单段重译拿到正式译文后撤销标记', async()=>{
  let pageWrites=0;const segWrites:string[]=[];let mode:'provisional'|'final'|'shortProv'='provisional';
  const m=manager(deps({
   writeCache:async()=>{pageWrites++;return true;},
@@ -151,12 +168,13 @@ test('5.0 审核: 临时标记挂在页状态上 —— 单段重译拿到正式
   mode='shortProv';
   const shorter=await m.compressBlocks(0,[{id:'b0',maxChars:20}]);
   assert.equal(shorter.get('b0'),'Courte colonne.');
-  assert.equal(pageWrites,0,'压缩后的临时译文不写页缓存');
-  assert.deepEqual(segWrites,[],'也不写段落库');
+  assert.ok(pageWrites>=1,'压缩后的临时译文带标记写页缓存');
+  assert.deepEqual(segWrites,[],'但不写段落库');
+  const before=pageWrites;
   mode='final';
   assert.equal(await m.retranslateBlock(0,'b0'),true);
   assert.equal(state.provisional?.has('b0'),false,'拿到正式译文后撤销临时标记');
-  assert.equal(pageWrites,1,'此时整页写入缓存');
+  assert.equal(pageWrites,before+1,'拿到正式译文后整页重写缓存');
   assert.deepEqual(segWrites,['Traduction conjointe.']);
  } finally {m.dispose();}
 });

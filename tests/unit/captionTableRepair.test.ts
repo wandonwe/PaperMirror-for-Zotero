@@ -39,8 +39,8 @@ test('reference requests translate titles in both structured and plain recovery 
  const {buildSystemPrompt}=await import('../../src/translation/promptBuilder');
  const request={sourceLanguage:'en',targetLanguage:'zh-CN',documentTitle:'T',previousContext:'',blocks:[{id:'r',type:'list' as const,text:'1. Smith A. A clinical study. Journal 2021;1:2.'}]};
  for(const plain of [false,true]) {
-  assert.match(buildSystemPrompt({...request,plain,referenceContent:true}),/translate the article or book TITLE/);
-  assert.doesNotMatch(buildSystemPrompt({...request,plain}),/translate the article or book TITLE/);
+  assert.match(buildSystemPrompt({...request,plain,referenceContent:true}),/article or book TITLE/);
+  assert.doesNotMatch(buildSystemPrompt({...request,plain}),/article or book TITLE/);
  }
 });
 

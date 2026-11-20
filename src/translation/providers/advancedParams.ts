@@ -14,7 +14,7 @@
 
 import type { ProviderSettings } from '../../types/models';
 import { PaperMirrorError } from '../../types/models';
-import { gpt6MinimumEffort, gpt6Tier, isGlm53, isGptOss, isKimiK26, isKimiK3 } from './modelFamilies';
+import { gpt6MinimumEffort, gpt6Tier, isGlm53, isGptOss, isKimiK26, isKimiK3, openaiDefaultThinkingFloor } from './modelFamilies';
 
 /**
  * 'minimal'…'xhigh' are OpenAI-style effort levels; 'disabled'/'auto' are the
@@ -177,6 +177,19 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
 			out.reasoning_effort = gpt6MinimumEffort(tier);
 		}
 	}
+	// 5.0 用户要求「所有模型默认都不思考」: GPT-5 / o 系列默认 medium 强度。
+	// 没设强度时取该型号最低档(GPT-5.1 起默认就是 none,不用发)。
+	const floor = openaiDefaultThinkingFloor(model);
+	if (floor && (providerId === 'openai' || providerId === 'openrouter') && (!eff || eff === 'disabled')) {
+		out.reasoning_effort = floor;
+	}
+	// Ollama 的 OpenAI 兼容接口 (docs.ollama.com/api/openai-compatibility):
+	// reasoning_effort "none" 关闭布尔式思考模型的思考(qwen3.5 等默认思考);
+	// 不认识的取值退回模型默认,不会 400;GPT-OSS 关不掉,自动映射为 low。
+	if (providerId === 'ollama') {
+		out.reasoning_effort = !eff || eff === 'disabled' ? 'none' : eff === 'auto' ? undefined : eff;
+		if (out.reasoning_effort === undefined) delete out.reasoning_effort;
+	}
 	if (providerId === 'groq' && isGptOss(model)) {
 		out.reasoning_effort = eff === 'high' || eff === 'xhigh' ? 'high' : eff === 'medium' ? 'medium' : 'low';
 	}
@@ -188,7 +201,7 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
 export function supportsReasoningControl(providerId: string): boolean {
 	return REASONING_EFFORT_PROVIDERS.has(providerId) || THINKING_OBJECT_PROVIDERS.has(providerId)
 		|| ENABLE_THINKING_PROVIDERS.has(providerId) || ALWAYS_THINKS_PROVIDERS.has(providerId)
-		|| providerId === 'anthropic' || providerId === 'gemini' || providerId === 'groq';
+		|| providerId === 'anthropic' || providerId === 'gemini' || providerId === 'groq' || providerId === 'ollama';
 }
 
 /**
