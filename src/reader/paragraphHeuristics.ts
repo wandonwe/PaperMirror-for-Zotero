@@ -21,7 +21,7 @@
  * which rejoins a fragment that ends mid-sentence with the one that follows.
  */
 
-import { isReferenceTailLine } from './referenceDetect';
+import { isReferenceTailLine, startsReferenceEntry } from './referenceDetect';
 import { endsMidSentence } from './metaFilter';
 
 /** [x1, y1, x2, y2] in PDF coordinates (origin bottom-left, y grows upward). */
@@ -897,6 +897,9 @@ export function startsContinuation(text: string): boolean {
 export function looksLikeListStart(text: string): boolean {
 	// 5.0: "93. doi: 10.1007/…" is the tail of a reference entry, not item 93.
 	if (isReferenceTailLine(text)) return false;
+	// 5.0 (校验 2757 p10: "100. …" 与 "101. Strain WD, …" 并成一块): three-digit
+	// reference numbers, recognised by the author–initials that follow.
+	if (startsReferenceEntry(text)) return true;
 	return /^(\[\d{1,3}\]|[•▪◦‣·*–—-]\s|\(?\d{1,2}[.)]\s|[（(]\d{1,2}[）)]|[ivxIVX]{1,4}[.)]\s)/.test(text.trim());
 }
 

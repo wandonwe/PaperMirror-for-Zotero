@@ -123,3 +123,8 @@ test('5.0 校验 3332: an author cited by number in a table cell may stay as it 
 	}
 	assert.equal(looksTranslated('Contrast volume [ml]', 'Contrast volume [ml]', 'zh-CN'), false);
 });
+
+test('5.0 校验 2757 p10: a three-digit reference number starts a new entry', () => {
+	assert.equal(looksLikeListStart('101. Strain WD, Chaturvedi N, Leggetter S, Nihoyannopoulos P,'), true);
+	assert.equal(looksLikeListStart('120 patients were enrolled in the study.'), false);
+});
