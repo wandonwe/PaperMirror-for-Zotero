@@ -3152,7 +3152,7 @@ export class TranslationManager {
 						// is. On the masked text every protected keV/kVp looked missing, so
 						// the diagnostics reported 'technical-unit' for unrelated failures.
 						const raw = single.translations[0]?.translatedText ?? '';
-						noteReject(block.id, pb.reg.ok(raw) ? rejectedResponse(block.id, pb.reg.restore(raw), 'salvage-validator') : 'salvage-placeholder');
+						noteReject(block.id, rejectedResponse(block.id, pb.reg.restore(raw), 'salvage-validator'));
 					}
 					else {
 						// 死分支修复 (1.1.8): 这里原本是与上面条件完全相同的
