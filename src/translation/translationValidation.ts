@@ -47,6 +47,7 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 	// 5.0 (联网校验 3384): authors stay in their source spelling — "Simsek ME"
 	// must not come back as "西姆谢克 ME".
 	if (opts?.isReference && referenceAuthorsChanged(source, t)) return false;
+	if (contactNamesChanged(source, t)) return false;
 	// Preserve only identifiable author/journal fragments, never all reference prose.
 	if (opts?.isReference && isEcho(source, t) && (looksLikeAuthorNameList(source.replace(/^\d+\.\s*/, ''))
 		|| looksLikePersonNames(source.replace(/^\d+\.\s*/, ''))
@@ -78,7 +79,7 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 		// "允许原样保留"与"译文合格"是两件事:数字、缩写、人名、单位原样返回是正当的;
 		// 一句自然语言原样返回就是没译。这里只拦**内容相同**的回声,不要求短块必含中文 ——
 		// 否则 CT / MRI / p < 0.05 全会被推进无效重试。
-		if (isEcho(source, t) && !mayStayUntranslated(proseSource) && !isAuthorCitation(source)) {
+		if (isEcho(source, t) && !mayStayUntranslated(proseSource) && !isAuthorCitation(source) && !isContactRecord(source)) {
 			return false;
 		}
 		return true; // label / acronym / numeric cell — may legitimately be CJK-free
@@ -263,6 +264,28 @@ export function referenceLeadSurnames(source: string): string[] {
 		if (out.length) break;
 	}
 	return out;
+}
+
+const CONTACT_NAME = /(?:^|[\s;:(])((?:[A-Z][\p{L}'’-]+\s){1,3}[A-Z][\p{L}'’-]+),\s*[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}/gu;
+
+/**
+ * 5.0 (推荐模型校验 2877): a "Name, e-mail" record keeps the person's name as
+ * written. The prompt says so since 4.99.15; this check also retires older
+ * cached translations ("Naying He" → "何娜英") when they are reused, without
+ * invalidating every cached page through a prompt-version bump.
+ */
+export function contactNamesChanged(source: string, translated: string): boolean {
+	CONTACT_NAME.lastIndex = 0;
+	let m: RegExpExecArray | null;
+	while ((m = CONTACT_NAME.exec(source))) {
+		if (!translated.includes(m[1]!)) return true;
+	}
+	return false;
+}
+
+/** "Naying He, hny12267@rjh.com.cn": a person's name and address, kept as written (5.0). */
+export function isContactRecord(source: string): boolean {
+	return /^\s*(?:\p{Lu}[\p{L}'’-]+\s){1,3}\p{Lu}[\p{L}'’-]+,\s*[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\s*[.;]?\s*$/u.test(source);
 }
 
 /** True when a translated reference entry lost a leading author's source spelling. */

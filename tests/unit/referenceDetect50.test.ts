@@ -174,3 +174,14 @@ test('5.0 校验 2897/2638: long reference blocks may still come back verbatim; 
 	assert.equal(looksLikeReferenceBlock(prose), false);
 	assert.equal(looksTranslated(prose, prose, 'zh-CN', { isReference: true }), false);
 });
+
+test('5.0 校验 2877: a contact record keeps the person name; old transliterated translations are retired', async () => {
+	const { contactNamesChanged } = await import('../../src/translation/translationValidation');
+	const src = 'Naying He, hny12267@example.org';
+	assert.equal(contactNamesChanged(src, '何娜英，hny12267@example.org'), true);
+	assert.equal(looksTranslated(src, '何娜英，hny12267@example.org', 'zh-CN'), false);
+	assert.equal(looksTranslated(src, src, 'zh-CN'), true, 'kept verbatim is fine');
+	assert.equal(contactNamesChanged('Correspondence: Ewart Mark Haacke, mark@example.com, Department of Radiology', '通讯作者：Ewart Mark Haacke，mark@example.com，放射科'), false);
+	// No contact record: nothing to check.
+	assert.equal(contactNamesChanged('The scanner was provided by Siemens Healthineers.', '扫描仪由西门子医疗提供。'), false);
+});
