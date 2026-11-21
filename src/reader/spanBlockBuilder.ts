@@ -346,6 +346,31 @@ export function sidewaysBodyChars(items: SpanItem[], pageWidth: number): number 
 /** Enough sideways body text to be a rotated table, not a stray rotated label. */
 export const ROTATED_TABLE_MIN_CHARS = 120;
 
+/**
+ * 真机 4.99.16 (3386 p10): with a rotated table kept original, its SHORT runs
+ * ("Value", "–", "99)") are not three times taller than wide and leaked into
+ * extraction as fragments. Inside the rotated table's box, runs that are
+ * narrow or a few characters long belong to the table and are dropped too;
+ * wide upright lines (the page footer, body text) are kept.
+ */
+function dropRotatedTableRemnants(items: SpanItem[], pageWidth: number): SpanItem[] {
+	if (sidewaysBodyChars(items, pageWidth) < ROTATED_TABLE_MIN_CHARS) return items;
+	const edge = pageWidth * 0.08;
+	const runs = items.filter(i => {
+		const cx = (i.rect[0] + i.rect[2]) / 2;
+		return isSidewaysRun(i) && cx >= edge && cx <= pageWidth - edge;
+	});
+	const pad = Math.max(...runs.map(i => i.rect[2] - i.rect[0]), 6);
+	const box: Rect = [Math.min(...runs.map(i => i.rect[0])) - pad, Math.min(...runs.map(i => i.rect[1])) - pad,
+		Math.max(...runs.map(i => i.rect[2])) + pad, Math.max(...runs.map(i => i.rect[3])) + pad];
+	return items.filter(i => {
+		const cx = (i.rect[0] + i.rect[2]) / 2, cy = (i.rect[1] + i.rect[3]) / 2;
+		if (cx < box[0] || cx > box[2] || cy < box[1] || cy > box[3]) return true;
+		const w = i.rect[2] - i.rect[0], h = i.rect[3] - i.rect[1];
+		return !(h >= w || i.text.trim().length <= 3);
+	});
+}
+
 export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 	const usable = items.filter((i) => {
 		if (!i.text.trim().length || !Number.isFinite(i.rect[1]) || !Number.isFinite(i.rect[3])) {
@@ -1028,6 +1053,7 @@ function dropWatermarkWords(items: SpanItem[]): SpanItem[] {
 export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOptions): SpanBuildResult {
 	items=removeCollapsedTextCopies(items);
 	items=dropWatermarkWords(items);
+	items=dropRotatedTableRemnants(items, options.pageWidth || 612);
 	if (options.legendSegmentsPdf?.length) {
 		const legends = extractLegendItems(items, { pageIndex: options.pageIndex,
 			pageWidth: options.pageWidth || 612, pageHeight: options.pageHeight,

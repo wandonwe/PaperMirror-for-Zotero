@@ -40,3 +40,19 @@ test('5.0: the session attaches the rotated-table note to the final placement an
 	assert.match(src, /placementTally\(stats\) : undefined, this\.pageNote\(pageIndex\)\.note\)/);
 	assert.match(src, /this\.extractor\.hasRotatedTable\(pageIndex\)/);
 });
+
+test('真机 4.99.16 3386 p10: short runs of a rotated table do not leak as fragments; body text beside it is kept', () => {
+	const items: SpanItem[] = [];
+	// Rotated table in the left half: long sideways runs plus short ones ("Value", "–", "99)").
+	for (let col = 0; col < 6; col++) for (let row = 0; row < 5; row++) items.push(sideways(`85.36 (77.18, 96.${row})`, 60 + col * 30, 120 + row * 110));
+	items.push({ text: 'Value', rect: [200, 600, 208, 619], fontSize: 7.5 });
+	items.push({ text: '–', rect: [90, 300, 98, 304], fontSize: 7.5 });
+	items.push({ text: '99)', rect: [150, 410, 158, 421], fontSize: 7.5 });
+	// Upright body column on the right.
+	const body = ['revision rates between antioxidant stabilized and nonstabilized implants were compared', 'in this study, and a lower revision rate due to late wear related loosening was expected'];
+	body.forEach((t, i) => items.push({ text: t, rect: [310, 700 - i * 12, 560, 709 - i * 12], fontSize: 9 }));
+	const { blocks } = buildBlocksFromSpans(items, { pageIndex: 9, pageWidth: 595, pageHeight: 842, includeReferences: true, imageRectsPdf: [] });
+	const texts = blocks.map(b => b.sourceText);
+	assert.ok(!texts.some(t => /^(?:Value|–|99\))$/.test(t.trim())), texts.join(' / '));
+	assert.ok(texts.some(t => t.includes('revision rates between') && t.includes('late wear')), texts.join(' / '));
+});
