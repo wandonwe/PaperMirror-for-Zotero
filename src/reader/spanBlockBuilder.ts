@@ -1,4 +1,5 @@
-import { looksLikeBibliographicFragment, looksLikeReferencePage, looksLikeReferenceText, startsReferenceEntry, startsUnnumberedEntry } from './referenceDetect';
+import { isFurnitureLine, type FurnitureLine } from './documentStyle';
+import { isReferenceTailLine, looksLikeBibliographicFragment, looksLikeReferencePage, looksLikeReferenceText, startsReferenceEntry, startsUnnumberedEntry } from './referenceDetect';
 import {extractPanelTitles} from './panelTitles';
 import {removeCollapsedTextCopies} from './collapsedTextCopies';
 import {extractTwoColumnTables} from './twoColumnTable';
@@ -321,7 +322,14 @@ function scriptRowAnchors(items: SpanItem[]): Map<SpanItem, SpanItem> {
 
 /** A run set sideways: far taller than wide (the same test groupIntoRows drops). */
 function isSidewaysRun(i: SpanItem): boolean {
-	return i.text.trim().length >= 2 && i.rect[3] - i.rect[1] > (i.rect[2] - i.rect[0]) * 3;
+	if (i.text.trim().length < 2) return false;
+	const w = i.rect[2] - i.rect[0], h = i.rect[3] - i.rect[1];
+	// 5.0 (校验 r22, 3322): a short word turned 90° ("ARTICLE" on the edge tab,
+	// 11 wide × 29 tall at 11pt) is not 3× taller than wide, but its box is one
+	// font-size wide and several tall — no upright run looks like that. It
+	// bridged two reference rows and pulled label "16." onto the line above.
+	const size = i.fontSize ?? 0;
+	return h > w * 3 || (size > 0 && w <= size * 1.3 && h >= size * 2.2);
 }
 
 /**
@@ -615,7 +623,7 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 		}
 		flush();
 	}
-	rejoinTabbedLabels(lines);
+	rejoinTabbedLabels(lines, referenceList);
 
 	// Publisher boilerplate ("This copy is for personal use only…") is dropped
 	// BY CONTENT here, BEFORE the ordering pass runs its own column detection —
@@ -656,7 +664,7 @@ const TABBED_LABEL = /^(?:\(?\d{1,3}[.)]|\[\d{1,3}\]|[•▪●◦–-])$/;
  * to the label's left edge (not the text's), the label and text are one
  * line; a real label column would have its continuation under the text.
  */
-function rejoinTabbedLabels(lines: SpanLine[]): void {
+function rejoinTabbedLabels(lines: SpanLine[], referenceList = false): void {
 	for (let i = 0; i < lines.length; i++) {
 		const label = lines[i]!;
 		if (label.items.length !== 1 || !TABBED_LABEL.test(label.items[0]!.text.trim())) continue;
@@ -671,7 +679,12 @@ function rejoinTabbedLabels(lines: SpanLine[]): void {
 		const below = (l: SpanLine): boolean => l.rect[3] < label.rect[1] && label.rect[1] - l.rect[3] <= size * 2.6 && Math.abs(l.fontSize - size) <= size * 0.15;
 		const underLabel = lines.some(l => below(l) && Math.abs(l.rect[0] - label.rect[0]) <= 1.5 && l.rect[2] > text.rect[0] + size * 4);
 		const underText = lines.some(l => below(l) && Math.abs(l.rect[0] - text.rect[0]) <= 1.5);
-		if (!underLabel || underText) continue;
+		// 5.0 (校验 r22, 3036 p5 / 3322 p11): on a reference list a label column
+		// with the continuation under the TEXT is a hanging indent — the label
+		// still belongs to the text on its own row. Left apart, the bare "13."
+		// joined the column above as a block of its own and the unlabelled
+		// entries welded in pairs.
+		if (!referenceList && (!underLabel || underText)) continue;
 		const items = [...label.items, ...text.items];
 		lines[i] = { items, rect: rectOf(items), fontSize: sizeOf(items) };
 		lines.splice(textIndex, 1);
@@ -694,6 +707,21 @@ export function lineText(line: SpanLine): string {
 /** 5.0: a line that ends the way a reference entry ends — year, volume:pages, DOI, URL, PubMed tag. */
 const ENTRY_END = /(?:\b(?:19|20)\d{2}[a-z]?\)?|\d+\s*[-–]\s*[eE]?\d+|\d+:\s*[eE]?\d+[A-Z]?|doi:\s*\S+|https?:\/\/\S+|\[PubMed[^\]]*\]|PMID:?\s*\d+)\s*\.?\s*$/;
 
+/** How far a numbered list may jump (a mis-set label, a dropped line) and still count as the same list. */
+const ENTRY_NUMBER_SKIP = 5;
+
+/**
+ * The label of a numbered entry: "521. Carotid…" / "[12] Smith" → 521 / 12.
+ * Not a tail line ("93. doi: 10…" continues the entry above), not a bare
+ * number, not a year or a volume.
+ */
+export function entryNumberOf(text: string): number | null {
+	const m = /^\s*(?:\[(\d{1,4})\]|(\d{1,4})\.)\s+(?=\S)/.exec(text);
+	if (!m || isReferenceTailLine(text)) return null;
+	const n = Number(m[1] ?? m[2]);
+	return n >= 1 && n < 1900 ? n : null;
+}
+
 export interface ParagraphContext {
 	/** The whole page is (part of) a reference list: entry boundaries count as breaks. */
 	referencePage?: boolean;
@@ -706,6 +734,18 @@ export interface ParagraphContext {
 	/** 5.0 全篇样式: measured first-line indent (pt) and the body size it was measured at. */
 	paragraphIndent?: number;
 	bodyFontSize?: number;
+	/**
+	 * Median line width to judge short lines by, when the lines passed are a
+	 * subset of the page's (furniture taken out): the short-line test must not
+	 * shift because a few short page-number lines left the stream.
+	 */
+	medianLineWidth?: number;
+}
+
+/** 中位行宽 (BabelDOC ParagraphFinding): 短行分段基准。 */
+export function medianLineWidthOf(lines: SpanLine[]): number {
+	const widths = lines.map(l => l.rect[2] - l.rect[0]).filter(w => w > 0).sort((a, b) => a - b);
+	return widths.length ? widths[Math.floor(widths.length / 2)]! : 0;
 }
 
 export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeight = 0, obstacles: Rect[] = [], gridRows: GridRowBarriers | GridRowBarriers[] | null = null, context: ParagraphContext = {}): SpanLine[][] {
@@ -729,12 +769,17 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 		};
 	};
 
-	// 中位行宽 (BabelDOC ParagraphFinding): 短行分段基准。
-	const widths = lines.map(l => l.rect[2] - l.rect[0]).filter(w => w > 0).sort((a, b) => a - b);
-	const medianLineWidth = widths.length ? widths[Math.floor(widths.length / 2)]! : 0;
+	const medianLineWidth = context.medianLineWidth ?? medianLineWidthOf(lines);
 
 	const paragraphs: SpanLine[][] = [];
 	let current: SpanLine[] = [];
+	// 5.0 (校验 r22, 2852 p74): the running entry number of a numbered list. The
+	// next number is the next entry whatever follows it — an organisation author
+	// ("521. Carotid Stenting Guidelines Committee"), glued initials
+	// ("524. Masdeu JC, Irimia P,Asenbaum S"), "535. Deleted in proof.",
+	// a lower-case particle ("536. de Bruijn SF") — none of which the author
+	// patterns recognise.
+	let entryNo: number | null = null;
 	const flush = (): void => {
 		if (current.length) {
 			paragraphs.push(current);
@@ -775,6 +820,11 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 			// (PMC manuscripts set "References" at x 90 beside a column starting at 150)
 			&& heading[0] <= margins.right && heading[2] >= margins.left - 80;
 		const referenceContext = !!context.referencePage || (inList(line) && inList(next));
+		const lineNo = referenceContext ? entryNumberOf(lineText(line)) : null;
+		// A mis-set label (2852: entry 531 printed as "535") must not derail the rest.
+		if (lineNo !== null && (entryNo === null || Math.abs(lineNo - entryNo) <= ENTRY_NUMBER_SKIP)) entryNo = lineNo;
+		const nextNo = referenceContext ? entryNumberOf(lineText(next)) : null;
+		const nextInSequence = entryNo !== null && nextNo === entryNo + 1;
 		// 5.0 全篇样式: a body-size line is indented relative to this document's
 		// measured first-line indent (0.75em in 2757 / 3285 — the fixed 0.8em never
 		// saw it); other sizes, or no measurement, keep the old 0.8em.
@@ -826,8 +876,8 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 			// 5.0 (2877 p18): unnumbered entries ("…In, 2011" / "Benomar A, Zarour E, …")
 			// were welded in pairs — the first line filled its column. On a known
 			// reference page an entry end followed by an entry start is a boundary.
-			entryBoundary: referenceContext && ENTRY_END.test(lineText(line))
-				&& (startsReferenceEntry(lineText(next)) || startsUnnumberedEntry(lineText(next)))
+			entryBoundary: nextInSequence || (referenceContext && ENTRY_END.test(lineText(line))
+				&& (startsReferenceEntry(lineText(next)) || startsUnnumberedEntry(lineText(next))))
 		});
 		if (brk) {
 			flush();
@@ -1044,6 +1094,8 @@ export interface SpanBuildOptions {
 	/** 5.0 全篇样式: measured first-line indent (pt) and body size. */
 	paragraphIndent?: number;
 	bodyFontSize?: number;
+	/** 5.0 全篇样式 (校验 r22): lines repeated at one position across the document. */
+	furniture?: readonly FurnitureLine[];
 	/**
 	 * 边框网格 (2.12.15):行线是硬屏障 —— 两行之间隔着一条网格行线,不许合成一个段落。
 	 * ESC p16 实证:灰色小节标题带与紧贴其下的格首行(间距 3.7pt、同一 x)被焊成一块,
@@ -1248,7 +1300,10 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// and split entry 36 into nine cells. The page is a reference list when an
 	// earlier page started the references, or when its own lines say so.
 	const lineTexts = lines.map(lineText);
-	const referenceHeadingHere = lineTexts.some(t => REFERENCES_HEADINGS.test(t.trim()));
+	// 5.0 全篇样式 (校验 r22): lines repeated at one spot across the document.
+	// A sidebar nav item "References" (3165, every page) is not this page's heading.
+	const furnitureSet = new Set(options.furniture?.length ? lines.filter((l, i) => isFurnitureLine(options.furniture, lineTexts[i]!, l.rect)) : []);
+	const referenceHeadingHere = lineTexts.some((t, i) => REFERENCES_HEADINGS.test(t.trim()) && !furnitureSet.has(lines[i]!));
 	// Line texts carry superscript labels ("⁷S. Rathee") that raw items do not ("7", "S. Rathee").
 	const referenceListByContent = !referenceHeadingHere && !REFERENCES_HEADING_HINT.test(pageRawText)
 		&& (referenceText || looksLikeReferenceText(lineTexts.join(' '))) && looksLikeReferencePage(lineTexts);
@@ -1272,17 +1327,25 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
   proseLines.sort((a,b)=>columnOf(a.rect,proseBands,pageWidth)-columnOf(b.rect,proseBands,pageWidth)||b.rect[3]-a.rect[3]||a.rect[0]-b.rect[0]);
  }
 	const gridRows = (options.grids ?? (options.grid ? [options.grid] : [])).map(g => gridRowBarriers(g, options.pageHeight));
+	// 5.0 全篇样式 (校验 r22): page furniture is grouped on its own. Left in the
+	// stream, a footer joined the column's last sentence (3036 "We compared the
+	// Choi HK, Burns LC…"), the page number joined the first line (2852 "e345
+	// when appropriate"), and a sidebar nav cut the body into line-long blocks
+	// (3165 "Chapter Outline").
+	const furnitureLines = furnitureSet.size ? proseLines.filter(l => furnitureSet.has(l)) : [];
+	const streamLines = furnitureLines.length ? proseLines.filter(l => !furnitureSet.has(l)) : proseLines;
 	const paragraphs = gridRows.reduce((groups, rows) => mergeGridCellStacks(groups, rows),
-		groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, [...obstacles,...(options.textRuleRectsPdf??[])], gridRows,
+		[...groupIntoParagraphs(streamLines, pageWidth, options.pageHeight, [...obstacles,...(options.textRuleRectsPdf??[])], gridRows,
 			{
 				referencePage: referencePageKnown || (!!options.referencesAlreadyStarted && !referenceHeadingHere),
 				// The heading line itself; with the document style, only on a page where a
 				// reference range really starts (3332 p1 has a lone "References" line).
 				referenceHeadingRect: referenceHeadingHere && options.referencesStartHere !== false
-					? lines.find(l => REFERENCES_HEADINGS.test(lineText(l).trim()))?.rect : undefined,
+					? lines.find(l => REFERENCES_HEADINGS.test(lineText(l).trim()) && !furnitureSet.has(l))?.rect : undefined,
 				paragraphIndent: options.paragraphIndent,
-				bodyFontSize: options.bodyFontSize
-			}));
+				bodyFontSize: options.bodyFontSize,
+				...(furnitureLines.length ? { medianLineWidth: medianLineWidthOf(proseLines) } : {})
+			}), ...groupIntoParagraphs(furnitureLines, pageWidth, options.pageHeight)]);
 
 	// Materialise, then repair anything still split mid-sentence.
 	const bands = detectColumns(lines.map(l => l.rect), pageWidth, options.pageHeight);
@@ -1476,7 +1539,8 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// 由单字母 span 拼成,字号与正文同,分类落成 paragraph —— 只认 heading/title
 	// 就永远认不出它。整块只有一行、且整行就是这个词时,类型不再是门槛。
 	const isReferencesHeadingBlock = (p: { type: string; text: string; group: unknown[] }): boolean =>
-		(p.type === 'heading' || p.type === 'title' || p.group.length === 1) && REFERENCES_HEADINGS.test(p.text);
+		(p.type === 'heading' || p.type === 'title' || p.group.length === 1) && REFERENCES_HEADINGS.test(p.text)
+		&& !(p.group as SpanLine[]).every(l => furnitureSet.has(l));
 	// 分带页的标题矩形预扫 (2.7.2): merged 序是按带/栏排的,文献三栏里排在标题
 	// 之前的块若只看"序后即文献"就漏掉 —— 先找出本页的文献标题,几何判定不依赖序。
 	const referencesHeadingRect: Rect | undefined = merged.find(p => isReferencesHeadingBlock(p))?.rect;
@@ -1606,6 +1670,11 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			fontSize: p.fontSize,
 			column: stampColumn(p.rect, !!p.isTableLine),
 			isReference: isRef,
+			// 5.0 (校验 r22): owned as furniture, so no shard pass absorbs "e345"
+			// into the paragraph beneath it.
+			...(furnitureSet.size && p.group.every(l => furnitureSet.has(l))
+				? { sourceRegion: { id: `page-${options.pageIndex}-furniture-${order}`, kind: 'page-furniture' as const, boundsPdf: [...p.rect] as Rect, evidence: 'document-repeat' as const } }
+				: {}),
 			...(preserveReference
 				? { translationMode: 'preserve' as const, preserveReason: 'reference' }
 				: keepReason

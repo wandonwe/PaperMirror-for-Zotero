@@ -9,6 +9,7 @@
  * 不碰 DOM、不碰 Zotero;所有跨页 / 跨文档的事实都从 `context` 传入。
  */
 import type { SourceBlock } from '../types/models';
+import type { FurnitureLine } from './documentStyle';
 import { finalizePageRegions } from './pageRegions';
 import { orderBlocksForReading } from './readingOrder';
 import { buildBlocksFromSpans, type SpanItem } from './spanBlockBuilder';
@@ -37,6 +38,8 @@ export interface PageContext {
 	referencesStartHere?: boolean;
 	/** 全篇样式:实测的段首缩进(pt,0/不填 = 未知)。 */
 	paragraphIndent?: number;
+	/** 全篇样式:页面固定元素(页眉页脚、侧栏导航)。 */
+	furniture?: readonly FurnitureLine[];
 	/** 不翻译的原文(用户设置),表格结构化用。 */
 	noTranslate?: string[];
 	obstacles?: Rect[];
@@ -64,6 +67,7 @@ export function structureSpanPage(page: SpanPage, context: PageContext): PageStr
 		knownGutters: context.knownGutters,
 		referencesStartHere: context.referencesStartHere,
 		paragraphIndent: context.paragraphIndent,
+		furniture: context.furniture,
 		bodyFontSize: context.bodyFontSize,
 		imageRectsPdf: obstacles,
 		grid: context.grid ?? null,

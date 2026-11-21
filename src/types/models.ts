@@ -23,7 +23,7 @@ export interface SourceRegion {
  id: string;
  kind: 'caption' | 'body-column' | 'table-cell' | 'page-furniture' | 'legend-item';
  boundsPdf: [number,number,number,number];
- evidence: 'label-aligned-lines' | 'caption-continuation' | 'column-geometry' | 'table-model' | 'page-margin' | 'marker-aligned-lines';
+ evidence: 'label-aligned-lines' | 'caption-continuation' | 'column-geometry' | 'table-model' | 'page-margin' | 'marker-aligned-lines' | 'document-repeat';
  /** Proven leading painted segment for a legend. A horizontal segment has
   * equal y coordinates; no colour is inferred or repainted from this proof. */
  markerPdf?: [number,number,number,number];

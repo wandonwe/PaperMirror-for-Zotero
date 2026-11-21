@@ -11,6 +11,13 @@ export function extractPanelTitles(items:SpanItem[],pageIndex:number,height:numb
   const first=items.filter(i=>i!==label&&!used.has(i)&&i.text.trim().length>15&&i.rect[0]>=label.rect[2]+em*.8&&i.rect[0]-label.rect[2]<em*3
    &&Math.abs(i.rect[3]-label.rect[3])<=em*.65&&Math.abs((i.fontSize||em)-em)<em*.1).sort((a,b)=>b.rect[3]-a.rect[3]||a.rect[0]-b.rect[0])[0];
   if(!first)continue;
+  // 5.0 (校验 r22, 3036 图 1–3): an inline caption sets "Figure 1" then a wide
+  // space then the text, and its next line returns to the LABEL's left edge.
+  // A panel title's lines stay indented under the title. Taken for a panel,
+  // the first caption line was cut off from the rest of its own caption.
+  const wrapsUnderLabel=items.some(i=>i!==label&&i!==first&&!used.has(i)&&Math.abs(i.rect[0]-label.rect[0])<=em*.5
+   &&i.rect[3]<label.rect[1]+em*.2&&label.rect[1]-i.rect[3]<em*1.2&&Math.abs((i.fontSize||em)-em)<em*.1&&i.rect[2]>first.rect[0]);
+  if(wrapsUnderLabel)continue;
   if(/^Table/.test(label.text)&&Math.abs(first.rect[3]-label.rect[3])<em*.3) {
    // Same-baseline badges require a numeric table beneath them. Plain inline
    // captions use the established path (including descriptive guideline tables).

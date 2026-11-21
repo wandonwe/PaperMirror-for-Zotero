@@ -100,9 +100,18 @@ function startsContinuation(text: string): boolean {
 
 function isBody(block: SourceBlock): boolean {
 	if (block.type !== 'paragraph' && block.type !== 'list') return false;
-	if (block.translationMode === 'preserve' || block.isReference || block.imageTextRegionPdf) return false;
+	// 5.0 (校验 r22, 2852 p74): a reference entry wraps across columns and pages
+	// like any sentence ("…echocardiography in patients" | "with cryptogenic
+	// cerebral ischaemia: a meta-analysis."). Entries link only to entries.
+	if (block.translationMode === 'preserve' || block.imageTextRegionPdf) return false;
 	if (block.tableId !== undefined || block.tableRow !== undefined || block.tableCol !== undefined) return false;
 	return !block.sourceRegion || block.sourceRegion.kind === 'body-column';
+}
+
+/** Entries rarely end in a full stop (a DOI, a page range) and the next one opens with its number: only a lower-case tail continues one. */
+function referenceLink(x: SourceBlock, y: SourceBlock): boolean {
+	if (!!x.isReference !== !!y.isReference) return false;
+	return !x.isReference || /^\p{Ll}/u.test(clean(y.sourceText));
 }
 
 function isSectionBarrier(block: SourceBlock): boolean {
@@ -174,7 +183,7 @@ function boundaryHasSection(item: Candidate, side: 'before' | 'after'): boolean 
 
 function samePageLink(a: Candidate, b: Candidate): boolean {
 	const x = a.block, y = b.block;
-	if (x.pageIndex !== y.pageIndex || sectionBetween(a, b)) return false;
+	if (x.pageIndex !== y.pageIndex || sectionBetween(a, b) || !referenceLink(x, y)) return false;
 	if (!unfinished(x.sourceText) || !startsContinuation(y.sourceText) || !comparable(x, y)) return false;
 	const bx = x.boundingBox!, by = y.boundingBox!;
 	const overlap = Math.min(bx.x + bx.width, by.x + by.width) - Math.max(bx.x, by.x);
@@ -194,6 +203,7 @@ function samePageLink(a: Candidate, b: Candidate): boolean {
 
 function crossPageLink(a: Candidate, b: Candidate): boolean {
 	return b.block.pageIndex === a.block.pageIndex + 1
+		&& referenceLink(a.block, b.block)
 		&& !boundaryHasSection(a, 'after') && !boundaryHasSection(b, 'before')
 		&& unfinished(a.block.sourceText) && startsContinuation(b.block.sourceText)
 		&& comparable(a.block, b.block) && filledTail(a.block);

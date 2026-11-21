@@ -11,7 +11,7 @@
  * 输入是每页的 span(与 getTextContentItems 同形),不碰 DOM、不碰 Zotero。
  * 每个判断都带上逐页证据(`pages`),供诊断解释"为什么这页算 / 不算"。
  */
-import { groupIntoLines, groupIntoRows, lineText, type SpanItem } from './spanBlockBuilder';
+import { groupIntoLines, groupIntoRows, lineText, type SpanItem, type SpanLine } from './spanBlockBuilder';
 import { detectGutters } from './paragraphHeuristics';
 import { looksLikeBibliographicFragment, looksLikeReferencePage, startsReferenceEntry, startsUnnumberedEntry } from './referenceDetect';
 
@@ -60,15 +60,113 @@ export interface DocumentStyle {
 	 * 旧的写死阈值 0.8em 看不见)到 2em(2877 手稿)都有。
 	 */
 	paragraphIndent: number;
+	/**
+	 * 页面固定元素(5.0 校验 r22):在 ≥3 页、且 ≥20% 的页上、同一位置出现的同一行
+	 * (数字归一 —— 页码、"e345"/"e394"、"2 of 6")。逐页按位置与正则认,认不出
+	 * 页面中间的侧栏导航(3165 "Chapter Outline")和贴着正文末行的页脚(3036
+	 * "Choi HK, Burns LC, Shojania K, et al. Ann Rheum Dis (2012)…"),它们会被并进
+	 * 正文、或把正文一行行切开。
+	 */
+	furniture: FurnitureLine[];
 	pages: PageEvidence[];
 }
+
+export interface FurnitureLine {
+	/** furnitureKey(lineText) */
+	key: string;
+	/** 位置(各页的中位):x 左、y 中线、x 右。 */
+	left: number;
+	mid: number;
+	right: number;
+	/** 出现的页数。 */
+	pages: number;
+	/**
+	 * 位置随页上下移动的侧栏项:当前章节展开子项时,下面的导航项整体下移(3165
+	 * "References" 从 y168 移到 y137)。这类只比 key 与左边 x。
+	 */
+	anyY?: boolean;
+}
+
+/** 同一行在各页之间的比较键:小写、数字归一、空白折叠。 */
+export function furnitureKey(text: string): string {
+	return text.toLowerCase().replace(/\d+/g, '#').replace(/\s+/g, ' ').trim();
+}
+
+/** 这一行(PDF 坐标)是不是全篇的固定元素。 */
+export function isFurnitureLine(furniture: readonly FurnitureLine[] | undefined, text: string, rect: [number, number, number, number]): boolean {
+	if (!furniture?.length) return false;
+	const key = furnitureKey(text);
+	if (!key) return false;
+	const mid = (rect[1] + rect[3]) / 2;
+	// x is not compared: running heads and feet alternate sides on facing pages
+	// (3036: the foot sits left on even pages, right on odd ones).
+	return furniture.some(f => f.key === key && (f.anyY ? Math.abs(f.left - rect[0]) <= FURNITURE_X : Math.abs(f.mid - mid) <= FURNITURE_Y));
+}
+
+const FURNITURE_Y = 4;
+const FURNITURE_X = 3;
 
 const REFERENCES_HEADING_LINE = /^\s*(?:\d{1,2}\.?\s*)?(?:r\s?e\s?f\s?e\s?r\s?e\s?n\s?c\s?e\s?s(?:\s+and\s+notes)?|bibliography|literature\s+cited|works\s+cited|参考文献|參考文獻|引用文献)\s*:?\s*$/i;
 const YEAR = /\b(?:19|20)\d{2}\b/;
 
-function pageLines(page: StylePage): string[] {
-	if (!page.items.length) return [];
-	return groupIntoLines(page.items, page.pageWidth, page.pageHeight).map(lineText).filter(t => t.trim());
+function furnitureOf(pages: StylePage[], linesOf: (pageIndex: number) => SpanLine[]): FurnitureLine[] {
+	const n = pages.length;
+	const minPages = Math.max(3, Math.ceil(n * 0.2));
+	if (n < 3) return [];
+	type Seen = { key: string; page: number; left: number; mid: number; right: number };
+	const seen: Seen[] = [];
+	pages.forEach((page, pageIndex) => {
+		if (!page.items.length) return;
+		for (const l of linesOf(pageIndex)) {
+			const text = lineText(l);
+			const key = furnitureKey(text);
+			// A furniture line is short: a running head, a page number, a nav item.
+			// Figure/table labels sit at one spot on many pages too ("Figure 3" at the
+			// same corner of each figure page, 3145) but belong to their captions.
+			if (!key || key.length > 120 || /^(?:fig(?:ure)?\.?|table|图|表|圖)\s*#/.test(key)) continue;
+			// A bare number repeats at one height in tables and lists too; only a
+			// page number in the top or bottom margin counts.
+			const mid = (l.rect[1] + l.rect[3]) / 2;
+			if (!/\p{L}{2}/u.test(key) && page.pageHeight > 0 && mid > page.pageHeight * 0.12 && mid < page.pageHeight * 0.88) continue;
+			seen.push({ key, page: pageIndex, left: l.rect[0], mid: (l.rect[1] + l.rect[3]) / 2, right: l.rect[2] });
+		}
+	});
+	const clusters: Seen[][] = [];
+	for (const s of seen) {
+		const c = clusters.find(c => c[0]!.key === s.key && Math.abs(c[0]!.mid - s.mid) <= FURNITURE_Y);
+		if (c) c.push(s); else clusters.push([s]);
+	}
+	const median = (xs: number[]): number => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
+	const pagesOf = (c: Seen[]): number => new Set(c.map(s => s.page)).size;
+	const fixed = clusters.filter(c => pagesOf(c) >= minPages)
+		.map((c): FurnitureLine => ({ key: c[0]!.key, left: median(c.map(s => s.left)), mid: median(c.map(s => s.mid)),
+			right: median(c.map(s => s.right)), pages: pagesOf(c) }));
+	// A sidebar item that moves up and down: same text, same left edge, on many
+	// pages, inside a strip that already carries fixed furniture at that edge.
+	// A strip is an edge with three or more different fixed items (a nav column),
+	// not one table header that repeats ("COR" over every recommendation table).
+	const lettered = fixed.filter(f => /\p{L}{2}/u.test(f.key));
+	const strips = lettered.map(f => f.left).filter(x => new Set(lettered.filter(g => Math.abs(g.left - x) <= FURNITURE_X).map(g => g.key)).size >= 3);
+	const onFixed = (s: Seen): boolean => fixed.some(f => f.key === s.key && Math.abs(f.mid - s.mid) <= FURNITURE_Y);
+	const moving: Seen[][] = [];
+	for (const s of seen) {
+		if (onFixed(s) || !/\p{L}{4}/u.test(s.key) || !strips.some(x => Math.abs(x - s.left) <= FURNITURE_X)) continue;
+		const c = moving.find(c => c[0]!.key === s.key && Math.abs(c[0]!.left - s.left) <= FURNITURE_X);
+		if (c) c.push(s); else moving.push([s]);
+	}
+	const minMoving = Math.max(5, Math.ceil(n * 0.3));
+	const furniture = [...fixed, ...moving.filter(c => pagesOf(c) >= minMoving)
+		.map((c): FurnitureLine => ({ key: c[0]!.key, left: median(c.map(s => s.left)), mid: median(c.map(s => s.mid)),
+			right: median(c.map(s => s.right)), pages: pagesOf(c), anyY: true }))];
+	// Pages that are copies of each other — a repeated form, a test double that
+	// serves one page for every index — have no furniture to tell from content.
+	const signatures = pages.map((_, i) => linesOf(i).map(l => furnitureKey(lineText(l))).sort().join('\n')).filter(Boolean);
+	const copies = signatures.filter((sig, i) => signatures.indexOf(sig) !== i).length;
+	return copies >= signatures.length / 2 ? [] : furniture;
+}
+
+function groupedLines(page: StylePage): SpanLine[] {
+	return page.items.length ? groupIntoLines(page.items, page.pageWidth, page.pageHeight) : [];
 }
 
 function evidenceFor(lines: string[]): PageEvidence {
@@ -107,7 +205,9 @@ function bodySizeOf(pages: StylePage[], skip: (pageIndex: number) => boolean = (
 }
 
 export function buildDocumentStyle(pages: StylePage[]): DocumentStyle {
-	const evidence = pages.map(p => evidenceFor(pageLines(p)));
+	// One line grouping per page, shared by every statistic below.
+	const lineSets = pages.map(groupedLines);
+	const evidence = lineSets.map(ls => evidenceFor(ls.map(lineText).filter(t => t.trim())));
 	const n = pages.length;
 	// 条目页:≥2 条条目;或文献的最后一页 —— 只剩 1 条,但页上几乎没有别的行。
 	const entries = (i: number): boolean => i < n && evidence[i]!.years >= 1
@@ -143,11 +243,12 @@ export function buildDocumentStyle(pages: StylePage[]): DocumentStyle {
 		.filter(c => c.length >= 2 && c.length >= bodyPages.length * 0.4)
 		.map(c => c.sort((a, b) => a - b)[Math.floor(c.length / 2)]!)
 		.sort((a, b) => a - b);
-	const paragraphIndent = paragraphIndentOf(bodyPages, bodyFontSize);
+	const paragraphIndent = paragraphIndentOf(lineSets.filter((_, i) => !inRange(i)), bodyFontSize);
 	return {
 		pageCount: n,
 		columnGutters,
 		paragraphIndent,
+		furniture: furnitureOf(pages, i => lineSets[i]!),
 		bodyFontSize,
 		referenceRanges: ranges,
 		referencesStartPage: ranges[0]?.[0] ?? -1,
@@ -156,12 +257,12 @@ export function buildDocumentStyle(pages: StylePage[]): DocumentStyle {
 	};
 }
 
-function paragraphIndentOf(pages: StylePage[], bodySize: number): number {
+function paragraphIndentOf(pageLineSets: SpanLine[][], bodySize: number): number {
 	if (bodySize <= 0) return 0;
 	const offsets = new Map<number, number>();
-	for (const page of pages) {
-		if (!page.items.length) continue;
-		const lines = groupIntoLines(page.items, page.pageWidth, page.pageHeight)
+	for (const pageLines of pageLineSets) {
+		if (!pageLines.length) continue;
+		const lines = pageLines
 			.filter(l => Math.abs(l.fontSize - bodySize) < 0.6 && lineText(l).length > 30);
 		// Column left edges: left positions many body lines share.
 		const lefts = new Map<number, number>();
