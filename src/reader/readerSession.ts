@@ -1,7 +1,7 @@
 import { contextualSourceText } from '../translation/sourceContinuity';
 import { ContinuationUnitStore } from '../translation/continuationUnitStore';
 import { sourceBlockAtPoint } from './sourceBlockAtPoint';
-import { idleProgressFor } from '../ui/statusCapsule';
+import { idleProgressFor, ROTATED_TABLE_NOTE } from '../ui/statusCapsule';
 import { temporaryPageArchive, pageContentKey } from '../export/pageArchive';
 import { showUnplacedTranslations } from '../ui/unplacedTranslations';
 /**
@@ -1386,7 +1386,7 @@ export class ReaderSession {
 		const pageIndex = adapter.getCurrentPageIndex(this.reader);
 		const stats = this.placementStats.get(pageIndex);
 		return idleProgressFor(pageIndex + 1, adapter.getPageCount(this.reader),
-			this.translatedPages.has(pageIndex), stats ? placementTally(stats) : undefined);
+			this.translatedPages.has(pageIndex), stats ? placementTally(stats) : undefined, this.pageNote(pageIndex).note);
 	}
 
 	/** Shared collapsed state → mirror onto BOTH surfaces' capsules. */
@@ -2075,8 +2075,14 @@ export class ReaderSession {
 			segTotal,
 			segTranslated: segTotal, // translation itself is complete at this point
 			segPlaced: placed,
-			kept
+			kept,
+			...this.pageNote(pageIndex)
 		});
+	}
+
+	/** 5.0: a rotated table is kept original by policy — say so instead of silently skipping it. */
+	private pageNote(pageIndex: number): { note?: string } {
+		return this.extractor.hasRotatedTable(pageIndex) ? { note: ROTATED_TABLE_NOTE } : {};
 	}
 
 	/** reportPlacement 拆出: 终版几何安全复核(违例块回退或保留原文),必须先于取数。 */

@@ -25,7 +25,7 @@ import type { SourceBlock } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
 import { buildBlocks, buildBlocksFromPlainText, medianFontSize } from './blockBuilder';
-import { buildBlocksFromSpans } from './spanBlockBuilder';
+import { buildBlocksFromSpans, sidewaysBodyChars, ROTATED_TABLE_MIN_CHARS } from './spanBlockBuilder';
 import { borderGrid, borderGrids, columnOfX, rowOfTop, type BorderGrid } from './tableBorders';
 import { orderBlocksForReading } from './readingOrder';
 import { structureTableCells } from './tableStructure';
@@ -174,6 +174,8 @@ export interface ExtractPhases {
 	gridRegion?: [number, number, number, number];
 	/** 落在网格内的块数 —— 与总块数一起看才知道网格是不是套对了地方。 */
 	gridInside?: number;
+	/** 5.0: 旋转 90° 排版的正文字符数(旋转表格,保留原文)。 */
+	rotatedTextChars?: number;
 	/** 取网格耗时。 */
 	gridMs?: number;
 	charsPathMs: number;
@@ -226,6 +228,8 @@ export class TextExtractor implements PageParser {
 	private inputsByPage = new Map<number, Omit<ExtractInputs, 'path'>>();
 	/** 2.8.15: 每页最近一次抽取的分段耗时 —— 回答"抽取等在哪一段"。 */
 	private phasesByPage = new Map<number, ExtractPhases>();
+	/** 5.0: 每页旋转排版正文的字符数(旋转表格不抽取,保留原文)。 */
+	private sidewaysCharsByPage = new Map<number, number>();
 	/**
 	 * 路径 1(fork 的 char 流)每页的结局,按枚举计数 (2.9.5)。
 	 *
@@ -663,6 +667,11 @@ export class TextExtractor implements PageParser {
 	}
 
 	/** 这一页最近一次抽取的分段耗时 (2.8.15);没抽过则 undefined。 */
+	/** 5.0: 这一页有旋转排版的表格,按策略保留原文(5.1 再做旋转译文)。 */
+	hasRotatedTable(pageIndex: number): boolean {
+		return (this.sidewaysCharsByPage.get(pageIndex) ?? 0) >= ROTATED_TABLE_MIN_CHARS;
+	}
+
 	extractPhasesFor(pageIndex: number): ExtractPhases | undefined {
 		const phases = this.phasesByPage.get(pageIndex);
 		return phases ? { ...phases } : undefined;
@@ -752,6 +761,9 @@ export class TextExtractor implements PageParser {
 			return null;
 		}
 		const phases = this.phasesByPage.get(pageIndex);
+		const sideways = sidewaysBodyChars(page.items, page.pageWidth);
+		this.sidewaysCharsByPage.set(pageIndex, sideways);
+		if (phases && sideways > 0) phases.rotatedTextChars = sideways;
 		const buildStartedAt = Date.now();
 		const result = buildBlocksFromSpans(page.items, {
 			pageIndex,

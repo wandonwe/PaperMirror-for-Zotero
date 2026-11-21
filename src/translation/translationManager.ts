@@ -453,6 +453,8 @@ export interface PageDiagnostics {
 		textLayerWaitMs?: number;
 		plainTextMs: number;
 		buildMs: number;
+		/** 5.0: 旋转排版正文字符数(旋转表格保留原文)。 */
+		rotatedTextChars?: number;
 	};
 }
 

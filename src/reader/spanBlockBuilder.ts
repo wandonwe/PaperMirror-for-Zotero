@@ -319,6 +319,33 @@ function scriptRowAnchors(items: SpanItem[]): Map<SpanItem, SpanItem> {
 	return anchors;
 }
 
+/** A run set sideways: far taller than wide (the same test groupIntoRows drops). */
+function isSidewaysRun(i: SpanItem): boolean {
+	return i.text.trim().length >= 2 && i.rect[3] - i.rect[1] > (i.rect[2] - i.rect[0]) * 3;
+}
+
+/**
+ * 5.0 (推荐模型校验 2897 末页 / 3386 p9–10): characters of sideways text away
+ * from the page edges — a table or caption printed rotated 90° on an upright
+ * page. Those runs are dropped from extraction (see groupIntoRows), so the
+ * reader is told the table stays in the source language. Edge strips (the
+ * "Author Manuscript" / journal watermark down the margin) do not count.
+ */
+export function sidewaysBodyChars(items: SpanItem[], pageWidth: number): number {
+	const edge = pageWidth * 0.08;
+	let chars = 0;
+	for (const i of items) {
+		if (!isSidewaysRun(i)) continue;
+		const cx = (i.rect[0] + i.rect[2]) / 2;
+		if (cx < edge || cx > pageWidth - edge) continue;
+		chars += i.text.replace(/\s+/g, '').length;
+	}
+	return chars;
+}
+
+/** Enough sideways body text to be a rotated table, not a stray rotated label. */
+export const ROTATED_TABLE_MIN_CHARS = 120;
+
 export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 	const usable = items.filter((i) => {
 		if (!i.text.trim().length || !Number.isFinite(i.rect[1]) || !Number.isFinite(i.rect[3])) {
@@ -329,9 +356,7 @@ export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
 		// than wide. Left in, they share a baseline band with the TITLE and
 		// get concatenated into it ("1307− 冠状动脉…"). A normal narrow glyph
 		// ("I", "1") is a single character and is kept.
-		const w = i.rect[2] - i.rect[0];
-		const h = i.rect[3] - i.rect[1];
-		if (i.text.trim().length >= 2 && h > w * 3) {
+		if (isSidewaysRun(i)) {
 			return false;
 		}
 		return true;
