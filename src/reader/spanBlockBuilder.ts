@@ -558,6 +558,7 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 		}
 		flush();
 	}
+	rejoinTabbedLabels(lines);
 
 	// Publisher boilerplate ("This copy is for personal use only…") is dropped
 	// BY CONTENT here, BEFORE the ordering pass runs its own column detection —
@@ -587,6 +588,38 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 		return ca !== cb ? ca - cb : (b.rect[3] - a.rect[3]) || (a.rect[0] - b.rect[0]);
 	});
 	return kept;
+}
+
+const TABBED_LABEL = /^(?:\(?\d{1,3}[.)]|\[\d{1,3}\]|[•▪●◦–-])$/;
+
+/**
+ * 5.0 (推荐模型校验 2721): a manuscript list written "13.⇥Feuchtner G, …" puts
+ * a tab of ~1.75em after the number, which the column-gap rule splits off.
+ * The label then joined the entry ABOVE. When the entry's next lines return
+ * to the label's left edge (not the text's), the label and text are one
+ * line; a real label column would have its continuation under the text.
+ */
+function rejoinTabbedLabels(lines: SpanLine[]): void {
+	for (let i = 0; i < lines.length; i++) {
+		const label = lines[i]!;
+		if (label.items.length !== 1 || !TABBED_LABEL.test(label.items[0]!.text.trim())) continue;
+		const size = label.fontSize || 10;
+		if (label.rect[2] - label.rect[0] > size * 2.5) continue;
+		const sameRow = (l: SpanLine): boolean => Math.abs(l.rect[3] - label.rect[3]) <= size * 0.3 && Math.abs(l.rect[1] - label.rect[1]) <= size * 0.3;
+		const textIndex = lines.findIndex((l, j) => j !== i && sameRow(l) && l.rect[0] > label.rect[2]
+			&& l.rect[0] - label.rect[2] <= size * 4 && Math.abs(l.fontSize - size) <= size * 0.15
+			&& !lines.some(m => m !== l && m !== label && sameRow(m) && m.rect[0] > label.rect[2] && m.rect[0] < l.rect[0]));
+		if (textIndex < 0) continue;
+		const text = lines[textIndex]!;
+		const below = (l: SpanLine): boolean => l.rect[3] < label.rect[1] && label.rect[1] - l.rect[3] <= size * 2.6 && Math.abs(l.fontSize - size) <= size * 0.15;
+		const underLabel = lines.some(l => below(l) && Math.abs(l.rect[0] - label.rect[0]) <= 1.5 && l.rect[2] > text.rect[0] + size * 4);
+		const underText = lines.some(l => below(l) && Math.abs(l.rect[0] - text.rect[0]) <= 1.5);
+		if (!underLabel || underText) continue;
+		const items = [...label.items, ...text.items];
+		lines[i] = { items, rect: rectOf(items), fontSize: sizeOf(items) };
+		lines.splice(textIndex, 1);
+		if (textIndex < i) i--;
+	}
 }
 
 /** Join the runs of a line into text, inserting spaces where there are gaps. */

@@ -833,3 +833,29 @@ test('5.0 校验 2877: a manuscript stamp word does not weld body rows, and cont
 		assert.equal((owner[0]!.match(/@/g) ?? []).length, 1, `one record per block: ${owner[0]}`);
 	}
 });
+
+test('5.0 校验 2721: a manuscript "13.⇥Author" label stays with its own entry, not the one above', () => {
+	const at = (text: string, x0: number, x1: number, y: number): SpanItem => ({ text, rect: [x0, y, x1, y + 12], fontSize: 12 });
+	const items: SpanItem[] = [
+		at('12.', 72, 87, 759), at('Conte E, Annoni A, Pontone G. Plaque features on coronary CT', 108, 508, 759),
+		at('angiography and long-term outcome. Eur Heart J Cardiovasc Imaging. 2017;18:1170-1178.', 72, 515, 731.5),
+		at('13.', 72, 87, 703.9), at('Feuchtner G, Kerber J, Burghard P, Dichtl W, Friedrich G, Bonaros N', 108, 508, 703.9),
+		at('and Plank F. The high-risk criteria low-attenuation plaque <60 HU and napkin-ring sign', 72, 511, 676.3),
+		at('are powerful predictors of MACE. Eur Heart J Cardiovasc Imaging. 2017;18:772-779.', 72, 480, 648.7)
+	];
+	const { blocks } = buildBlocksFromSpans(items, { pageIndex: 32, pageWidth: 612, pageHeight: 792, includeReferences: true, referencesAlreadyStarted: true, imageRectsPdf: [] });
+	const texts = blocks.map(b => b.sourceText);
+	assert.ok(texts.some(t => t.startsWith('13. Feuchtner')), texts.join(' / '));
+	assert.ok(texts.some(t => t.startsWith('12. Conte')), texts.join(' / '));
+	assert.ok(!texts.some(t => /1178\.\s*13\.$/.test(t.trim())), 'label not appended to the entry above');
+});
+
+test('a label column whose entries continue under the text is not rejoined by the tab rule', async () => {
+	const { groupIntoLines } = await import('../../src/reader/spanBlockBuilder');
+	const at = (text: string, x0: number, x1: number, y: number): SpanItem => ({ text, rect: [x0, y, x1, y + 12], fontSize: 12 });
+	const lines = groupIntoLines([
+		at('13.', 72, 87, 700), at('Feuchtner G, Kerber J, Burghard P, Dichtl W, Friedrich', 108, 508, 700),
+		at('G, Bonaros N and Plank F. The high-risk criteria plaque', 108, 508, 686)
+	], 612, 792);
+	assert.ok(lines.some(l => l.items.length === 1 && l.items[0]!.text === '13.'));
+});
