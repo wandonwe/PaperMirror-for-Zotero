@@ -152,6 +152,8 @@ export interface TranslatedBlock {
 	translatedText: string;
 	/** 5.0: a per-part (degraded continuation) translation kept in the page cache for display only. */
 	provisional?: true;
+	/** 5.0: prompt-policy stamp the translation was produced under (promptPolicies.ts); absent = v1. */
+	policy?: string;
 }
 
 export type LanguageCode = 'en' | 'zh-CN' | 'zh-TW' | 'auto' | string;

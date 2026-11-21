@@ -1,3 +1,4 @@
+import { policyStampFor } from './promptPolicies';
 import { numericPowerIssue, isNumericPowerLiteral } from './numericPowers';
 import { technicalUnitIssue, isTechnicalUnitLiteral } from './technicalUnits';
 /**
@@ -52,12 +53,30 @@ export function noteProvisionalIn(state: Pick<PageTranslationState, 'provisional
  * (per-part) translations are kept, flagged, so a revisit shows them without
  * paying again; the flag keeps them out of the segment store after restore.
  */
-export function pageCacheRows(state: Pick<PageTranslationState, 'provisional' | 'translations'>, blocks: { id: string }[]): TranslatedBlock[] {
+export function pageCacheRows(state: Pick<PageTranslationState, 'provisional' | 'translations'>, blocks: Array<{ id: string; sourceText?: string; isReference?: boolean }>): TranslatedBlock[] {
 	return blocks
 		.filter(b => state.translations.has(b.id))
-		.map(b => state.provisional?.has(b.id)
-			? { id: b.id, translatedText: state.translations.get(b.id)!, provisional: true as const }
-			: { id: b.id, translatedText: state.translations.get(b.id)! });
+		.map(b => {
+			// 5.0: the prompt-policy stamp this row was produced under (see promptPolicies.ts).
+			const policy = typeof b.sourceText === 'string' ? policyStampFor({ sourceText: b.sourceText, isReference: b.isReference }) : '';
+			return {
+				id: b.id,
+				translatedText: state.translations.get(b.id)!,
+				...(state.provisional?.has(b.id) ? { provisional: true as const } : {}),
+				...(policy ? { policy } : {})
+			};
+		});
+}
+
+/**
+ * 5.0 规则版本: 段落库的键。内容 + 语言(+ 续段上下文)之外,再并入与本块相关、
+ * 版本 > 1 的规则戳 —— 与规则无关的块键不变(旧缓存照常命中),相关的块在规则
+ * 升版后换键,旧译文不再被取到。
+ */
+export function blockSegmentHash(block: Pick<SourceBlock, 'sourceText' | 'continuationContext'> & { isReference?: boolean }, sourceLang: string, targetLang: string): string {
+	const base = segmentHash(block.sourceText, sourceLang, targetLang, block.continuationContext);
+	const stamp = policyStampFor(block);
+	return stamp ? fnv1a64(`${base}\u0001${stamp}`) : base;
 }
 
 export function hasShownProvisional(state: Pick<PageTranslationState, 'provisional' | 'translations'>): boolean {
@@ -1389,7 +1408,7 @@ export class TranslationManager {
 						this.trackWrite(this.deps.writeSegments(pageIndex, [...accepted]
 							.filter(([id]) => byId.has(id) && !state.provisional?.has(id))
 							.map(([id, text]) => ({
-								hash: segmentHash(byId.get(id)!.sourceText, source, target, byId.get(id)!.continuationContext),
+								hash: blockSegmentHash(byId.get(id)!, source, target),
 								translatedText: text
 							}))
 						));
@@ -1429,7 +1448,7 @@ export class TranslationManager {
 				const sample = prior.blocks.map(b => b.sourceText).join('\n').slice(0, 4000);
 				const { source, target } = this.deps.getLanguages(sample);
 				for (const b of prior.blocks) {
-					this.failedSegments.delete(segmentHash(b.sourceText, source, target, b.continuationContext));
+					this.failedSegments.delete(blockSegmentHash(b, source, target));
 				}
 			}
 			catch { /* language resolution is best-effort here */ }
@@ -1481,7 +1500,7 @@ export class TranslationManager {
 		const { source, target } = this.deps.getLanguages(block.sourceText);
 		const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block), block.styleRuns);
 		const text = reg.text;
-		this.failedSegments.delete(segmentHash(block.sourceText, source, target, block.continuationContext));
+		this.failedSegments.delete(blockSegmentHash(block, source, target));
 		try {
 			return await this.scheduler.enqueue(`page-${pageIndex}-seg-${blockId}`, PRIORITY.CURRENT_RETRANSLATE, async (signal) => {
 				const live = (): boolean => !this.disposed && !signal.aborted && this.pages.get(pageIndex) === state;
@@ -1514,7 +1533,7 @@ export class TranslationManager {
 				this.notify(state);
 				if (this.deps.writeSegments && !provisional) {
 					await this.deps.writeSegments(pageIndex, [{
-						hash: segmentHash(block.sourceText, source, target, block.continuationContext),
+						hash: blockSegmentHash(block, source, target),
 						translatedText: restored
 					}]).catch(() => { /* best effort */ });
 				}
@@ -2713,7 +2732,7 @@ export class TranslationManager {
 		state.status = 'translating';
 		this.notify(state);
 
-		const segHash = run.segHash = (b: SourceBlock): string => segmentHash(b.sourceText, source, target, b.continuationContext);
+		const segHash = run.segHash = (b: SourceBlock): string => blockSegmentHash(b, source, target);
 		if (!bypass.bypassSegments) {
 			await this.prefillFromSegments(run);
 		}
@@ -2792,9 +2811,14 @@ export class TranslationManager {
 		if (cached) {
 			const cachedById = new Map(cached.map(t => [t.id, t.translatedText]));
 			const cachedProvisional = new Set(cached.filter(t => t.provisional).map(t => t.id));
+			const cachedPolicy = new Map(cached.map(t => [t.id, t.policy ?? '']));
 			let usable = 0;
+			let stale = 0;
 			for (const block of activeBlocks) {
 				const text = cachedById.get(block.id);
+				// 5.0: a row produced under an older version of a prompt rule that
+				// concerns this block is dropped; only those blocks are re-translated.
+				if (typeof text === 'string' && cachedPolicy.get(block.id) !== policyStampFor(block)) { stale++; continue; }
 				if (typeof text === 'string' && accept(block.id, text)) {
 					state.translations.set(block.id, text);
 					// Still provisional: never promoted into the segment store.
@@ -2819,7 +2843,7 @@ export class TranslationManager {
 			}
 			if (usable) {
 				this.usage.pageCachePartialHits++;
-				logger.info(MODULE, `Page ${pageIndex + 1}: partial cache (${usable}/${activeBlocks.length}) — prefilled, translating the rest`);
+				logger.info(MODULE, `Page ${pageIndex + 1}: partial cache (${usable}/${activeBlocks.length}${stale ? `, ${stale} under an older prompt rule` : ''}) — prefilled, translating the rest`);
 				this.notify(state); // show reused blocks immediately
 			}
 		}
@@ -3208,7 +3232,7 @@ export class TranslationManager {
 			return Promise.resolve();
 		}
 		return this.deps.writeSegments(run.pageIndex, durable.map(r => ({
-			hash: segmentHash(run.sourceById.get(r.id) ?? '', run.source, run.target, run.sourceBlockById.get(r.id)?.continuationContext),
+			hash: blockSegmentHash(run.sourceBlockById.get(r.id) ?? { sourceText: run.sourceById.get(r.id) ?? '' }, run.source, run.target),
 			translatedText: r.translatedText
 		}))).catch(() => { /* best-effort */ });
 	}
