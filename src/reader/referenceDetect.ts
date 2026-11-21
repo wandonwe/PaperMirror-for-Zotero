@@ -82,6 +82,8 @@ export function looksLikeBibliographicFragment(text: string): boolean {
  * 不参与断段(正文里"Smith J, …"开头的行会误伤)。
  */
 const UNNUMBERED_ENTRY = /^\s*\p{Lu}[\p{L}'’-]+(?:[\s-]\p{Lu}[\p{L}'’-]+)?\s\p{Lu}{1,3}(?:,\s\p{Lu}[\p{L}'’-]+(?:[\s-]\p{Lu}[\p{L}'’-]+)?\s\p{Lu}{1,3}|\.\s\p{Lu})/u;
+/** APA / Harvard: "Behrend, H., Giesinger, K. …", "Bistolfi, A. & Bellare, …", "Currier, J.H., …". */
+const APA_ENTRY = /^\s*\p{Lu}[\p{L}'’-]+(?:\s\p{Lu}[\p{L}'’-]+)?,\s(?:\p{Lu}\.\s?){1,3}(?:,\s\p{Lu}|\s?&\s\p{Lu}|\s\((?:19|20)\d{2})/u;
 export function startsUnnumberedEntry(text: string): boolean {
-	return UNNUMBERED_ENTRY.test(text);
+	return UNNUMBERED_ENTRY.test(text) || APA_ENTRY.test(text);
 }

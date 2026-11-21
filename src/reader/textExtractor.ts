@@ -809,6 +809,8 @@ export class TextExtractor implements PageParser {
 			includeReferences: this.includeReferences,
 			referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
 			bodyFontSize: this.bodyFontSize,
+			knownGutters: this.documentStyle?.columnGutters ?? [],
+			...(this.documentStyle ? { referencesStartHere: this.documentStyle.referenceRanges.some(([a]) => a === pageIndex) } : {}),
 			noTranslate: this.noTranslateSafe(),
 			obstacles,
 			grid,

@@ -472,7 +472,7 @@ export function groupIntoRows(items: SpanItem[]): SpanItem[][] {
  * `pageWidth` lets the gutter vote work; without it a conservative gap
  * threshold is used instead.
  */
-export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 0, referenceList = false): SpanLine[] {
+export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 0, referenceList = false, knownGutters: number[] = []): SpanLine[] {
 	const rows = groupIntoRows(items);
 	if (!rows.length) {
 		return [];
@@ -515,6 +515,12 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 	// 真栏沟 (≥1.1em) 照切。
 	const pageGutterXs: number[] = detectGutters(rowRects, pageWidth);
 	const weakGutterXs: number[] = bandedActive ? [] : pageGutterXs;
+	// 5.0 全篇样式: gutters the document's body pages agree on. One applies here
+	// only when this page also finds a gutter within 15pt (it really has columns
+	// there) — then it decides where the channel is, even if items reach into it
+	// (3064 reference pages: right-column numbers at x 303 pushed the page's own
+	// gutter centre to 306, and "5. Hoppe … 22. Devresse" welded into one line).
+	const confirmedGutters = knownGutters.filter(k => pageGutterXs.some(x => Math.abs(x - k) <= 15));
 
 	// Short multi-column bands can be outvoted by full-width figures/captions.
 	// Require three nearby rows with matching gap edges, not a page-wide vote.
@@ -585,7 +591,8 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 				// strictly before the gutter centre let that single line bridge the
 				// two columns into one scrambled line (三栏页连字符悬垂焊行).
 				const slack = Math.min(6, size * 0.6);
-				const crossesGutter = ((!captionRows.has(row) || gap >= size * 0.8) && rowGutters.some(g => crossesLineGutter(previous.rect[2], item.rect[0], g, slack, size) && beatsWordGap(g, gap)))
+				const crossesGutter = (gap >= size * 0.8 && confirmedGutters.some(k => previous.rect[2] <= k + slack && item.rect[0] >= k - 1))
+					|| ((!captionRows.has(row) || gap >= size * 0.8) && rowGutters.some(g => crossesLineGutter(previous.rect[2], item.rect[0], g, slack, size) && beatsWordGap(g, gap)))
 					|| (gap >= size * 1.05
 						&& weakGutterXs.some(x => previous.rect[2] <= x + slack && item.rect[0] >= x));
 				const repeatedLocalGap = gap >= size * 1.05
@@ -684,7 +691,21 @@ export function lineText(line: SpanLine): string {
  * refuses to end a paragraph after a line that ran to its column's right
  * margin — that line wrapped, so the sentence continues on the next one.
  */
-export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeight = 0, obstacles: Rect[] = [], gridRows: GridRowBarriers | GridRowBarriers[] | null = null): SpanLine[][] {
+/** 5.0: a line that ends the way a reference entry ends — year, volume:pages, DOI, URL, PubMed tag. */
+const ENTRY_END = /(?:\b(?:19|20)\d{2}[a-z]?\)?|\d+\s*[-–]\s*[eE]?\d+|\d+:\s*[eE]?\d+[A-Z]?|doi:\s*\S+|https?:\/\/\S+|\[PubMed[^\]]*\]|PMID:?\s*\d+)\s*\.?\s*$/;
+
+export interface ParagraphContext {
+	/** The whole page is (part of) a reference list: entry boundaries count as breaks. */
+	referencePage?: boolean;
+	/**
+	 * The page carries the heading that starts a reference list: only lines
+	 * below it in its own column are in the list — the body above the heading
+	 * and the other columns keep body rules.
+	 */
+	referenceHeadingRect?: Rect;
+}
+
+export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeight = 0, obstacles: Rect[] = [], gridRows: GridRowBarriers | GridRowBarriers[] | null = null, context: ParagraphContext = {}): SpanLine[][] {
 	if (!lines.length) {
 		return [];
 	}
@@ -742,6 +763,15 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 
 		const size = line.fontSize > 0 ? line.fontSize : 10;
 		const margins = marginOf(i);
+		const heading = context.referenceHeadingRect;
+		// Below the heading in the heading's own column only: what sits in another
+		// column on that page may be body or declarations (3285 p8, 2721 p8).
+		const inList = (l: SpanLine): boolean => !!heading && l.rect[3] <= heading[1] + 1
+			&& Math.min(l.rect[2], margins.right) - Math.max(l.rect[0], margins.left) > 0
+			// the heading overlaps this column or hangs in the margin just left of it
+			// (PMC manuscripts set "References" at x 90 beside a column starting at 150)
+			&& heading[0] <= margins.right && heading[2] >= margins.left - 80;
+		const referenceContext = !!context.referencePage || (inList(line) && inList(next));
 		const brk = shouldBreak({
 			fontSize: size,
 			gap: line.rect[1] - next.rect[3],
@@ -772,11 +802,20 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 			listStart: looksLikeListStart(lineText(next)) || (HAS_EMAIL.test(lineText(line)) && HAS_EMAIL.test(lineText(next)))
 				|| /^\s*[■□●○•▪▫◆◇▶►‣⁃]\s/.test(lineText(next))
 				// "…(jh11200@rjh.com.cn)." then "Published Online: …" / "doi:10…": a new field.
-				|| (/[.)]\s*$/.test(lineText(line)) && /^\s*(?:\p{Lu}[\p{Ll}]+(?:\s\p{Lu}?[\p{Ll}]+){0,3}:\s|doi:\s?10\.)/u.test(lineText(next))),
+				// Not inside a reference list, where "doi:10…" continues the entry above.
+				|| (!referenceContext && /[.)]\s*$/.test(lineText(line)) && /^\s*(?:\p{Lu}[\p{Ll}]+(?:\s\p{Lu}?[\p{Ll}]+){0,3}:\s|doi:\s?10\.)/u.test(lineText(next))),
+			// In a reference list, line length says nothing (an author line ends
+			// early, 3064 entry 16); only the start of the next entry does.
 			shortLine: medianLineWidth > 0
 				&& (line.rect[2] - line.rect[0]) < medianLineWidth * 0.7
-				&& !startsContinuation(lineText(next)),
-			leaderDots: hasLeaderDots(lineText(line))
+				&& !startsContinuation(lineText(next))
+				&& (!referenceContext || startsReferenceEntry(lineText(next)) || startsUnnumberedEntry(lineText(next))),
+			leaderDots: hasLeaderDots(lineText(line)),
+			// 5.0 (2877 p18): unnumbered entries ("…In, 2011" / "Benomar A, Zarour E, …")
+			// were welded in pairs — the first line filled its column. On a known
+			// reference page an entry end followed by an entry start is a boundary.
+			entryBoundary: referenceContext && ENTRY_END.test(lineText(line))
+				&& (startsReferenceEntry(lineText(next)) || startsUnnumberedEntry(lineText(next)))
 		});
 		if (brk) {
 			flush();
@@ -986,6 +1025,10 @@ export interface SpanBuildOptions {
 	pageWidth?: number;
 	includeReferences?: boolean;
 	referencesAlreadyStarted?: boolean;
+	/** 5.0 全篇样式: gutter x positions the document's body pages agree on. */
+	knownGutters?: number[];
+	/** 5.0 全篇样式: whether a reference range starts on this page (undefined = unknown). */
+	referencesStartHere?: boolean;
 	/**
 	 * 边框网格 (2.12.15):行线是硬屏障 —— 两行之间隔着一条网格行线,不许合成一个段落。
 	 * ESC p16 实证:灰色小节标题带与紧贴其下的格首行(间距 3.7pt、同一 x)被焊成一块,
@@ -1169,7 +1212,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// the heading-driven behaviour (body above, list below).
 	const pageRawText = filteredItems.map(i => i.text).join(' ');
 	const referenceText = !REFERENCES_HEADING_HINT.test(pageRawText) && looksLikeReferenceText(pageRawText);
-	const lines=[...buckets.values()].flatMap(items=>groupIntoLines(items,pageWidth,options.pageHeight,referenceText));
+	const lines=[...buckets.values()].flatMap(items=>groupIntoLines(items,pageWidth,options.pageHeight,referenceText,options.knownGutters ?? []));
 
 	// 页面正文字号 = 行字号的众数,不是中位数 (1.2.5)。封面页的前置件
 	// (7pt 作者单位 17 行 + 8.5pt 摘要 18 行) 在行数上压过 10pt 正文 (28 行),
@@ -1215,7 +1258,14 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
  }
 	const gridRows = (options.grids ?? (options.grid ? [options.grid] : [])).map(g => gridRowBarriers(g, options.pageHeight));
 	const paragraphs = gridRows.reduce((groups, rows) => mergeGridCellStacks(groups, rows),
-		groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, [...obstacles,...(options.textRuleRectsPdf??[])], gridRows));
+		groupIntoParagraphs(proseLines, pageWidth, options.pageHeight, [...obstacles,...(options.textRuleRectsPdf??[])], gridRows,
+			{
+				referencePage: referencePageKnown || (!!options.referencesAlreadyStarted && !referenceHeadingHere),
+				// The heading line itself; with the document style, only on a page where a
+				// reference range really starts (3332 p1 has a lone "References" line).
+				referenceHeadingRect: referenceHeadingHere && options.referencesStartHere !== false
+					? lines.find(l => REFERENCES_HEADINGS.test(lineText(l).trim()))?.rect : undefined
+			}));
 
 	// Materialise, then repair anything still split mid-sentence.
 	const bands = detectColumns(lines.map(l => l.rect), pageWidth, options.pageHeight);

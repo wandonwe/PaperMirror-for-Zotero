@@ -11,7 +11,8 @@
  * 输入是每页的 span(与 getTextContentItems 同形),不碰 DOM、不碰 Zotero。
  * 每个判断都带上逐页证据(`pages`),供诊断解释"为什么这页算 / 不算"。
  */
-import { groupIntoLines, lineText, type SpanItem } from './spanBlockBuilder';
+import { groupIntoLines, groupIntoRows, lineText, type SpanItem } from './spanBlockBuilder';
+import { detectGutters } from './paragraphHeuristics';
 import { looksLikeBibliographicFragment, looksLikeReferencePage, startsReferenceEntry, startsUnnumberedEntry } from './referenceDetect';
 
 export interface StylePage {
@@ -47,6 +48,12 @@ export interface DocumentStyle {
 	/** 第一段的开始页;-1 = 没找到(诊断与旧接口用)。 */
 	referencesStartPage: number;
 	referencesEndPage: number;
+	/**
+	 * 正文页上反复出现的栏沟 x(PDF 单位)。单页的栏沟投票在边缘情况下会失手
+	 * (3064 参考文献页:右栏编号伸进沟里,沟心被推到 306,而正文页一直是 296),
+	 * 全篇一致的沟是更强的证据。至少出现在 2 页、且 ≥40% 的正文页上。
+	 */
+	columnGutters: number[];
 	pages: PageEvidence[];
 }
 
@@ -114,8 +121,23 @@ export function buildDocumentStyle(pages: StylePage[]): DocumentStyle {
 		ranges.push([i, end]);
 		i = end;
 	}
+	const inRange = (i: number): boolean => ranges.some(([a, b]) => i >= a && i <= b);
+	const bodyPages = pages.filter((_, i) => !inRange(i));
+	const votes: number[][] = [];
+	for (const p of bodyPages) {
+		const xs = p.items.length ? detectGutters(groupIntoRows(p.items).map(r => r.map(it => it.rect)), p.pageWidth) : [];
+		for (const x of new Set(xs.map(v => Math.round(v)))) {
+			const cluster = votes.find(c => Math.abs(c[0]! - x) <= 6);
+			if (cluster) cluster.push(x); else votes.push([x]);
+		}
+	}
+	const columnGutters = votes
+		.filter(c => c.length >= 2 && c.length >= bodyPages.length * 0.4)
+		.map(c => c.sort((a, b) => a - b)[Math.floor(c.length / 2)]!)
+		.sort((a, b) => a - b);
 	return {
 		pageCount: n,
+		columnGutters,
 		// 正文字号不算参考文献页:小字号的长文献列表字数常常压过正文(3332 算成 7pt)。
 		bodyFontSize: bodySizeOf(pages, i => ranges.some(([a, b]) => i >= a && i <= b)) || bodySizeOf(pages),
 		referenceRanges: ranges,

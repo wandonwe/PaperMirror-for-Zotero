@@ -96,7 +96,7 @@
 		"column": 100,
 		"readingIndex": 15,
 		"mode": "preserve",
-		"text": "Published Online: November 10, 2025."
+		"text": "Published Online: November 10, 2025. doi"
 	},
 	{
 		"type": "list",
@@ -110,73 +110,66 @@
 		"column": 100,
 		"readingIndex": 17,
 		"mode": "preserve",
-		"text": "doi:10.1001/jamaneurol.2025.4404"
+		"text": "JAMA Neurology Published online November"
 	},
 	{
 		"type": "paragraph",
 		"column": 100,
 		"readingIndex": 18,
 		"mode": "preserve",
-		"text": "JAMA Neurology Published online November"
-	},
-	{
-		"type": "paragraph",
-		"column": 100,
-		"readingIndex": 19,
-		"mode": "preserve",
 		"text": "E2"
 	},
 	{
 		"type": "paragraph",
 		"column": 101,
-		"readingIndex": 20,
+		"readingIndex": 19,
 		"mode": "preserve",
 		"text": "Phys Med. 2020;79:126-136. doi:10.1016/j"
 	},
 	{
 		"type": "paragraph",
 		"column": 101,
-		"readingIndex": 21,
+		"readingIndex": 20,
 		"mode": "preserve",
 		"text": "2020.10.030"
 	},
 	{
 		"type": "list",
 		"column": 101,
-		"readingIndex": 22,
+		"readingIndex": 21,
 		"text": "2. Maguida G, Shuaib A. Collateral circu"
 	},
 	{
 		"type": "paragraph",
 		"column": 101,
-		"readingIndex": 23,
+		"readingIndex": 22,
 		"mode": "preserve",
 		"text": "25(2):179-198. doi:10.5853/jos.2022.0293"
 	},
 	{
 		"type": "list",
 		"column": 101,
-		"readingIndex": 24,
+		"readingIndex": 23,
 		"text": "3. Douek PC, Boccalini S, Oei EHG, et al"
 	},
 	{
 		"type": "paragraph",
 		"column": 101,
-		"readingIndex": 25,
+		"readingIndex": 24,
 		"mode": "preserve",
 		"text": "Radiology. 2023;309(1):e222432. doi:10.1"
 	},
 	{
 		"type": "paragraph",
 		"column": 101,
-		"readingIndex": 26,
+		"readingIndex": 25,
 		"mode": "preserve",
 		"text": "222432"
 	},
 	{
 		"type": "paragraph",
 		"column": 101,
-		"readingIndex": 27,
+		"readingIndex": 26,
 		"mode": "preserve",
 		"text": "jamaneurology.com"
 	}

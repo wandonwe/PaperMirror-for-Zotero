@@ -31,6 +31,10 @@ export interface PageContext {
 	referencesAlreadyStarted: boolean;
 	/** 文档级正文字号;0 表示未知。 */
 	bodyFontSize: number;
+	/** 全篇样式给出的栏沟 x(没有则空)。 */
+	knownGutters?: number[];
+	/** 全篇样式:本页是否开始一段参考文献(未知则不填)。 */
+	referencesStartHere?: boolean;
 	/** 不翻译的原文(用户设置),表格结构化用。 */
 	noTranslate?: string[];
 	obstacles?: Rect[];
@@ -55,6 +59,8 @@ export function structureSpanPage(page: SpanPage, context: PageContext): PageStr
 		pageWidth: page.pageWidth,
 		includeReferences: context.includeReferences,
 		referencesAlreadyStarted: context.referencesAlreadyStarted,
+		knownGutters: context.knownGutters,
+		referencesStartHere: context.referencesStartHere,
 		imageRectsPdf: obstacles,
 		grid: context.grid ?? null,
 		grids: context.grids,
