@@ -147,3 +147,30 @@ test('5.0: a reference tail torn from its start is still bibliographic; prose is
 	assert.equal(looksLikeBibliographicFragment('Scand 1952;26(4):312–327.'), true);
 	assert.equal(looksLikeBibliographicFragment('In summary, the method described in this work provides a methodology for evaluating task-based resolution across various reconstruction algorithms, as reported in 2012.'), false);
 });
+
+test('5.0 校验 2897/2638: long reference blocks may still come back verbatim; long prose may not', async () => {
+	const { looksLikeReferenceBlock } = await import('../../src/translation/translationValidation');
+	// One entry made long by its author list (~40 initials-first names).
+	const names = Array.from({ length: 40 }, (_, i) => `${String.fromCharCode(65 + (i % 26))}.K. Norberg${i}`.replace(/\d+/, m => 'abcdefghij'[Number(m) % 10]!.repeat(1 + (Number(m) >> 3))));
+	const longEntry = `[17] ${names.join(', ')}, Coronary CT angiography in patients with acute chest pain, J. Am. Coll. Cardiol. 75 (5) (2020) 453–463.`;
+	assert.ok(longEntry.length > 600);
+	assert.equal(looksLikeReferenceBlock(longEntry), true);
+	assert.equal(looksTranslated(longEntry, longEntry, 'zh-CN', { isReference: true }), true);
+	// Several unnumbered Vancouver entries merged into one block.
+	const merged = [
+		'Tamura K, Ivanov JS. Single photon counting x-ray detectors in medical imaging. Med Phys. 2013; 40:100901. [PubMed: 24089889]',
+		'Tellez J, Kim HK, Carver IA. The role of the x-ray Swank factor in energy-resolving imaging. Med Phys. 2010; 37:6205–11.',
+		'Weber T, Bauer TM, Fischer T, Kappel SG. Investigation of ultra low-dose scans with quantum-counting CT. Proc SPIE. 2012; 8313:83134B.',
+		'Xiao C, Dahl M, Berg H. Energy loss and charge sharing in cadmium telluride detectors. IEEE Trans Nucl Sci. 2011; 58:614–25.',
+		'Yuan Z, Liang S, Jensen SM, Li Z. Imaging performance of a whole-body CT system with a photon-counting detector. Phys Med Biol. 2016; 61:1572.',
+		'Zeller R, Moore P, Ortiz A. Dose reduction in low-dose lung screening with photon-counting CT. Radiology. 2017; 285:380–9.'
+	].join(' ');
+	assert.ok(merged.length > 600);
+	assert.equal(looksLikeReferenceBlock(merged), true);
+	assert.equal(looksTranslated(merged, merged, 'zh-CN', { isReference: true }), true);
+	// Long prose that cites a few works is not a reference block.
+	const prose = 'In this study we compared photon-counting and energy-integrating detectors in a lung phantom (Tamura et al., 2013; Tellez et al., 2010). The noise was measured at three dose levels and the results were analysed with mixed models. '.repeat(4);
+	assert.ok(prose.length > 600);
+	assert.equal(looksLikeReferenceBlock(prose), false);
+	assert.equal(looksTranslated(prose, prose, 'zh-CN', { isReference: true }), false);
+});

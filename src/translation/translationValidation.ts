@@ -59,7 +59,7 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 	// 仍留英文,还触发「引擎不稳定」换引擎。现在当作「保持原文」接受。只对
 	// 结构上确实是参考文献条目的块生效(looksLikeReferenceEntry: 年份 + 至少两种
 	// 书目特征),正文即使被误标为参考文献区,也不会因此被放过不翻。
-	if (opts?.isReference && looksLikeReferenceEntry(source)
+	if (opts?.isReference && looksLikeReferenceBlock(source)
 		&& !isTruncatedTranslation(stripProtectable(source), stripProtectable(t))
 		&& (isEcho(source, t) || hasMixedCopiedResidue(source, t))) {
 		return true;
@@ -205,10 +205,41 @@ export function looksLikeReferenceEntry(source: string): boolean {
 		/\b[A-Z][A-Za-z'’-]+,?\s+(?:[A-Z]\.?\s?){1,3}[,.]/.test(text),
 		/\bet al\b/i.test(text),
 		/\b(?:doi|pmid|pmcid)\b|10\.\d{4,9}\//i.test(text),
-		/\b\d+\s*(?:\(\s*\d+[–-]?\d*\s*\))?\s*:\s*[eE]?\d+(?:[–-][eE]?\d+)?\b/.test(text),
-		/\b(?:19|20)\d{2}\s*[;,]\s*\d+/.test(text)
+		// Article numbers may carry a letter (SPIE "2012:83134B").
+		/\b\d+\s*(?:\(\s*\d+[–-]?\d*\s*\))?\s*:\s*[eE]?\d+[A-Z]?(?:[–-][eE]?\d+[A-Z]?)?(?!\w)/.test(text),
+		/\b(?:19|20)\d{2}\s*[;,]\s*\d+/.test(text),
+		// Elsevier: "J. Am. Coll. Cardiol. 75 (5) (2020) 453–463"; initials-first authors.
+		/\b\d+\s*(?:\(\s*\d+[–-]?\d*\s*\)\s*)?\((?:19|20)\d{2}\)\s*[eE]?\d+(?:[–-][eE]?\d+)?/.test(text),
+		/(?:^|[\]).]\s)(?:[A-Z]\.\s?-?){1,3}\s?[A-Z][\p{L}'’-]+,/u.test(text)
 	].filter(Boolean).length;
 	return features >= 2;
+}
+
+const VANCOUVER_NAME = /[A-Z][\p{L}'’-]+(?:\s[A-Z][\p{L}'’-]+)?\s[A-Z]{1,3},\s/gu;
+const INITIALS_NAME = /(?:[A-Z]\.\s?-?){1,3}\s?[A-Z][\p{L}'’¨-]+(?:\s[a-z]{1,3}\s[A-Z][\p{L}'’-]+)?,\s/gu;
+const ENTRY_BOUNDARY = /(?<=[.\]])\s+(?=\[?\d{1,3}[\].)]\s|[A-Z][\p{L}'’-]+(?:\s[A-Z][\p{L}'’-]+)?\s[A-Z]{1,3}[,.]\s)/u;
+
+/**
+ * A reference block too long for looksLikeReferenceEntry (5.0, 推荐模型校验
+ * 2897 p10 959 字 / 2638 p7 684 字): either one entry whose author list alone
+ * runs past 600 characters, or several whole entries merged into one block.
+ * Prose never qualifies: every merged segment must itself be an entry, and a
+ * long single entry must be long because of its names.
+ */
+export function looksLikeReferenceBlock(source: string): boolean {
+	const text = source.replace(/\s+/g, ' ').trim();
+	if (looksLikeReferenceEntry(text)) return true;
+	if (text.length > 4000) return false;
+	const parts = text.split(new RegExp(ENTRY_BOUNDARY.source, 'gu')).filter(p => p.trim());
+	if (parts.length >= 2 && parts.every(p => looksLikeReferenceEntry(p))) return true;
+	for (const re of [INITIALS_NAME, VANCOUVER_NAME]) {
+		const names = text.match(re) ?? [];
+		if (names.length < 8) continue;
+		let kept = 0;
+		const compact = text.replace(re, m => (kept++ === 0 ? m : ''));
+		if (compact.length <= 600 && looksLikeReferenceEntry(compact)) return true;
+	}
+	return false;
 }
 
 /**
