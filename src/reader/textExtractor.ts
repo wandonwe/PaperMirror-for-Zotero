@@ -810,7 +810,10 @@ export class TextExtractor implements PageParser {
 			referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
 			bodyFontSize: this.bodyFontSize,
 			knownGutters: this.documentStyle?.columnGutters ?? [],
-			...(this.documentStyle ? { referencesStartHere: this.documentStyle.referenceRanges.some(([a]) => a === pageIndex) } : {}),
+			...(this.documentStyle ? {
+				referencesStartHere: this.documentStyle.referenceRanges.some(([a]) => a === pageIndex),
+				paragraphIndent: this.documentStyle.paragraphIndent
+			} : {}),
 			noTranslate: this.noTranslateSafe(),
 			obstacles,
 			grid,

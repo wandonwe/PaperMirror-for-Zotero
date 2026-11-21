@@ -74,7 +74,8 @@ function contextFor(pageIndex: number, style: DocumentStyle, startedSoFar: boole
 		referencesAlreadyStarted: referencesContinueOnto(style, pageIndex),
 		bodyFontSize: style.bodyFontSize,
 		knownGutters: style.columnGutters,
-		referencesStartHere: style.referenceRanges.some(([a]) => a === pageIndex)
+		referencesStartHere: style.referenceRanges.some(([a]) => a === pageIndex),
+		paragraphIndent: style.paragraphIndent
 	};
 }
 
@@ -134,7 +135,7 @@ async function main(): Promise<void> {
 		const spans = await readSpans(join(pdfDir, file), join(outDir, 'spans'));
 		const prints = printDoc(spans);
 		const st = buildDocumentStyle(spans.pages);
-		summary.push(`${spans.doc}: body ${st.bodyFontSize}pt, gutters [${st.columnGutters.join(',')}], references ${st.referenceRanges.map(([a, b]) => `p${a + 1}–p${b + 1}`).join(', ') || 'none'} of ${st.pageCount}`);
+		summary.push(`${spans.doc}: body ${st.bodyFontSize}pt, gutters [${st.columnGutters.join(',')}], indent ${st.paragraphIndent}pt, references ${st.referenceRanges.map(([a, b]) => `p${a + 1}–p${b + 1}`).join(', ') || 'none'} of ${st.pageCount}`);
 		writeFileSync(join(outDir, 'fp', `${spans.doc}.json`), JSON.stringify(prints, null, 1));
 		totalPages += prints.length;
 		if (!compareDir) continue;

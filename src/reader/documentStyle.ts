@@ -54,6 +54,12 @@ export interface DocumentStyle {
 	 * 全篇一致的沟是更强的证据。至少出现在 2 页、且 ≥40% 的正文页上。
 	 */
 	columnGutters: number[];
+	/**
+	 * 正文段首行缩进(pt,0 = 测不出:无缩进的手稿,或样本不足)。按正文字号的
+	 * 长行相对本栏左边的偏移取众数,至少出现 5 次。实测从 0.75em(2757、3285,
+	 * 旧的写死阈值 0.8em 看不见)到 2em(2877 手稿)都有。
+	 */
+	paragraphIndent: number;
 	pages: PageEvidence[];
 }
 
@@ -123,6 +129,8 @@ export function buildDocumentStyle(pages: StylePage[]): DocumentStyle {
 	}
 	const inRange = (i: number): boolean => ranges.some(([a, b]) => i >= a && i <= b);
 	const bodyPages = pages.filter((_, i) => !inRange(i));
+	// 正文字号不算参考文献页:小字号的长文献列表字数常常压过正文(3332 算成 7pt)。
+	const bodyFontSize = bodySizeOf(pages, inRange) || bodySizeOf(pages);
 	const votes: number[][] = [];
 	for (const p of bodyPages) {
 		const xs = p.items.length ? detectGutters(groupIntoRows(p.items).map(r => r.map(it => it.rect)), p.pageWidth) : [];
@@ -135,16 +143,52 @@ export function buildDocumentStyle(pages: StylePage[]): DocumentStyle {
 		.filter(c => c.length >= 2 && c.length >= bodyPages.length * 0.4)
 		.map(c => c.sort((a, b) => a - b)[Math.floor(c.length / 2)]!)
 		.sort((a, b) => a - b);
+	const paragraphIndent = paragraphIndentOf(bodyPages, bodyFontSize);
 	return {
 		pageCount: n,
 		columnGutters,
-		// 正文字号不算参考文献页:小字号的长文献列表字数常常压过正文(3332 算成 7pt)。
-		bodyFontSize: bodySizeOf(pages, i => ranges.some(([a, b]) => i >= a && i <= b)) || bodySizeOf(pages),
+		paragraphIndent,
+		bodyFontSize,
 		referenceRanges: ranges,
 		referencesStartPage: ranges[0]?.[0] ?? -1,
 		referencesEndPage: ranges[0]?.[1] ?? -1,
 		pages: evidence
 	};
+}
+
+function paragraphIndentOf(pages: StylePage[], bodySize: number): number {
+	if (bodySize <= 0) return 0;
+	const offsets = new Map<number, number>();
+	for (const page of pages) {
+		if (!page.items.length) continue;
+		const lines = groupIntoLines(page.items, page.pageWidth, page.pageHeight)
+			.filter(l => Math.abs(l.fontSize - bodySize) < 0.6 && lineText(l).length > 30);
+		// Column left edges: left positions many body lines share.
+		const lefts = new Map<number, number>();
+		for (const l of lines) lefts.set(Math.round(l.rect[0]), (lefts.get(Math.round(l.rect[0])) ?? 0) + 1);
+		// Most-shared first; a candidate just right of an accepted edge (within 4em)
+		// is that column's indent, not a column of its own — even on a page where
+		// many paragraphs start.
+		const edges: number[] = [];
+		for (const [x, k] of [...lefts].sort((a, b) => b[1] - a[1])) {
+			if (k < Math.max(4, lines.length * 0.08)) break;
+			if (!edges.some(e => x > e && x - e < bodySize * 4)) edges.push(x);
+		}
+		edges.sort((a, b) => a - b);
+		for (const l of lines) {
+			const edge = edges.filter(x => x <= l.rect[0] + 0.5).pop();
+			if (edge === undefined) continue;
+			const off = Math.round((l.rect[0] - edge) * 2) / 2;
+			if (off > 0.5 && off < bodySize * 4) offsets.set(off, (offsets.get(off) ?? 0) + 1);
+		}
+	}
+	// Merge half-point neighbours (14.5 / 15) into the mode.
+	let best = 0, bestCount = 0;
+	for (const [off] of offsets) {
+		const count = (offsets.get(off - 0.5) ?? 0) + (offsets.get(off) ?? 0) + (offsets.get(off + 0.5) ?? 0);
+		if (count > bestCount) { best = off; bestCount = count; }
+	}
+	return bestCount >= 5 ? best : 0;
 }
 
 /** 本页之前是否已进入参考文献、且本页仍在参考文献范围内。 */

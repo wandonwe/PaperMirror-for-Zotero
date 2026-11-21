@@ -703,6 +703,9 @@ export interface ParagraphContext {
 	 * and the other columns keep body rules.
 	 */
 	referenceHeadingRect?: Rect;
+	/** 5.0 全篇样式: measured first-line indent (pt) and the body size it was measured at. */
+	paragraphIndent?: number;
+	bodyFontSize?: number;
 }
 
 export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeight = 0, obstacles: Rect[] = [], gridRows: GridRowBarriers | GridRowBarriers[] | null = null, context: ParagraphContext = {}): SpanLine[][] {
@@ -772,6 +775,15 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 			// (PMC manuscripts set "References" at x 90 beside a column starting at 150)
 			&& heading[0] <= margins.right && heading[2] >= margins.left - 80;
 		const referenceContext = !!context.referencePage || (inList(line) && inList(next));
+		// 5.0 全篇样式: a body-size line is indented relative to this document's
+		// measured first-line indent (0.75em in 2757 / 3285 — the fixed 0.8em never
+		// saw it); other sizes, or no measurement, keep the old 0.8em.
+		const indentThreshold = (l: SpanLine): number => {
+			const measured = context.paragraphIndent ?? 0;
+			const lineSize = l.fontSize > 0 ? l.fontSize : size;
+			return measured > 0 && context.bodyFontSize && Math.abs(lineSize - context.bodyFontSize) < 0.6
+				? measured * 0.6 : lineSize * 0.8;
+		};
 		const brk = shouldBreak({
 			fontSize: size,
 			gap: line.rect[1] - next.rect[3],
@@ -788,7 +800,7 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 			// 真机 4.99.16 (3084 p8): a line starting where the line above starts
 			// continues it — hanging-label reference lists sit 0.8em right of the
 			// band edge on EVERY continuation line, not just the first.
-			indented: next.rect[0] > margins.left + size * 0.8 && next.rect[0] > line.rect[0] + size * 0.5,
+			indented: next.rect[0] > margins.left + indentThreshold(next) && next.rect[0] > line.rect[0] + Math.min(size * 0.5, indentThreshold(next)),
 			// 对称跳变 (2.5.13, wu2026-p4 实证): 除数取两行字号的较小者。原式
 			// 除以【当前行】字号,于是 10pt 正文接 12pt 标题 = 2/10 = 0.20 能断,
 			// 而 12pt 标题接 10pt 正文 = 2/12 = 0.167 断不了 —— 每个压在正文上
@@ -1029,6 +1041,9 @@ export interface SpanBuildOptions {
 	knownGutters?: number[];
 	/** 5.0 全篇样式: whether a reference range starts on this page (undefined = unknown). */
 	referencesStartHere?: boolean;
+	/** 5.0 全篇样式: measured first-line indent (pt) and body size. */
+	paragraphIndent?: number;
+	bodyFontSize?: number;
 	/**
 	 * 边框网格 (2.12.15):行线是硬屏障 —— 两行之间隔着一条网格行线,不许合成一个段落。
 	 * ESC p16 实证:灰色小节标题带与紧贴其下的格首行(间距 3.7pt、同一 x)被焊成一块,
@@ -1264,7 +1279,9 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 				// The heading line itself; with the document style, only on a page where a
 				// reference range really starts (3332 p1 has a lone "References" line).
 				referenceHeadingRect: referenceHeadingHere && options.referencesStartHere !== false
-					? lines.find(l => REFERENCES_HEADINGS.test(lineText(l).trim()))?.rect : undefined
+					? lines.find(l => REFERENCES_HEADINGS.test(lineText(l).trim()))?.rect : undefined,
+				paragraphIndent: options.paragraphIndent,
+				bodyFontSize: options.bodyFontSize
 			}));
 
 	// Materialise, then repair anything still split mid-sentence.

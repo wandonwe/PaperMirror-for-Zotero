@@ -119,3 +119,30 @@ test('5.0 (3064 p9): a gutter the body pages agree on splits welded reference co
 	assert.equal(split.length, 0, 'with the known gutter no line spans both columns');
 	assert.ok(welded.length >= split.length);
 });
+
+// ---- 4. Measured first-line indent ---------------------------------------------
+
+test('5.0 (3285 p3): a 0.75em first-line indent, measured from the document, starts a paragraph', () => {
+	const W = 450, SZ = 10;
+	const full = 'The study was approved by the ethical review authority and all patients gave written consent before';
+	const at = (text: string, x: number, y: number, w = W): SpanItem => ({ text, rect: [x, y, x + w, y + SZ], fontSize: SZ });
+	// Body pages: paragraphs whose first line is indented 7.5pt (0.75em).
+	const bodyPage: StylePage = { pageWidth: 612, pageHeight: 792, items: Array.from({ length: 40 }, (_, i) =>
+		at(full, i % 5 === 0 ? 79.5 : 72, 740 - i * 12, i % 5 === 0 ? W - 7.5 : W)) };
+	const style = buildDocumentStyle([bodyPage, bodyPage]);
+	assert.equal(style.paragraphIndent, 7.5);
+	// Previous paragraph ends with a FULL line, next paragraph is indented 7.5pt.
+	const page = [at(full, 72, 700), at(full, 72, 688), at('Five carotid plaques were randomly chosen from donations of patients undergoing', 79.5, 676, W - 7.5), at(full, 72, 664)];
+	const lines = groupIntoLines(page, 612, 792);
+	const fixed = groupIntoParagraphs(lines, 612, 792);
+	const measured = groupIntoParagraphs(lines, 612, 792, [], null, { paragraphIndent: style.paragraphIndent, bodyFontSize: style.bodyFontSize });
+	assert.equal(fixed.length, 1, 'the fixed 0.8em rule misses a 0.75em indent');
+	assert.equal(measured.length, 2);
+	assert.ok(lineText(measured[1]![0]!).startsWith('Five carotid'));
+});
+
+test('5.0: no measurable indent (manuscripts without one) keeps the fixed rule', () => {
+	const flat: StylePage = { pageWidth: 612, pageHeight: 792, items: Array.from({ length: 40 }, (_, i) =>
+		({ text: 'A manuscript line of body text that runs the full width of the column here', rect: [72, 740 - i * 12, 520, 750 - i * 12] as [number, number, number, number], fontSize: 10 })) };
+	assert.equal(buildDocumentStyle([flat]).paragraphIndent, 0);
+});

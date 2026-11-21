@@ -35,6 +35,8 @@ export interface PageContext {
 	knownGutters?: number[];
 	/** 全篇样式:本页是否开始一段参考文献(未知则不填)。 */
 	referencesStartHere?: boolean;
+	/** 全篇样式:实测的段首缩进(pt,0/不填 = 未知)。 */
+	paragraphIndent?: number;
 	/** 不翻译的原文(用户设置),表格结构化用。 */
 	noTranslate?: string[];
 	obstacles?: Rect[];
@@ -61,6 +63,8 @@ export function structureSpanPage(page: SpanPage, context: PageContext): PageStr
 		referencesAlreadyStarted: context.referencesAlreadyStarted,
 		knownGutters: context.knownGutters,
 		referencesStartHere: context.referencesStartHere,
+		paragraphIndent: context.paragraphIndent,
+		bodyFontSize: context.bodyFontSize,
 		imageRectsPdf: obstacles,
 		grid: context.grid ?? null,
 		grids: context.grids,
