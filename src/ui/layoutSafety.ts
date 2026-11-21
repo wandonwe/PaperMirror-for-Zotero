@@ -369,10 +369,19 @@ export function flowText<T>(text: string, regions: T[], fits: (text: string, reg
    const mid=Math.ceil((lo+hi)/2);
    if(fits(chars.slice(offset,offset+mid).join(''),regions[i]!,i,start)) lo=mid;else hi=mid-1;
   }
+  // 5.0 (联网校验 3278 "10. Zhan|g X"): a piece must not end inside a Latin
+  // word or number. Back off to the last break opportunity when there is one;
+  // a single unbreakable token (a long URL) keeps the measured cut.
+  if (lo > 0 && offset + lo < chars.length && WORD_CHAR.test(chars[offset+lo-1]!) && WORD_CHAR.test(chars[offset+lo]!)) {
+   let k = lo;
+   while (k > 0 && WORD_CHAR.test(chars[offset+k-1]!)) k--;
+   if (k > 0 && fits(chars.slice(offset,offset+k).join(''),regions[i]!,i,start)) lo = k;
+  }
   parts.push(chars.slice(offset,offset+lo).join(''));offset+=lo;
  }
  return offset===chars.length ? parts : null;
 }
+const WORD_CHAR = /[A-Za-z0-9\u00C0-\u024F]/;
 
 /** Recover the available bands of an L-shaped source paragraph, including vector figures. */
 export function sourceFlowRegions(lines: PixelBox[], fontPx: number): PixelBox[] {

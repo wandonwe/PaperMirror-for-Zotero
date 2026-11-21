@@ -1,3 +1,4 @@
+import { hasLeaderDots } from './paragraphHeuristics';
 import { semanticBoundary } from './semanticBoundary';
 /**
  * Region coalescing — the pass between block extraction and translation.
@@ -33,8 +34,17 @@ function isBodyBlock(block: SourceBlock): boolean {
 	return (block.type === 'paragraph' || block.type === 'list')
 		&& block.translationMode !== 'preserve'
 		&& !block.isReference
+		// 5.0 (校验 2877): a contact record ("Naying He, hny…@rjh.com.cn") is
+		// one line of a list — welding twelve of them made one run-on block.
+		&& !CONTACT_RECORD_RE.test(block.sourceText.trim())
+		// 5.0 (全篇样式, 2721 p12): a table-of-contents line ("Table S2. … ......4")
+		// is one entry. Pages after the references used to be marked as references
+		// wholesale, which hid that the coalescer welded every TOC line into one.
+		&& !hasLeaderDots(block.sourceText)
 		&& !!block.lineRectsPdf?.length;
 }
+/** "Name, address@host.tld" and nothing else. */
+const CONTACT_RECORD_RE = /^[\p{L}][\p{L} .'’-]{1,60},\s*[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}$/u;
 
 /** A caption fragment must not be the START of a different figure/table. */
 const FIGURE_LABEL_RE = /^(figure|fig\.?|table|图|表|圖)\s*\d+/i;

@@ -54,7 +54,11 @@ test('DataCloneError preserves every source line through the standard text-conte
   const actual = blocks.map(b => b.sourceText).join(' ').replace(/\s+/g, ' ');
   assert.equal(actual, f.lines.join(' '), 'no dropped, duplicated, or altered source characters');
   assert.ok(blocks.every(b => b.boundingBox && b.boundingBox.width > 0 && b.boundingBox.height > 0));
-  assert.equal(f.textReads(), 1);
+  // 5.0: one read for the page itself + one for the whole-document style scan
+  // (each page once per document, lightweight). Extracting again reads nothing new.
+  assert.equal(f.textReads(), 2);
+  await extractor.extractPage(0);
+  assert.equal(f.textReads(), 2, 'the document style is computed once per document');
 });
 
 test('realm probe repeats its chrome control and restores local mode without exposing source text', async () => {

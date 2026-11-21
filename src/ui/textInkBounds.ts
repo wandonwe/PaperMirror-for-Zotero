@@ -259,6 +259,54 @@ export function insetTextInk(node: HTMLElement, guard: TextInkGuard, maxInset: n
  return false;
 }
 
+/**
+ * Descender bleed (5.0, 联网校验 3278/3064): reference entries and tight body
+ * lines were abandoned whole because a g/p/comma reached 1-2.5px below the
+ * box. The layout may grant a bounded bottom margin, painted with
+ * overflow-clip-margin; the guard then checks against the extended edge.
+ */
+export const INK_BLEED_ATTR = 'data-pm-ink-bleed';
+export function inkBleedOf(node: Element): number {
+ const v = parseFloat(node.getAttribute?.(INK_BLEED_ATTR) ?? '');
+ return Number.isFinite(v) && v > 0 ? v : 0;
+}
+/** The largest bleed granted: never more than a fifth of the font size or 3px. */
+export function maxInkBleed(fontPx: number): number {
+ return Math.min(3, Math.max(0, fontPx * 0.2));
+}
+export function setInkBleed(node: HTMLElement, px: number): void {
+ if (px > 0) {
+  node.setAttribute(INK_BLEED_ATTR, px.toFixed(2));
+  node.style.overflow = 'clip';
+  node.style.setProperty('overflow-clip-margin', `${px.toFixed(2)}px`);
+ } else if (node.hasAttribute(INK_BLEED_ATTR)) {
+  node.removeAttribute(INK_BLEED_ATTR);
+  node.style.overflow = 'hidden';
+  node.style.removeProperty('overflow-clip-margin');
+ }
+}
+/**
+ * Try the smallest bleed that lets every glyph's bottom ink fit (pure policy
+ * over the guard). Only a bottom-only failure qualifies; `stripFree(px)` must
+ * confirm nothing else lives in the strip below. Rolls back on failure.
+ */
+export function tryInkBleed(node: HTMLElement, guard: TextInkGuard, fontPx: number, stripFree: (px: number) => boolean, extraNodes: HTMLElement[] = [], maxPx?: number): boolean {
+ const max = maxPx ?? maxInkBleed(fontPx);
+ let px = 0;
+ for (let i = 0; i < 4; i++) {
+  const f = guard.failure(node);
+  if (!f || f.topOverflow > 0 || f.leftOverflow || f.rightOverflow || !(f.bottomOverflow > 0)) break;
+  px = Math.ceil((Math.max(px, inkBleedOf(node)) + f.bottomOverflow + 0.25) * 4) / 4;
+  if (px > max || !stripFree(px)) break;
+  setInkBleed(node, px);
+  for (const extra of extraNodes) setInkBleed(extra, Math.max(px, inkBleedOf(extra)));
+  if (guard(node)) return true;
+ }
+ setInkBleed(node, 0);
+ for (const extra of extraNodes) setInkBleed(extra, 0);
+ return false;
+}
+
 /** Per-render canvas; read current font metrics so late font loads cannot leave stale bounds. */
 export function createTextInkGuard(doc: Document): TextInkGuard {
  const canvas = doc.createElementNS('http://www.w3.org/1999/xhtml', 'canvas') as HTMLCanvasElement;
@@ -294,7 +342,11 @@ export function createTextInkGuard(doc: Document): TextInkGuard {
   failures.delete(node);
   const clientClip = node.getBoundingClientRect();
   const rotation=Number(node.closest?.('[data-pm-page-turn]')?.getAttribute('data-pm-page-turn') ?? 0);
-  const clip=uprightVerticalBounds(clientClip,clientClip,rotation);
+  // 5.0: a descender bleed granted by the layout (data-pm-ink-bleed, painted
+  // through overflow-clip-margin) moves the effective bottom clip edge.
+  const bleed=inkBleedOf(node);
+  const baseClip=uprightVerticalBounds(clientClip,clientClip,rotation);
+  const clip=bleed>0?{...baseClip,bottom:baseClip.bottom+bleed}:baseClip;
   const upright=(rect:DOMRect):VerticalBounds=>uprightVerticalBounds(rect,clientClip,rotation);
   const axis=deviceAxisFor(clientClip,rotation,doc.defaultView?.devicePixelRatio || 1);
   const walker = doc.createTreeWalker(node, 4 /* SHOW_TEXT */);

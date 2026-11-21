@@ -294,7 +294,6 @@ export async function buildTranslatedPdf(
 				keptOriginal++;
 				continue; // Do not paint unresolved placeholders/control glyphs over valid source content.
 			}
-			const rects = block.lineRectsPdf!;
 			// 1. typeset FIRST — the mask is painted only after the translation is
 			//    known to fit. 顺序是 LO-1 修复的核心 (2.2.8): 旧实现先涂白再排版,
 			//    排不下也只画带「…」的截断译文 —— 原文已被涂掉,段落尾部在导出文件

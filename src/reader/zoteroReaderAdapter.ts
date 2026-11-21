@@ -124,14 +124,6 @@ export function getReaderBrowser(reader: ReaderLike): Element {
 	return iframe as Element;
 }
 
-export function getMainWindowForReader(reader: ReaderLike): Window {
-	const win = reader._window ?? Zotero.getMainWindow();
-	if (!win) {
-		throw new PaperMirrorError('READER_API_CHANGED', 'No main window available for reader.');
-	}
-	return win;
-}
-
 /**
  * 归属判定专用 (2.0.10, 审核 P3): 不经 getMainWindow() 兜底。缺 _window 的
  * reader 被兜底归到「碰巧的窗口」时,disposeWindow 可能误杀在用会话或漏杀
@@ -569,6 +561,35 @@ fontRepair.resolvedFonts=fonts.size;
 	catch (e) {
 		logger.debug(MODULE, `getTextContentItems(${pageIndex}) failed`, e);
 		return say(`threw:${(e as { constructor?: { name?: string } })?.constructor?.name ?? 'unknown'}`);
+	}
+}
+
+/**
+ * 5.0 全篇样式用的轻量读取:只要文字、矩形和字号,不做符号 / 旧字体修复
+ * (那要算子列表,对整篇逐页做太贵,而统计正文字号和参考文献范围用不着)。
+ * 同样穿 Xray、同样是任何页随时可读的公开 API。失败返回 null。
+ */
+export async function getTextContentItemsLight(reader: ReaderLike, pageIndex: number): Promise<TextLayerPage | null> {
+	try {
+		const doc = waive((waive(pdfWindow(reader)?.PDFViewerApplication) as
+			{ pdfDocument?: unknown } | undefined)?.pdfDocument) as { getPage?: (n: number) => Promise<unknown> } | undefined;
+		if (typeof doc?.getPage !== 'function') return null;
+		const page = waive(await doc.getPage(pageIndex + 1)) as { getTextContent?: () => Promise<{ items?: unknown[] }>; view?: number[] };
+		if (typeof page?.getTextContent !== 'function') return null;
+		const content = waive(await page.getTextContent());
+		const items: TextLayerItem[] = [];
+		for (const entry of Array.isArray(content?.items) ? content.items : []) {
+			const it = entry as { str?: unknown; transform?: unknown; width?: unknown };
+			if (typeof it.str !== 'string' || !it.str.trim() || !Array.isArray(it.transform) || typeof it.width !== 'number') continue;
+			const box = textContentItemRect(it.transform as number[], it.width);
+			if (box) items.push({ text: it.str, rect: box.rect, ...(box.fontSize ? { fontSize: box.fontSize } : {}) });
+		}
+		const view = Array.isArray(page.view) && page.view.length >= 4 ? page.view : null;
+		return { items, pageWidth: view ? Number(view[2]) - Number(view[0]) : 612, pageHeight: view ? Number(view[3]) - Number(view[1]) : 792 };
+	}
+	catch (e) {
+		logger.debug(MODULE, `getTextContentItemsLight(${pageIndex}) failed`, e);
+		return null;
 	}
 }
 
@@ -1782,15 +1803,6 @@ export function getSelectedText(reader: ReaderLike): string {
  */
 export function registerToolbarListener(pluginID: string, handler: (event: ZoteroReaderEvent) => void): void {
 	Zotero.Reader.registerEventListener('renderToolbar', handler, pluginID);
-}
-
-/**
- * Official text-selection popup hook (documented event type in 9.0.6
- * registerEventListener JSDoc). event.params.annotation.text carries the
- * selected text. Cleanup happens via pluginID on shutdown, same as toolbar.
- */
-export function registerSelectionPopupListener(pluginID: string, handler: (event: ZoteroReaderEvent) => void): void {
-	Zotero.Reader.registerEventListener('renderTextSelectionPopup', handler, pluginID);
 }
 
 /**

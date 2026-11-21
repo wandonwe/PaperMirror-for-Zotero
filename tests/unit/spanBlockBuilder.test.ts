@@ -796,3 +796,66 @@ test('short three-column band retains the 12pt gutter beside a wide figure', asy
  assert.equal(blocks.find(b=>b.sourceText.includes('left body'))?.boundingBox?.width,158);
  assert.equal(blocks.find(b=>b.sourceText.includes('middle key'))?.boundingBox?.x,254);
 });
+
+test('5.0 校验 3084: a raised label that precedes its line stays with that line, not the row above', () => {
+	// Row above ends a reference "… 12(4), 437–442 (1985)." in the right column;
+	// the next entry's raised "7" sits left of "S. Rathee" and overlaps a left-column row band.
+	const items: SpanItem[] = [
+		{ text: 'Left column body text that shares the page row band here.', rect: [50, 715, 290, 723], fontSize: 8 },
+		{ text: '437–442 (1985).', rect: [322.2, 721.7, 375.4, 729.7], fontSize: 8 },
+		{ text: '7', rect: [318.7, 715.1, 321.7, 721.1], fontSize: 6 },
+		{ text: 'S. Rathee, B. G. Fallone, and D. Robinson, “Modulation transfer func-', rect: [322.2, 712.2, 559.8, 720.2], fontSize: 8 }
+	];
+	const lines = groupIntoLines(items, 612, 792).map(l => l.items.map(i => i.text).join('|'));
+	assert.ok(lines.some(l => l.startsWith('7|S. Rathee')), lines.join(' / '));
+	assert.ok(lines.some(l => l === '437–442 (1985).'), lines.join(' / '));
+});
+
+test('5.0 校验 2877: a manuscript stamp word does not weld body rows, and contact lines stay one per block', () => {
+	const items: SpanItem[] = [
+		{ text: 'E-mail addresses:', rect: [46.7, 420, 140, 430], fontSize: 10 },
+		{ text: 'Naying He, hny12267@rjh.com.cn', rect: [46.7, 400, 190, 410], fontSize: 10 },
+		{ text: 'Youmin Zhang, zym2020376@sjtu.edu.cn', rect: [46.7, 380, 210, 390], fontSize: 10 },
+		{ text: 'Hong Jiang, jh11200@rjh.com.cn', rect: [46.7, 367.8, 194, 377.9], fontSize: 10.1 },
+		{ text: 'Fuhua Yan, yfh11655@rjh.com.cn', rect: [46.7, 344.6, 197, 354.6], fontSize: 10.1 },
+		{ text: 'ACCEPTED', rect: [174, 268.9, 543.9, 345.9], fontSize: 77 },
+		{ text: 'Funding:', rect: [46.7, 297.8, 89.5, 307.9], fontSize: 10.1 },
+		{ text: 'The authors declare that no funds, grants, or other support were received during the preparation', rect: [46.7, 274.3, 462.1, 284.3], fontSize: 10.1 },
+		{ text: 'of this manuscript.', rect: [46.7, 255, 140, 265], fontSize: 10.1 }
+	];
+	const { blocks } = buildBlocksFromSpans(items, { pageIndex: 28, pageWidth: 612, pageHeight: 792, includeReferences: true, imageRectsPdf: [] });
+	const texts = blocks.map(b => b.sourceText);
+	assert.ok(!texts.some(t => /ACCEPTED/.test(t)), texts.join(' / '));
+	for (const name of ['Naying He', 'Youmin Zhang', 'Hong Jiang', 'Fuhua Yan']) {
+		const owner = texts.filter(t => t.includes(name));
+		assert.equal(owner.length, 1, name);
+		assert.ok(!/Funding|declare/.test(owner[0]!), owner[0]);
+		assert.equal((owner[0]!.match(/@/g) ?? []).length, 1, `one record per block: ${owner[0]}`);
+	}
+});
+
+test('5.0 校验 2721: a manuscript "13.⇥Author" label stays with its own entry, not the one above', () => {
+	const at = (text: string, x0: number, x1: number, y: number): SpanItem => ({ text, rect: [x0, y, x1, y + 12], fontSize: 12 });
+	const items: SpanItem[] = [
+		at('12.', 72, 87, 759), at('Conte E, Annoni A, Pontone G. Plaque features on coronary CT', 108, 508, 759),
+		at('angiography and long-term outcome. Eur Heart J Cardiovasc Imaging. 2017;18:1170-1178.', 72, 515, 731.5),
+		at('13.', 72, 87, 703.9), at('Feuchtner G, Kerber J, Burghard P, Dichtl W, Friedrich G, Bonaros N', 108, 508, 703.9),
+		at('and Plank F. The high-risk criteria low-attenuation plaque <60 HU and napkin-ring sign', 72, 511, 676.3),
+		at('are powerful predictors of MACE. Eur Heart J Cardiovasc Imaging. 2017;18:772-779.', 72, 480, 648.7)
+	];
+	const { blocks } = buildBlocksFromSpans(items, { pageIndex: 32, pageWidth: 612, pageHeight: 792, includeReferences: true, referencesAlreadyStarted: true, imageRectsPdf: [] });
+	const texts = blocks.map(b => b.sourceText);
+	assert.ok(texts.some(t => t.startsWith('13. Feuchtner')), texts.join(' / '));
+	assert.ok(texts.some(t => t.startsWith('12. Conte')), texts.join(' / '));
+	assert.ok(!texts.some(t => /1178\.\s*13\.$/.test(t.trim())), 'label not appended to the entry above');
+});
+
+test('a label column whose entries continue under the text is not rejoined by the tab rule', async () => {
+	const { groupIntoLines } = await import('../../src/reader/spanBlockBuilder');
+	const at = (text: string, x0: number, x1: number, y: number): SpanItem => ({ text, rect: [x0, y, x1, y + 12], fontSize: 12 });
+	const lines = groupIntoLines([
+		at('13.', 72, 87, 700), at('Feuchtner G, Kerber J, Burghard P, Dichtl W, Friedrich', 108, 508, 700),
+		at('G, Bonaros N and Plank F. The high-risk criteria plaque', 108, 508, 686)
+	], 612, 792);
+	assert.ok(lines.some(l => l.items.length === 1 && l.items[0]!.text === '13.'));
+});

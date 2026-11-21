@@ -23,7 +23,9 @@ import { requestJSON } from './httpClient';
 import type { TranslateOptions, TranslationProvider } from './types';
 
 const DEFAULT_BASE = 'https://generativelanguage.googleapis.com';
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+// Google recommends 3.8 Flash for new projects; the 2.5 family is limited to
+// prior users (2026-10-28 models page). Kept in sync w/ modelCatalog.
+const DEFAULT_MODEL = 'gemini-3.8-flash';
 
 export function geminiGenerateURL(settings: ProviderSettings, defaultModel = DEFAULT_MODEL): string {
 	const base = (settings.apiBaseURL || DEFAULT_BASE).replace(/\/+$/, '');
@@ -58,17 +60,27 @@ export function geminiGenerationConfig(settings: ProviderSettings, opts?: { json
 		config.responseMimeType = 'application/json';
 	}
 	const r = settings.reasoning;
-    const model=(settings.model || DEFAULT_MODEL).replace(/^models\//,'');
-    if (/^gemini-3/.test(model)) {
-        if(r && r !== 'auto') {
-            const minimum=/^gemini-3\.[78]-flash/.test(model) || /pro/.test(model) ? 'low' : 'minimal';
-            config.thinkingConfig={thinkingLevel:r === 'disabled' || r === 'minimal' ? minimum : r === 'xhigh' ? 'high' : r};
-        }
-    } else if (r === 'disabled' || r === 'minimal') {
-        config.thinkingConfig = { thinkingBudget: /^gemini-2\.5-pro/.test(model) ? 128 : 0 };
-    } else if (r === 'auto') {
-        config.thinkingConfig = { thinkingBudget: -1 };
-    }
+	const model = (settings.model || DEFAULT_MODEL).replace(/^models\//, '');
+	if (/^gemini-(?:[3-9]|\d{2})(?:[.-]|$)/.test(model)) {
+		// Gemini 3+/4 use thinkingLevel (thinkingBudget is deprecated and 400s on
+		// gemini-4-argon). Models that cannot turn thinking off take their
+		// documented minimum: 'low' for Gemini 4, 3.7/3.8 Flash and Pro.
+		// 5.0 审核: 没设强度时也取最低档(与 GPT-6、DeepSeek 一致) —— 3.x/4 默认
+		// 会先思考,对翻译只是更慢更贵;'auto' 才交给模型自行决定。
+		if (r !== 'auto') {
+			const minimum = /^gemini-(?:[4-9]|\d{2})/.test(model) || /^gemini-3\.[78]-flash/.test(model) || /pro/.test(model) ? 'low' : 'minimal';
+			config.thinkingConfig = { thinkingLevel: !r || r === 'disabled' || r === 'minimal' ? minimum : r === 'xhigh' ? 'high' : r };
+		}
+	}
+	else if (r === 'disabled' || r === 'minimal' || (!r && /^gemini-2\.5-/.test(model))) {
+		// 5.0 (联网校验: 2.5 Flash 41–130 字/秒,Flash-Lite 255–531): 2.5 Flash 未设
+		// 强度时默认动态思考,思考 token 按输出价计费。未设强度与「禁用」一样:
+		// Flash/Flash-Lite 关闭,2.5 Pro 关不掉取最低 128。
+		config.thinkingConfig = { thinkingBudget: /^gemini-2\.5-pro/.test(model) ? 128 : 0 };
+	}
+	else if (r === 'auto') {
+		config.thinkingConfig = { thinkingBudget: -1 };
+	}
 	return config;
 }
 
@@ -99,11 +111,6 @@ export function isThinkingRejection(e: unknown): boolean {
 	return e instanceof PaperMirrorError
 		&& e.httpStatus === 400
 		&& (e.rejectedParam === 'thinking' || /think|budget/i.test(e.message));
-}
-
-/** 测试可重置的自愈记忆。 */
-export function resetThinkingHeal(): void {
-	thinkingRejected.clear();
 }
 
 /**

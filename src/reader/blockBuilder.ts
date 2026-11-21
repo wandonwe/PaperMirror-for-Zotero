@@ -1,3 +1,4 @@
+import { looksLikeReferencePage, looksLikeReferenceText } from './referenceDetect';
 import { imageCaptionRegions, withinCaption, markImageCaptions } from './imageCaption';
 import { extractLegendItems } from './legendItems';
 /**
@@ -522,7 +523,11 @@ export function buildBlocks(chars: PdfChar[], options: BuildOptions): BuildResul
 	// would re-weld two columns at the stamping step (三栏首页回归).
 	const columnBands = detectColumns(lines.map(l => l.rect as Rect), pageWidth, pageHeight);
 
-	let referencesStarted = !!options.referencesAlreadyStarted;
+	// 5.0: a reference continuation page is recognised by its own content when
+	// the page with the heading has not been extracted yet (see referenceDetect).
+	const paragraphTexts = paragraphs.flatMap(p => p.lines.map(l => textForRange(chars, l.start, l.end)));
+	let referencesStarted = !!options.referencesAlreadyStarted
+		|| (!paragraphs.some(p => REFERENCES_HEADINGS.test(p.text.trim())) && looksLikeReferenceText(paragraphTexts.join(' ')) && looksLikeReferencePage(paragraphTexts));
 	const blocks: SourceBlock[] = [];
 	let order = 0;
 	for (const p of paragraphs) {

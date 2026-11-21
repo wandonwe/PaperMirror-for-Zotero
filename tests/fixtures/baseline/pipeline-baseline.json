@@ -12,15 +12,15 @@
 		"dupBlocks": 0
 	},
 	"Aquino_-_2023_-_Myocardial_Characterization_with_Extracellular_Volume_Mapping_with_a_First-Generation_Photon-countin-p2": {
-		"blocks": 18,
-		"translatable": 16,
+		"blocks": 16,
+		"translatable": 14,
 		"tableCells": 0,
 		"modules": 7,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 16,
-		"payloadChars": 4997,
+		"maxBlocksPerChunk": 14,
+		"payloadChars": 4999,
 		"dupBlocks": 0
 	},
 	"aquino2023-p1": {
@@ -36,15 +36,15 @@
 		"dupBlocks": 0
 	},
 	"aquino2023-p2": {
-		"blocks": 18,
-		"translatable": 16,
+		"blocks": 16,
+		"translatable": 14,
 		"tableCells": 0,
 		"modules": 7,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 16,
-		"payloadChars": 4997,
+		"maxBlocksPerChunk": 14,
+		"payloadChars": 4999,
 		"dupBlocks": 0
 	},
 	"booz2019-p1": {
@@ -252,7 +252,7 @@
 		"dupBlocks": 1
 	},
 	"hakime2007-p2": {
-		"blocks": 17,
+		"blocks": 16,
 		"translatable": 10,
 		"tableCells": 0,
 		"modules": 6,
@@ -260,7 +260,7 @@
 		"fastChunks": 1,
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 10,
-		"payloadChars": 5688,
+		"payloadChars": 5709,
 		"dupBlocks": 0
 	},
 	"horst2024-p1": {
@@ -312,7 +312,7 @@
 		"dupBlocks": 0
 	},
 	"jacc2020-p15": {
-		"blocks": 78,
+		"blocks": 73,
 		"translatable": 7,
 		"tableCells": 0,
 		"modules": 4,
@@ -324,15 +324,15 @@
 		"dupBlocks": 0
 	},
 	"jamaneurol2025-p2": {
-		"blocks": 32,
-		"translatable": 20,
+		"blocks": 27,
+		"translatable": 16,
 		"tableCells": 0,
 		"modules": 5,
 		"chunks": 1,
 		"fastChunks": 1,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 20,
-		"payloadChars": 2977,
+		"maxBlocksPerChunk": 16,
+		"payloadChars": 2981,
 		"dupBlocks": 0
 	},
 	"nejm-defuse3-p7": {

@@ -21,6 +21,7 @@
  * which rejoins a fragment that ends mid-sentence with the one that follows.
  */
 
+import { isReferenceTailLine, startsReferenceEntry } from './referenceDetect';
 import { endsMidSentence } from './metaFilter';
 
 /** [x1, y1, x2, y2] in PDF coordinates (origin bottom-left, y grows upward). */
@@ -894,6 +895,11 @@ export function startsContinuation(text: string): boolean {
  * starts a new block even when the text before it looks unfinished.
  */
 export function looksLikeListStart(text: string): boolean {
+	// 5.0: "93. doi: 10.1007/…" is the tail of a reference entry, not item 93.
+	if (isReferenceTailLine(text)) return false;
+	// 5.0 (校验 2757 p10: "100. …" 与 "101. Strain WD, …" 并成一块): three-digit
+	// reference numbers, recognised by the author–initials that follow.
+	if (startsReferenceEntry(text)) return true;
 	return /^(\[\d{1,3}\]|[•▪◦‣·*–—-]\s|\(?\d{1,2}[.)]\s|[（(]\d{1,2}[）)]|[ivxIVX]{1,4}[.)]\s)/.test(text.trim());
 }
 
@@ -1160,35 +1166,63 @@ export interface BreakContext {
 	 * 自成一段,不与上下行合并。
 	 */
 	leaderDots?: boolean;
+	/**
+	 * 5.0: 已知参考文献页上,上一行像条目的结尾(年份、卷期页、DOI),下一行像
+	 * 条目的开头(带编号或不带编号的作者)。
+	 */
+	entryBoundary?: boolean;
 }
 
-export function shouldBreak(ctx: BreakContext): boolean {
+/**
+ * 断段证据 (5.0 结构层重构第 2 步)。
+ *
+ * 原来的 shouldBreak 是一串按顺序执行的 if:先命中谁就听谁的。改成"各项证据
+ * 并列、带权重相加":
+ *   - 强证据(换栏、列表开头、引导点、短行、大间距、缩进、字号跳变、条目边界)各 +3;
+ *   - 行宽撑满本栏(句子在续)−2;
+ *   - 中等间距(> 0.75em)+1;
+ * 总分 > 0 即断。这组权重与旧级联**逐例等价**(任一强证据都压过"撑满";
+ * 撑满压过中等间距;都没有就不断),所以替换本身不改变任何结果 —— 本机语料
+ * 234 页逐页核对。之后加新证据或改权重,改动都落在一处,且每个断点都说得出理由。
+ */
+export type BreakReason = 'new-column' | 'list-start' | 'leader-dots' | 'short-line' | 'large-gap'
+	| 'indent' | 'font-jump' | 'entry-boundary' | 'wrapped' | 'gap';
+
+export interface BreakEvidence { reason: BreakReason; weight: number }
+export interface BreakDecision { brk: boolean; score: number; evidence: BreakEvidence[] }
+
+export const BREAK_WEIGHTS = { strong: 3, wrapped: -2, gap: 1 } as const;
+
+export function decideBreak(ctx: BreakContext): BreakDecision {
 	const size = ctx.fontSize > 0 ? ctx.fontSize : 10;
-	if (ctx.newColumn || ctx.listStart) {
-		return true;
-	}
+	const evidence: BreakEvidence[] = [];
+	const strong = (on: boolean | undefined, reason: BreakReason): void => {
+		if (on) evidence.push({ reason, weight: BREAK_WEIGHTS.strong });
+	};
+	strong(ctx.newColumn, 'new-column');
+	strong(ctx.listStart, 'list-start');
 	// 目录行/短行 (BabelDOC): 连点号行自成一段;明显短于中位行宽的行是段末。
-	if (ctx.leaderDots) {
-		return true;
-	}
-	if (ctx.shortLine && !ctx.wrapped) {
-		return true;
-	}
+	strong(ctx.leaderDots, 'leader-dots');
+	strong(ctx.shortLine && !ctx.wrapped, 'short-line');
 	// A gap this big is a section break no matter what the line looked like.
-	if (ctx.gap > size * 1.7) {
-		return true;
-	}
+	strong(ctx.gap > size * 1.7, 'large-gap');
 	// Indentation is measured against the COLUMN's left margin, and a font-size
 	// change is measured from dominant (not mean) sizes — both are strong
 	// enough to end a paragraph on their own.
-	if (ctx.indented || ctx.fontJump) {
-		return true;
-	}
-	// The decisive guard for the remaining signal: a line that filled its
-	// column wrapped, so the sentence continues. Line-spacing wobble — a tall
-	// glyph, an inline formula, a superscript — must not cut it in half.
-	if (ctx.wrapped) {
-		return false;
-	}
-	return ctx.gap > size * 0.75;
+	strong(ctx.indented, 'indent');
+	strong(ctx.fontJump, 'font-jump');
+	// 5.0: inside a known reference list, the previous line ends an entry and
+	// the next starts one (numbered or not).
+	strong(ctx.entryBoundary, 'entry-boundary');
+	// A line that filled its column wrapped, so the sentence continues.
+	// Line-spacing wobble — a tall glyph, an inline formula, a superscript —
+	// must not cut it in half.
+	if (ctx.wrapped) evidence.push({ reason: 'wrapped', weight: BREAK_WEIGHTS.wrapped });
+	if (ctx.gap > size * 0.75) evidence.push({ reason: 'gap', weight: BREAK_WEIGHTS.gap });
+	const score = evidence.reduce((n, e) => n + e.weight, 0);
+	return { brk: score > 0, score, evidence };
+}
+
+export function shouldBreak(ctx: BreakContext): boolean {
+	return decideBreak(ctx).brk;
 }

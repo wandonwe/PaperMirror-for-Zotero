@@ -101,8 +101,3 @@ export function mapFetchFailure(e: unknown): PaperMirrorError {
 	}
 	return new PaperMirrorError('UNKNOWN', message, { retryable: false });
 }
-
-/** Localizable, user-facing message key for an error code. */
-export function fluentKeyForError(code: PaperMirrorError['code']): string {
-	return `papermirror-error-${code.toLowerCase().replace(/_/g, '-')}`;
-}

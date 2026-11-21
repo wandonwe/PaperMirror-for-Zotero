@@ -10,7 +10,10 @@ import type { TranslationRequest } from '../types/models';
 // translation accepted before the integrity checks cannot bypass them.
 export const PROMPT_VERSION = 4;
 
-const allTextRule = 'Translate all natural-language content, including person names, company/manufacturer names, institutions, product names, author lists, affiliations and publication names. Use established target-language names where known, otherwise a faithful transliteration; do not invent an original spelling or identity. Translate surrounding titles and roles too. Preserve numerical values, formulas, URLs, DOIs and exact alphanumeric model identifiers.';
+// 5.0 (校验 2877, 用户 2026-11-21 同意): person names keep their source
+// spelling. A transliteration of a pinyin name back into characters is a guess
+// ("Naying He" → 「何娜英」) that the reader cannot verify against the original.
+const allTextRule = 'Translate all natural-language content, including company/manufacturer names, institutions, product names, affiliations and publication names. Use established target-language names where known, otherwise a faithful transliteration; do not invent an original spelling or identity. Keep PERSON names (authors, investigators, contact persons, author lists) exactly as written in the source: never transliterate them or guess characters for romanized names. Translate surrounding titles and roles. Preserve numerical values, formulas, URLs, e-mail addresses, DOIs and exact alphanumeric model identifiers.';
 const continuationRule = 'A block with continuationContext is a source sentence fragment split by layout (possibly across columns or pages). Read before + text + after together to understand the sentence. Translate only this block\'s text, keeping its role in that sentence: preserve negation, before/after conditions, and the ordered correspondence of metrics and values. Keep the translation in source-fragment order so adjacent translated fragments join coherently; do not prematurely close a sentence or move a condition/list into another fragment. The before/after source evidence is not additional content to translate or repeat. Where target-language grammar needs it, repeat only the minimal governing predicate to make a continuation unambiguous.';
 const continuationUnitRule = 'Blocks sharing continuationUnit.id are ordered PARTS OF ONE COMPLETE SOURCE SENTENCE. Translate continuationUnit.source ONCE as a complete faithful sentence, then partition that ONE translation into contiguous natural phrase fragments for the part ids in order. The fragments concatenated must contain all original measurements, subjects, predicates, conjunctions, negation, timing conditions, and ordered metric/value relationships exactly once. Target-language grammar may redistribute meaning between neighbouring parts; never delete meaning to force word-by-word ownership. Keep fragment lengths roughly proportional to the corresponding source parts when possible. Every part.text is source content, even when repeated in the reference copy continuationUnit.source. Return every part id exactly once with a nonempty fragment. Do not translate the parts independently, repeat the whole sentence in each part, or leave natural-language words untranslated because a part is unfinished.';
 
@@ -31,7 +34,10 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 	// 样式标记/上下文的请求,不再携带对应规则 —— 大多数请求省 ~50–120 输入 token,
 	// 且对确实携带这些标记的请求一字不变(无需 bump PROMPT_VERSION、不作废缓存)。
 	const hasPlaceholders = request.blocks.some(b => b.text.includes('⟦PM'));
-	const referenceRule = 'In bibliography entries, translate the article or book TITLE into the target language. Translate author and journal names too; keep years, volumes, pages and DOIs unchanged. A reference title is natural language, not an identifier; do not copy the entire entry unchanged.';
+	// 5.0 (联网校验 3384/3132): author names were transliterated ("Simsek ME" →
+	// "西姆谢克 ME") and journal abbreviations paraphrased ("J Imaging Inf Med" →
+	// 《影像信息医学》), which breaks looking the reference up. Only the title translates.
+	const referenceRule = 'In bibliography entries, translate ONLY the article or book TITLE into the target language. Copy author names (including "et al."), journal names and abbreviations, years, volumes, issues, pages, DOIs and URLs exactly as written in the source; never transliterate or translate them. A reference title is natural language, not an identifier; do not copy the entire entry unchanged.';
 	const hasStyleTags = request.blocks.some(b => b.text.includes('⟦b⟧') || b.text.includes('⟦i⟧'));
  const hasContinuation = request.blocks.some(b => b.continuationContext);
  const hasContinuationUnits = request.blocks.some(b => b.continuationUnit);
