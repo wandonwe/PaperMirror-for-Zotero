@@ -195,3 +195,11 @@ test('5.0 校验: a shared unit distributed over each value is not a unit change
 	assert.equal(technicalUnitIssue(s, '在 120 下重建了 40、50 和 60 keV 的虚拟单能图像。'), 'technical-unit');
 	assert.equal(technicalUnitIssue(s, '在 120 kVp 下重建了 40 keV、50 keV 和 70 keV 的虚拟单能图像。'), 'technical-unit-value');
 });
+
+test('5.0 校验 2638: a list before a unit is not one number', () => {
+	const s = 'There was no significant difference between 40, 45 keV, and T3D compared to EID-CT. Scores were higher at 50, 55, 60 and 70 keV.';
+	assert.equal(technicalUnitIssue(s, '40、45 keV 与 T3D 和 EID-CT 相比无显著差异。在 50、55、60 和 70 keV 时评分更高。'), null);
+	assert.equal(technicalUnitIssue(s, '40、45 keV 与 T3D 和 EID-CT 相比无显著差异。在 50、55、60 和 75 keV 时评分更高。'), 'technical-unit-value');
+	assert.equal(technicalUnitIssue('a dose of 12,500 mGy', '剂量 12,500 mGy'), null);
+	assert.equal(technicalUnitIssue('a dose of 12,500 mGy', '剂量 500 mGy'), 'technical-unit-value');
+});

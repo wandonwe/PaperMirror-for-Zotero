@@ -43,7 +43,13 @@ function numberIdentity(text:string):string {
 function measuredValues(text:string):Map<string,number> {
  const result=new Map<string,number>();
  for(const match of text.matchAll(pattern())) {
-  const number= text.slice(0,match.index).match(/((?:[-+−]\s*)?(?:\d|\.\d)[\d.,eE+−\-\s]*)\s*$/)?.[1];
+  const run= text.slice(0,match.index).match(/((?:[-+−]\s*)?(?:\d|\.\d)[\d.,eE+−\-\s]*)\s*$/)?.[1];
+  // 5.0 (校验 2638: 同一段在四个引擎上都被拒): the run before a unit can be
+  // a list — "between 40, 45 keV" captured "40, 45" as ONE number, so a
+  // translation "40、45 keV" lost it and "gained" 45. A comma followed by
+  // whitespace separates list items; the value is the last item ("12,500" and
+  // space-grouped "1 000" stay whole).
+  const number=run?.split(/,\s+/).pop();
   if(!number)continue;
   const key=`${numberIdentity(number)}:${canonical(match[0])}`;
   result.set(key,(result.get(key)??0)+1);
