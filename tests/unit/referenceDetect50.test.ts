@@ -138,6 +138,8 @@ test('5.0 校验 3084: superscript-numbered references (Medical Physics) start e
 	assert.equal(startsReferenceEntry('¹²E. Samei, A. Badano, D. Chakraborty, K. Compton'), true);
 	assert.equal(startsReferenceEntry('²C. E. Metz and K. Doi, “Transfer function analysis'), true);
 	assert.equal(startsReferenceEntry('²In summary, the method described in this work'), false);
+	assert.equal(startsReferenceEntry('³International Commision on Radiation Units and Measurements, “Prescribing'), true);
+	assert.equal(startsReferenceEntry('⁴American Association of Physicists in Medicine, “Report 233'), true);
 	assert.equal(looksLikeListStart('⁸E. Samei, M. J. Flynn, and D. A. Reimann, “A method'), true);
 });
 

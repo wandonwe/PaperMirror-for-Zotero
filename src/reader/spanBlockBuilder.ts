@@ -755,7 +755,10 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 			// share an x-range, so this can't interleave the two columns either.
 			newColumn: next.rect[3] > line.rect[3] + size
 				|| !linesShareColumn(line.rect, next.rect),
-			indented: next.rect[0] > margins.left + size * 0.8,
+			// 真机 4.99.16 (3084 p8): a line starting where the line above starts
+			// continues it — hanging-label reference lists sit 0.8em right of the
+			// band edge on EVERY continuation line, not just the first.
+			indented: next.rect[0] > margins.left + size * 0.8 && next.rect[0] > line.rect[0] + size * 0.5,
 			// 对称跳变 (2.5.13, wu2026-p4 实证): 除数取两行字号的较小者。原式
 			// 除以【当前行】字号,于是 10pt 正文接 12pt 标题 = 2/10 = 0.20 能断,
 			// 而 12pt 标题接 10pt 正文 = 2/12 = 0.167 断不了 —— 每个压在正文上
@@ -766,7 +769,10 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 				&& Math.abs(next.fontSize - size) / Math.min(size, next.fontSize) >= FONT_JUMP_RATIO,
 			// 5.0 (校验 2877): one contact record per line — two consecutive
 			// lines that each carry an e-mail address are separate items.
-			listStart: looksLikeListStart(lineText(next)) || (HAS_EMAIL.test(lineText(line)) && HAS_EMAIL.test(lineText(next))),
+			listStart: looksLikeListStart(lineText(next)) || (HAS_EMAIL.test(lineText(line)) && HAS_EMAIL.test(lineText(next)))
+				|| /^\s*[■□●○•▪▫◆◇▶►‣⁃]\s/.test(lineText(next))
+				// "…(jh11200@rjh.com.cn)." then "Published Online: …" / "doi:10…": a new field.
+				|| (/[.)]\s*$/.test(lineText(line)) && /^\s*(?:\p{Lu}[\p{Ll}]+(?:\s\p{Lu}?[\p{Ll}]+){0,3}:\s|doi:\s?10\.)/u.test(lineText(next))),
 			shortLine: medianLineWidth > 0
 				&& (line.rect[2] - line.rect[0]) < medianLineWidth * 0.7
 				&& !startsContinuation(lineText(next)),

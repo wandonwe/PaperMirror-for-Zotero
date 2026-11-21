@@ -14,7 +14,7 @@ const YEAR = /\b(?:19|20)\d{2}\b/;
 
 /** One line or paragraph that starts like a numbered reference entry. */
 export function startsReferenceEntry(text: string): boolean {
-	if (SUPERSCRIPT_ENTRY.test(text)) return true;
+	if (SUPERSCRIPT_ENTRY.test(text) || SUPERSCRIPT_ORG_ENTRY.test(text)) return true;
 	return ENTRY_START.test(' ' + text.trim().slice(0, 80)) && /^\s*(?:\[\d{1,3}\]|\d{1,3}\.)/.test(text);
 }
 
@@ -46,6 +46,8 @@ export function isReferenceTailLine(text: string): boolean {
 	return /^\s*\d{1,4}[.,;:)]?\s*(?:doi\b|https?:|www\.|PMID\b)/i.test(text);
 }
 
+/** 真机 4.99.16 (3084 p8): an organization as author — "³International Commission on Radiation Units…,". */
+const SUPERSCRIPT_ORG_ENTRY = /^\s*[⁰¹²³⁴⁵⁶⁷⁸⁹]{1,3}\s*\p{Lu}[\p{L}'’\-]+(?:\s(?:(?:of|on|for|and|the|in)\s)*\p{Lu}[\p{L}'’\-]+){1,8}\s?,/u;
 const SUPERSCRIPT_ENTRY_GLOBAL = /(?:^|\s)[⁰¹²³⁴⁵⁶⁷⁸⁹]{1,3}\s*(?:[A-Z]\.\s?){1,3}[A-Z][\p{L}'’\-]+/gu;
 const ENTRY_START_GLOBAL = /(?:^|\s)(?:\[\d{1,3}\]|\d{1,3}\.)\s+(?:[A-Z]\.\s?){0,3}[A-Z][\p{L}'’\-]+(?:\s+[A-Z][\p{L}'’\-]+)?,?\s+(?:[A-Z]{1,3}\b|[A-Z]\.)/gu;
 
