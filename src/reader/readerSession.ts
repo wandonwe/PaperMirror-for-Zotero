@@ -26,6 +26,7 @@ import { endpointHost, supportsCharBudget } from '../translation/providers/types
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
 import { TranslationManager, type ManagerEvents, type PageTranslationState, type TranslateHooks, type TranslationDeps } from '../translation/translationManager';
 import { PROMPT_VERSION } from '../translation/promptBuilder';
+import { PageLedger } from './pageLedger';
 import { joinPlacementOutcome } from './diagnosticsJoin';
 import { engineExportRow, type EngineExportRow } from '../export/endpointKind';
 import type { DiagnosticsExportSource } from '../export/diagnosticsJsonl';
@@ -207,8 +208,10 @@ export class ReaderSession {
 	private quiescing = false;
 	/** Provider pool (primary first). Rebuilt when translation (re)starts. */
 	private pool: string[] = [];
+	/** 5.0: the single source of truth for per-page state (see pageLedger.ts). */
+	private readonly ledger = new PageLedger<HTMLElement, UnfitBlock>();
 	/** Real image rects per page (operator list), fetched once per document. */
-	private imageRects = new Map<number, [number, number, number, number][] | null>();
+	private imageRects = this.ledger.view<[number, number, number, number][] | null>('imageRects');
 	/**
 	 * 底图位图 LRU (2.2.5, 计划 第三批 item6 · PF-4): 缓存 renderPageBitmap 得到的
 	 * 独立底图,键 = `${page}@${宽度桶}`。切换页/回看/在原宽度重渲染时命中即复用
@@ -249,7 +252,8 @@ export class ReaderSession {
 	 * repeat measures burned all the rounds on one render and long blocks
 	 * reverted to English ("译文显示后又消失").
 	 */
-	private compressPending = new Set<number>();
+	// 5.0: compress in-flight / turned-away renders live in the page ledger's
+	// state machine (beginCompress / deferRender / releaseCompress / endCompress).
 	/**
 	 * 被 compressPending 挡回的最近一次 settle (2.0.9, 审核 P2-10)。压缩请求
 	 * 可飞 120s,期间页面因缩放/更新重渲染 —— 新渲染的 resolveStrictUnfit 被
@@ -258,24 +262,23 @@ export class ReaderSession {
 	 * 记下待办,在飞压缩的 finally 里续跑(只保留最新一次;旧 token 由 live()
 	 * 自然拦截)。
 	 */
-	private compressBlocked = new Map<number, { element: HTMLElement; unfit: UnfitBlock[]; token: number }>();
 	/** 扫描/纯图页每页只提示一次。 */
-	private scannedNoticeShown = new Set<number>();
+	private scannedNoticeShown = this.ledger.flag('scannedNoticeShown');
 	/** 排版失败提示每页只弹一次 (2.5.2) —— 这条路径现在会自动重试。 */
-	private strictFailNoticeShown = new Set<number>();
+	private strictFailNoticeShown = this.ledger.flag('strictFailNoticeShown');
 	/** 几何安全复核结果按页留档(进诊断导出;只计数,无文本)。 */
-	private geometryAudits = new Map<number, import('../ui/strictPageReplacement').GeometryAuditResult>();
+	private geometryAudits = this.ledger.view<import('../ui/strictPageReplacement').GeometryAuditResult>('geometryAudits');
 	/** 每页最近一次 placement 统计 (2.0.10, 审核 P3): imageExcluded 等
 	 *  「有意保留」类目此前不进任何诊断 —— 阈值收紧后该类目变大也无从发现。 */
-	private placementStats = new Map<number, import('../ui/strictPageReplacement').StrictPageStats>();
+	private placementStats = this.ledger.view<import('../ui/strictPageReplacement').StrictPageStats>('placementStats');
 	/** 每页 placement 探针 (审核: 封面标题空洞定位): 每块的 base 位图/遮罩取样
 	 *  (baseInk/maskOpaque),分辨「底图缺字」与「遮罩误盖」。只几何+布尔,无文本。 */
 	private pageArchive = temporaryPageArchive();
  private continuationUnits = new ContinuationUnitStore();
- private placementKeys = new Map<number,string>();
-	private placementProbe = new Map<number, import('../ui/strictPageReplacement').StrictProbeRow[]>();
+ private placementKeys = this.ledger.view<string>('placementKeys');
+	private placementProbe = this.ledger.view<import('../ui/strictPageReplacement').StrictProbeRow[]>('placementProbe');
 	/** 放弃清单 (2.7.0, 审核 B-1): 页索引 → 放弃块 id + 原因枚举串,无文本。 */
-	private abandonedBlocks = new Map<number, import('../ui/strictPageReplacement').AbandonedBlock[]>();
+	private abandonedBlocks = this.ledger.view<import('../ui/strictPageReplacement').AbandonedBlock[]>('abandonedBlocks');
 	/**
 	 * 导出中的逐页短时保护 (2.8.6, 导出方案 P1)。
 	 *
@@ -283,21 +286,21 @@ export class ReaderSession {
 	 * 报"在用",2.8.3 的淘汰就不会正好在这时把它卸掉。**不是全局暂停淘汰** ——
 	 * 那样长文档导出时内存会一路上涨,把第四批省下来的又吃回去。
 	 */
-	private exportPins = new Set<number>();
+	private exportPins = this.ledger.flag('exportPins');
 	/**
 	 * Per-page render generation. Bumped at the start of every renderDocPage;
 	 * an async render (or its settle/compress callbacks) that discovers a newer
 	 * generation for its page aborts instead of overwriting the live slot — no
 	 * stale render can flash an old page in after a newer one has been shown.
 	 */
-	private renderToken = new Map<number, number>();
+	private renderToken = this.ledger.view<number>('renderToken');
 	/**
 	 * 刷新-driven engine rotation. With a provider pool active, hitting 刷新 on
 	 * a page bumps its offset so the RE-translation is dealt to the NEXT
 	 * engine in the pool — a page that came out poorly on one service gets a
 	 * genuinely different translator, not the same one again.
 	 */
-	private pageProviderOffset = new Map<number, number>();
+	private pageProviderOffset = this.ledger.view<number>('pageProviderOffset');
 	/** The single capsule's task queue (see setTask/renderTopTask). */
 	private tasks = new Map<string, OverlayProgress>();
 	private taskHideTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -311,7 +314,7 @@ export class ReaderSession {
 	private capsuleCollapsed = false;
 	/** Pages that have been translated at least once — drives the idle glyph
 	 * (✓ vs ↻ 刷新本页) so the resting capsule tells the truth per page. */
-	private translatedPages = new Set<number>();
+	private translatedPages = this.ledger.flag('translatedPages');
 	/**
 	 * The most recent page that settled with kept-original segments, and the
 	 * strict-page element that holds its `[data-pm-unfit]` boxes. Drives
@@ -1207,7 +1210,7 @@ export class ReaderSession {
  private resetPageArchive(): void {
   this.continuationUnits.clear();
   void this.pageArchive.close();this.pageArchive=temporaryPageArchive();
-  this.placementKeys.clear();this.placementProbe.clear();this.abandonedBlocks.clear();this.geometryAudits.clear();this.placementStats.clear();
+  this.ledger.resetPlacementAll();
  }
 	private onPageUpdate(state: PageTranslationState): void {
 		if (this.destroyed) {
@@ -1215,8 +1218,7 @@ export class ReaderSession {
 		}
   const key = pageContentKey(state.blocks, state.translations);
   if (this.placementKeys.get(state.pageIndex) !== key) {
-   this.placementProbe.delete(state.pageIndex);this.abandonedBlocks.delete(state.pageIndex);
-   this.geometryAudits.delete(state.pageIndex);this.placementStats.delete(state.pageIndex);
+   this.ledger.resetPlacement(state.pageIndex);
   }
   if (state.blocks.length && (state.status === 'done' || state.status === 'error' || (state.status === 'idle' && state.translations.size > 0))) this.archivePage(state);
 		this.pane?.renderPage(state);
@@ -1910,22 +1912,23 @@ export class ReaderSession {
 
 		// (1): budgeted compress for the rest — at most one page-level request
 		// in flight, patched into the live page (no full re-render).
-		if (!plan.compress.length || this.compressPending.has(pageIndex) || !this.manager) {
+		const compressPending = this.ledger.isCompressPending(pageIndex);
+		if (!plan.compress.length || compressPending || !this.manager) {
 			// shrink-only 路径此前静默结束,页面的最终清点从未发生(1.1.0
 			// 顺手补上的诚实计数缺口)——几何复核与 tally 都挂在 reportPlacement。
-			if (!plan.compress.length && !this.compressPending.has(pageIndex)) {
+			if (!plan.compress.length && !compressPending) {
 				this.reportPlacement(pageIndex, element);
 			}
 			// 丢失唤醒补接力 (2.0.9, 审核 P2-10): 被在飞压缩挡回的渲染记下
 			// 待办,压缩 finally 里续跑 —— 否则这次渲染的未适配块永远无人处理。
-			else if (plan.compress.length && this.compressPending.has(pageIndex)) {
-				this.compressBlocked.set(pageIndex, { element, unfit: remaining, token });
+			else if (plan.compress.length && compressPending) {
+				this.ledger.deferRender(pageIndex, { element, unfit: remaining, token });
 			}
 			// 5.0 (联网校验 3064/3384: 胶囊停在「正在适配 · 排版 0/N」): 这一趟只剩
 			// 缩字/保留原文、却撞上一个属于旧渲染的在飞压缩 —— 两条分支都不成立,
 			// 最终清点无人执行。登记一个空待办,压缩收尾时替这次渲染做清点。
-			else if (this.compressPending.has(pageIndex)) {
-				this.compressBlocked.set(pageIndex, { element, unfit: [], token });
+			else if (compressPending) {
+				this.ledger.deferRender(pageIndex, { element, unfit: [], token });
 			}
 			return;
 		}
@@ -1937,7 +1940,11 @@ export class ReaderSession {
 	 * 结果就地套用;仍放不下的进入下一轮,全部处理完做最终清点。
 	 */
 	private runStrictCompress(pageIndex: number, element: HTMLElement, remaining: UnfitBlock[], compressIds: string[], token: number, live: () => boolean, manager: TranslationManager): void {
-		this.compressPending.add(pageIndex);
+		const generation = this.ledger.beginCompress(pageIndex);
+		if (!generation) return; // resolveStrictUnfit already checked; defensive
+		// A render turned away during the previous round (released early to let
+		// this round start) joins this round instead of being lost.
+		this.ledger.adoptCarried(pageIndex);
 		for (const id of compressIds) {
 			this.compressRounds.set(id, (this.compressRounds.get(id) ?? 0) + 1);
 		}
@@ -1965,7 +1972,7 @@ export class ReaderSession {
 				// 这处 delete 必须留在递归调用之前,不能只靠下面的 finally ——
 				// finally 在 then 体跑完之后才执行,而 resolveStrictUnfit 的入口
 				// 就查 compressPending,届时下一轮会被自己挡回。
-				this.compressPending.delete(pageIndex);
+				this.ledger.releaseCompress(pageIndex, generation);
 				if (next.length) {
 					this.resolveStrictUnfit(pageIndex, element, next, token);
 				}
@@ -1985,12 +1992,14 @@ export class ReaderSession {
 				// 兜底清理 (审核 P1-6): 无论 then 早退、then 正常、还是 catch,
 				// 这个标记都必须落地清除。Set.delete 幂等,与上面 then 里那次
 				// 提前清除并存无害。
-				this.compressPending.delete(pageIndex);
+				// 5.0: release only THIS generation. Before, this delete also wiped the
+				// flag of a round that the then-branch had just started, so a third
+				// render could start a concurrent compress for the same page.
 				// P2-10 (2.0.9): 压缩期间被挡回的最新渲染在这里接力 —— 旧 token
-				// 由 resolveStrictUnfit 自己的 live() 拦截,无需在此判活。
-				const blocked = this.compressBlocked.get(pageIndex);
+				// 由 resolveStrictUnfit 自己的 live() 拦截,无需在此判活。若下一轮已
+				// 经开始,被挡回的渲染已交给它(adoptCarried),这里拿到的是 null。
+				const blocked = this.ledger.endCompress(pageIndex, generation) ?? this.ledger.takeCarried(pageIndex);
 				if (blocked) {
-					this.compressBlocked.delete(pageIndex);
 					if (!this.destroyed && blocked.unfit.length) {
 						this.resolveStrictUnfit(pageIndex, blocked.element, blocked.unfit, blocked.token);
 					}
@@ -2510,8 +2519,7 @@ export class ReaderSession {
 
 	private restartAfterConfigChange(): void {
 		this.compressRounds.clear();
-		this.compressPending.clear();
-		this.compressBlocked.clear();
+		this.ledger.resetCompressAll();
 		this.pageProviderOffset.clear();
 		this.detectedSource = null;
 		// 必须等 in-flight 真正结束再排新任务 (审核 P1-8): resetAll 只发 abort,
@@ -2547,8 +2555,7 @@ export class ReaderSession {
 				this.compressRounds.delete(id);
 			}
 		}
-		this.compressPending.delete(page);
-		this.compressBlocked.delete(page);
+		this.ledger.resetCompress(page);
 	}
 
 	/**
@@ -2598,8 +2605,7 @@ export class ReaderSession {
 	private cancelCurrentTranslation(): void {
 		const page = adapter.getCurrentPageIndex(this.reader);
 		this.manager?.cancelPage(page);
-		this.compressPending.delete(page);
-		this.compressBlocked.delete(page);
+		this.ledger.resetCompress(page);
 		this.pushOverlayProgress({
 			phase: 'cancelled',
 			currentPage: page + 1,
@@ -2622,8 +2628,7 @@ export class ReaderSession {
 			return;
 		}
 		this.compressRounds.clear();
-		this.compressPending.clear();
-		this.compressBlocked.clear();
+		this.ledger.resetCompressAll();
 		this.pageProviderOffset.clear();
 		// 先等所有在飞任务真正解绕再清盘 (2.0.7, 审核 P2-3): resetAll() 只发
 		// abort 不等待,被 abort 的任务要到下一个检查点才退出,其 persistPartial
@@ -3771,8 +3776,9 @@ export class ReaderSession {
 		this.tasks.clear();
 		this.translatedPages.clear();
 		this.lastPartial = null;
-		this.compressBlocked.clear(); // P2-10: 不再持有已卸载页元素
-		this.placementStats.clear();
+		// 5.0: every per-page record goes (elements held by deferred renders,
+		// render tokens, notices, image rects … — before, only some were cleared).
+		this.ledger.dispose();
 		this.baseBitmaps.clear(); // 释放缓存的底图 canvas
 		this.disposePdfScrollIntent?.();
 		this.disposePdfScrollIntent = null;

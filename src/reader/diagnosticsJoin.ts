@@ -28,7 +28,7 @@ export interface AbandonedRow {
 
 export function joinPlacementOutcome(
 	pages: DiagnosticsPageRow[],
-	abandonedByPageIndex: Map<number, AbandonedRow[]>
+	abandonedByPageIndex: Pick<ReadonlyMap<number, AbandonedRow[]>, 'get'>
 ): DiagnosticsPageRow[] {
 	return pages.map((page) => {
 		const abandoned = abandonedByPageIndex.get(page.page - 1);

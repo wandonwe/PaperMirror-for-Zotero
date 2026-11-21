@@ -109,9 +109,13 @@ import { join } from 'node:path';
 test('a shrink-only render blocked by an in-flight compress still gets its final placement report (结构性回归闸)', () => {
 	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
 	const resolve = src.slice(src.indexOf('private resolveStrictUnfit('), src.indexOf('private runStrictCompress('));
-	assert.match(resolve, /else if \(this\.compressPending\.has\(pageIndex\)\) \{\s*this\.compressBlocked\.set\(pageIndex, \{ element, unfit: \[\], token \}\);/);
+	// 5.0 step 4: compress state lives in the page ledger. A shrink-only render that
+	// meets an in-flight compress is deferred with an EMPTY unfit list…
+	assert.match(resolve, /else if \(compressPending\) \{\s*this\.ledger\.deferRender\(pageIndex, \{ element, unfit: \[\], token \}\);/);
 	const run = src.slice(src.indexOf('private runStrictCompress('));
 	const fin = run.slice(run.indexOf('.finally('));
+	// …and the compress's finally (its own generation only) reports placement for it.
+	assert.match(fin, /this\.ledger\.endCompress\(pageIndex, generation\) \?\? this\.ledger\.takeCarried\(pageIndex\)/);
 	assert.match(fin, /blocked\.unfit\.length/);
 	assert.match(fin, /this\.renderToken\.get\(pageIndex\) === blocked\.token\) \{\s*this\.reportPlacement\(pageIndex, blocked\.element\);/);
 });
