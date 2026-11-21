@@ -60,12 +60,13 @@ test('携带占位符/样式/上下文时对应规则一字不少 (行为不变,
 	assert.ok(!plainSys.includes('⟦PM0⟧'));
 });
 
-test('all translation routes translate names instead of requiring English preservation', async () => {
+test('all translation routes translate institutions and products but keep person names in their source spelling (5.0)', async () => {
  const { buildSystemPrompt } = await import('../../src/translation/promptBuilder');
  for (const plain of [false,true]) for (const referenceContent of [false,true]) {
   const prompt=buildSystemPrompt({sourceLanguage:'en',targetLanguage:'zh-CN',documentTitle:'T',previousContext:'',plain,referenceContent,blocks:[{id:'a',type:'paragraph',text:'University of Virginia'}]} as never);
   assert.match(prompt,/Translate all natural-language content/);
   assert.match(prompt,/faithful transliteration/);
+  assert.match(prompt,/Keep PERSON names .* exactly as written in the source/);
   assert.doesNotMatch(prompt,/Keep proper names EXACTLY|Keep author names, journal names/);
   assert.match(prompt,/Preserve numerical values/);
  }

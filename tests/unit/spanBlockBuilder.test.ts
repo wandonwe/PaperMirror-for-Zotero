@@ -796,3 +796,40 @@ test('short three-column band retains the 12pt gutter beside a wide figure', asy
  assert.equal(blocks.find(b=>b.sourceText.includes('left body'))?.boundingBox?.width,158);
  assert.equal(blocks.find(b=>b.sourceText.includes('middle key'))?.boundingBox?.x,254);
 });
+
+test('5.0 校验 3084: a raised label that precedes its line stays with that line, not the row above', () => {
+	// Row above ends a reference "… 12(4), 437–442 (1985)." in the right column;
+	// the next entry's raised "7" sits left of "S. Rathee" and overlaps a left-column row band.
+	const items: SpanItem[] = [
+		{ text: 'Left column body text that shares the page row band here.', rect: [50, 715, 290, 723], fontSize: 8 },
+		{ text: '437–442 (1985).', rect: [322.2, 721.7, 375.4, 729.7], fontSize: 8 },
+		{ text: '7', rect: [318.7, 715.1, 321.7, 721.1], fontSize: 6 },
+		{ text: 'S. Rathee, B. G. Fallone, and D. Robinson, “Modulation transfer func-', rect: [322.2, 712.2, 559.8, 720.2], fontSize: 8 }
+	];
+	const lines = groupIntoLines(items, 612, 792).map(l => l.items.map(i => i.text).join('|'));
+	assert.ok(lines.some(l => l.startsWith('7|S. Rathee')), lines.join(' / '));
+	assert.ok(lines.some(l => l === '437–442 (1985).'), lines.join(' / '));
+});
+
+test('5.0 校验 2877: a manuscript stamp word does not weld body rows, and contact lines stay one per block', () => {
+	const items: SpanItem[] = [
+		{ text: 'E-mail addresses:', rect: [46.7, 420, 140, 430], fontSize: 10 },
+		{ text: 'Naying He, hny12267@rjh.com.cn', rect: [46.7, 400, 190, 410], fontSize: 10 },
+		{ text: 'Youmin Zhang, zym2020376@sjtu.edu.cn', rect: [46.7, 380, 210, 390], fontSize: 10 },
+		{ text: 'Hong Jiang, jh11200@rjh.com.cn', rect: [46.7, 367.8, 194, 377.9], fontSize: 10.1 },
+		{ text: 'Fuhua Yan, yfh11655@rjh.com.cn', rect: [46.7, 344.6, 197, 354.6], fontSize: 10.1 },
+		{ text: 'ACCEPTED', rect: [174, 268.9, 543.9, 345.9], fontSize: 77 },
+		{ text: 'Funding:', rect: [46.7, 297.8, 89.5, 307.9], fontSize: 10.1 },
+		{ text: 'The authors declare that no funds, grants, or other support were received during the preparation', rect: [46.7, 274.3, 462.1, 284.3], fontSize: 10.1 },
+		{ text: 'of this manuscript.', rect: [46.7, 255, 140, 265], fontSize: 10.1 }
+	];
+	const { blocks } = buildBlocksFromSpans(items, { pageIndex: 28, pageWidth: 612, pageHeight: 792, includeReferences: true, imageRectsPdf: [] });
+	const texts = blocks.map(b => b.sourceText);
+	assert.ok(!texts.some(t => /ACCEPTED/.test(t)), texts.join(' / '));
+	for (const name of ['Naying He', 'Youmin Zhang', 'Hong Jiang', 'Fuhua Yan']) {
+		const owner = texts.filter(t => t.includes(name));
+		assert.equal(owner.length, 1, name);
+		assert.ok(!/Funding|declare/.test(owner[0]!), owner[0]);
+		assert.equal((owner[0]!.match(/@/g) ?? []).length, 1, `one record per block: ${owner[0]}`);
+	}
+});

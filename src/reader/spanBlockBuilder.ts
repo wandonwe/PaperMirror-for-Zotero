@@ -1,4 +1,4 @@
-import { looksLikeReferencePage, looksLikeReferenceText, startsReferenceEntry } from './referenceDetect';
+import { looksLikeBibliographicFragment, looksLikeReferencePage, looksLikeReferenceText, startsReferenceEntry } from './referenceDetect';
 import {extractPanelTitles} from './panelTitles';
 import {removeCollapsedTextCopies} from './collapsedTextCopies';
 import {extractTwoColumnTables} from './twoColumnTable';
@@ -83,6 +83,7 @@ export interface SpanLine {
 // 原正则不认,整段三栏参考文献被当正文切碎翻译。
 /** A References heading anywhere in the raw page text, letter-spaced or not (5.0). */
 const REFERENCES_HEADING_HINT = /(?:^|\s)(?:R\s?E\s?F\s?E\s?R\s?E\s?N\s?C\s?E\s?S|References|Bibliography|Literature\s+Cited|参考文献|參考文獻|引用文献)(?=\s|$)/;
+const HAS_EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}/;
 const REFERENCES_HEADINGS = /^(r\s*e\s*f\s*e\s*r\s*e\s*n\s*c\s*e\s*s|bibliography|literature\s+cited|参考文献|參考文獻|引用文献)\s*$/i;
 
 /**
@@ -296,7 +297,13 @@ function scriptRowAnchors(items: SpanItem[]): Map<SpanItem, SpanItem> {
 		for (const base of items) {
 			const font = fontSizeOf(base);
 			if (base === script || size < font * 0.45 || size > font * 0.86 || font <= 0) continue;
-			const gap = script.rect[0] - base.rect[2];
+			// 5.0 (校验 3084, Medical Physics): a raised number can also PRECEDE
+			// its base — the label of a superscript-numbered reference
+			// ("⁷S. Rathee, …"). Without this it was read with the row above and
+			// fused into a page number there ("12(4), 7437–442").
+			const after = script.rect[0] - base.rect[2];
+			const before = base.rect[0] - script.rect[2];
+			const gap = numericIndex && before >= -font * 0.2 && before <= font * 0.65 && !(after >= -font * 0.2 && after <= font * 0.65) ? before : after;
 			if (gap < -font * 0.2 || gap > font * 0.65) continue;
 			const rise = script.rect[1] - base.rect[1];
 			const lowered = base.rect[3] - script.rect[3];
@@ -674,7 +681,9 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 			// 就这样连标题带首段焊成一块,标题结构在译文页消失。
 			fontJump: size > 0 && next.fontSize > 0
 				&& Math.abs(next.fontSize - size) / Math.min(size, next.fontSize) >= FONT_JUMP_RATIO,
-			listStart: looksLikeListStart(lineText(next)),
+			// 5.0 (校验 2877): one contact record per line — two consecutive
+			// lines that each carry an e-mail address are separate items.
+			listStart: looksLikeListStart(lineText(next)) || (HAS_EMAIL.test(lineText(line)) && HAS_EMAIL.test(lineText(next))),
 			shortLine: medianLineWidth > 0
 				&& (line.rect[2] - line.rect[0]) < medianLineWidth * 0.7
 				&& !startsContinuation(lineText(next)),
@@ -940,8 +949,27 @@ export function detectTableLineIndices(lines: SpanLine[], pageHeight: number, em
 	return out;
 }
 
+/**
+ * Manuscript stamps ("ACCEPTED" / "MANUSCRIPT" at 77pt across a 10pt page,
+ * 5.0 校验 2877): one item whose box spans several body rows. Grouped as text it
+ * welded "Fuhua Yan, …" + "Funding:" + "The authors declare…" into one 86pt
+ * "line". A single all-caps word at ≥4× the page's body size is a watermark:
+ * it stays on the original page and is never part of a line.
+ */
+function dropWatermarkWords(items: SpanItem[]): SpanItem[] {
+	if (items.length < 8) return items;
+	// Body size = the size that carries most characters.
+	const weight = new Map<number, number>();
+	for (const i of items) { const f = Math.round((fontSizeOf(i) || 0) * 2) / 2; if (f > 0) weight.set(f, (weight.get(f) ?? 0) + i.text.length); }
+	const body = [...weight].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
+	if (!(body > 0)) return items;
+	const keep = items.filter(i => !((fontSizeOf(i) || 0) >= body * 4 && /^[A-Z][A-Z\- ]{3,24}$/.test(i.text.trim()) && !/\s{2,}/.test(i.text)));
+	return keep.length === items.length ? items : keep;
+}
+
 export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOptions): SpanBuildResult {
 	items=removeCollapsedTextCopies(items);
+	items=dropWatermarkWords(items);
 	if (options.legendSegmentsPdf?.length) {
 		const legends = extractLegendItems(items, { pageIndex: options.pageIndex,
 			pageWidth: options.pageWidth || 612, pageHeight: options.pageHeight,
@@ -1073,8 +1101,9 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// earlier page started the references, or when its own lines say so.
 	const lineTexts = lines.map(lineText);
 	const referenceHeadingHere = lineTexts.some(t => REFERENCES_HEADINGS.test(t.trim()));
-	const referenceListByContent = !referenceHeadingHere && referenceText && looksLikeReferencePage(lineTexts);
-	const referenceListPage = !!options.referencesAlreadyStarted || referenceListByContent;
+	// Line texts carry superscript labels ("⁷S. Rathee") that raw items do not ("7", "S. Rathee").
+	const referenceListByContent = !referenceHeadingHere && !REFERENCES_HEADING_HINT.test(pageRawText)
+		&& (referenceText || looksLikeReferenceText(lineTexts.join(' '))) && looksLikeReferencePage(lineTexts);
 	const tableLineIdx = referenceListByContent ? new Set<number>() : detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10), obstacles,options.panelAnchors);
 	const proseLines = tableLineIdx.size ? lines.filter((_, i) => !tableLineIdx.has(i)) : lines;
  // After isolating numbered panels, order prose using prose columns, not
@@ -1271,7 +1300,10 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		};
 	}).filter(p => p.text.length >= 1);
 
-	let referencesStarted = referenceListPage;
+	// Content-detected pages mark references block by block (below): Medical
+	// Physics prints its references as column footnotes on body pages, and a
+	// page-wide flag would turn the Conclusion into a bibliography entry.
+	let referencesStarted = !!options.referencesAlreadyStarted;
 	// 字距拉开的标题 (2.7.2, 审核 C-2, jacc2020-p15 实证): "R E F E R E N C E S"
 	// 由单字母 span 拼成,字号与正文同,分类落成 paragraph —— 只认 heading/title
 	// 就永远认不出它。整块只有一行、且整行就是这个词时,类型不再是门槛。
@@ -1380,7 +1412,9 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		// side columns, BMC declarations above the list) were missed and the
 		// coalescer welded "9." … "14." into one 1413-character block. A block
 		// that itself starts like a numbered entry and carries a year is one.
-		const entryByContent = !!referencesHeadingRect && !p.isTableLine && startsReferenceEntry(p.text) && /\b(?:19|20)\d{2}\b/.test(p.text);
+		const entryByContent = (!!referencesHeadingRect || referenceListByContent) && !p.isTableLine
+			&& (startsReferenceEntry(p.text) && /\b(?:19|20)\d{2}\b/.test(p.text)
+				|| referenceListByContent && looksLikeBibliographicFragment(p.text));
 		const isRef = p.isTableLine ? false
 			: entryByContent ? true
 			: referencesHeadingRect && bandedStamp

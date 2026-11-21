@@ -14,8 +14,16 @@ const YEAR = /\b(?:19|20)\d{2}\b/;
 
 /** One line or paragraph that starts like a numbered reference entry. */
 export function startsReferenceEntry(text: string): boolean {
+	if (SUPERSCRIPT_ENTRY.test(text)) return true;
 	return ENTRY_START.test(' ' + text.trim().slice(0, 80)) && /^\s*(?:\[\d{1,3}\]|\d{1,3}\.)/.test(text);
 }
+
+/**
+ * Superscript-numbered entries (5.0, 校验 3084 Medical Physics / AIP style):
+ * "⁷S. Rathee, B. G. Fallone, and D. Robinson," or "¹²E. Samei,". The label
+ * arrives as raised small digits, which the extractor writes as superscripts.
+ */
+const SUPERSCRIPT_ENTRY = /^\s*[⁰¹²³⁴⁵⁶⁷⁸⁹]{1,3}\s*(?:(?:[A-Z]\.\s?(?:-?[A-Z]\.\s?)?){1,3}[A-Z][\p{L}'’\-]+|[A-Z][\p{L}'’\-]+,?\s+(?:[A-Z]{1,3}\b|[A-Z]\.))/u;
 
 /**
  * Is this page (given its line texts, in any order) a reference list? At least
@@ -38,6 +46,7 @@ export function isReferenceTailLine(text: string): boolean {
 	return /^\s*\d{1,4}[.,;:)]?\s*(?:doi\b|https?:|www\.|PMID\b)/i.test(text);
 }
 
+const SUPERSCRIPT_ENTRY_GLOBAL = /(?:^|\s)[⁰¹²³⁴⁵⁶⁷⁸⁹]{1,3}\s*(?:[A-Z]\.\s?){1,3}[A-Z][\p{L}'’\-]+/gu;
 const ENTRY_START_GLOBAL = /(?:^|\s)(?:\[\d{1,3}\]|\d{1,3}\.)\s+(?:[A-Z]\.\s?){0,3}[A-Z][\p{L}'’\-]+(?:\s+[A-Z][\p{L}'’\-]+)?,?\s+(?:[A-Z]{1,3}\b|[A-Z]\.)/gu;
 
 /**
@@ -45,8 +54,22 @@ const ENTRY_START_GLOBAL = /(?:^|\s)(?:\[\d{1,3}\]|\d{1,3}\.)\s+(?:[A-Z]\.\s?){0
  * the text does not matter): at least five entry starts and years for most.
  */
 export function looksLikeReferenceText(text: string): boolean {
-	const starts = (text.match(ENTRY_START_GLOBAL) ?? []).length;
+	const starts = (text.match(ENTRY_START_GLOBAL) ?? []).length + (text.match(SUPERSCRIPT_ENTRY_GLOBAL) ?? []).length;
 	if (starts < 5) return false;
 	const years = (text.match(/\b(?:19|20)\d{2}\b/g) ?? []).length;
 	return years >= starts * 0.6;
+}
+
+/**
+ * The tail of a reference entry torn from its start (a column or page break):
+ * short, with a year and a volume/page locator, and little running prose —
+ * "CT head scanner,” Med. Phys. 4(2), 163–167 (1977)." / "Scand 1952;26(4):312–327."
+ */
+export function looksLikeBibliographicFragment(text: string): boolean {
+	const t = text.trim();
+	if (!t || t.length > 400 || !/\b(?:19|20)\d{2}\b/.test(t)) return false;
+	const locator = /\d+\s*\(\d+\)\s*[:,]\s*\d+|\b\d+\s*:\s*\d+(?:\s*[–-]\s*\d+)?|\bdoi\b|https?:\/\/|\(\s*(?:19|20)\d{2}\s*\)\.?$|\bReport No\./i;
+	if (!locator.test(t)) return false;
+	const lowerWords = (t.match(/\b[a-z]{4,}\b/g) ?? []).length;
+	return lowerWords <= 12;
 }

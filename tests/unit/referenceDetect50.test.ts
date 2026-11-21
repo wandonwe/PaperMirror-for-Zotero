@@ -100,7 +100,6 @@ test('the reference prompt keeps authors and journals verbatim and overrides the
 	const prompt = buildSystemPrompt({ blocks: [{ id: 'a', text: 'x' }], sourceLanguage: 'en', targetLanguage: 'zh-CN', referenceContent: true } as never);
 	assert.match(prompt, /translate ONLY the article or book TITLE/);
 	assert.match(prompt, /never transliterate or translate them/);
-	assert.match(prompt, /overrides the general rule about names/);
 });
 
 test('table cells holding a domain or a bare journal locator may come back unchanged', () => {
@@ -132,4 +131,19 @@ test('5.0 校验 2757 p10: a three-digit reference number starts a new entry', (
 test('5.0 校验 2638: a value with its unit in a table header may come back unchanged', () => {
 	assert.equal(looksTranslated('40 keV', '40 keV', 'zh-CN'), true);
 	assert.equal(looksTranslated('120 kVp', '120 kVp', 'zh-CN'), true);
+});
+
+test('5.0 校验 3084: superscript-numbered references (Medical Physics) start entries', () => {
+	assert.equal(startsReferenceEntry('⁷S. Rathee, B. G. Fallone, and D. Robinson, “Modulation transfer function'), true);
+	assert.equal(startsReferenceEntry('¹²E. Samei, A. Badano, D. Chakraborty, K. Compton'), true);
+	assert.equal(startsReferenceEntry('²C. E. Metz and K. Doi, “Transfer function analysis'), true);
+	assert.equal(startsReferenceEntry('²In summary, the method described in this work'), false);
+	assert.equal(looksLikeListStart('⁸E. Samei, M. J. Flynn, and D. A. Reimann, “A method'), true);
+});
+
+test('5.0: a reference tail torn from its start is still bibliographic; prose is not', async () => {
+	const { looksLikeBibliographicFragment } = await import('../../src/reader/referenceDetect');
+	assert.equal(looksLikeBibliographicFragment('CT head scanner,” Med. Phys. 4(2), 163–167 (1977).'), true);
+	assert.equal(looksLikeBibliographicFragment('Scand 1952;26(4):312–327.'), true);
+	assert.equal(looksLikeBibliographicFragment('In summary, the method described in this work provides a methodology for evaluating task-based resolution across various reconstruction algorithms, as reported in 2012.'), false);
 });
