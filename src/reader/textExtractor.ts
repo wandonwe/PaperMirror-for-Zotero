@@ -25,7 +25,9 @@ import type { SourceBlock } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
 import { buildBlocks, buildBlocksFromPlainText, medianFontSize } from './blockBuilder';
-import { buildBlocksFromSpans, sidewaysBodyChars, ROTATED_TABLE_MIN_CHARS } from './spanBlockBuilder';
+import { sidewaysBodyChars, ROTATED_TABLE_MIN_CHARS } from './spanBlockBuilder';
+import { structureSpanPage } from './pagePipeline';
+import { buildDocumentStyle, referencesContinueOnto, type DocumentStyle } from './documentStyle';
 import { borderGrid, borderGrids, columnOfX, rowOfTop, type BorderGrid } from './tableBorders';
 import { orderBlocksForReading } from './readingOrder';
 import { structureTableCells } from './tableStructure';
@@ -34,6 +36,11 @@ import type { ReaderLike } from './zoteroReaderAdapter';
 import { validatePageIR, type PageParser } from '../ir/documentIR';
 
 const MODULE = 'textExtractor';
+
+/** 5.0 全篇样式:首次抽取最多等这么久;超时的页退回逐页取法,样式照样在后台算完。 */
+const DOCUMENT_STYLE_WAIT_MS = 6000;
+/** 超过这么多页的文献(书、合订本)不做全篇统计。 */
+const DOCUMENT_STYLE_MAX_PAGES = 400;
 
 /**
  * Hard ceiling on one getPageData round-trip.
@@ -176,6 +183,16 @@ export interface ExtractPhases {
 	gridInside?: number;
 	/** 5.0: 旋转 90° 排版的正文字符数(旋转表格,保留原文)。 */
 	rotatedTextChars?: number;
+	/**
+	 * 5.0 全篇样式(都是数字 —— 诊断文件不含原文的隐私闸要求每个字段都是 number):
+	 * 状态 0 未开始 / 1 计算中 / 2 就绪 / 3 失败 / 4 超时;耗时;正文字号;
+	 * 本页所在(否则第一段)参考文献范围的首尾页码(1 起,0 = 没有)。
+	 */
+	documentStyleState?: number;
+	documentStyleMs?: number;
+	documentBodyPt?: number;
+	referencesFirstPage?: number;
+	referencesLastPage?: number;
 	/** 取网格耗时。 */
 	gridMs?: number;
 	charsPathMs: number;
@@ -199,6 +216,11 @@ export class TextExtractor implements PageParser {
 	private referencesStartedByPage = new Map<number, boolean>();
 	private fullText: adapter.FullTextInfo | null = null;
 	private bodyFontSize = 0;
+	/** 5.0 全篇样式(打开文献后异步算一次;失败或超时为 null,退回逐页取法)。 */
+	private documentStyle: DocumentStyle | null = null;
+	private documentStylePromise: Promise<DocumentStyle | null> | null = null;
+	private documentStyleState: 'idle' | 'pending' | 'ready' | 'failed' | 'timeout' = 'idle';
+	private documentStyleMs = 0;
 	/** 边框硬屏障: per-page figure rects (operator list), cached; [] = none. */
 	private imageRects = new Map<number, [number, number, number, number][]>();
 	/** 逐页边框网格缓存;undefined = 还没取过,null = 取过但这页没有网格。 */
@@ -311,6 +333,11 @@ export class TextExtractor implements PageParser {
 	}
 
 	private referencesAlreadyStarted(pageIndex: number): boolean {
+		// 5.0: 全篇样式就位时与翻页顺序无关,且参考文献会结束(之后的表格、
+		// 图注、附录不再按参考文献处理)。没有时退回旧取法:前面已抽过的页。
+		if (this.documentStyle) {
+			return referencesContinueOnto(this.documentStyle, pageIndex);
+		}
 		for (const [page, started] of this.referencesStartedByPage) {
 			if (page < pageIndex && started) {
 				return true;
@@ -480,6 +507,9 @@ export class TextExtractor implements PageParser {
 	}
 
  async extractPage(pageIndex: number): Promise<SourceBlock[]> {
+  // 5.0: 全篇样式先就位(或等到超时),再算结构键 —— 键里的参考文献状态和
+  // 正文字号都取自它,先算键会拿旧取法的值去命中缓存。
+  await this.awaitDocumentStyle();
   const key=this.structureKey(pageIndex),hit=this.structureCache.get(key);
   if(hit){this.inputsByPage.set(pageIndex,this.currentExtractInputs(pageIndex));const phases=this.phasesByPage.get(pageIndex);if(phases)phases.structureCacheHit=true;return hit;}
   const running=this.extracting.get(key);
@@ -507,6 +537,15 @@ export class TextExtractor implements PageParser {
 		const t0 = Date.now();
 		const phases: ExtractPhases = { obstaclesMs: 0, charsPathMs: 0, textContentMs: 0, textLayerMs: 0, plainTextMs: 0, buildMs: 0 };
 		this.phasesByPage.set(pageIndex, phases);
+		{
+			const st = this.documentStyleSummary();
+			phases.documentStyleState = ['idle', 'pending', 'ready', 'failed', 'timeout'].indexOf(st.state);
+			phases.documentStyleMs = st.ms;
+			if (st.bodyFontSize) phases.documentBodyPt = st.bodyFontSize;
+			const range = st.referenceRanges?.find(([a, b]) => pageIndex >= a && pageIndex <= b) ?? st.referenceRanges?.[0];
+			phases.referencesFirstPage = range ? range[0] + 1 : 0;
+			phases.referencesLastPage = range ? range[1] + 1 : 0;
+		}
 		// 边框硬屏障: real figure boundaries participate in extraction — in-figure
 		// labels stay out of the flow, and nothing merges across a figure.
 		const obstacles = await this.obstaclesFor(pageIndex);
@@ -765,20 +804,20 @@ export class TextExtractor implements PageParser {
 		this.sidewaysCharsByPage.set(pageIndex, sideways);
 		if (phases && sideways > 0) phases.rotatedTextChars = sideways;
 		const buildStartedAt = Date.now();
-		const result = buildBlocksFromSpans(page.items, {
+		const result = structureSpanPage(page, {
 			pageIndex,
-			pageHeight: page.pageHeight,
-			pageWidth: page.pageWidth,
 			includeReferences: this.includeReferences,
 			referencesAlreadyStarted: this.referencesAlreadyStarted(pageIndex),
-			imageRectsPdf: obstacles,
+			bodyFontSize: this.bodyFontSize,
+			noTranslate: this.noTranslateSafe(),
+			obstacles,
 			grid,
 			grids: this.allBorderGrids.get(pageIndex),
 			legendSegmentsPdf: this.legendSegments.get(pageIndex)
 		});
 		// Rebuild semantic regions from whatever fragments extraction
 		// produced: whole regions translate as whole sentences.
-		const sourceBlockCount = result.blocks.length;
+		const sourceBlockCount = result.sourceBlockCount;
 		if (grid) {
 			const phases2 = this.phasesByPage.get(pageIndex);
 			if (phases2) {
@@ -790,8 +829,6 @@ export class TextExtractor implements PageParser {
 				}).length;
 			}
 		}
-		const structured = structureTableCells(orderBlocksForReading(result.blocks), pageIndex, this.bodyFontSize || 10, this.noTranslateSafe(), this.allBorderGrids.get(pageIndex) ?? grid, true, page.pageHeight);
-		result.blocks = finalizePageRegions(structured, page.pageHeight, obstacles);
 		// 建块是**同步 CPU 段**,与等待是两回事 —— 主线程卡不卡看这个数,
 		// 等得久不久看 textLayerWaitMs。混在一起就分不出该优化哪边。
 		if (phases) {
@@ -928,6 +965,67 @@ export class TextExtractor implements PageParser {
 			reports.push({ path: 'PDFWorker', ok: false, detail: e instanceof Error ? e.message : String(e) });
 		}
 		return reports;
+	}
+
+	/**
+	 * 全篇样式 (5.0 结构层重构第 1 步)。逐页读文字(轻量:不做字体修复),
+	 * 一次算出正文字号和参考文献页范围。只算一次;失败返回 null。
+	 */
+	ensureDocumentStyle(): Promise<DocumentStyle | null> {
+		if (this.documentStylePromise) return this.documentStylePromise;
+		this.documentStyleState = 'pending';
+		const startedAt = Date.now();
+		this.documentStylePromise = (async () => {
+			try {
+				const count = adapter.getPageCount(this.reader);
+				if (!count || count > DOCUMENT_STYLE_MAX_PAGES) throw new Error(`page count ${count}`);
+				const pages: adapter.TextLayerPage[] = new Array(count);
+				let next = 0;
+				const worker = async (): Promise<void> => {
+					while (next < count) {
+						const i = next++;
+						pages[i] = (await adapter.getTextContentItemsLight(this.reader, i)) ?? { items: [], pageWidth: 612, pageHeight: 792 };
+					}
+				};
+				await Promise.all(Array.from({ length: Math.min(4, count) }, worker));
+				const style = buildDocumentStyle(pages);
+				this.documentStyle = style;
+				this.documentStyleState = 'ready';
+				if (style.bodyFontSize > 0) this.bodyFontSize = style.bodyFontSize;
+				logger.info(MODULE, `Document style: body ${style.bodyFontSize}pt, references ${style.referenceRanges.map(([a, b]) => `p${a + 1}-p${b + 1}`).join(', ') || 'none'} (${count} pages, ${Date.now() - startedAt} ms)`);
+				return style;
+			}
+			catch (e) {
+				this.documentStyleState = 'failed';
+				logger.warn(MODULE, 'Document style unavailable; per-page context is used', e);
+				return null;
+			}
+			finally {
+				this.documentStyleMs = Date.now() - startedAt;
+			}
+		})();
+		return this.documentStylePromise;
+	}
+
+	/** Wait for the document style, but never longer than the budget. */
+	private async awaitDocumentStyle(): Promise<void> {
+		// 超时过一次就不再让后面的页再等:样式在后台照样算完,算完后的页自然用上。
+		if (this.documentStyle || this.documentStyleState === 'failed' || this.documentStyleState === 'timeout') return;
+		const pending = this.ensureDocumentStyle();
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const timeout = new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), DOCUMENT_STYLE_WAIT_MS); });
+		const style = await Promise.race([pending, timeout]);
+		if (timer) clearTimeout(timer);
+		if (!style && this.documentStyleState === 'pending') {
+			this.documentStyleState = 'timeout';
+			logger.warn(MODULE, `Document style not ready after ${DOCUMENT_STYLE_WAIT_MS} ms; this page uses per-page context`);
+		}
+	}
+
+	/** 诊断用:全篇样式的状态与结论(不含原文)。 */
+	documentStyleSummary(): { state: string; ms: number; bodyFontSize?: number; referenceRanges?: Array<[number, number]> } {
+		const st = this.documentStyle;
+		return { state: this.documentStyleState, ms: this.documentStyleMs, ...(st ? { bodyFontSize: st.bodyFontSize, referenceRanges: st.referenceRanges } : {}) };
 	}
 
 	/** Establish the document body font size from the current page (lazy). */

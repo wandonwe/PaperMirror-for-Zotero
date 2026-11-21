@@ -1,4 +1,4 @@
-import { looksLikeBibliographicFragment, looksLikeReferencePage, looksLikeReferenceText, startsReferenceEntry } from './referenceDetect';
+import { looksLikeBibliographicFragment, looksLikeReferencePage, looksLikeReferenceText, startsReferenceEntry, startsUnnumberedEntry } from './referenceDetect';
 import {extractPanelTitles} from './panelTitles';
 import {removeCollapsedTextCopies} from './collapsedTextCopies';
 import {extractTwoColumnTables} from './twoColumnTable';
@@ -1194,7 +1194,18 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// Line texts carry superscript labels ("⁷S. Rathee") that raw items do not ("7", "S. Rathee").
 	const referenceListByContent = !referenceHeadingHere && !REFERENCES_HEADING_HINT.test(pageRawText)
 		&& (referenceText || looksLikeReferenceText(lineTexts.join(' '))) && looksLikeReferencePage(lineTexts);
-	const tableLineIdx = referenceListByContent ? new Set<number>() : detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10), obstacles,options.panelAnchors);
+	// 5.0 全篇样式: referencesAlreadyStarted now comes from the document's
+	// reference ranges and ENDS with them, so a continuation page can skip table
+	// detection too — before, it never ended and every table page after the
+	// references would have lost its tables. Journal lines ("Int J Stroke 2012;
+	// 17:18-29") no longer split off as "cells" that are not references.
+	// Only when the page's own lines are entries (≥1/4 start one): a real table
+	// on a page inside the reference range keeps its table detection.
+	const entryLineShare = lineTexts.length
+		? lineTexts.filter(t => startsReferenceEntry(t) || startsUnnumberedEntry(t)).length / lineTexts.length : 0;
+	const referencePageKnown = referenceListByContent
+		|| (!!options.referencesAlreadyStarted && !referenceHeadingHere && entryLineShare >= 0.25);
+	const tableLineIdx = referencePageKnown ? new Set<number>() : detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10), obstacles,options.panelAnchors);
 	const proseLines = tableLineIdx.size ? lines.filter((_, i) => !tableLineIdx.has(i)) : lines;
  // After isolating numbered panels, order prose using prose columns, not
  // numeric table columns: a short paragraph tail must stay between its lines.

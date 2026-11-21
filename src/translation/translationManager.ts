@@ -455,6 +455,12 @@ export interface PageDiagnostics {
 		buildMs: number;
 		/** 5.0: 旋转排版正文字符数(旋转表格保留原文)。 */
 		rotatedTextChars?: number;
+		/** 5.0 全篇样式(数字,见 ExtractPhases)。 */
+		documentStyleState?: number;
+		documentStyleMs?: number;
+		documentBodyPt?: number;
+		referencesFirstPage?: number;
+		referencesLastPage?: number;
 	};
 }
 

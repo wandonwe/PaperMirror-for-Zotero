@@ -89,8 +89,16 @@ test('两条基于 span 的路径共用同一份建块实现 (结构性回归闸
 	const src = read('src/reader/textExtractor.ts');
 	// 各写一遍,两条路迟早会在阅读序、表格结构化或合并上悄悄分叉,而分叉出来的
 	// 差异会伪装成"这一页的结构变了",把语料的结构比对引向错误的结论。
-	assert.equal((src.match(/buildBlocksFromSpans\(/g) ?? []).length, 1,
-		'buildBlocksFromSpans 只能被调用一处');
+	// 5.0: 建块 → 阅读序 → 表格 → 合并抽成了纯函数 structureSpanPage(插件与离线
+	// 语料工具共用),这里只能有一处调用它,且不得绕过它直接调 buildBlocksFromSpans。
+	assert.equal((src.match(/structureSpanPage\(/g) ?? []).length, 1,
+		'structureSpanPage 只能被调用一处');
+	assert.equal((src.match(/buildBlocksFromSpans\(/g) ?? []).length, 0,
+		'span 路径不得绕过 structureSpanPage 自己建块');
+	const pipeline = read('src/reader/pagePipeline.ts');
+	assert.equal((pipeline.match(/buildBlocksFromSpans\(/g) ?? []).length, 1);
+	assert.ok(/orderBlocksForReading\(/.test(pipeline) && /structureTableCells\(/.test(pipeline) && /finalizePageRegions\(/.test(pipeline),
+		'阅读序、表格结构化、区域合并都在同一个纯函数里');
 	assert.equal((src.match(/private blocksFromSpanPage\(/g) ?? []).length, 1);
 	for (const caller of ['extractFromTextLayer', 'extractFromTextContent']) {
 		const body = src.slice(src.indexOf(`private async ${caller}(`), src.indexOf('\n\t}', src.indexOf(`private async ${caller}(`)));

@@ -445,6 +445,9 @@ export class ReaderSession {
 			return;
 		}
 
+		// 5.0: 全篇样式在后台先开算(逐页轻量读文字),与首页渲染并行;
+		// 首次抽取最多等它 6 秒。
+		void this.extractor.ensureDocumentStyle();
 		await this.extractor.prime();
 		if (this.destroyed) {
 			return; // 同上: prime 期间被销毁,后续注册一律不做

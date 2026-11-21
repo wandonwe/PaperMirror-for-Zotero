@@ -36,3 +36,4 @@ baseline-report.md
 preview/shots/
 # 桌面端把交付文件落在仓库目录里时生成的文件夹
 Claude outputs/
+scripts/corpus/.build/

@@ -75,3 +75,13 @@ export function looksLikeBibliographicFragment(text: string): boolean {
 	const lowerWords = (t.match(/\b[a-z]{4,}\b/g) ?? []).length;
 	return lowerWords <= 12;
 }
+
+/**
+ * 5.0 全篇样式用:不带编号的 Vancouver 条目开头 —— "Feigin VL, Brainin M, …"、
+ * "McHugh ML. Interrater…"(AJR 手稿、PMC 作者手稿)。只用作页级证据计数,
+ * 不参与断段(正文里"Smith J, …"开头的行会误伤)。
+ */
+const UNNUMBERED_ENTRY = /^\s*\p{Lu}[\p{L}'’-]+(?:[\s-]\p{Lu}[\p{L}'’-]+)?\s\p{Lu}{1,3}(?:,\s\p{Lu}[\p{L}'’-]+(?:[\s-]\p{Lu}[\p{L}'’-]+)?\s\p{Lu}{1,3}|\.\s\p{Lu})/u;
+export function startsUnnumberedEntry(text: string): boolean {
+	return UNNUMBERED_ENTRY.test(text);
+}

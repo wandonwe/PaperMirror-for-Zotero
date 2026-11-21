@@ -564,6 +564,35 @@ fontRepair.resolvedFonts=fonts.size;
 	}
 }
 
+/**
+ * 5.0 全篇样式用的轻量读取:只要文字、矩形和字号,不做符号 / 旧字体修复
+ * (那要算子列表,对整篇逐页做太贵,而统计正文字号和参考文献范围用不着)。
+ * 同样穿 Xray、同样是任何页随时可读的公开 API。失败返回 null。
+ */
+export async function getTextContentItemsLight(reader: ReaderLike, pageIndex: number): Promise<TextLayerPage | null> {
+	try {
+		const doc = waive((waive(pdfWindow(reader)?.PDFViewerApplication) as
+			{ pdfDocument?: unknown } | undefined)?.pdfDocument) as { getPage?: (n: number) => Promise<unknown> } | undefined;
+		if (typeof doc?.getPage !== 'function') return null;
+		const page = waive(await doc.getPage(pageIndex + 1)) as { getTextContent?: () => Promise<{ items?: unknown[] }>; view?: number[] };
+		if (typeof page?.getTextContent !== 'function') return null;
+		const content = waive(await page.getTextContent());
+		const items: TextLayerItem[] = [];
+		for (const entry of Array.isArray(content?.items) ? content.items : []) {
+			const it = entry as { str?: unknown; transform?: unknown; width?: unknown };
+			if (typeof it.str !== 'string' || !it.str.trim() || !Array.isArray(it.transform) || typeof it.width !== 'number') continue;
+			const box = textContentItemRect(it.transform as number[], it.width);
+			if (box) items.push({ text: it.str, rect: box.rect, ...(box.fontSize ? { fontSize: box.fontSize } : {}) });
+		}
+		const view = Array.isArray(page.view) && page.view.length >= 4 ? page.view : null;
+		return { items, pageWidth: view ? Number(view[2]) - Number(view[0]) : 612, pageHeight: view ? Number(view[3]) - Number(view[1]) : 792 };
+	}
+	catch (e) {
+		logger.debug(MODULE, `getTextContentItemsLight(${pageIndex}) failed`, e);
+		return null;
+	}
+}
+
 export function probeTextContentApi(reader: ReaderLike): TextContentApiState {
 	try {
 		const doc = waive((waive(pdfWindow(reader)?.PDFViewerApplication) as
