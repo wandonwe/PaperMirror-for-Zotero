@@ -225,3 +225,10 @@ test('5.0 r22 (2852 p74): a long author list does not sink a translated title', 
 	const spaced = '525. Masdeu JC, Irimia P, Asenbaum S, Bogousslavsky J, Brainin M, Chabriat H, Herholz K, Markus HS, Martínez-Vila E, Niederkorn K, et al; EFNS. EFNS急性卒中神经影像指南：EFNS工作组报告。Eur J Neurol. 2006;13:1271–1283. doi: 10.1111/j.1468-1331.2006.01507.x';
 	assert.equal(looksTranslated(glued, spaced, 'zh-CN', { isReference: true }), true, 'glued initials may come back spaced');
 });
+
+test('5.0 r22 (3036 p2): a translation opening with a stand-in "（无）" is not accepted, even from cache', () => {
+	const source = 'each index tophus using a computer automated procedure for inter-rater reproducibility. The same scans were scored twice for intra-rater reproducibility.';
+	assert.equal(looksTranslated(source, '（无） 同一扫描重复评分两次以评估评定者内重复性。', 'zh-CN'), false);
+	assert.equal(looksTranslated(source, '每个指标痛风石，以评估评定者间重复性。同一扫描重复评分两次以评估评定者内重复性。', 'zh-CN'), true);
+	assert.equal(looksTranslated('(None) of the patients withdrew.', '（无）患者退出。', 'zh-CN'), true, 'the source itself opens that way');
+});

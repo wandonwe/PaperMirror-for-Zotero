@@ -25,6 +25,9 @@ import {
  * are rejected and routed through retry/salvage instead of stored as "done".
  * Short cells/labels and non-CJK targets have no cheap check and pass.
  */
+/** A block opening with a stand-in for missing text: "（无）…", "(N/A) …". */
+const STAND_IN_LEAD = /^[（(]\s*(?:无|空|略|省略|none|n\/?a)\s*[)）]/i;
+
 export function looksTranslated(source: string, translated: string, targetLang: string, opts?: { isReference?: boolean }): boolean {
 	const t = translated.trim();
 	if (technicalUnitIssue(source, t) || numericPowerIssue(source, t)) return false;
@@ -33,6 +36,10 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 	if (!t) {
 		return false;
 	}
+	// 5.0 (校验 r22, 3036 p2): a continuation part the model filled with "（无）"
+	// was stored joined to the block's next sentence ("（无） 同一扫描重复评分两次…").
+	// Reject it wherever it comes from — fresh, page cache, segment store.
+	if (STAND_IN_LEAD.test(t) && !STAND_IN_LEAD.test(source.trim())) return false;
 	if (!/^zh/i.test(targetLang)) {
 		return true;
 	}
