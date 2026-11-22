@@ -295,6 +295,11 @@ export interface PaneCallbacks {
 	/** 菜单栏直接切换 — no round-trip through the settings pane. */
 	onPickLanguages(source: string, target: string): void;
 	onPickProvider(providerId: string): void;
+	/**
+	 * 5.0: 菜单打开前重新取「已设置」的引擎清单(密钥/端点可能刚在设置里改过)。
+	 * 可选;不提供或超时则沿用上次 setProviderChoices 的清单。
+	 */
+	loadProviderChoices?(): Promise<{ id: string; displayName: string }[]>;
 	onOpenSettings(): void;
 	onClose(): void;
 	onSwapSides(): void;
@@ -729,7 +734,30 @@ export class TranslationPane {
 		]);
 	}
 
-	private openProviderMenu(): void {
+	/** 菜单打开前等待最新清单的上限 —— 凭据库卡住时不让点击无响应。 */
+	private static readonly PROVIDER_REFRESH_WAIT_MS = 800;
+	private providerMenuLoading = false;
+
+	private async openProviderMenu(): Promise<void> {
+		const load = this.callbacks.loadProviderChoices;
+		if (load) {
+			if (this.providerMenuLoading) {
+				return;
+			}
+			this.providerMenuLoading = true;
+			try {
+				const fresh = await Promise.race([
+					load.call(this.callbacks).catch(() => null),
+					new Promise<null>(resolve => setTimeout(() => resolve(null), TranslationPane.PROVIDER_REFRESH_WAIT_MS))
+				]);
+				if (fresh && fresh.length) {
+					this.providerChoices = fresh;
+				}
+			}
+			finally {
+				this.providerMenuLoading = false;
+			}
+		}
 		if (!this.providerPill || !this.providerChoices.length) {
 			this.callbacks.onOpenSettings();
 			return;
@@ -958,7 +986,7 @@ export class TranslationPane {
 		providerPill.append(this.providerMark, this.providerName);
 		providerPill.addEventListener('click', (event) => {
 			event.stopPropagation();
-			this.openProviderMenu();
+			void this.openProviderMenu();
 		});
 
 		this.syncSwitch = this.switchControl(this.strings.syncScroll, true, on => this.callbacks.onToggleSync(on));

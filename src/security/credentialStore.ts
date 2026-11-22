@@ -124,6 +124,51 @@ export async function getApiKey(providerId: string): Promise<string> {
 }
 
 /**
+ * 已保存密钥的服务商 id 集合 (5.0): 供菜单栏「翻译服务」只列出已设置的引擎。
+ *
+ * 只看「有没有」,不取出、不缓存密钥本身。来源取并集: Login Manager 的
+ * 用户名(一次查询,同样受 4 秒超时保护)、明文回退首选项、本会话已解析
+ * 出的非空密钥缓存。凭据库超时/不可用时退回后两者 —— 宁可少列,不会卡住菜单。
+ */
+export async function providersWithSavedKeys(): Promise<Set<string>> {
+	const out = new Set<string>();
+	for (const [id, key] of keyCache) {
+		if (key) {
+			out.add(id);
+		}
+	}
+	try {
+		const raw = getPref<string>('apiKeyFallback', '');
+		if (raw) {
+			const map = JSON.parse(raw) as Record<string, unknown>;
+			for (const [id, key] of Object.entries(map)) {
+				if (typeof key === 'string' && key) {
+					out.add(id);
+				}
+			}
+		}
+	}
+	catch {
+		// 损坏的回退首选项不影响菜单
+	}
+	try {
+		const logins = await withTimeout(
+			Services.logins.searchLoginsAsync({ origin: ORIGIN, httpRealm: REALM }),
+			LOGIN_LOOKUP_TIMEOUT_MS
+		);
+		for (const login of logins as { username?: string; password?: string }[]) {
+			if (login.username && login.password) {
+				out.add(login.username);
+			}
+		}
+	}
+	catch (e) {
+		logger.warn(MODULE, 'Login Manager unavailable while listing saved keys', e);
+	}
+	return out;
+}
+
+/**
  * 清空会话内明文密钥缓存 (2.1.1, 审核 P3-B): shutdown() 调用,连同 logSanitizer
  * 的 clearSecrets 一起,确保停用/卸载(不重启 Zotero)后内存里不残留明文密钥。
  * 同时递增代次,让任何在途的 getApiKey 不会把清空前读到的值回填进来。

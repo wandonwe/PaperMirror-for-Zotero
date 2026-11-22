@@ -42,14 +42,20 @@ export interface OverlayProgress {
 	 * (undefined) is retryable, i.e. translation.
 	 */
 	retryable?: boolean;
+	/** 5.0: a page-level remark shown under the result (e.g. a rotated table kept original). */
+	note?: string;
 }
+
+/** 5.0: the remark for a page whose rotated table is kept in the source language. */
+export const ROTATED_TABLE_NOTE = '旋转排版的表格保留原文';
 
 /** Resting state must retain placement failures after an active task disappears. */
 export function idleProgressFor(currentPage: number, totalPages: number, translated: boolean,
- placement?: { placed: number; kept: number; segTotal: number }): OverlayProgress {
+ placement?: { placed: number; kept: number; segTotal: number }, note?: string): OverlayProgress {
+ const extra = note ? { note } : {};
  if (placement && placement.kept > 0) return {phase:'partial',currentPage,totalPages,
-  segTotal:placement.segTotal,segTranslated:placement.segTotal,segPlaced:placement.placed,kept:placement.kept};
- return {phase:'idle',currentPage,totalPages,segTotal:0,segTranslated:translated ? 1 : 0,segPlaced:0,kept:0};
+  segTotal:placement.segTotal,segTranslated:placement.segTotal,segPlaced:placement.placed,kept:placement.kept,...extra};
+ return {phase:'idle',currentPage,totalPages,segTotal:0,segTranslated:translated ? 1 : 0,segPlaced:0,kept:0,...extra};
 }
 
 export interface CapsuleAction {
@@ -284,7 +290,7 @@ export function capsuleStateFor(m: OverlayProgress): CapsuleState {
 			// invites 刷新本页. No auto-hide, no right-hand action. (segTranslated
 			// is used as a 0/1 "page already translated" flag by idleCapsuleState.)
 			return m.segTranslated > 0
-				? { phase: m.phase, glyph: 'check', fraction: 1, main: '本页翻译已完成' }
+				? { phase: m.phase, glyph: 'check', fraction: 1, main: '本页翻译已完成', ...(m.note ? { sub: m.note } : {}) }
 				: { phase: m.phase, glyph: 'refresh', fraction: null, main: '点击圆环翻译本页' };
 		case 'translating':
 			// True stage text (audit: "不能从开始到结束都显示正在翻译"):
@@ -320,6 +326,7 @@ export function capsuleStateFor(m: OverlayProgress): CapsuleState {
 				glyph: 'check',
 				fraction: 1,
 				main: `已完成 第 ${m.currentPage} 页`,
+				...(m.note ? { sub: m.note } : {}),
 				autoHideMs: 2000
 			};
 		case 'partial':
@@ -328,7 +335,7 @@ export function capsuleStateFor(m: OverlayProgress): CapsuleState {
 				glyph: 'warn',
 				fraction: combined,
 				main: `第 ${m.currentPage} 页 · ${m.kept} 段保留原文`,
-				sub: counts,
+				sub: m.note ? `${counts} · ${m.note}` : counts,
 				action: { kind: 'view', label: '查看译文', title: '定位保留原文的段落,并在文章流里查看这一页的完整译文' }
 			};
 		case 'failed':

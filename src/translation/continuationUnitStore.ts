@@ -1,5 +1,5 @@
 /** Session-local, bounded shared translations of complete source sentences. */
-import { PaperMirrorError, type GlossaryRule, type PlaceholderEntry, type TranslationRequest, type TranslationResponse } from '../types/models';
+import { PaperMirrorError, type GlossaryRule, type TranslationRequest, type TranslationResponse } from '../types/models';
 import { planContinuationRequest } from './continuationRequest';
 import { PlaceholderRegistry } from './placeholderRegistry';
 import { fnv1a64 } from '../cache/cacheSchema';
@@ -98,9 +98,25 @@ function unitKey(group: Group, request: TranslationRequest, glossary: GlossaryRu
 		namespace === undefined ? [...(options.noTranslate ?? [])].sort() : null]));
 }
 
-function numericInventory(text: string): string {
-	return JSON.stringify((canonical(text).match(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\d+(?:[.,]\d+)*(?:[eE][+−-]?\d+)?/g) ?? []).sort());
+function numericInventory(text: string, commas: 'thousands' | 'join' = 'thousands'): string {
+	// 千分位不算差异: 中文译文常把 "12,500" 写成 "12500"。
+	// 'join' (5.0, 联网校验 3145/3386): 引用编号 "(113,197)" 会被千分位规则并成
+	// 113197,而译文写成 "(113, 197)" 就成了两个数 —— 整句被判废、页面不进缓存。
+	// 第二种读法把数字间的逗号(连同空格)全部并掉,两种读法任一一致即可。
+	const c = canonical(text);
+	const plain = commas === 'join'
+		? c.replace(/(\d)\s*[,，、]\s*(?=\d)/g, '$1')
+		: c.replace(/(\d),(?=\d{3}(?!\d))/g, '$1');
+	return JSON.stringify((plain.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\d+(?:[.,]\d+)*(?:[eE][+−-]?\d+)?/g) ?? []).sort());
 }
+
+/** Same numbers in source and translation, under either comma reading (5.0). */
+export function sameNumericInventory(source: string, text: string): boolean {
+	return numericInventory(source) === numericInventory(text) || numericInventory(source, 'join') === numericInventory(text, 'join');
+}
+
+/** A part "translated" as nothing: （无） / (空) / N/A / none / — / … */
+const PART_STAND_IN = /^[（(【\[]?\s*(?:无|空|略|省略|同上|none|empty|n\/?a|nil|—+|-+|…+|\.{3,})\s*[)）】\]]?$/i;
 
 type IntegrityReason = 'part-count' | 'empty-or-invalid-text' | 'raw-placeholder-residue'
 	| 'numeric-inventory' | 'technical-unit' | 'technical-unit-value' | 'numeric-power'
@@ -112,14 +128,22 @@ function validateRawTexts(group: Group, registries: PlaceholderRegistry[], texts
 		return false;
 	};
 	if (!Array.isArray(texts) || texts.length !== group.parts.length) return reject('part-count', -1);
+	// 数字、单位、幂按**整句**核对 (5.0, 真机 Vitamin E 一文): 中文会调整语序,
+	// 数字从一栏挪到另一栏是正常的;逐栏要求数字一致,让跨页句子反复判废、
+	// 整段留英文。整句里一个不少、一个不多才是要守的底线。占位符(上标等)
+	// 仍逐栏校验 —— 它们的编号本来就属于各自那一栏。
+	// 5.0 (校验 r22, 3036 p1→p2): a model that moved the whole sentence into the
+	// first part may fill the other with a stand-in — "（无）", "N/A", "…" —
+	// and the reader then sees "（无） 同一扫描重复评分两次…". A stand-in is empty.
+	const blank = (text: unknown): boolean => typeof text !== 'string' || !text.trim() || PART_STAND_IN.test(text.trim());
+	if (texts.some(blank)) return reject('empty-or-invalid-text', texts.findIndex(blank));
+	const sourceJoined = group.parts.map(rawText).join(' '), textJoined = (texts as string[]).join(' ');
+	if (!sameNumericInventory(sourceJoined, textJoined)) return reject('numeric-inventory', -1);
+	const technical = technicalUnitIssue(sourceJoined, textJoined);
+	if (technical) return reject(technical, -1);
+	if (numericPowerIssue(sourceJoined, textJoined)) return reject('numeric-power', -1);
 	return texts.every((text, index) => {
-		if (typeof text !== 'string' || !text.trim()) return reject('empty-or-invalid-text', index);
 		if (/⟦PM\d+⟧/.test(text)) return reject('raw-placeholder-residue', index);
-		const source = rawText(group.parts[index]!);
-		if (numericInventory(source) !== numericInventory(text)) return reject('numeric-inventory', index);
-		const technical = technicalUnitIssue(source, text);
-		if (technical) return reject(technical, index);
-		if (numericPowerIssue(source, text)) return reject('numeric-power', index);
 		const registry = registries[index]!;
 		try {
 			const encoded = encodeForCaller(text, { id: '', type: 'paragraph', text: registry.text, protectedLiterals: registry.entries });
@@ -156,13 +180,23 @@ function encodeForCaller(text: string, block: Block): string {
 	return encoded;
 }
 
+const MAX_DEGRADED = 512;
+
 export class ContinuationUnitStore {
 	private units = new Map<string, Entry>();
+	/** 本会话内整句校验失败过的句子;只影响本会话,下次打开重新尝试整句。 */
+	private degraded = new Set<string>();
+
+	private markDegraded(key: string): void {
+		this.degraded.delete(key); this.degraded.add(key);
+		if (this.degraded.size > MAX_DEGRADED) this.degraded.delete(this.degraded.values().next().value as string);
+	}
 	private lifecycle = new AbortController();
 	private generation = 0;
 
 	clear(): void {
 		this.generation++;
+		this.degraded.clear();
 		this.lifecycle.abort(); this.lifecycle = new AbortController();
 		for (const entry of this.units.values()) entry.controller.abort();
 		this.units.clear();
@@ -305,11 +339,25 @@ export class ContinuationUnitStore {
 			usage.inputTokens += value.inputTokens; usage.outputTokens += value.outputTokens; usage.cachedInputTokens += value.cachedInputTokens;
 		};
 		const translated: TranslationResponse['translations'] = [];
+		// 整句失败的降级 (5.0): 此前一句判废就抛错,整个请求(含同批的普通段落)
+		// 一起作废,补救链路走的还是同一条整句校验 —— 结果整段留英文、同批段落
+		// 反复重发。现在: 这一句改为各栏分开翻译,和普通段落同批发出;结果标为
+		// 临时(provisionalIds),调用方据此不写缓存,下次打开再试整句。本会话内
+		// 同一句不再重试整句,免得每次补救都先白花一次请求。
+		const fallback: Block[] = [];
 		for (const group of groups) {
 			checkSignal(signal);
 			if (generation !== this.generation) throw cancelled();
+			const key = unitKey(group, plan.request, matchingGlossary(plan.request, group.source, options), options, namespace);
+			if (this.degraded.has(key)) { fallback.push(...group.parts); continue; }
 			const entry = this.entry(group, plan.request, freshTranslate, owner, signal, namespace, options);
-			const result = await this.wait(entry, signal, owner);
+			let result: UnitResult;
+			try { result = await this.wait(entry, signal, owner); }
+			catch (error) {
+				if (!(error instanceof PaperMirrorError) || error.code !== 'BAD_RESPONSE' || signal.aborted) throw error;
+				if (entry.owner === owner && !entry.usageDelivered) usageMissing = true;
+				this.markDegraded(key); fallback.push(...group.parts); continue;
+			}
 			progress(options);
 			if (entry.owner === owner && !entry.usageDelivered) { entry.usageDelivered = true; if (!result.fromDisk) addUsage(result.usage); }
 			try {
@@ -317,7 +365,11 @@ export class ContinuationUnitStore {
 			}
 			catch (error) { if (this.units.get(entry.key) === entry) this.units.delete(entry.key); throw error; }
 		}
-		const ordinary = plan.request.blocks.filter(block => !block.continuationUnit);
+		const fallbackIds = new Set(fallback.map(part => part.id));
+		const ordinary = [
+			...plan.request.blocks.filter(block => !block.continuationUnit),
+			...fallback.map(({ continuationUnit: _unit, ...part }) => part)
+		];
 		if (ordinary.length) {
 			const response = await this.enqueue({ ...plan.request, blocks: ordinary }, freshTranslate, signal, generation);
 			progress(options);
@@ -326,6 +378,7 @@ export class ContinuationUnitStore {
 		checkSignal(signal);
 		if (generation !== this.generation) throw cancelled();
 		return plan.restore({ translations: translated,
+			...(fallbackIds.size ? { provisionalIds: [...fallbackIds] } : {}),
 			...(freshRawCalls === 0 ? { cacheOnly: true, usage: zeroUsage() } : { usage: usageMissing ? undefined : usage }) });
 	}
 }

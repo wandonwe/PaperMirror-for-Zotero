@@ -325,7 +325,6 @@ export class RequestScheduler {
 		if (this.disposed) {
 			return;
 		}
-		const bgGlobalCap = this.options.maxConcurrent - this.reservedForeground;
 		// Scan the priority-sorted queue and start every ELIGIBLE job. Ineligible
 		// jobs are SKIPPED (not removed) so a lower-priority job on a lane that
 		// DOES have room can still start — this is what lets other providers'

@@ -14,6 +14,7 @@
 
 import type { ProviderSettings } from '../../types/models';
 import { PaperMirrorError } from '../../types/models';
+import { gpt6MinimumEffort, gpt6Tier, isGlm53, isGptOss, isKimiK26, isKimiK3, openaiDefaultThinkingFloor } from './modelFamilies';
 
 /**
  * 'minimal'…'xhigh' are OpenAI-style effort levels; 'disabled'/'auto' are the
@@ -24,7 +25,8 @@ export type ReasoningLevel = '' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh
 
 /** OpenAI-compatible providers whose chat endpoint accepts `reasoning_effort`.
  *  Values follow OpenAI's official levels (minimal/low/medium/high/xhigh —
- *  xhigh exists on gpt-5.4+; unsupported levels are the model's own 400).
+ *  xhigh exists on gpt-5.4+; GPT-6 drops minimal, see the override below;
+ *  other unsupported levels are the model's own 400).
  *  Gemini is NOT here anymore: it runs on the native generateContent API and
  *  handles 深度思考 via thinkingConfig in its own adapter (geminiNative). */
 const REASONING_EFFORT_PROVIDERS = new Set(['openai', 'openrouter']);
@@ -63,10 +65,10 @@ const REASONING_EFFORT_PROVIDERS = new Set(['openai', 'openrouter']);
  * 翻译不需要思维链:我们只要最终译文,推理过程读都不读。默认关掉。
  * 用户在高级设置里显式要了思考强度,就按他要的发 —— 那是他的决定。
  */
-/* Checked 2026-09-16: controls differ by provider AND model family.
+/* Checked 2026-11-19 (5.0): controls differ by provider AND model family.
  * DeepSeek uses thinking plus top-level reasoning_effort; GLM-5.3 and Kimi K3
  * always think, while K2.6 and older GLM can disable it. Model-specific
- * overrides below take precedence. Sources: docs/LLM-PROVIDERS-2026-09-16.md.
+ * overrides below take precedence. Sources: docs/LLM-PROVIDERS-2026-11-19.md.
  */
 const THINKING_OBJECT_PROVIDERS = new Set(['deepseek', 'zhipu']);
 
@@ -125,45 +127,72 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
 		out.reasoning_effort = eff;
 	}
 	const level = deepseekEffort(eff);
+	const model = (settings.model || '').trim();
 	if (THINKING_OBJECT_PROVIDERS.has(providerId)) {
 		// 默认关闭(见上方证据):翻译只要最终译文,而它们默认就思考,
 		// 输出 token 是译文的十几倍 —— 时间和钱都白烧。
-		out.thinking = level ? { type: 'enabled' } : { type: 'disabled' };
-        if (providerId === 'deepseek' && level) out.reasoning_effort = level;
+		out.thinking = { type: level ? 'enabled' : 'disabled' };
+		if (providerId === 'deepseek' && level) {
+			out.reasoning_effort = level;
+		}
 	}
 	else if (ENABLE_THINKING_PROVIDERS.has(providerId)) {
 		out.enable_thinking = level !== null;
 	}
-	else if (providerId === 'moonshot' && /^kimi-k2\.6(?:$|-)/i.test(settings.model || '')) {
-        out.thinking = {type: level ? 'enabled' : 'disabled'};
-    }
-    else if (ALWAYS_THINKS_PROVIDERS.has(providerId)) {
+	else if (providerId === 'moonshot' && isKimiK26(model)) {
+		out.thinking = { type: level ? 'enabled' : 'disabled' };
+	}
+	else if (ALWAYS_THINKS_PROVIDERS.has(providerId)) {
 		// 关不掉就取最低档。默认是 max —— 对翻译是纯浪费。
 		out.reasoning_effort = level ?? 'low';
 	}
-    const model=(settings.model || '').trim();
-    // Hosted GLM-5.3 always reasons; do not send the generic off switch.
-    if(providerId === 'siliconflow' && model === 'zai-org/GLM-5.3') delete out.enable_thinking;
-    if(providerId === 'zhipu' && /^glm-5\.3(?:$|-)/i.test(model)) {
-        out.thinking={type:'enabled'};
-        out.reasoning_effort=level ?? 'low';
-    }
-    if(providerId === 'moonshot' && /^kimi-k(?:3|2\.6)(?:$|-)/i.test(model)) {
-        const expected=/^kimi-k3/i.test(model) || level ? 1 : .6;
-        if(typeof settings.temperature === 'number' && settings.temperature !== expected)
-            throw new PaperMirrorError('UNKNOWN', `当前 Kimi 模型温度固定为 ${expected}，请清除高级设置中的自定义温度。`);
-        delete out.temperature;
-        if(/^kimi-k3/i.test(model) && 'max_tokens' in out) {
-            out.max_completion_tokens=out.max_tokens;delete out.max_tokens;
-        }
-    }
-    if(providerId === 'openai' && /^gpt-6-astra(?:$|-)/.test(model)) {
-        if(eff === 'minimal' || eff === 'disabled') out.reasoning_effort='low';
-    }
-    if(providerId === 'groq' && /^openai\/gpt-oss-/.test(model)) {
-        out.reasoning_effort=eff === 'high' || eff === 'xhigh' ? 'high' : eff === 'medium' ? 'medium' : 'low';
-    }
 
+	// ---- 型号级覆盖(优先于上面的服务商级规则) ----
+	// SiliconFlow 托管的 GLM-5.3 总是思考,不发通用的关闭开关。
+	if (providerId === 'siliconflow' && model === 'zai-org/GLM-5.3') {
+		delete out.enable_thinking;
+	}
+	if (providerId === 'zhipu' && isGlm53(model)) {
+		out.thinking = { type: 'enabled' };
+		out.reasoning_effort = level ?? 'low';
+	}
+	if (providerId === 'moonshot' && (isKimiK3(model) || isKimiK26(model))) {
+		// 温度由服务端固定: K3/K3.1 恒为 1.0;K2.6 思考时 1.0、不思考时 0.6。
+		const expected = isKimiK3(model) || level ? 1 : 0.6;
+		if (typeof settings.temperature === 'number' && settings.temperature !== expected) {
+			throw new PaperMirrorError('UNKNOWN', `当前 Kimi 模型温度固定为 ${expected}，请清除高级设置中的自定义温度。`);
+		}
+		delete out.temperature;
+		if (isKimiK3(model) && 'max_tokens' in out) {
+			out.max_completion_tokens = out.max_tokens;
+			delete out.max_tokens;
+		}
+	}
+	const tier = gpt6Tier(model);
+	if (tier && (providerId === 'openai' || providerId === 'openrouter')) {
+		// GPT-6 没有 minimal 档。5.0 (真机: gpt-6-luna 默认推理,单请求 22–28 秒,
+		// 吞吐 87 字/秒,同池 DeepSeek 392、Gemini 318): 与 DeepSeek 默认关思考
+		// 同理 —— 用户没设强度时取该型号的最低档。
+		if (!eff || eff === 'minimal' || eff === 'disabled') {
+			out.reasoning_effort = gpt6MinimumEffort(tier);
+		}
+	}
+	// 5.0 用户要求「所有模型默认都不思考」: GPT-5 / o 系列默认 medium 强度。
+	// 没设强度时取该型号最低档(GPT-5.1 起默认就是 none,不用发)。
+	const floor = openaiDefaultThinkingFloor(model);
+	if (floor && (providerId === 'openai' || providerId === 'openrouter') && (!eff || eff === 'disabled')) {
+		out.reasoning_effort = floor;
+	}
+	// Ollama 的 OpenAI 兼容接口 (docs.ollama.com/api/openai-compatibility):
+	// reasoning_effort "none" 关闭布尔式思考模型的思考(qwen3.5 等默认思考);
+	// 不认识的取值退回模型默认,不会 400;GPT-OSS 关不掉,自动映射为 low。
+	if (providerId === 'ollama') {
+		out.reasoning_effort = !eff || eff === 'disabled' ? 'none' : eff === 'auto' ? undefined : eff;
+		if (out.reasoning_effort === undefined) delete out.reasoning_effort;
+	}
+	if (providerId === 'groq' && isGptOss(model)) {
+		out.reasoning_effort = eff === 'high' || eff === 'xhigh' ? 'high' : eff === 'medium' ? 'medium' : 'low';
+	}
 	return out;
 }
 
@@ -172,7 +201,7 @@ export function openaiChatExtras(settings: ProviderSettings, providerId: string)
 export function supportsReasoningControl(providerId: string): boolean {
 	return REASONING_EFFORT_PROVIDERS.has(providerId) || THINKING_OBJECT_PROVIDERS.has(providerId)
 		|| ENABLE_THINKING_PROVIDERS.has(providerId) || ALWAYS_THINKS_PROVIDERS.has(providerId)
-		|| providerId === 'anthropic' || providerId === 'gemini' || providerId === 'groq';
+		|| providerId === 'anthropic' || providerId === 'gemini' || providerId === 'groq' || providerId === 'ollama';
 }
 
 /**

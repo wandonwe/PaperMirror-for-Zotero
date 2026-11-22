@@ -21,9 +21,9 @@ export interface BoundingBox {
 /** Explicit source ownership carried from extraction into layout. Coordinates are raw PDF points. */
 export interface SourceRegion {
  id: string;
- kind: 'caption' | 'body-column' | 'table-cell' | 'page-furniture' | 'legend-item';
+ kind: 'caption' | 'body-column' | 'table-cell' | 'page-furniture' | 'legend-item' | 'list-entry';
  boundsPdf: [number,number,number,number];
- evidence: 'label-aligned-lines' | 'caption-continuation' | 'column-geometry' | 'table-model' | 'page-margin' | 'marker-aligned-lines';
+ evidence: 'label-aligned-lines' | 'caption-continuation' | 'column-geometry' | 'table-model' | 'page-margin' | 'marker-aligned-lines' | 'document-repeat';
  /** Proven leading painted segment for a legend. A horizontal segment has
   * equal y coordinates; no colour is inferred or repainted from this proof. */
  markerPdf?: [number,number,number,number];
@@ -150,6 +150,10 @@ export interface PlaceholderEntry {
 export interface TranslatedBlock {
 	id: string;
 	translatedText: string;
+	/** 5.0: a per-part (degraded continuation) translation kept in the page cache for display only. */
+	provisional?: true;
+	/** 5.0: prompt-policy stamp the translation was produced under (promptPolicies.ts); absent = v1. */
+	policy?: string;
 }
 
 export type LanguageCode = 'en' | 'zh-CN' | 'zh-TW' | 'auto' | string;
@@ -202,6 +206,11 @@ export interface TranslationResponse {
 	translations: TranslatedBlock[];
  /** Internal source-unit reuse; no provider HTTP call was made. */
  cacheOnly?: boolean;
+	/**
+	 * 5.0: 跨页/跨栏整句未通过校验、改为各栏分开翻译的段落 id。译文可以显示,
+	 * 但不进缓存,下次打开重新尝试整句翻译。
+	 */
+	provisionalIds?: string[];
 	/** 服务商报告的 token 用量 (2.7.0, 审核 F-2): 纯计数,无文本;缺失即服务商不报。 */
 	usage?: { inputTokens: number; outputTokens: number; cachedInputTokens: number };
 }

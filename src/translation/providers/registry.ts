@@ -15,9 +15,9 @@ const openaiProvider = createOpenAICompatibleProvider({
 	id: 'openai',
 	displayName: 'OpenAI',
 	defaultBaseURL: 'https://api.openai.com',
-	// GPT-5.6 family is current; Luna is the cost-optimized tier (verified
-	// 2026-08-10, developers.openai.com). Kept in sync w/ modelCatalog.
-	defaultModel: 'gpt-5.6-luna'
+	// GPT-6 family is current; Luna is the cost-sensitive high-volume tier
+	// (verified 2026-11-19, developers.openai.com). Kept in sync w/ modelCatalog.
+	defaultModel: 'gpt-6-luna'
 });
 
 const openaiCompatibleProvider = createOpenAICompatibleProvider({
@@ -55,8 +55,8 @@ const presetProviders: TranslationProvider[] = [
 	createOpenAICompatibleProvider({
 		id: 'moonshot',
 		displayName: 'Kimi (Moonshot AI)',
-		// Base moved to api.moonshot.ai; moonshot-v1-* sunsetting, kimi-k3 current
-		// (verified 2026-08-10, platform.kimi.ai). Kept in sync w/ modelCatalog.
+		// Base api.moonshot.ai. kimi-k3 stays the default; K3.1 Pro (newest
+		// flagship) is offered in the picker (verified 2026-11-19, platform.kimi.ai).
 		defaultBaseURL: 'https://api.moonshot.ai',
 		defaultModel: 'kimi-k3'
 	}),

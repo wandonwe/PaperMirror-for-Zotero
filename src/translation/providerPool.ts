@@ -270,11 +270,6 @@ function providerType(cap: ProviderCapability): 'free' | 'paid-mt' | 'local' | '
 
 export type ProviderKind = 'free' | 'paid-mt' | 'local' | 'llm' | 'unknown';
 
-/** The provider "kind" that decides its band and its custom-range limits. */
-export function providerKind(cap: ProviderCapability): ProviderKind {
-	return providerType(cap);
-}
-
 /**
  * The custom-mode range for a provider: the min/max a user may set, whether the
  * field is LOCKED (free engines are fixed at 1), and the default value for a
@@ -416,4 +411,72 @@ export function buildPool(primary: string, extras: string[]): string[] {
 		}
 	}
 	return out;
+}
+
+/* ==========================================================================
+   当前页优先 (5.0)
+   ========================================================================== */
+
+/** 离当前页这么近的页算「马上要读」,不交给慢引擎。 */
+export const NEAR_PAGE_RADIUS = 2;
+/** 比最快的那家慢到这个比例以下,就算「慢引擎」(只做远处预取)。 */
+const SLOW_RATIO = 0.5;
+/** 当前页: 分到的引擎不到最快那家的这个比例,就改给最快的。 */
+const FOREGROUND_RATIO = 0.67;
+
+function measured(stats: Record<string, ProviderThroughput>, id: string): number {
+	const s = stats[id];
+	return s && s.samples >= MIN_SAMPLES && s.charsPerSecond > 0 ? s.charsPerSecond : 0;
+}
+
+/** 可被改派的目标: 免费机翻引擎只在池里全是免费引擎时才算(质量不同,不能因为快就替用户换掉大模型)。 */
+function rerouteTargets(pool: string[]): string[] {
+	const llm = pool.filter(id => !FREE_MT.has(id));
+	return llm.length ? llm : pool;
+}
+
+/** 测得最快的可改派引擎;数据不足返回 ''。 */
+export function fastestProvider(pool: string[], stats: Record<string, ProviderThroughput>, exclude = ''): string {
+	let best = '', bestRate = 0;
+	for (const id of rerouteTargets(pool)) {
+		if (id === exclude) continue;
+		const rate = measured(stats, id);
+		if (rate > bestRate || (rate === bestRate && rate > 0 && id < best)) { best = id; bestRate = rate; }
+	}
+	return best;
+}
+
+/**
+ * 每页的运行时引擎 (5.0, 真机 Vitamin E 一文: 同池 OpenAI 87 字/秒、DeepSeek
+ * 392、Gemini 318,按页固定分配让正在读的页等 22–28 秒)。
+ *
+ *   - 当前页: 交给测得最快的引擎(除非分到的那家已经够快);
+ *   - 当前页前后 NEAR_PAGE_RADIUS 页: 不交给慢引擎,在其余引擎里按权重重分;
+ *   - 更远的页: 照旧按速度加权的 HRW,慢引擎在这里干活。
+ *
+ * 缓存身份不受影响: 页缓存键用的是规范引擎(canonicalProviderForPage),
+ * 运行时换谁翻都写在同一个键下。没有足够测量(冷启动)时与 2.12 完全一致。
+ */
+export function routeProviderForPage(
+	pool: string[],
+	pageIndex: number,
+	currentPage: number,
+	stats: Record<string, ProviderThroughput>
+): string {
+	const weights = weightsFromThroughput(stats);
+	const base = pickWeightedProviderForPage(pool, pageIndex, weights);
+	if (pool.length < 2) return base;
+	const fastest = fastestProvider(pool, stats);
+	if (!fastest) return base;
+	const top = measured(stats, fastest), own = measured(stats, base);
+	const targets = new Set(rerouteTargets(pool));
+	const distance = Math.abs(pageIndex - currentPage);
+	if (distance === 0) {
+		return own > 0 && own >= top * FOREGROUND_RATIO ? base : fastest;
+	}
+	if (distance <= NEAR_PAGE_RADIUS && own > 0 && own < top * SLOW_RATIO && targets.has(base)) {
+		const quick = pool.filter(id => targets.has(id) && (measured(stats, id) === 0 || measured(stats, id) >= top * SLOW_RATIO));
+		return quick.length ? pickWeightedProviderForPage(quick, pageIndex, weights) : base;
+	}
+	return base;
 }

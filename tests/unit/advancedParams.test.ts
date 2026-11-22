@@ -45,20 +45,28 @@ test('openaiChatExtras: max tokens key differs for the official OpenAI endpoint'
 	assert.deepEqual(openaiChatExtras(base({ maxOutputTokens: 0 }), 'openai'), {});
 });
 
-test('gemini 深度思考 (native adapter): disabled→budget 0, auto→budget -1, default→omitted', () => {
+test('gemini 深度思考 (native adapter): disabled→budget 0, auto→budget -1, default→最低档', () => {
 	assert.deepEqual(
-		geminiGenerationConfig(base({ reasoning: 'disabled' })),
+		geminiGenerationConfig(base({ model: 'gemini-2.5-flash', reasoning: 'disabled' })),
 		{ temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
 	);
 	assert.deepEqual(
-		geminiGenerationConfig(base({ reasoning: 'auto' })),
+		geminiGenerationConfig(base({ model: 'gemini-2.5-flash', reasoning: 'auto' })),
 		{ temperature: 0, thinkingConfig: { thinkingBudget: -1 } }
 	);
-	assert.deepEqual(geminiGenerationConfig(base({})), { temperature: 0 });
+	// 5.0: 默认型号 gemini-3.8-flash 走 thinkingLevel,最低 low
+	assert.deepEqual(
+		geminiGenerationConfig(base({ reasoning: 'disabled' })),
+		{ temperature: 0, thinkingConfig: { thinkingLevel: 'low' } }
+	);
+	// 5.0 审核: 3.x/4 没设强度也取最低档;5.0 用户要求「默认都不思考」: 2.5 未设置同样关闭。
+	assert.deepEqual(geminiGenerationConfig(base({})), { temperature: 0, thinkingConfig: { thinkingLevel: 'low' } });
+	assert.deepEqual(geminiGenerationConfig(base({ model: 'gemini-3.6-flash' })), { temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } });
+	assert.deepEqual(geminiGenerationConfig(base({ model: 'gemini-2.5-flash' })), { temperature: 0, thinkingConfig: { thinkingBudget: 0 } });
 	// json mode + user-set advanced values flow into generationConfig
 	assert.deepEqual(
-		geminiGenerationConfig(base({ temperature: 0.5, maxOutputTokens: 4096 }), { json: true }),
-		{ temperature: 0.5, maxOutputTokens: 4096, responseMimeType: 'application/json' }
+		geminiGenerationConfig(base({ model: 'gemini-2.5-flash', temperature: 0.5, maxOutputTokens: 4096 }), { json: true }),
+		{ temperature: 0.5, maxOutputTokens: 4096, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } }
 	);
 	// disabled/auto are Gemini-only vocabulary — OpenAI/OpenRouter never emit them.
 	assert.deepEqual(openaiChatExtras(base({ reasoning: 'disabled' }), 'openai'), {});
@@ -264,9 +272,11 @@ test('没中招的几家一个思考字段都不带 (2.12.2)', () => {
 		assert.ok(!('enable_thinking' in extras), `${id} 不该带 enable_thinking`);
 	}
 	// 这几家也不该被塞一个我们自作主张的 reasoning_effort。
-	for (const id of ['groq', 'ollama', 'custom']) {
+	for (const id of ['groq', 'custom']) {
 		assert.ok(!('reasoning_effort' in openaiChatExtras(base({}), id)), `${id} 不该带 reasoning_effort`);
 	}
+	// 5.0: Ollama 默认发 reasoning_effort "none"(官方兼容层: 关闭布尔式思考,不认识的值退回默认)。
+	assert.equal(openaiChatExtras(base({}), 'ollama').reasoning_effort, 'none');
 });
 
 test('三种关法互斥,每家只发自己的那一种 (2.12.2)', () => {

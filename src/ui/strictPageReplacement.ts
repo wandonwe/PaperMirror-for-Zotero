@@ -1,5 +1,5 @@
 import { preserveCollapsedPlotPanels } from '../reader/compositePlotGuard';
-import { createTextInkGuard, insetSideInk, insetTextInk, type InkFailure } from './textInkBounds';
+import { createTextInkGuard, insetSideInk, insetTextInk, maxInkBleed, setInkBleed, tryInkBleed, type InkFailure } from './textInkBounds';
 import { RenderMeasurementCache } from './measurementCache';
 import { pageContentKey } from '../export/pageArchive';
 /**
@@ -171,6 +171,9 @@ const SHRINK_STEPS = [0.94, 0.88];
  * 缩到 82% 也不与正文比出大小差;正文流仍止于 0.88 (发花闸不动)。
  */
 const SHRINK_STEPS_ISOLATED = [0.94, 0.88, 0.82];
+/** 5.0: 正文段落「差一点」时的小幅缩字档位(见 pmShrinkFit 第 4 步)。 */
+export const GENTLE_SHRINK_STEPS = [0.96, 0.92];
+const GENTLE_SHRINK_TYPES = new Set(['paragraph', 'list']);
 /** 墙钟 (2.7.0): 浏览器窗口有 performance,单测环境退回 Date.now。 */
 const now = (): number =>
 	(typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
@@ -396,6 +399,8 @@ export interface StrictPageStats {
 	/** LO-10 (2.4.6): 因新占区域压上未建模墨迹而被否决的扩展次数(按次计)。
 	 * 不是失败 —— 块回退原盒后继续走压缩/缩字/保留原文的既有流程。 */
 	inkBlocked: number;
+	/** 5.0: 靠小幅缩字(96%/92%)放回的正文段落数。 */
+	gentleShrinks?: number;
 	/** 排版量测累计耗时 ms (2.7.0, 审核 A-2): 所有 ladderFits 量测(含扩边、
 	 *  缩字、几何复核里的重测)的墙钟之和;不含 API 等待与页面渲染。可选:
 	 *  placementTally 等纯函数的合成 stats 不必带它。 */
@@ -811,6 +816,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	// LO-10 (2.4.6): 因新占条带上有**未建模墨迹**(分节横线/分栏竖线等)而被
 	// 否决的扩展次数 —— 这些块本来会叠印上去且审计看不见。按次计,非按块。
 	let inkBlocked = 0;
+	let gentleShrinks = 0;
 	// 排版量测累计耗时 (2.7.0, 审核 A-2): 只在 ladderFits 里累加。
 	let layoutMs = 0;
 	// 3.0.0:译了却没进排版的块,逐块记原因。以前 tooSmall / imageExcluded / tableIntentional
@@ -1238,6 +1244,44 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 	const textInkFits = createTextInkGuard(doc);
 	const sideInset = new WeakSet<HTMLElement>();
 	const heightSlack = (item: StrictItem): number => Math.max(1.5, item.fontPx * 0.35);
+	/**
+	 * May a descender bleed of `px` go below `piece` (5.0)? The strip must be
+	 * blank on the page bitmap (this block's own source lines excepted, they
+	 * are masked), clear of figures and preserved ink, inside this block's
+	 * column band, and above where a neighbouring block's first line can paint.
+	 */
+	const bleedStripFree = (item: StrictItem, piece: PixelBox, px: number): boolean => {
+		const strip = { left: piece.left, top: piece.top + piece.height, width: piece.width, height: px };
+		const hits = (b: PixelBox): boolean => Math.min(strip.left + strip.width, b.left + b.width) - Math.max(strip.left, b.left) > 0.5
+			&& Math.min(strip.top + strip.height, b.top + b.height) - Math.max(strip.top, b.top) > 0.01;
+		if (imageBoxes.some(hits) || inkObstacles.some(o => hits(o.box))) return false;
+		const room = (other: StrictItem, b: PixelBox): number =>
+			Math.min(2, other.fontPx * (Math.max(0, (other.minLineHeight || 1) - 1) / 2 + 0.06)) + (b.top - strip.top);
+		const inside = strip.top + strip.height <= item.box.top + item.box.height + 0.01;
+		if (inside) {
+			// Between this block's own lines (a flow piece above the next one;
+			// 联网校验 2757 "94. Casanova F / , Adingupu"): the area is this
+			// block's own and its source ink is masked or already there, so no
+			// bitmap test — only keep clear of the next piece's first line.
+			return !(item.flowBoxes ?? []).some(b => b.top > piece.top + 0.5 && hits(b) && px > room(item, b));
+		}
+		{
+			// Into another block's box only within its top half-leading (plus
+			// 0.06em, at most 2px): its first line's glyph ink starts below that.
+			// Reference entries stacked without a gap miss by 0.5-2.5px exactly so.
+			for (const other of items) {
+				if (other === item || other.abandoned) continue;
+				for (const b of other.flowBoxes ?? [other.box]) {
+					if (!hits(b)) continue;
+					if (px > room(other, b)) return false;
+				}
+			}
+			if (geometric.some(b => !byId.has(b.id) && pxOf.get(b.id) && hits(pxOf.get(b.id)!))) return false;
+			if (item.bodyRegion && strip.top + px > item.bodyRegion.top + item.bodyRegion.height + 0.01) return false;
+			if (strip.top + px > canvas.height / BITMAP_SCALE) return false;
+		}
+		return !regionHasInk(strip, 0.005, 3, lineBoxesFor.get(item.id) ?? []);
+	};
 
 	/** Ladder-fit a hidden node; true when it fits its fixed rectangle. */
 	const ladderFits = (item: StrictItem): boolean => {
@@ -1264,6 +1308,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				item.node.style.letterSpacing = step.letterSpacingEm ? `${step.letterSpacingEm}em` : '';
 				// A side inset belongs to one tested layout; never carry it to the next.
 				if (sideInset.has(item.node)) { item.node.style.paddingLeft = ''; item.node.style.paddingRight = ''; sideInset.delete(item.node); }
+				setInkBleed(item.node, 0);
 				if (item.flowBoxes) {
 					item.node.replaceChildren();
 					const nodes = item.flowBoxes.map(b => {
@@ -1284,6 +1329,17 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
                          const failure = textInkFits.failure(child);
                          if (failure) item.inkFailure = {...failure,flowIndex:index};
                          inkFits = insetTextInk(child,textInkFits,item.fontPx * 0.5,sizeFitsNow) || insetSideInk(child,textInkFits,item.fontPx * 0.25,sizeFitsNow);
+                         // 5.0: a g/p/comma 1-3px below the piece — bleed into blank space below.
+                         // The last piece's bleed leaves the block, so the block's own clip opens too.
+                         const last = index === item.flowBoxes!.length - 1;
+                         // Between two of this block's own lines the bleed may use the
+                         // whole line gap (a one-line piece is exactly 1em tall: a g/p
+                         // reaches ~0.22em below it — 联网校验 2757 "94. Casanova F").
+                         const next = item.flowBoxes![index + 1];
+                         const lineGapMax = next && next.top > b.top + b.height
+                          ? next.top - (b.top + b.height) + Math.min(2, item.fontPx * (Math.max(0, (item.minLineHeight || 1) - 1) / 2 + 0.06))
+                          : 0;
+                         if (!inkFits) inkFits = tryInkBleed(child,textInkFits,item.fontPx,px => bleedStripFree(item,b,px),last ? [item.node] : [],Math.max(maxInkBleed(item.fontPx),lineGapMax) || undefined);
                         }
 						if (sizeFits && !inkFits) glyphRejected = true;
 						return inkFits;
@@ -1309,6 +1365,13 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 				}
 				const inkFailure = textInkFits.failure(item.node);
 				if (inkFailure) item.inkFailure = inkFailure;
+				// 5.0: only descenders reach below the box — bleed into blank space below it.
+				if (inkFailure && inkFailure.bottomOverflow > 0 && !inkFailure.topOverflow && !inkFailure.leftOverflow && !inkFailure.rightOverflow
+					&& measured.height <= Math.round(item.box.height + heightSlack(item)) && layoutWidthFits(measured.width, item.node.clientWidth)
+					&& tryInkBleed(item.node, textInkFits, item.fontPx, px => bleedStripFree(item, item.box, px))) {
+					item.lastOverflow = 'none';
+					return true;
+				}
 				// A glyph hanging over a side edge (a "j" starting a line): inset
 				// that side inside the same rectangle and re-test everything.
 				if (inkFailure && (inkFailure.leftOverflow || inkFailure.rightOverflow)
@@ -1646,6 +1709,31 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 					}
 				}
 			}
+			// 4. 正文「差一点」的小幅缩字 (5.0, 真机 Frontiers 一文: 数字密集的段落
+			// 差 4px、窄栏段落只差 0.5–1.5px 字形下沿就整段留英文)。正文仍不做
+			// 常规缩字;只在原盒里差不到一行、或只差字形出框时,缩到 96%/92%(只在原盒内,不扩边),
+			// 肉眼几乎分不出与邻段的字号差。仍走同一套行距梯子与墨迹检查。
+			if (!fits && !canShrink && GENTLE_SHRINK_TYPES.has(item.node.getAttribute('data-pm-type') ?? '')) {
+				applyBox(item, original.width, original.height);
+				ladderFits(item);
+				const lineBox = item.fontPx * Math.max(1, item.minLineHeight || 1);
+				const excess = item.flowBoxes ? Infinity : item.node.scrollHeight - item.box.height;
+				const nearMiss = item.lastOverflow === 'glyph-bounds' || (item.lastOverflow === 'height' && excess <= lineBox * 1.05);
+				const floor = SHRINK_FLOOR_PT * pxPerPoint;
+				if (nearMiss) {
+					for (const factor of GENTLE_SHRINK_STEPS) {
+						const px = item.fontPx * factor;
+						if (px < floor) break;
+						item.node.style.fontSize = `${px.toFixed(2)}px`;
+						fits = ladderFits(item);
+						if (fits) break;
+					}
+					if (fits) {
+						gentleShrinks++;
+						item.node.setAttribute('data-pm-gentle-shrink', '1');
+					}
+				}
+			}
 			if (fits) {
 				commit(item);
 			}
@@ -1936,7 +2024,7 @@ export function buildStrictPage(doc: Document, input: StrictPageInput): StrictPa
 		return {
 			replaceable: items.length + unsafeLegendMasks.size,
 			committed, abandoned, pending,
-			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed, inkBlocked,
+			tableIntentional, tableFailed, imageExcluded, untranslated, tooSmall, annexed, inkBlocked, gentleShrinks,
 			layoutMs: Math.round(layoutMs)
 		};
 	};

@@ -1,7 +1,7 @@
 import { contextualSourceText } from '../translation/sourceContinuity';
 import { ContinuationUnitStore } from '../translation/continuationUnitStore';
 import { sourceBlockAtPoint } from './sourceBlockAtPoint';
-import { idleProgressFor } from '../ui/statusCapsule';
+import { idleProgressFor, ROTATED_TABLE_NOTE } from '../ui/statusCapsule';
 import { temporaryPageArchive, pageContentKey } from '../export/pageArchive';
 import { showUnplacedTranslations } from '../ui/unplacedTranslations';
 /**
@@ -17,14 +17,16 @@ import {
 	saveExplanationNote,
 	saveTranslationNote
 } from '../notes/noteService';
-import { getApiKey } from '../security/credentialStore';
+import { getApiKey, providersWithSavedKeys } from '../security/credentialStore';
+import { configuredProviderIds } from '../translation/providerAvailability';
 import { registerUrlCredentials } from '../security/logSanitizer';
 import { getProvider, listProviders } from '../translation/providers/registry';
-import { buildPool, pickProviderForPage, pickWeightedProviderForPage, rankProvidersForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
+import { buildPool, pickProviderForPage, routeProviderForPage, fastestProvider, rankProvidersForPage, poolLanePlan, prefetchWindowFor, normalizePerfMode, normalizeGlobalMax, DEFAULT_PERF_MODE, GLOBAL_MAX_DEFAULT, type ProviderCapability } from '../translation/providerPool';
 import { endpointHost, supportsCharBudget } from '../translation/providers/types';
 import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
-import { TranslationManager, type PageTranslationState, type TranslateHooks } from '../translation/translationManager';
+import { TranslationManager, type ManagerEvents, type PageTranslationState, type TranslateHooks, type TranslationDeps } from '../translation/translationManager';
 import { PROMPT_VERSION } from '../translation/promptBuilder';
+import { PageLedger } from './pageLedger';
 import { joinPlacementOutcome } from './diagnosticsJoin';
 import { engineExportRow, type EngineExportRow } from '../export/endpointKind';
 import type { DiagnosticsExportSource } from '../export/diagnosticsJsonl';
@@ -41,7 +43,7 @@ import {
 } from '../export/fileSink';
 import { parseGlossaryJSON, serializeGlossary, dedupeLearnedTerms } from '../translation/glossary';
 import { parseProviderProfiles, effectiveProviderConfig } from '../translation/providerProfiles';
-import type { GlossaryRule, ProviderSettings, SourceBlock, TranslationRequest, TranslationResponse } from '../types/models';
+import type { GlossaryRule, ProviderSettings, SourceBlock, TranslatedBlock, TranslationRequest, TranslationResponse } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PageRenderResult, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
@@ -206,8 +208,10 @@ export class ReaderSession {
 	private quiescing = false;
 	/** Provider pool (primary first). Rebuilt when translation (re)starts. */
 	private pool: string[] = [];
+	/** 5.0: the single source of truth for per-page state (see pageLedger.ts). */
+	private readonly ledger = new PageLedger<HTMLElement, UnfitBlock>();
 	/** Real image rects per page (operator list), fetched once per document. */
-	private imageRects = new Map<number, [number, number, number, number][] | null>();
+	private imageRects = this.ledger.view<[number, number, number, number][] | null>('imageRects');
 	/**
 	 * 底图位图 LRU (2.2.5, 计划 第三批 item6 · PF-4): 缓存 renderPageBitmap 得到的
 	 * 独立底图,键 = `${page}@${宽度桶}`。切换页/回看/在原宽度重渲染时命中即复用
@@ -248,7 +252,8 @@ export class ReaderSession {
 	 * repeat measures burned all the rounds on one render and long blocks
 	 * reverted to English ("译文显示后又消失").
 	 */
-	private compressPending = new Set<number>();
+	// 5.0: compress in-flight / turned-away renders live in the page ledger's
+	// state machine (beginCompress / deferRender / releaseCompress / endCompress).
 	/**
 	 * 被 compressPending 挡回的最近一次 settle (2.0.9, 审核 P2-10)。压缩请求
 	 * 可飞 120s,期间页面因缩放/更新重渲染 —— 新渲染的 resolveStrictUnfit 被
@@ -257,24 +262,23 @@ export class ReaderSession {
 	 * 记下待办,在飞压缩的 finally 里续跑(只保留最新一次;旧 token 由 live()
 	 * 自然拦截)。
 	 */
-	private compressBlocked = new Map<number, { element: HTMLElement; unfit: UnfitBlock[]; token: number }>();
 	/** 扫描/纯图页每页只提示一次。 */
-	private scannedNoticeShown = new Set<number>();
+	private scannedNoticeShown = this.ledger.flag('scannedNoticeShown');
 	/** 排版失败提示每页只弹一次 (2.5.2) —— 这条路径现在会自动重试。 */
-	private strictFailNoticeShown = new Set<number>();
+	private strictFailNoticeShown = this.ledger.flag('strictFailNoticeShown');
 	/** 几何安全复核结果按页留档(进诊断导出;只计数,无文本)。 */
-	private geometryAudits = new Map<number, import('../ui/strictPageReplacement').GeometryAuditResult>();
+	private geometryAudits = this.ledger.view<import('../ui/strictPageReplacement').GeometryAuditResult>('geometryAudits');
 	/** 每页最近一次 placement 统计 (2.0.10, 审核 P3): imageExcluded 等
 	 *  「有意保留」类目此前不进任何诊断 —— 阈值收紧后该类目变大也无从发现。 */
-	private placementStats = new Map<number, import('../ui/strictPageReplacement').StrictPageStats>();
+	private placementStats = this.ledger.view<import('../ui/strictPageReplacement').StrictPageStats>('placementStats');
 	/** 每页 placement 探针 (审核: 封面标题空洞定位): 每块的 base 位图/遮罩取样
 	 *  (baseInk/maskOpaque),分辨「底图缺字」与「遮罩误盖」。只几何+布尔,无文本。 */
 	private pageArchive = temporaryPageArchive();
  private continuationUnits = new ContinuationUnitStore();
- private placementKeys = new Map<number,string>();
-	private placementProbe = new Map<number, import('../ui/strictPageReplacement').StrictProbeRow[]>();
+ private placementKeys = this.ledger.view<string>('placementKeys');
+	private placementProbe = this.ledger.view<import('../ui/strictPageReplacement').StrictProbeRow[]>('placementProbe');
 	/** 放弃清单 (2.7.0, 审核 B-1): 页索引 → 放弃块 id + 原因枚举串,无文本。 */
-	private abandonedBlocks = new Map<number, import('../ui/strictPageReplacement').AbandonedBlock[]>();
+	private abandonedBlocks = this.ledger.view<import('../ui/strictPageReplacement').AbandonedBlock[]>('abandonedBlocks');
 	/**
 	 * 导出中的逐页短时保护 (2.8.6, 导出方案 P1)。
 	 *
@@ -282,21 +286,21 @@ export class ReaderSession {
 	 * 报"在用",2.8.3 的淘汰就不会正好在这时把它卸掉。**不是全局暂停淘汰** ——
 	 * 那样长文档导出时内存会一路上涨,把第四批省下来的又吃回去。
 	 */
-	private exportPins = new Set<number>();
+	private exportPins = this.ledger.flag('exportPins');
 	/**
 	 * Per-page render generation. Bumped at the start of every renderDocPage;
 	 * an async render (or its settle/compress callbacks) that discovers a newer
 	 * generation for its page aborts instead of overwriting the live slot — no
 	 * stale render can flash an old page in after a newer one has been shown.
 	 */
-	private renderToken = new Map<number, number>();
+	private renderToken = this.ledger.view<number>('renderToken');
 	/**
 	 * 刷新-driven engine rotation. With a provider pool active, hitting 刷新 on
 	 * a page bumps its offset so the RE-translation is dealt to the NEXT
 	 * engine in the pool — a page that came out poorly on one service gets a
 	 * genuinely different translator, not the same one again.
 	 */
-	private pageProviderOffset = new Map<number, number>();
+	private pageProviderOffset = this.ledger.view<number>('pageProviderOffset');
 	/** The single capsule's task queue (see setTask/renderTopTask). */
 	private tasks = new Map<string, OverlayProgress>();
 	private taskHideTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -310,7 +314,7 @@ export class ReaderSession {
 	private capsuleCollapsed = false;
 	/** Pages that have been translated at least once — drives the idle glyph
 	 * (✓ vs ↻ 刷新本页) so the resting capsule tells the truth per page. */
-	private translatedPages = new Set<number>();
+	private translatedPages = this.ledger.flag('translatedPages');
 	/**
 	 * The most recent page that settled with kept-original segments, and the
 	 * strict-page element that holds its `[data-pm-unfit]` boxes. Drives
@@ -335,7 +339,9 @@ export class ReaderSession {
 				//
 				// 只在 offset === 0 时加权:offset 非零意味着熔断/手动轮换正在
 				// 让这一页退让,那时要的是"下一名"这个确定的序,不是重新按权重挑。
-				return pickWeightedProviderForPage(this.pool, pageIndex, this.manager?.providerWeights() ?? {});
+				// 5.0: 当前页给最快的引擎,临近页避开慢引擎(routeProviderForPage)。
+				return routeProviderForPage(this.pool, pageIndex,
+					this.manager?.currentPageIndex() ?? pageIndex, this.manager?.providerThroughput() ?? {});
 			}
 			const rank = rankProvidersForPage(this.pool, pageIndex);
 			return rank[offset % rank.length]!;
@@ -415,7 +421,56 @@ export class ReaderSession {
 		const item = adapter.getReaderItem(this.reader);
 		const title = item?.getDisplayTitle?.() ?? (item ? String(item.getField('title') ?? '') : '') ?? 'PDF';
 
-		this.pane = new TranslationPane(this.split.paneHost, title || 'PDF', paneStrings(), {
+		const pane = this.createPaneAndOverlay(this.split, title);
+
+		this.sync = createSyncController({
+			scrollPaneToPage: pageIndex => this.pane?.scrollToPage(pageIndex),
+			scrollPaneToPosition: (pageIndex, fraction) => this.pane?.setPdfScrollFraction(pageIndex, fraction),
+			scrollPdfToPosition: (pageIndex, fraction) => { adapter.setPageScrollFraction(this.reader, pageIndex, fraction); },
+			navigatePdfToPage: pageIndex => adapter.navigateToPage(this.reader, pageIndex)
+		});
+		this.sync.enabled = getPref<boolean>('syncScroll', true);
+
+		// Resolve the file hash for cache keys (item.attachmentHash is md5)
+		try {
+			this.fileHash = item?.attachmentHash ? await item.attachmentHash : '';
+		}
+		catch {
+			this.fileHash = '';
+		}
+		// open()×destroy 竞态闸 (2.0.7, 审核 P1-1): 上面的 await(以及下面的
+		// prime,可达数秒)期间用户关标签/关窗口/禁用插件都会 destroy()。
+		// 此前 open() 继续执行: 在销毁**之后**注册 disposePdfEvents 与
+		// startPolling —— eventBus 监听与兜底轮询永不解除(tick 首行的
+		// destroyed 检查只让它空转,不停止),每次「打开后迅速关闭」泄漏一条;
+		// 隐私未接受分支还会对已置 null 的 split/pane 直接调用抛 TypeError。
+		if (this.destroyed) {
+			return;
+		}
+
+		// 5.0: 全篇样式在后台先开算(逐页轻量读文字),与首页渲染并行;
+		// 首次抽取最多等它 6 秒。
+		void this.extractor.ensureDocumentStyle();
+		await this.extractor.prime();
+		if (this.destroyed) {
+			return; // 同上: prime 期间被销毁,后续注册一律不做
+		}
+		this.watchAutomaticExplanation();
+
+		if (!await this.showPrivacyOrStart(this.split, pane)) {
+			return;
+		}
+
+		this.subscribePdfEvents();
+
+		this.installIdentityPrefObservers();
+		this.startPolling();
+		logger.info(MODULE, `Session opened for tab ${this.reader.tabID}`);
+	}
+
+	/** open() 拆出: 建译文面板与覆盖层,接好回调、主题、偏好与引擎菜单。 */
+	private createPaneAndOverlay(split: SplitViewHandles, title: string): TranslationPane {
+		this.pane = new TranslationPane(split.paneHost, title || 'PDF', paneStrings(), {
 			onExplainBlock: (pageIndex, blockId) => {
 				const state = this.manager?.getPageState(pageIndex);
 				const source = state?.blocks.find(b => b.id === blockId)?.sourceText ?? '';
@@ -449,6 +504,7 @@ export class ReaderSession {
 			onToggleViewKind: kind => this.applyPaneViewKind(kind, { persist: true }),
 			onPickLanguages: (source, target) => this.applyLanguagePick(source, target),
 			onPickProvider: providerId => this.applyProviderPick(providerId),
+			loadProviderChoices: () => this.configuredProviderChoices(),
 			onClose: () => this.close(),
 			onSwapSides: () => this.swapSides(),
 			onBlockClick: (pageIndex, _blockId) => this.sync?.onPaneNavigated(pageIndex),
@@ -482,7 +538,6 @@ export class ReaderSession {
 		this.overlay.setPageRenderer((pageIndex, host, width, signal) => this.renderDocPage(pageIndex, host, width, signal));
 		this.overlay.setDisplayMode(getPref<OverlayDisplayMode>('overlayDisplayMode', 'dim-original'));
 		this.overlay.setPeekOnHover(getPref<boolean>('overlayPeekHover', true));
-		this.overlay.setFitMode(getPref<'strict' | 'expand'>('overlayFitMode', 'expand'));
 		this.pane.setArticleFontSize(getPref<number>('articleFontSize', 16));
 		// 整页对照: the pane shows the whole document; each page renders as
 		// the original until its translation completes, then swaps.
@@ -493,57 +548,35 @@ export class ReaderSession {
 		this.pane.setViewKind(getPref<'page' | 'article'>('paneView', 'page'));
 		{
 			const providerId = getPref<string>('provider', 'bing-free');
-			this.pane.setProviderChoices(
-				listProviders().map(p => ({ id: p.id, displayName: p.displayName })),
-				providerId
-			);
+			// 5.0: 菜单只列已设置的引擎。先用同步可得的信息(免费引擎 + 当前
+			// 引擎 + 端点/本地配置)占位,凭据库查完再替换;每次打开菜单还会重取。
+			this.pane.setProviderChoices(this.providerChoicesFrom(new Set()), providerId);
+			void this.configuredProviderChoices().then(choices => {
+				this.pane?.setProviderChoices(choices, getPref<string>('provider', 'bing-free'));
+			}).catch(() => { /* 保留占位清单 */ });
 			this.pane.setProviderInfo(getProvider(providerId).displayName, providerId);
 			const prefSource = getPref<string>('sourceLanguage', 'auto');
 			const prefTarget = getPref<string>('targetLanguage', 'auto');
 			this.pane.setLanguageCodes(prefSource, prefTarget);
 			this.pane.setLanguagePair(languageLabel(prefSource), languageLabel(prefTarget));
 		}
+		return this.pane;
+	}
 
-		this.sync = createSyncController({
-			scrollPaneToPage: pageIndex => this.pane?.scrollToPage(pageIndex),
-			scrollPaneToPosition: (pageIndex, fraction) => this.pane?.setPdfScrollFraction(pageIndex, fraction),
-			scrollPdfToPosition: (pageIndex, fraction) => { adapter.setPageScrollFraction(this.reader, pageIndex, fraction); },
-			navigatePdfToPage: pageIndex => adapter.navigateToPage(this.reader, pageIndex)
-		});
-		this.sync.enabled = getPref<boolean>('syncScroll', true);
-
-		// Resolve the file hash for cache keys (item.attachmentHash is md5)
-		try {
-			this.fileHash = item?.attachmentHash ? await item.attachmentHash : '';
-		}
-		catch {
-			this.fileHash = '';
-		}
-		// open()×destroy 竞态闸 (2.0.7, 审核 P1-1): 上面的 await(以及下面的
-		// prime,可达数秒)期间用户关标签/关窗口/禁用插件都会 destroy()。
-		// 此前 open() 继续执行: 在销毁**之后**注册 disposePdfEvents 与
-		// startPolling —— eventBus 监听与兜底轮询永不解除(tick 首行的
-		// destroyed 检查只让它空转,不停止),每次「打开后迅速关闭」泄漏一条;
-		// 隐私未接受分支还会对已置 null 的 split/pane 直接调用抛 TypeError。
-		if (this.destroyed) {
-			return;
-		}
-
-		await this.extractor.prime();
-		if (this.destroyed) {
-			return; // 同上: prime 期间被销毁,后续注册一律不做
-		}
-		this.watchAutomaticExplanation();
-
+	/**
+	 * open() 拆出: 隐私说明未接受时先展示说明,否则应用视图并开始翻译。
+	 * 返回 false 表示等待期间会话已被销毁,调用方必须停止后续注册。
+	 */
+	private async showPrivacyOrStart(split: SplitViewHandles, pane: TranslationPane): Promise<boolean> {
 		if (!getPref<boolean>('privacyNoticeAccepted', false)) {
 			const settings = await this.providerSettings();
 			if (this.destroyed) {
-				return; // P1-1: providerSettings 查密钥库最长 4s,期间可被销毁
+				return false; // P1-1: providerSettings 查密钥库最长 4s,期间可被销毁
 			}
 			const provider = getProvider(getPref<string>('provider', 'bing-free'));
 			// The notice lives in the pane, so it must be on screen to be read.
-			this.split.setPaneVisible(true);
-			this.pane.showPrivacyNotice(endpointHost(settings, provider.defaultBaseURL));
+			split.setPaneVisible(true);
+			pane.showPrivacyNotice(endpointHost(settings, provider.defaultBaseURL));
 		}
 		else {
 			this.applyViewMode();
@@ -558,7 +591,11 @@ export class ReaderSession {
 			});
 			this.startTranslating();
 		}
+		return true;
+	}
 
+	/** open() 拆出: 订阅 PDF.js 的滚动、渲染与文本层事件。 */
+	private subscribePdfEvents(): void {
 		// PDF.js events: the pane renders its pages itself now, so left-side
 		// re-renders and zooms no longer force a rebuild. The stream drives
 		// 同步滚动 (following the reader's position continuously) AND — 2.2.9,
@@ -603,10 +640,6 @@ export class ReaderSession {
 			}
 			this.manager?.onPageRendered(pageIndex);
 		}, ['textlayerrendered']);
-
-		this.installIdentityPrefObservers();
-		this.startPolling();
-		logger.info(MODULE, `Session opened for tab ${this.reader.tabID}`);
 	}
 
 	/**
@@ -690,114 +723,8 @@ export class ReaderSession {
 			return;
 		}
 		this.manager = new TranslationManager(
-			{
-				extractPage: pageIndex => this.extractor.extractPage(pageIndex),
-				extractRenderedPage: pageIndex => this.extractor.extractRenderedPage(pageIndex),
-				extractPathOf: pageIndex => this.extractor.extractPathFor(pageIndex),
-				extractPhasesOf: pageIndex => this.extractor.extractPhasesFor(pageIndex),
-				translateRequest: (request, signal, hooks) => this.translateRequest(request, signal, hooks),
-                restoreSnapshot: async pageIndex => {
-                    const saved = await this.pageArchive.get(pageIndex);
-                    if (!saved?.blocks?.length || !saved.translations?.length) return null;
-                    const diagnostics = saved.diagnostics as {status?: string; metrics?: PageTranslationState['diagnostics']} | undefined;
-                    const translations = new Map(saved.translations.map(t => [t.id, t.translatedText]));
-                    const blocks = saved.blocks as SourceBlock[];
-                    return {pageIndex, blocks, translations,
-                        status:diagnostics?.status === 'done' ? 'done' : 'idle',
-                        diagnostics:diagnostics?.metrics,
-                        cached:blocks.every(b => b.translationMode === 'preserve' || translations.has(b.id))};
-                },
-				readCache: async (pageIndex, blocks) => {
-					const texts = blocks.map(contextualSourceText);
-     const sample = blocks.map(b=>b.sourceText).join('\n').slice(0,2000);
-					const parts = await this.cacheKey(pageIndex, texts, undefined, sample);
-					if (parts) {
-						const hit = await cacheManager.readPage(parts);
-						if (hit) {
-							return hit;
-						}
-					}
-					// 发送前查全服务商缓存 (2.2.1, 计划 第三批 item1 · Codex API-P1):
-					// 规范键 miss 后,遍历池内其余已启用服务商各自的完整页缓存 ——
-					// 只要**任一**服务商曾译过这页(上个会话主译的引擎、池变动前的
-					// 拥有者、熔断换过的引擎),就直接复用、绝不重付费。跨会话/增删
-					// 服务商后最常见的「白重译一整篇」由此根治。命中键与规范键不同
-					// 不回写(读写键仍恒等,下次仍靠这层探测,成本只是几次文件存在性
-					// 检查;getApiKey 已 memoize,构键几乎零开销)。
-					if (this.pool.length > 1) {
-						const canonical = parts?.provider;
-						for (const pid of this.pool) {
-							const alt = await this.cacheKey(pageIndex, texts, pid, sample);
-							if (!alt || alt.provider === canonical) {
-								continue;
-							}
-							const hit = await cacheManager.readPage(alt);
-							if (hit) {
-								return hit;
-							}
-						}
-					}
-					return null;
-				},
-				writeCache: async (pageIndex, blocks, translations) => {
-					const parts = await this.cacheKey(pageIndex, blocks.map(contextualSourceText), undefined, blocks.map(b=>b.sourceText).join('\n').slice(0,2000));
-					if (parts) {
-						// producedBy = 运行时引擎 (P3, 2.0.10, 仅诊断): 键是规范引擎的。
-						return await cacheManager.writePage(parts, translations, this.providerForPage(pageIndex));
-					}
-					return false;
-				},
-				// 段落级缓存: per-segment store scoped by provider/model/prompt/
-				// glossary, beneath the page cache. 普通刷新 (圆环) reuses it.
-				readSegments: async (pageIndex, hashes) => {
-					const parts = await this.segmentContext(pageIndex);
-					return parts ? cacheManager.readSegments(parts, hashes) : null;
-				},
-				writeSegments: async (pageIndex, entries) => {
-					const parts = await this.segmentContext(pageIndex);
-					if (parts) {
-						await cacheManager.writeSegments(parts, entries);
-					}
-				},
-				getLanguages: sample => this.resolveLanguages(sample),
-				getDocumentTitle: () => {
-					const item = adapter.getReaderItem(this.reader);
-					return item?.getDisplayTitle?.() ?? '';
-				},
-				getGlossary: () => this.loadGlossary(),
-				getNoTranslate: () => readNoTranslateList(),
-				// 内存淘汰的"在用"判据 (2.8.3, 性能第四批): 当前阅读页、面板上
-				// 仍挂着内容的页、以及正在重建的页,都不许被卸掉完整内容。
-				isPageInUse: (pageIndex: number) =>
-					pageIndex === adapter.getCurrentPageIndex(this.reader)
-					|| this.pane?.hasMountedPage(pageIndex) === true
-					// 2.8.6 (导出方案 P1): 导出器正在读的那一页也算在用 —— 逐页短时
-					// 保护,读完立即释放,不在整个导出期间全局暂停淘汰。
-					|| this.exportPins.has(pageIndex),
-				useContext: () => getPref<boolean>('useContext', true),
-    continuityIdentity: () => this.continuityNamespace(),
-				pageCount: () => adapter.getPageCount(this.reader),
-				// Each page's provider LANE — lets the scheduler cap providers
-				// independently and reserve a foreground slot for the current one.
-				laneFor: (pageIndex: number) => this.providerForPage(pageIndex),
-				poolSize: () => this.pool.length
-			},
-			{
-				onPageUpdate: state => this.onPageUpdate(state),
-				// 熔断: this page's engine keeps dropping/echoing ids → deal its
-				// REMAINING requests to the next engine in the pool. With a single
-				// configured provider there is no backup — log and continue.
-				onProviderUnstable: (pageIndex, missingRatio) => {
-					const pct = Math.round(missingRatio * 100);
-					if (this.pool.length > 1) {
-						this.pageProviderOffset.set(pageIndex, ((this.pageProviderOffset.get(pageIndex) ?? 0) + 1) % this.pool.length);
-						logger.warn(MODULE, `page ${pageIndex + 1}: engine unstable (${pct}% missing) → switching to ${this.providerForPage(pageIndex)}`);
-					}
-					else {
-						logger.warn(MODULE, `page ${pageIndex + 1}: engine unstable (${pct}% missing); no backup provider configured`);
-					}
-				}
-			},
+			this.translationDeps(),
+			this.translationEvents(),
 			{
 				// The global cap is set properly by applyConcurrencyPlan() below
 				// (sum of each enabled provider's own lane cap); this initial value
@@ -814,6 +741,131 @@ export class ReaderSession {
 		if (!this.quiescing) { // P3 (2.0.10): quiesce 封口
 			this.manager.setCurrentPage(page);
 		}
+	}
+
+	/** startTranslatingWithPool 拆出: 翻译管理器依赖的宿主能力(抽取、请求、缓存、调度)。 */
+	private translationDeps(): TranslationDeps {
+		return {
+			extractPage: pageIndex => this.extractor.extractPage(pageIndex),
+			extractRenderedPage: pageIndex => this.extractor.extractRenderedPage(pageIndex),
+			extractPathOf: pageIndex => this.extractor.extractPathFor(pageIndex),
+			extractPhasesOf: pageIndex => this.extractor.extractPhasesFor(pageIndex),
+			translateRequest: (request, signal, hooks) => this.translateRequest(request, signal, hooks),
+                restoreSnapshot: async pageIndex => {
+                    const saved = await this.pageArchive.get(pageIndex);
+                    if (!saved?.blocks?.length || !saved.translations?.length) return null;
+                    const diagnostics = saved.diagnostics as {status?: string; metrics?: PageTranslationState['diagnostics']} | undefined;
+                    const translations = new Map(saved.translations.map(t => [t.id, t.translatedText]));
+                    const blocks = saved.blocks as SourceBlock[];
+                    return {pageIndex, blocks, translations,
+                        status:diagnostics?.status === 'done' ? 'done' : 'idle',
+                        diagnostics:diagnostics?.metrics,
+                        cached:blocks.every(b => b.translationMode === 'preserve' || translations.has(b.id))};
+                },
+			readCache: (pageIndex, blocks) => this.readPageCacheAnyProvider(pageIndex, blocks),
+			writeCache: async (pageIndex, blocks, translations) => {
+				const parts = await this.cacheKey(pageIndex, blocks.map(contextualSourceText), undefined, blocks.map(b=>b.sourceText).join('\n').slice(0,2000));
+				if (parts) {
+					// producedBy = 运行时引擎 (P3, 2.0.10, 仅诊断): 键是规范引擎的。
+					return await cacheManager.writePage(parts, translations, this.providerForPage(pageIndex));
+				}
+				return false;
+			},
+			// 段落级缓存: per-segment store scoped by provider/model/prompt/
+			// glossary, beneath the page cache. 普通刷新 (圆环) reuses it.
+			readSegments: async (pageIndex, hashes) => {
+				const parts = await this.segmentContext(pageIndex);
+				return parts ? cacheManager.readSegments(parts, hashes) : null;
+			},
+			writeSegments: async (pageIndex, entries) => {
+				const parts = await this.segmentContext(pageIndex);
+				if (parts) {
+					await cacheManager.writeSegments(parts, entries);
+				}
+			},
+			getLanguages: sample => this.resolveLanguages(sample),
+			getDocumentTitle: () => {
+				const item = adapter.getReaderItem(this.reader);
+				return item?.getDisplayTitle?.() ?? '';
+			},
+			getGlossary: () => this.loadGlossary(),
+			getNoTranslate: () => readNoTranslateList(),
+			// 内存淘汰的"在用"判据 (2.8.3, 性能第四批): 当前阅读页、面板上
+			// 仍挂着内容的页、以及正在重建的页,都不许被卸掉完整内容。
+			isPageInUse: (pageIndex: number) =>
+				pageIndex === adapter.getCurrentPageIndex(this.reader)
+				|| this.pane?.hasMountedPage(pageIndex) === true
+				// 2.8.6 (导出方案 P1): 导出器正在读的那一页也算在用 —— 逐页短时
+				// 保护,读完立即释放,不在整个导出期间全局暂停淘汰。
+				|| this.exportPins.has(pageIndex),
+			useContext: () => getPref<boolean>('useContext', true),
+    continuityIdentity: () => this.continuityNamespace(),
+			pageCount: () => adapter.getPageCount(this.reader),
+			// Each page's provider LANE — lets the scheduler cap providers
+			// independently and reserve a foreground slot for the current one.
+			laneFor: (pageIndex: number) => this.providerForPage(pageIndex),
+			poolSize: () => this.pool.length,
+			// 5.0 对冲: 只找测得最快、且不是当前这家的大模型;没有数据就不对冲。
+			hedgeProviderFor: (_pageIndex: number, current: string) =>
+				this.pool.length > 1 ? fastestProvider(this.pool, this.manager?.providerThroughput() ?? {}, current) : ''
+		};
+	}
+
+	/** startTranslatingWithPool 拆出: 管理器回调(页面更新、引擎熔断)。 */
+	private translationEvents(): ManagerEvents {
+		return {
+			onPageUpdate: state => this.onPageUpdate(state),
+			// 熔断: this page's engine keeps dropping/echoing ids → deal its
+			// REMAINING requests to the next engine in the pool. With a single
+			// configured provider there is no backup — log and continue.
+			onProviderUnstable: (pageIndex, missingRatio) => {
+				const pct = Math.round(missingRatio * 100);
+				if (this.pool.length > 1) {
+					this.pageProviderOffset.set(pageIndex, ((this.pageProviderOffset.get(pageIndex) ?? 0) + 1) % this.pool.length);
+					logger.warn(MODULE, `page ${pageIndex + 1}: engine unstable (${pct}% missing) → switching to ${this.providerForPage(pageIndex)}`);
+				}
+				else {
+					logger.warn(MODULE, `page ${pageIndex + 1}: engine unstable (${pct}% missing); no backup provider configured`);
+				}
+			}
+		};
+	}
+
+	/**
+	 * 读页缓存: 先用规范引擎的键;没有再探测池里其他服务商各自的整页缓存
+	 * (2.2.1, 发送前查全服务商缓存),任一家译过就直接复用。
+	 */
+	private async readPageCacheAnyProvider(pageIndex: number, blocks: SourceBlock[]): Promise<TranslatedBlock[] | null> {
+			const texts = blocks.map(contextualSourceText);
+     const sample = blocks.map(b=>b.sourceText).join('\n').slice(0,2000);
+			const parts = await this.cacheKey(pageIndex, texts, undefined, sample);
+			if (parts) {
+				const hit = await cacheManager.readPage(parts);
+				if (hit) {
+					return hit;
+				}
+			}
+			// 发送前查全服务商缓存 (2.2.1, 计划 第三批 item1 · Codex API-P1):
+			// 规范键 miss 后,遍历池内其余已启用服务商各自的完整页缓存 ——
+			// 只要**任一**服务商曾译过这页(上个会话主译的引擎、池变动前的
+			// 拥有者、熔断换过的引擎),就直接复用、绝不重付费。跨会话/增删
+			// 服务商后最常见的「白重译一整篇」由此根治。命中键与规范键不同
+			// 不回写(读写键仍恒等,下次仍靠这层探测,成本只是几次文件存在性
+			// 检查;getApiKey 已 memoize,构键几乎零开销)。
+			if (this.pool.length > 1) {
+				const canonical = parts?.provider;
+				for (const pid of this.pool) {
+					const alt = await this.cacheKey(pageIndex, texts, pid, sample);
+					if (!alt || alt.provider === canonical) {
+						continue;
+					}
+					const hit = await cacheManager.readPage(alt);
+					if (hit) {
+						return hit;
+					}
+				}
+			}
+			return null;
 	}
 
 	/**
@@ -991,9 +1043,11 @@ export class ReaderSession {
 	}
 
 	private async translateRequest(request: TranslationRequest, signal: AbortSignal, hooks?: TranslateHooks): Promise<TranslationResponse> {
-		const chosen = typeof request.pageIndex === 'number'
-			? this.providerForPage(request.pageIndex)
-			: getPref<string>('provider', 'bing-free');
+		const chosen = hooks?.provider && this.pool.includes(hooks.provider)
+			? hooks.provider
+			: typeof request.pageIndex === 'number'
+				? this.providerForPage(request.pageIndex)
+				: getPref<string>('provider', 'bing-free');
 		const settings = await this.providerSettingsFor(chosen);
 		const provider = getProvider(settings.providerId);
 		if (provider.requiresApiKey && !settings.apiKey) {
@@ -1156,7 +1210,7 @@ export class ReaderSession {
  private resetPageArchive(): void {
   this.continuationUnits.clear();
   void this.pageArchive.close();this.pageArchive=temporaryPageArchive();
-  this.placementKeys.clear();this.placementProbe.clear();this.abandonedBlocks.clear();this.geometryAudits.clear();this.placementStats.clear();
+  this.ledger.resetPlacementAll();
  }
 	private onPageUpdate(state: PageTranslationState): void {
 		if (this.destroyed) {
@@ -1164,8 +1218,7 @@ export class ReaderSession {
 		}
   const key = pageContentKey(state.blocks, state.translations);
   if (this.placementKeys.get(state.pageIndex) !== key) {
-   this.placementProbe.delete(state.pageIndex);this.abandonedBlocks.delete(state.pageIndex);
-   this.geometryAudits.delete(state.pageIndex);this.placementStats.delete(state.pageIndex);
+   this.ledger.resetPlacement(state.pageIndex);
   }
   if (state.blocks.length && (state.status === 'done' || state.status === 'error' || (state.status === 'idle' && state.translations.size > 0))) this.archivePage(state);
 		this.pane?.renderPage(state);
@@ -1338,7 +1391,7 @@ export class ReaderSession {
 		const pageIndex = adapter.getCurrentPageIndex(this.reader);
 		const stats = this.placementStats.get(pageIndex);
 		return idleProgressFor(pageIndex + 1, adapter.getPageCount(this.reader),
-			this.translatedPages.has(pageIndex), stats ? placementTally(stats) : undefined);
+			this.translatedPages.has(pageIndex), stats ? placementTally(stats) : undefined, this.pageNote(pageIndex).note);
 	}
 
 	/** Shared collapsed state → mirror onto BOTH surfaces' capsules. */
@@ -1615,28 +1668,9 @@ export class ReaderSession {
 		// viewer turns happen AFTER strict fitting, so they may reuse this raster.
 		// Keep exact widths: rounding could reuse a slightly different viewport
 		// and leave masks out of alignment at fractional zoom levels.
-		const intrinsicRotation = adapter.getPageIntrinsicRotation(this.reader, pageIndex);
-		const bitmapKey = `${pageIndex}@${width}#${intrinsicRotation}`;
-		let render = this.baseBitmaps.get(bitmapKey) ?? null;
-		if (!render) {
-			// Supersample within a fixed pixel budget: sharp text without letting a
-			// tall page allocate an enormous canvas.
-			const oversample = Math.max(1, Math.min(1.8, Math.sqrt(3_200_000 / Math.max(1, width * width * 1.4))));
-			render = await adapter.renderPageBitmap(this.reader, pageIndex, width, oversample);
-			if (!current()) {
-				return false;
-			}
-			if (render) {
-				this.baseBitmaps.set(bitmapKey, render); // 只缓存独立 raster
-			}
-		}
-		if (!render) {
-			// Core rendering unavailable (compartment quirk, worker busy):
-			// fall back to copying the LEFT viewer's canvas. It only exists for
-			// pages near the left viewport, and comes at the left zoom rather
-			// than the pane width — the element is scaled to fit below. 不缓存
-			// (它是左视图 live canvas、宽度/缩放都不对,复用会错位)。
-			render = adapter.getPageRender(this.reader, pageIndex);
+		const render = await this.pageBitmap(pageIndex, width, current);
+		if (render === 'stale') {
+			return false;
 		}
 		if (!render || this.destroyed) {
 			return false;
@@ -1741,48 +1775,7 @@ export class ReaderSession {
 					}
 					this.resolveStrictUnfit(pageIndex, element, unfit, token);
 				});
-				// A single click on translated text must be INERT reading behaviour:
-				// it only moves the focus highlight. The old handler ran 深度讲解 +
-				// a scroll-to-top + a PDF navigation on every innocent click — the
-				// reader clicked a paragraph and the whole layout convulsed.
-				// 深度讲解 is now a deliberate DOUBLE-click.
-				for (const node of Array.from(built.element.querySelectorAll('[data-pm-block]'))) {
-					const focusBlock = (): void => {
-						const scope = slot.closest('.pm-scroll') ?? built.element;
-						for (const other of Array.from(scope.querySelectorAll('.pm-repage-block.pm-focused'))) {
-							other.classList.remove('pm-focused');
-						}
-						node.classList.add('pm-focused');
-					};
-					node.addEventListener('click', focusBlock);
-					node.addEventListener('dblclick', () => {
-						focusBlock();
-						const id = node.getAttribute('data-pm-block');
-						const block = state.blocks.find(b => b.id === id)
-							?? state.blocks.find(b => b.id === id?.replace(/::p\d+$/, ''));
-						if (block?.sourceText.trim()) void this.explainSelection(block.sourceText);
-					});
-					// 右键 = 重译此段 (单段 replay, 参照 retain-pdf item replay):
-					// one foreground request for exactly this block, keep-origin
-					// and 止损 cleared so the retry is real.
-					node.addEventListener('contextmenu', (event) => {
-						event.preventDefault();
-						event.stopPropagation();
-						focusBlock();
-						const id = node.getAttribute('data-pm-block')?.split('::')[0];  // 段落拆分块 id 形如 <region>::pN,取区域 id
-						if (!id || !this.manager) {
-							return;
-						}
-						node.classList.add('pm-retranslating');
-						this.flashNotice('正在重译此段…');
-						void this.manager.retranslateBlock(pageIndex, id).then((ok) => {
-							node.classList.remove('pm-retranslating');
-							// Neutral failure text: a scroll-cancel and a rejected response
-							// look the same from here — don't claim a reason we don't know.
-							this.flashNotice(ok ? '此段已重译' : '此段重译未完成,可再试或换服务商');
-						});
-					});
-				}
+				this.wireBlockInteractions(built.element, slot, state, pageIndex);
 				return partial ? 'partial' : 'translated';
 			}
 		}
@@ -1795,6 +1788,84 @@ export class ReaderSession {
 		}
 		slot.replaceChildren(applyFit(buildOriginalPage(doc, render)));
 		return degraded ? 'degraded' : 'original';
+	}
+
+	/**
+	 * renderDocPage 拆出: 取这一页的底图。优先用本会话缓存的独立 raster(按页、宽度、
+	 * 固有旋转区分),否则让内核渲染;内核不可用时退回复制左侧视图的画布。
+	 * 'stale' 表示渲染期间这一趟已被更新的渲染或取消取代。
+	 */
+	private async pageBitmap(pageIndex: number, width: number, current: () => boolean): Promise<adapter.PageRender | null | 'stale'> {
+		const intrinsicRotation = adapter.getPageIntrinsicRotation(this.reader, pageIndex);
+		const bitmapKey = `${pageIndex}@${width}#${intrinsicRotation}`;
+		let render = this.baseBitmaps.get(bitmapKey) ?? null;
+		if (!render) {
+			// Supersample within a fixed pixel budget: sharp text without letting a
+			// tall page allocate an enormous canvas.
+			const oversample = Math.max(1, Math.min(1.8, Math.sqrt(3_200_000 / Math.max(1, width * width * 1.4))));
+			render = await adapter.renderPageBitmap(this.reader, pageIndex, width, oversample);
+			if (!current()) {
+				return 'stale';
+			}
+			if (render) {
+				this.baseBitmaps.set(bitmapKey, render); // 只缓存独立 raster
+			}
+		}
+		if (!render) {
+			// Core rendering unavailable (compartment quirk, worker busy):
+			// fall back to copying the LEFT viewer's canvas. It only exists for
+			// pages near the left viewport, and comes at the left zoom rather
+			// than the pane width — the element is scaled to fit below. 不缓存
+			// (它是左视图 live canvas、宽度/缩放都不对,复用会错位)。
+			render = adapter.getPageRender(this.reader, pageIndex);
+		}
+		return render;
+	}
+
+	/** renderDocPage 拆出: 译文块的单击(聚焦)、双击(深度讲解)、右键(重译此段)。 */
+	private wireBlockInteractions(element: HTMLElement, slot: HTMLElement, state: PageTranslationState, pageIndex: number): void {
+		// A single click on translated text must be INERT reading behaviour:
+		// it only moves the focus highlight. The old handler ran 深度讲解 +
+		// a scroll-to-top + a PDF navigation on every innocent click — the
+		// reader clicked a paragraph and the whole layout convulsed.
+		// 深度讲解 is now a deliberate DOUBLE-click.
+		for (const node of Array.from(element.querySelectorAll('[data-pm-block]'))) {
+			const focusBlock = (): void => {
+				const scope = slot.closest('.pm-scroll') ?? element;
+				for (const other of Array.from(scope.querySelectorAll('.pm-repage-block.pm-focused'))) {
+					other.classList.remove('pm-focused');
+				}
+				node.classList.add('pm-focused');
+			};
+			node.addEventListener('click', focusBlock);
+			node.addEventListener('dblclick', () => {
+				focusBlock();
+				const id = node.getAttribute('data-pm-block');
+				const block = state.blocks.find(b => b.id === id)
+					?? state.blocks.find(b => b.id === id?.replace(/::p\d+$/, ''));
+				if (block?.sourceText.trim()) void this.explainSelection(block.sourceText);
+			});
+			// 右键 = 重译此段 (单段 replay, 参照 retain-pdf item replay):
+			// one foreground request for exactly this block, keep-origin
+			// and 止损 cleared so the retry is real.
+			node.addEventListener('contextmenu', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				focusBlock();
+				const id = node.getAttribute('data-pm-block')?.split('::')[0];  // 段落拆分块 id 形如 <region>::pN,取区域 id
+				if (!id || !this.manager) {
+					return;
+				}
+				node.classList.add('pm-retranslating');
+				this.flashNotice('正在重译此段…');
+				void this.manager.retranslateBlock(pageIndex, id).then((ok) => {
+					node.classList.remove('pm-retranslating');
+					// Neutral failure text: a scroll-cancel and a rejected response
+					// look the same from here — don't claim a reason we don't know.
+					this.flashNotice(ok ? '此段已重译' : '此段重译未完成,可再试或换服务商');
+				});
+			});
+		}
 	}
 
 	/**
@@ -1841,25 +1912,44 @@ export class ReaderSession {
 
 		// (1): budgeted compress for the rest — at most one page-level request
 		// in flight, patched into the live page (no full re-render).
-		if (!plan.compress.length || this.compressPending.has(pageIndex) || !this.manager) {
+		const compressPending = this.ledger.isCompressPending(pageIndex);
+		if (!plan.compress.length || compressPending || !this.manager) {
 			// shrink-only 路径此前静默结束,页面的最终清点从未发生(1.1.0
 			// 顺手补上的诚实计数缺口)——几何复核与 tally 都挂在 reportPlacement。
-			if (!plan.compress.length && !this.compressPending.has(pageIndex)) {
+			if (!plan.compress.length && !compressPending) {
 				this.reportPlacement(pageIndex, element);
 			}
 			// 丢失唤醒补接力 (2.0.9, 审核 P2-10): 被在飞压缩挡回的渲染记下
 			// 待办,压缩 finally 里续跑 —— 否则这次渲染的未适配块永远无人处理。
-			else if (plan.compress.length && this.compressPending.has(pageIndex)) {
-				this.compressBlocked.set(pageIndex, { element, unfit: remaining, token });
+			else if (plan.compress.length && compressPending) {
+				this.ledger.deferRender(pageIndex, { element, unfit: remaining, token });
+			}
+			// 5.0 (联网校验 3064/3384: 胶囊停在「正在适配 · 排版 0/N」): 这一趟只剩
+			// 缩字/保留原文、却撞上一个属于旧渲染的在飞压缩 —— 两条分支都不成立,
+			// 最终清点无人执行。登记一个空待办,压缩收尾时替这次渲染做清点。
+			else if (compressPending) {
+				this.ledger.deferRender(pageIndex, { element, unfit: [], token });
 			}
 			return;
 		}
-		this.compressPending.add(pageIndex);
-		for (const id of plan.compress) {
+		this.runStrictCompress(pageIndex, element, remaining, plan.compress, token, live, this.manager);
+	}
+
+	/**
+	 * resolveStrictUnfit 拆出: 对这些块发一次页级压缩重译(同页最多一个在飞),
+	 * 结果就地套用;仍放不下的进入下一轮,全部处理完做最终清点。
+	 */
+	private runStrictCompress(pageIndex: number, element: HTMLElement, remaining: UnfitBlock[], compressIds: string[], token: number, live: () => boolean, manager: TranslationManager): void {
+		const generation = this.ledger.beginCompress(pageIndex);
+		if (!generation) return; // resolveStrictUnfit already checked; defensive
+		// A render turned away during the previous round (released early to let
+		// this round start) joins this round instead of being lost.
+		this.ledger.adoptCarried(pageIndex);
+		for (const id of compressIds) {
 			this.compressRounds.set(id, (this.compressRounds.get(id) ?? 0) + 1);
 		}
-		const entries = remaining.filter(u => plan.compress.includes(u.id));
-		void this.manager.compressBlocks(pageIndex, entries)
+		const entries = remaining.filter(u => compressIds.includes(u.id));
+		void manager.compressBlocks(pageIndex, entries)
 			.then((accepted) => {
 				if (!live()) {
 					// 注意: compressPending 的清理在下面的 finally,不在这里 ——
@@ -1882,7 +1972,7 @@ export class ReaderSession {
 				// 这处 delete 必须留在递归调用之前,不能只靠下面的 finally ——
 				// finally 在 then 体跑完之后才执行,而 resolveStrictUnfit 的入口
 				// 就查 compressPending,届时下一轮会被自己挡回。
-				this.compressPending.delete(pageIndex);
+				this.ledger.releaseCompress(pageIndex, generation);
 				if (next.length) {
 					this.resolveStrictUnfit(pageIndex, element, next, token);
 				}
@@ -1902,14 +1992,19 @@ export class ReaderSession {
 				// 兜底清理 (审核 P1-6): 无论 then 早退、then 正常、还是 catch,
 				// 这个标记都必须落地清除。Set.delete 幂等,与上面 then 里那次
 				// 提前清除并存无害。
-				this.compressPending.delete(pageIndex);
+				// 5.0: release only THIS generation. Before, this delete also wiped the
+				// flag of a round that the then-branch had just started, so a third
+				// render could start a concurrent compress for the same page.
 				// P2-10 (2.0.9): 压缩期间被挡回的最新渲染在这里接力 —— 旧 token
-				// 由 resolveStrictUnfit 自己的 live() 拦截,无需在此判活。
-				const blocked = this.compressBlocked.get(pageIndex);
+				// 由 resolveStrictUnfit 自己的 live() 拦截,无需在此判活。若下一轮已
+				// 经开始,被挡回的渲染已交给它(adoptCarried),这里拿到的是 null。
+				const blocked = this.ledger.endCompress(pageIndex, generation) ?? this.ledger.takeCarried(pageIndex);
 				if (blocked) {
-					this.compressBlocked.delete(pageIndex);
-					if (!this.destroyed) {
+					if (!this.destroyed && blocked.unfit.length) {
 						this.resolveStrictUnfit(pageIndex, blocked.element, blocked.unfit, blocked.token);
+					}
+					else if (!this.destroyed && blocked.element.isConnected && this.renderToken.get(pageIndex) === blocked.token) {
+						this.reportPlacement(pageIndex, blocked.element);
 					}
 				}
 			});
@@ -1941,49 +2036,13 @@ export class ReaderSession {
   this.placementKeys.set(pageIndex, pageContentKey(state.blocks,state.translations));
   this.placementProbe.delete(pageIndex);
 
-		// 几何安全复核 (1.1.0 目标架构第 5 步): FINAL 状态下审计一次;违例的
-		// 块回退扩展/缩字重试,仍不适配则保留原文——处置结果反映进随后的
-		// stats/tally,所以必须先审计后取数。
-		try {
-			const audit = auditStrictGeometry(element);
-			if (audit) {
-				this.geometryAudits.set(pageIndex, audit);
-			}
-			if (audit && audit.violations > 0) {
-				logger.info(
-					MODULE,
-					`page ${pageIndex + 1} geometry audit: ${audit.violations} violation(s) → `
-					+ `${audit.adjusted} re-fit within original box, ${audit.reverted} kept original`
-				);
-			}
-		}
-		catch (e) {
-			logger.warn(MODULE, `geometry audit failed on page ${pageIndex + 1} (ignored)`, e);
-		}
+		this.auditFinalGeometry(pageIndex, element);
 		const s = strictPageStats(element);
 		if (!s) {
 			return;
 		}
 		this.placementStats.set(pageIndex, s); // P3 (2.0.10): 供诊断导出
-		// 放弃清单 (2.7.0): 不采样像素、零成本,无论是否开调试日志都收。
-		try {
-			const abandoned = strictAbandonedBlocks(element);
-			if (abandoned) {
-				this.abandonedBlocks.set(pageIndex, abandoned);
-			}
-		}
-		catch (e) {
-			logger.debug(MODULE, `abandoned list failed on page ${pageIndex + 1} (ignored)`, e);
-		}
-		// Always archive lightweight placement measurements. Pixel sampling is
-		// still debug-only; bitmapSampled=false distinguishes omitted samples.
-		try {
-			const probe = probeStrictPlacement(element, getPref<boolean>('debugLogging', false));
-			if (probe) this.placementProbe.set(pageIndex, probe);
-		}
-		catch (e) {
-			logger.debug(MODULE, `placement probe failed on page ${pageIndex + 1} (ignored)`, e);
-		}
+		this.collectPlacementDiagnostics(pageIndex, element);
 		this.archivePage(state, true);
 		logger.info(
 			MODULE,
@@ -2028,8 +2087,60 @@ export class ReaderSession {
 			segTotal,
 			segTranslated: segTotal, // translation itself is complete at this point
 			segPlaced: placed,
-			kept
+			kept,
+			...this.pageNote(pageIndex)
 		});
+	}
+
+	/** 5.0: a rotated table is kept original by policy — say so instead of silently skipping it. */
+	private pageNote(pageIndex: number): { note?: string } {
+		return this.extractor.hasRotatedTable(pageIndex) ? { note: ROTATED_TABLE_NOTE } : {};
+	}
+
+	/** reportPlacement 拆出: 终版几何安全复核(违例块回退或保留原文),必须先于取数。 */
+	private auditFinalGeometry(pageIndex: number, element: HTMLElement): void {
+		// 几何安全复核 (1.1.0 目标架构第 5 步): FINAL 状态下审计一次;违例的
+		// 块回退扩展/缩字重试,仍不适配则保留原文——处置结果反映进随后的
+		// stats/tally,所以必须先审计后取数。
+		try {
+			const audit = auditStrictGeometry(element);
+			if (audit) {
+				this.geometryAudits.set(pageIndex, audit);
+			}
+			if (audit && audit.violations > 0) {
+				logger.info(
+					MODULE,
+					`page ${pageIndex + 1} geometry audit: ${audit.violations} violation(s) → `
+					+ `${audit.adjusted} re-fit within original box, ${audit.reverted} kept original`
+				);
+			}
+		}
+		catch (e) {
+			logger.warn(MODULE, `geometry audit failed on page ${pageIndex + 1} (ignored)`, e);
+		}
+	}
+
+	/** reportPlacement 拆出: 收放弃清单与轻量排版探针,供诊断导出。 */
+	private collectPlacementDiagnostics(pageIndex: number, element: HTMLElement): void {
+		// 放弃清单 (2.7.0): 不采样像素、零成本,无论是否开调试日志都收。
+		try {
+			const abandoned = strictAbandonedBlocks(element);
+			if (abandoned) {
+				this.abandonedBlocks.set(pageIndex, abandoned);
+			}
+		}
+		catch (e) {
+			logger.debug(MODULE, `abandoned list failed on page ${pageIndex + 1} (ignored)`, e);
+		}
+		// Always archive lightweight placement measurements. Pixel sampling is
+		// still debug-only; bitmapSampled=false distinguishes omitted samples.
+		try {
+			const probe = probeStrictPlacement(element, getPref<boolean>('debugLogging', false));
+			if (probe) this.placementProbe.set(pageIndex, probe);
+		}
+		catch (e) {
+			logger.debug(MODULE, `placement probe failed on page ${pageIndex + 1} (ignored)`, e);
+		}
 	}
 
 	/**
@@ -2337,6 +2448,22 @@ export class ReaderSession {
 		});
 	}
 
+	/** 菜单栏「翻译服务」的候选: 只含已设置的引擎(见 providerAvailability)。 */
+	private providerChoicesFrom(withKey: ReadonlySet<string>): { id: string; displayName: string }[] {
+		const all = listProviders();
+		const ids = new Set(configuredProviderIds({
+			providers: all.map(p => ({ id: p.id, requiresApiKey: p.requiresApiKey })),
+			withKey,
+			profiles: parseProviderProfiles(getPref<string>('providerProfiles', '{}')),
+			current: getPref<string>('provider', 'bing-free')
+		}));
+		return all.filter(p => ids.has(p.id)).map(p => ({ id: p.id, displayName: p.displayName }));
+	}
+
+	private async configuredProviderChoices(): Promise<{ id: string; displayName: string }[]> {
+		return this.providerChoicesFrom(await providersWithSavedKeys());
+	}
+
 	/** 菜单栏直接切换翻译服务 — same restart contract as a language switch. */
 	private applyProviderPick(providerId: string): void {
 		// 先静默 in-flight,再改配置 (审核 P1-9)。见 quiesceThenReconfigure。
@@ -2392,8 +2519,7 @@ export class ReaderSession {
 
 	private restartAfterConfigChange(): void {
 		this.compressRounds.clear();
-		this.compressPending.clear();
-		this.compressBlocked.clear();
+		this.ledger.resetCompressAll();
 		this.pageProviderOffset.clear();
 		this.detectedSource = null;
 		// 必须等 in-flight 真正结束再排新任务 (审核 P1-8): resetAll 只发 abort,
@@ -2429,8 +2555,7 @@ export class ReaderSession {
 				this.compressRounds.delete(id);
 			}
 		}
-		this.compressPending.delete(page);
-		this.compressBlocked.delete(page);
+		this.ledger.resetCompress(page);
 	}
 
 	/**
@@ -2480,8 +2605,7 @@ export class ReaderSession {
 	private cancelCurrentTranslation(): void {
 		const page = adapter.getCurrentPageIndex(this.reader);
 		this.manager?.cancelPage(page);
-		this.compressPending.delete(page);
-		this.compressBlocked.delete(page);
+		this.ledger.resetCompress(page);
 		this.pushOverlayProgress({
 			phase: 'cancelled',
 			currentPage: page + 1,
@@ -2504,8 +2628,7 @@ export class ReaderSession {
 			return;
 		}
 		this.compressRounds.clear();
-		this.compressPending.clear();
-		this.compressBlocked.clear();
+		this.ledger.resetCompressAll();
 		this.pageProviderOffset.clear();
 		// 先等所有在飞任务真正解绕再清盘 (2.0.7, 审核 P2-3): resetAll() 只发
 		// abort 不等待,被 abort 的任务要到下一个检查点才退出,其 persistPartial
@@ -3653,8 +3776,9 @@ export class ReaderSession {
 		this.tasks.clear();
 		this.translatedPages.clear();
 		this.lastPartial = null;
-		this.compressBlocked.clear(); // P2-10: 不再持有已卸载页元素
-		this.placementStats.clear();
+		// 5.0: every per-page record goes (elements held by deferred renders,
+		// render tokens, notices, image rects … — before, only some were cleared).
+		this.ledger.dispose();
 		this.baseBitmaps.clear(); // 释放缓存的底图 canvas
 		this.disposePdfScrollIntent?.();
 		this.disposePdfScrollIntent = null;

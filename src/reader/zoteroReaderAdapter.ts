@@ -1,6 +1,6 @@
 import { decodeLegacyText, legacyFontEncodings, resolvedPdfFont, repeatedImageRefs } from './legacyTextEncoding';
 import { embeddedSymbolRepairs, type SymbolGlyphObservation } from './embeddedFontSymbols';
-import { hasSymbolCandidate, repairSymbolText } from './symbolFontSemantics';
+import { OPERATOR_SLOTS, hasSymbolCandidate, repairSymbolText } from './symbolFontSemantics';
 import { onScrollIntent } from './scrollSynchronizer';
 import { canonicalPagePoint, pageQuarterTurn, type PageQuarterTurn } from './overlayGeometry';
 /**
@@ -122,14 +122,6 @@ export function getReaderBrowser(reader: ReaderLike): Element {
 		throw new PaperMirrorError('READER_API_CHANGED', 'ReaderTab._iframe is unavailable; the Zotero Reader API may have changed.');
 	}
 	return iframe as Element;
-}
-
-export function getMainWindowForReader(reader: ReaderLike): Window {
-	const win = reader._window ?? Zotero.getMainWindow();
-	if (!win) {
-		throw new PaperMirrorError('READER_API_CHANGED', 'No main window available for reader.');
-	}
-	return win;
 }
 
 /**
@@ -264,6 +256,7 @@ async function pageSymbolRepairs(reader: ReaderLike, pageIndex: number): Promise
   const fonts = new Map<string, string>();
   const used: {fontId: string; code: number; unicode: string}[] = [];
   let drawingProofComplete = true, squareProofComplete = true;
+  const drawnByFont = new Map<string, number>();
   let fontId = ''; const stack: string[] = [];
   for (let i = 0; i < list.fnArray.length; i++) {
    const fn = list.fnArray[i], args = waive(list.argsArray[i]) as any;
@@ -291,13 +284,21 @@ async function pageSymbolRepairs(reader: ReaderLike, pageIndex: number): Promise
      // A composite glyph containing n prevents a global letter repair, but
      // cannot invalidate independent currency/fraction outline evidence.
      if (glyph.unicode.includes('n') && glyph.unicode !== 'n') squareProofComplete = false;
-     if (glyph && ['$', '¼', 'n'].includes(glyph.unicode)) {
+     drawnByFont.set(fontId, (drawnByFont.get(fontId) ?? 0) + 1);
+     if (glyph && (['$', '¼', 'n'].includes(glyph.unicode) || OPERATOR_SLOTS.has(glyph.unicode))) {
       used.push({fontId, code: typeof glyph.originalCharCode === 'number' ? glyph.originalCharCode : NaN, unicode: glyph.unicode});
      }
     }
    }
   }
   if (!drawingProofComplete) {complete = false; return emptySymbols();}
+  // 校验 r24: operator slots ("," "." "1" "2" "3") are checked only in fonts
+  // that draw a handful of glyphs on the page — a math font, not the body
+  // font whose every comma would be read from its outline (cost only: the
+  // outline still decides).
+  for (let i = used.length - 1; i >= 0; i--) {
+   if (OPERATOR_SLOTS.has(used[i]!.unicode) && (drawnByFont.get(used[i]!.fontId) ?? 0) > 60) used.splice(i, 1);
+  }
   if (!used.length) return emptySymbols();
   for (const id of new Set(used.map(g => g.fontId))) {
    if (!id) {complete = false; continue;}
@@ -314,6 +315,8 @@ async function pageSymbolRepairs(reader: ReaderLike, pageIndex: number): Promise
   }
   const pageWide = new Map<string, string>();
   for (const unicode of new Set(used.map(g => g.unicode))) {
+   // A page-wide "," → "<" would rewrite every body comma in a span without a font.
+   if (OPERATOR_SLOTS.has(unicode)) continue;
    const targets = used.filter(g => g.unicode === unicode).map(g => byFont.get(g.fontId)?.get(unicode));
    if (targets.length && targets.every(t => t !== undefined && t === targets[0])) pageWide.set(unicode, targets[0]!);
   }
@@ -569,6 +572,35 @@ fontRepair.resolvedFonts=fonts.size;
 	catch (e) {
 		logger.debug(MODULE, `getTextContentItems(${pageIndex}) failed`, e);
 		return say(`threw:${(e as { constructor?: { name?: string } })?.constructor?.name ?? 'unknown'}`);
+	}
+}
+
+/**
+ * 5.0 全篇样式用的轻量读取:只要文字、矩形和字号,不做符号 / 旧字体修复
+ * (那要算子列表,对整篇逐页做太贵,而统计正文字号和参考文献范围用不着)。
+ * 同样穿 Xray、同样是任何页随时可读的公开 API。失败返回 null。
+ */
+export async function getTextContentItemsLight(reader: ReaderLike, pageIndex: number): Promise<TextLayerPage | null> {
+	try {
+		const doc = waive((waive(pdfWindow(reader)?.PDFViewerApplication) as
+			{ pdfDocument?: unknown } | undefined)?.pdfDocument) as { getPage?: (n: number) => Promise<unknown> } | undefined;
+		if (typeof doc?.getPage !== 'function') return null;
+		const page = waive(await doc.getPage(pageIndex + 1)) as { getTextContent?: () => Promise<{ items?: unknown[] }>; view?: number[] };
+		if (typeof page?.getTextContent !== 'function') return null;
+		const content = waive(await page.getTextContent());
+		const items: TextLayerItem[] = [];
+		for (const entry of Array.isArray(content?.items) ? content.items : []) {
+			const it = entry as { str?: unknown; transform?: unknown; width?: unknown };
+			if (typeof it.str !== 'string' || !it.str.trim() || !Array.isArray(it.transform) || typeof it.width !== 'number') continue;
+			const box = textContentItemRect(it.transform as number[], it.width);
+			if (box) items.push({ text: it.str, rect: box.rect, ...(box.fontSize ? { fontSize: box.fontSize } : {}) });
+		}
+		const view = Array.isArray(page.view) && page.view.length >= 4 ? page.view : null;
+		return { items, pageWidth: view ? Number(view[2]) - Number(view[0]) : 612, pageHeight: view ? Number(view[3]) - Number(view[1]) : 792 };
+	}
+	catch (e) {
+		logger.debug(MODULE, `getTextContentItemsLight(${pageIndex}) failed`, e);
+		return null;
 	}
 }
 
@@ -1782,15 +1814,6 @@ export function getSelectedText(reader: ReaderLike): string {
  */
 export function registerToolbarListener(pluginID: string, handler: (event: ZoteroReaderEvent) => void): void {
 	Zotero.Reader.registerEventListener('renderToolbar', handler, pluginID);
-}
-
-/**
- * Official text-selection popup hook (documented event type in 9.0.6
- * registerEventListener JSDoc). event.params.annotation.text carries the
- * selected text. Cleanup happens via pluginID on shutdown, same as toolbar.
- */
-export function registerSelectionPopupListener(pluginID: string, handler: (event: ZoteroReaderEvent) => void): void {
-	Zotero.Reader.registerEventListener('renderTextSelectionPopup', handler, pluginID);
 }
 
 /**

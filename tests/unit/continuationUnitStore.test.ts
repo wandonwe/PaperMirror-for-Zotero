@@ -150,22 +150,28 @@ test('fresh unit numeric/placeholder corruption cannot become shared or durable 
 	const store = new ContinuationUnitStore(), [left] = pair('The mean dose was 33 mGy before', 'the baseline acquisition.'); let writes = 0, calls = 0;
 	const raw: Raw = async payload => { calls++; return { translations: payload.blocks.map(b => ({ id: b.id, translatedText: b.text.replace(/⟦PM\d+⟧/g, '34') })) }; };
 	const options = { writeUnit: async () => { writes++; } };
-	await assert.rejects(store.translate(left, raw, signal(), 'settings', options));
-	await assert.rejects(store.translate(left, raw, signal(), 'settings', options));
-	assert.equal(calls, 2); assert.equal(writes, 0);
+	// 5.0: 整句判废不再抛错,改为分栏翻译并标为临时;本会话不再重试整句。
+	const first = await store.translate(left, raw, signal(), 'settings', options);
+	assert.deepEqual(first.provisionalIds, ['left']);
+	assert.equal(calls, 2, '一次整句 + 一次分栏');
+	const second = await store.translate(left, raw, signal(), 'settings', options);
+	assert.deepEqual(second.provisionalIds, ['left']);
+	assert.equal(calls, 3, '同一句本会话直接分栏'); assert.equal(writes, 0);
 });
 
 test('all unit parts must be unique and nonempty before sharing or persistence', async () => {
 	for (const mode of ['missing', 'duplicate', 'empty']) {
 		const store = new ContinuationUnitStore(), [left] = pair(); let writes = 0;
-		await assert.rejects(store.translate(left, async payload => {
+		const result = await store.translate(left, async payload => {
 			const out = echo(payload);
 			if (mode === 'missing') out.translations.pop();
 			if (mode === 'duplicate') out.translations.push(out.translations[0]!);
 			if (mode === 'empty') out.translations[0]!.translatedText = '';
 			return out;
-		}, signal(), 'settings', { writeUnit: async () => { writes++; } }));
+		}, signal(), 'settings', { writeUnit: async () => { writes++; } });
 		assert.equal(writes, 0, mode);
+		// 分栏补发同样残缺 → 父段不出现(交给上层补救链),绝不冒充完整整句。
+		assert.equal(result.translations.length, 0, mode);
 	}
 });
 
@@ -251,13 +257,13 @@ test('ordinary identity responses retain usage and strip only internal source fi
 test('fresh unit integrity rejection logs only an enum and part index, never source/translation/numeric content', async () => {
 	const [left] = pair('All 172 completed the examination without complications before', 'the independent acquisition.');
 	const before = recentProblems().length;
-	await assert.rejects(new ContinuationUnitStore().translate(left, async payload => ({
+	await new ContinuationUnitStore().translate(left, async payload => ({
 		translations: payload.blocks.map((part, index) => ({ id: part.id,
 			translatedText: index ? '独立采集。' : '所有人完成检查，且未出现并发症。' }))
-	}), signal()));
+	}), signal());
 	const added = recentProblems().slice(before).filter(line => line.includes('[continuationUnitStore]'));
 	assert.equal(added.length, 1);
-	assert.equal(added[0]!.split('[continuationUnitStore] ')[1], 'unit-integrity:numeric-inventory;partIndex:0');
+	assert.equal(added[0]!.split('[continuationUnitStore] ')[1], 'unit-integrity:numeric-inventory;partIndex:-1');
 });
 
 test('invalid persisted unit content remains a silent cache miss', async () => {
@@ -267,4 +273,63 @@ test('invalid persisted unit content remains a silent cache miss', async () => {
 		readUnit: async () => ['All completed the examination before', 'the independent acquisition.']
 	});
 	assert.equal(recentProblems().filter(line => line.includes('[continuationUnitStore]')).length, before);
+});
+
+test('5.0: numbers may move between columns; the whole sentence must keep every number', async () => {
+	const [left] = pair('In 2019, 172 patients were enrolled before', 'the 12,500 scans were reviewed.');
+	let calls = 0;
+	const moved: Raw = async payload => { calls++; return { translations: payload.blocks.map((b, i) => ({ id: b.id,
+		translatedText: i ? '在 12500 次扫描复核之前，' : '2019 年纳入了 172 名患者' })), usage }; };
+	const ok = await new ContinuationUnitStore().translate(left, moved, signal());
+	assert.equal(ok.provisionalIds, undefined, '跨栏换位、千分位写法不同都不算错');
+	assert.equal(calls, 1);
+	calls = 0;
+	const lost: Raw = async payload => { calls++; return { translations: payload.blocks.map((b, i) => ({ id: b.id,
+		translatedText: i ? '在扫描复核之前，' : '2019 年纳入了 172 名患者' })), usage }; };
+	const degraded = await new ContinuationUnitStore().translate(left, lost, signal());
+	assert.deepEqual(degraded.provisionalIds, ['left'], '整句丢数字仍判废,降级为分栏并标临时');
+	assert.equal(calls, 2);
+});
+
+test('5.0: a failed shared sentence never poisons the ordinary blocks in the same request', async () => {
+	const [left] = pair('The mean dose was 33 mGy before', 'the baseline acquisition.');
+	const req: TranslationRequest = { ...left, blocks: [...left.blocks, { id: 'plain', type: 'paragraph', text: 'Ordinary text.', sourceText: 'Ordinary text.' }] };
+	const raw: Raw = async payload => ({ translations: payload.blocks.map(b => ({ id: b.id,
+		translatedText: b.continuationUnit ? b.text.replace(/33/g, '34') : b.text })), usage });
+	const result = await new ContinuationUnitStore().translate(req, raw, signal());
+	assert.ok(result.translations.some(t => t.id === 'plain'), '普通段落照常返回');
+	assert.ok(result.translations.some(t => t.id === 'left'));
+	assert.deepEqual(result.provisionalIds, ['left']);
+});
+
+test('5.0: cancellation during a shared sentence is still a cancellation, not a degradation', async () => {
+	const controller = new AbortController(), [left] = pair();
+	const pending = new ContinuationUnitStore().translate(left, async (_payload, active) => new Promise((_, reject) => {
+		active.addEventListener('abort', () => reject(Object.assign(new Error('cancelled'), { code: 'CANCELLED' })), { once: true });
+	}), controller.signal);
+	controller.abort();
+	await assert.rejects(pending, cancelled);
+});
+
+test('5.0 联网校验: citation lists survive either comma reading in the whole-sentence number check', async () => {
+	const { sameNumericInventory } = await import('../../src/translation/continuationUnitStore');
+	assert.equal(sameNumericInventory('the scan delay (113,197) was used', '扫描延迟(113, 197)'), true);
+	assert.equal(sameNumericInventory('cited (44,193,194)', '引用(44，193，194)'), true);
+	assert.equal(sameNumericInventory('a dose of 12,500 IU', '剂量 12500 IU'), true);
+	assert.equal(sameNumericInventory('values 3, 4 and 5', '数值 3、4 和 5'), true);
+	assert.equal(sameNumericInventory('the scan delay (113,197) was used', '扫描延迟(113, 198)'), false, 'a changed number is still caught');
+	assert.equal(sameNumericInventory('10–20 mL in 2 groups', '10–20 mL'), false, 'a dropped number is still caught');
+});
+
+test('5.0 r22 (3036 p1→p2): a part filled with a stand-in such as "（无）" is an empty part', async () => {
+	const [left] = pair('Two radiologists quantified the urate volume of', 'each index tophus using a computer automated procedure.');
+	const before = recentProblems().length;
+	for (const standIn of ['（无）', '(N/A)', '…', '无']) {
+		const result = await new ContinuationUnitStore().translate(left, async payload => ({
+			translations: payload.blocks.map((part, index) => ({ id: part.id,
+				translatedText: index ? standIn : '两名放射科医师使用计算机自动化程序定量了每个指标痛风石的尿酸盐体积。' }))
+		}), signal());
+		assert.ok(!result.translations.some(t => t.translatedText === standIn), standIn);
+	}
+	assert.ok(recentProblems().slice(before).some(line => line.endsWith('unit-integrity:empty-or-invalid-text;partIndex:1')));
 });

@@ -24,7 +24,7 @@
 
 **PaperMirror(文镜)** —— 文字之镜,原文与译文两相映照。在 Zotero 自带的 PDF 阅读器里直接对照阅读外文文献:一边是**原版 PDF**(排版、图表、公式原封不动),另一边是**按版面重排的整页译文**,大小与原文一致、逐段对齐。图表、表格、公式、分栏、页眉页脚等都从原页原样保留,只有正文被替换并重新排版,不会被硬塞进原文的换行里。
 
-**4.10.2**（整理版，插件代码同 4.10.1）：译文框边缘的西文字母不再被切掉一丝；发布前的自动检查改用与 Zotero 相同的 Firefox 内核。4.10 起：根据内嵌字体轮廓恢复方块项目符号并保留列表边界；完整期刊页脚保留原文；修复窄框和行首西文字形的横向裁切。详见 [更新记录](CHANGELOG.md#4102--2026-11-18) 和 [4.10.1 验证记录](docs/RELEASE-4.10.1-VALIDATION.md)。
+**5.0.0**：结构识别改为先读全篇再逐页建块——参考文献、页眉页脚、正文字号和段首缩进按整篇判断，同一页每次打开分块一致；参考文献逐条翻译、作者期刊原样；数学字体里的 < > + − × 按字形认回；各翻译引擎按 2026-11-19 官方文档更新，菜单只列已设置的引擎。升级后约 1/4 到 1/3 的已翻译段落会重新翻译一次。详见 [更新记录](CHANGELOG.md#500--2026-11-23) 和 [5.0.0 验证记录](docs/RELEASE-5.0.0-VALIDATION.md)。
 
 ### 三种阅读模式
 
@@ -103,7 +103,7 @@ for paragraph. Figures, tables, equations, columns and running heads are kept
 from the rendered page exactly; only body text is replaced and re‑flowed, never
 crammed back into the original line breaks.
 
-**4.10.2** (housekeeping; plugin code identical to 4.10.1): Latin letters at the edge of a translation box are no longer shaved, and the pre-release browser gate runs in Firefox, the engine Zotero is built on. Since 4.10: square bullets restored only when embedded glyph outlines prove them, list boundaries and complete journal footer records preserved, horizontal clipping fixed in narrow boxes and at line edges. See the [notes](CHANGELOG.md#4102--2026-11-18) and the [4.10.1 validation record](docs/RELEASE-4.10.1-VALIDATION.md).
+**5.0.0**: structure recognition now reads the whole document first, then builds each page — references, running heads and footers, body size and first-line indent are judged once per document, so a page splits the same way every time it is opened. References are translated entry by entry with authors and journals kept verbatim; <, >, +, −, × drawn by math fonts are recovered from their glyph outlines; every engine is updated to the providers' documentation of 2026-11-19 and the menu lists only engines you have set up. After upgrading, roughly a quarter to a third of previously translated paragraphs are translated once more. See the [notes](CHANGELOG.md#500--2026-11-23) and the [5.0.0 validation record](docs/RELEASE-5.0.0-VALIDATION.md).
 
 ### Three reading modes
 

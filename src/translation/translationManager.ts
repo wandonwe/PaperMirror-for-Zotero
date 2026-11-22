@@ -1,6 +1,6 @@
+import { policyStampFor } from './promptPolicies';
 import { numericPowerIssue, isNumericPowerLiteral } from './numericPowers';
 import { technicalUnitIssue, isTechnicalUnitLiteral } from './technicalUnits';
-import { referenceAlignmentIssue } from './referenceAlignment';
 /**
  * Per-attachment translation orchestration:
  *  - lazy per-page translation with a pool-sized prefetch window
@@ -26,14 +26,78 @@ import type {
 } from '../types/models';
 import { PaperMirrorError } from '../types/models';
 import * as logger from '../utils/logger';
-import { isFormulaDenseRisk, stripProtectable } from '../reader/formulaGuard';
+import { isFormulaDenseRisk } from '../reader/formulaGuard';
 import { PlaceholderRegistry } from './placeholderRegistry';
 import {
-	hasMixedCopiedResidue,
-	isTruncatedTranslation,
-	longEnglishResidueSpans,
-	looksLikeAuthorNameList
-} from './residueRules';
+	looksTranslated,
+	looksContextBleed,
+	hasEnglishResidue,
+	looksLikeReferenceEntry
+} from './translationValidation';
+/**
+ * 5.0: 按响应更新页状态上的临时(分栏降级)标记: 响应里标了的加入,同一段拿到
+ * 正式译文则移出。所有收译文的路径(主流程、压缩重译、单段重译)都走这里。
+ */
+export function noteProvisionalIn(state: Pick<PageTranslationState, 'provisional'>, response: TranslationResponse, ids?: Iterable<string>): void {
+	const set = state.provisional ?? (state.provisional = new Set());
+	const marked = new Set(response.provisionalIds ?? []);
+	for (const id of ids ?? response.translations.map(t => t.id)) {
+		if (marked.has(id)) set.add(id);
+		else set.delete(id);
+	}
+}
+
+/** 5.0: 页面里还有正在显示的临时译文 → 不写页缓存。 */
+/**
+ * Page-cache rows for the blocks that have a translation (5.0): provisional
+ * (per-part) translations are kept, flagged, so a revisit shows them without
+ * paying again; the flag keeps them out of the segment store after restore.
+ */
+export function pageCacheRows(state: Pick<PageTranslationState, 'provisional' | 'translations'>, blocks: Array<{ id: string; sourceText?: string; isReference?: boolean }>): TranslatedBlock[] {
+	return blocks
+		.filter(b => state.translations.has(b.id))
+		.map(b => {
+			// 5.0: the prompt-policy stamp this row was produced under (see promptPolicies.ts).
+			const policy = typeof b.sourceText === 'string' ? policyStampFor({ sourceText: b.sourceText, isReference: b.isReference }) : '';
+			return {
+				id: b.id,
+				translatedText: state.translations.get(b.id)!,
+				...(state.provisional?.has(b.id) ? { provisional: true as const } : {}),
+				...(policy ? { policy } : {})
+			};
+		});
+}
+
+/**
+ * 5.0 规则版本: 段落库的键。内容 + 语言(+ 续段上下文)之外,再并入与本块相关、
+ * 版本 > 1 的规则戳 —— 与规则无关的块键不变(旧缓存照常命中),相关的块在规则
+ * 升版后换键,旧译文不再被取到。
+ */
+export function blockSegmentHash(block: Pick<SourceBlock, 'sourceText' | 'continuationContext'> & { isReference?: boolean }, sourceLang: string, targetLang: string): string {
+	const base = segmentHash(block.sourceText, sourceLang, targetLang, block.continuationContext);
+	const stamp = policyStampFor(block);
+	return stamp ? fnv1a64(`${base}\u0001${stamp}`) : base;
+}
+
+export function hasShownProvisional(state: Pick<PageTranslationState, 'provisional' | 'translations'>): boolean {
+	for (const id of state.provisional ?? []) {
+		if (state.translations.has(id)) return true;
+	}
+	return false;
+}
+
+/** 兼容旧导入路径: 验收函数已移到 translationValidation.ts。 */
+export {
+	looksTranslated,
+	looksContextBleed,
+	hasEnglishResidue,
+	looksLikeReferenceEntry,
+	looksLikePersonNames,
+	looksLikeCitationTail,
+	untranslatedLatinWords,
+	referenceRejectReason,
+	translationRejectReason
+} from './translationValidation';
 import { capLearnedRules, matchRules, mergeGlossaries } from './glossary';
 import { DocumentMemory, extractTermPairs } from './docMemory';
 import { RequestScheduler } from './requestScheduler';
@@ -45,6 +109,7 @@ import { buildLayoutModules } from '../reader/layoutModules';
 import { fnv1a64 } from '../cache/cacheSchema';
 import { addUsage, emptyUsage, type TokenUsage } from './usageMeter';
 import { pagesToEvict, type RetainCandidate } from './pageRetention';
+import { PageRun } from './pageRun';
 import { buildPageDigest, digestRows, diagnosticRows, type PageBlockDigest } from './pageBlockDigest';
 
 const MODULE = 'translationManager';
@@ -149,115 +214,6 @@ export const RELEASE_RETRY_RADIUS = 3;
 export const MAX_RENDER_RETRIES = 2;
 
 /**
- * Accept a response as a REAL translation, not an echo or a half-translation.
- * For a Chinese target a prose source (≥PROSE_WORD_GATE Latin words — a real
- * sentence, not a label or an acronym/numeric cell) must come back
- * predominantly Chinese; empty, echoed-English, and half-in-English responses
- * are rejected and routed through retry/salvage instead of stored as "done".
- * Short cells/labels and non-CJK targets have no cheap check and pass.
- */
-export function looksTranslated(source: string, translated: string, targetLang: string, opts?: { isReference?: boolean }): boolean {
-	const t = translated.trim();
-	if (technicalUnitIssue(source, t) || numericPowerIssue(source, t)) return false;
-	if (/[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFD]/.test(t)) return false;
-	if (referenceAlignmentIssue(source, t)) return false;
-	if (!t) {
-		return false;
-	}
-	if (!/^zh/i.test(targetLang)) {
-		return true;
-	}
-	// A provider that preserves paragraph boundaries can be validated locally:
- // an unchanged byline must not dominate the language score of translated prose.
- const sourceParts=source.split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
- const targetParts=t.split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
- if(sourceParts.length>1 && sourceParts.length===targetParts.length
-  && sourceParts.some(p=>looksLikeAuthorNameList(p)||looksLikePersonNames(p))) {
-  return sourceParts.every((p,i)=>looksTranslated(p,targetParts[i]!,targetLang,opts));
- }
-	// Preserve only identifiable author/journal fragments, never all reference prose.
-	if (opts?.isReference && isEcho(source, t) && (looksLikeAuthorNameList(source.replace(/^\d+\.\s*/, ''))
-		|| looksLikePersonNames(source.replace(/^\d+\.\s*/, ''))
-|| /^(?:\d+\.\s*)?(?:[A-Z][a-z'’-]+\s+[A-Z]{1,4},\s*)+(?:[A-Z][a-z'’-]+\s+[A-Z]{1,4},?\s*)?et al\.$/.test(source.trim())
-		|| /^[A-Z][A-Za-z .&-]{1,70}\s+(?:19|20)\d{2}\s*;\s*\d+[\d:()–—-]*[.:]?\s*$/.test(source.trim()))) {
-		return true;
-	}
-	// PROSE-ONLY scoring (审核项: 统计密集行被误拒): citations, p-values, CIs and
-	// formulas are byte-identical in source and translation BY DESIGN — counting
-	// them as "untranslated Latin" rejected perfect translations of stats-dense
-	// lines back to English. Both sides are stripped to their prose before any
-	// ratio is computed; works whether the caller passes masked or raw text.
-	const proseSource = stripProtectable(source);
-	const proseWords = (proseSource.match(/[A-Za-z]{2,}/g) ?? []).length;
-	if (proseWords < PROSE_WORD_GATE) {
-		// 短块没有廉价的比率判据,但**照抄**判得出来 (2.12.12, 内容保留规则审核第 1 条):
-		// 以前这里无条件放行,"No evidence of benefit" / "Document Title" / "Year Published"
-		// 原样返回都被计作成功、写进缓存,短标题和表头就此永远留英文。
-		// "允许原样保留"与"译文合格"是两件事:数字、缩写、人名、单位原样返回是正当的;
-		// 一句自然语言原样返回就是没译。这里只拦**内容相同**的回声,不要求短块必含中文 ——
-		// 否则 CT / MRI / p < 0.05 全会被推进无效重试。
-		if (isEcho(source, t) && !mayStayUntranslated(proseSource)) {
-			return false;
-		}
-		return true; // label / acronym / numeric cell — may legitimately be CJK-free
-	}
-	// 作者名单豁免 (retain-pdf): a byline legitimately stays Latin — rejecting
-	// it buys a doomed retry on every page-1.
-	if (looksLikeAuthorNameList(proseSource) || looksLikePersonNames(proseSource)) {
-		return true;
-	}
-	const proseT = stripProtectable(t);
-	// 截断硬判据 (retain-pdf quality.py): a long source answered with <15% of
-	// its length is a tail/half output — the ratio test alone scores a short
-	// all-Chinese fragment as "translated" and stored the loss silently.
-	if (isTruncatedTranslation(proseSource, proseT)) {
-		return false;
-	}
-	// 小样本验收 (1.1.8, Horst 2024 第 1 页 region-2/region-4 连拒): 比率是一个
-	// 比例估计,分母越小噪声越大。一条 56–58 字符的标题/署名里保留 4–5 个专名
-	// 与缩写是忠实翻译的常态,却足以把比率压到 0.45 以下 —— 同样的噪声在
-	// 800/1783 字符的正文段落里根本不存在(同页那三段全部一次通过)。短源文
-	// 因此换一把小样本安全的尺子;正文段落一律走下面原来的比率阈值,验收
-	// 强度一个字都没动。
-	if (proseSource.length <= SHORT_SOURCE_PROSE_CHARS) {
-		return shortSourceTranslated(proseSource, proseT) && !hasMixedCopiedResidue(source, t);
-	}
-	// A PROSE source must come back predominantly Chinese. This rejects not
-	// only echoed English (ratio 0) but a HALF-translated / mixed response,
-	// which the old "contains any CJK" test accepted.
-	if (targetLanguageRatio(proseT) < MIN_TARGET_RATIO) {
-		return false;
-	}
-	// 混合残留硬判据 (retain-pdf): the ratio passes on a LONG paragraph whose
-	// tail is still a copied English span — Chinese-dominant overall, one
-	// clause silently untranslated. A ≥12-word span that is surface-identical
-	// (or ≥0.82 similar) to the source is copied, not translated.
-	if (hasMixedCopiedResidue(source, t)) {
-		return false;
-	}
-	return true;
-}
-
-/**
- * context_bleed 校验 (参照 retain-pdf blocking issue): a translation that is
- * FAR longer than its source can support usually swallowed the injected
- * context (previous page tail / section heading) into the output. EN→ZH runs
- * ~1.1–1.6 hanzi per source word; 2.4× with a floor is safely above any
- * legitimate translation. Only meaningful when context was injected.
- */
-export function looksContextBleed(source: string, translated: string, hadContext: boolean): boolean {
-	if (!hadContext) {
-		return false;
-	}
-	const words = (stripProtectable(source).match(/[A-Za-z]{2,}/g) ?? []).length;
-	if (words < 8) {
-		return false;
-	}
-	const cjk = (translated.match(CJK_RE) ?? []).length;
-	return cjk > Math.max(80, words * 2.4);
-}
-
-/**
  * 翻译前估算排版容量: the character budget a block's ORIGINAL rectangles can
  * hold in the target script, sent with the FIRST request so most paragraphs fit
  * on the first try — instead of translate → measure-fail → compress → re-measure
@@ -308,222 +264,6 @@ export function segmentHash(sourceText: string, sourceLang: string, targetLang: 
 const RESIDUE_MAX_PER_PAGE = 8;
 /** 纯文本兜底: how many rejected blocks get a plain-mode rescue per page. */
 const FINAL_RECOVERY_MAX = 4;
-/** A run of this many consecutive plain-English words is untranslated prose. */
-const RESIDUE_WORD_RUN = 6;
-
-/**
- * 局部英文残留检测: does a (mostly-Chinese) translation still contain a run of
- * plain untranslated English prose? Six+ CONSECUTIVE lowercase English words is
- * essentially always a dropped clause — acronyms (ALLCAPS), drug/gene symbols
- * and proper nouns (Title-case) are excluded by the lowercase-only rule, URLs
- * and emails are stripped first, and a short Latin idiom ("in vitro", "et al")
- * is below the run threshold. Deliberately strict: a false positive costs one
- * wasted re-translation, so we only fire on a clear untranslated sentence.
- */
-export function hasEnglishResidue(text: string): boolean {
-	const cleaned = text.replace(/https?:\/\/\S+|www\.\S+|\S+@\S+/gi, ' ');
-	let run = 0;
-	for (const tok of cleaned.split(/\s+/)) {
-		const w = tok.replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, '');
-		if (/^[a-z]{2,}$/.test(w)) {
-			run++;
-			if (run >= RESIDUE_WORD_RUN) {
-				return true;
-			}
-		}
-		// 中性 token 不打断连跑 (2.5.12, wu2026-p4 实证): "with a standard ROI
-		// area of 3 mm² for polyps ≥5 mm in diameter" 这段典型残留被 'a'(单字母
-		// 不满足 {2,})、'ROI'(全大写)、'3'(纯数字)各重置一次,6 词连跑永远
-		// 凑不满,夹生译文年久失修。数字/符号、单字母 (a, I)、全大写缩写
-		// (ROI, CT, PCD-CT) 本就同时出现在残留英文与合格译文里,不是"已翻译"
-		// 的证据 —— 既不计数也不重置。含 CJK 的 token 仍然重置: 中文字符才是
-		// 真正的翻译证据,否则整段中文里零星散布的 6 个英文虚词会被误连成跑。
-		else if (!/[㐀-鿿]/.test(tok)
-			&& (w === '' || /^[A-Za-z]$/.test(w) || /^[A-Z]{2,}(?:-[A-Z0-9]+)*$/.test(w))) {
-			// neutral: keep the run
-		}
-		else {
-			run = 0;
-		}
-	}
-	// 跨度规则 (retain-pdf _has_long_english_residue_span): a ≥10-word Latin
-	// prose span — Title-Case words count too, which the lowercase run above
-	// deliberately skips — that is NOT data-dense (NMR lines, numeric strings
-	// stay exempt) is a dropped clause. Catches "The Results Showed That..."
-	// style residue the run rule missed.
-	return longEnglishResidueSpans(stripProtectable(cleaned), 10).length > 0;
-}
-
-/** CJK ideograph ranges used for the target-language ratio. */
-const CJK_RE = /[㐀-鿿豈-﫿]/g;
-
-/** A source with at least this many Latin words is prose worth validating. */
-const PROSE_WORD_GATE = 6;
-
-/** 内容相同(忽略大小写、标点、空白)= 回声。 */
-function isEcho(source: string, translated: string): boolean {
-	const norm = (x: string): string => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
-	const a = norm(source);
-	return a.length > 0 && a === norm(translated);
-}
-
-/**
- * 这段短文本**原样保留**是不是正当的 (2.12.12)。
- *
- * 正当:没有自然语言词(数字、单位、符号)、全是缩写(CT / MRI / COVID-19 / IIa)、
- * 人名("Powers WJ" / "J. Smith" / "Zhang W, Li M")。
- * 不正当:含至少一个普通词(≥3 个字母且至少 2 个小写)—— "Document Title"、
- * "Not recommended"、"Table 3" 原样返回就是没译。
- *
- * 专名(药名、机构名)会被算成普通词而进入重试;重试链有上限,最终失败仍显示原文。
- * 这是有意的取舍:把没译的标为已译、写进缓存,比多花一两次请求坏得多。
- */
-function mayStayUntranslated(proseSource: string): boolean {
-	const t = proseSource.trim();
-	if (!t) { return true; }
-	const words = (t.match(/[A-Za-z][A-Za-z'’-]*/g) ?? [])
-		.filter(w => w.replace(/[^A-Za-z]/g, '').length >= 3 && (w.match(/[a-z]/g) ?? []).length >= 2);
-	if (words.length === 0) { return true; }
-	// 作者名单(≥3 段、每段 ≥2 词)至少 6 个词,根本到不了这个分支 —— 它在上面的
-	// PROSE_WORD_GATE 之后另有豁免;这里只需要认短形式的人名。
-	// 姓 + 首字母缩写(可逗号连排),或 首字母. 姓。
-	const surnameInitials = /^(?:[A-Z][a-z'’-]+(?:[\s-][A-Z][a-z'’-]+)?\s+[A-Z]{1,3}\.?\s*(?:,\s*|$))+$/;
-	const initialSurname = /^(?:[A-Z]\.\s*){1,2}[A-Z][a-z'’-]+$/;
-	return surnameInitials.test(t) || initialSurname.test(t) || looksLikePersonNames(t) || looksLikeCitationTail(t);
-}
-
-/** 学位/职称缩写 —— 署名行里跟在人名后面、原样保留是正当的。 */
-const DEGREE_TOKENS = new Set(['MD', 'PhD', 'DPhil', 'RT', 'RN', 'MS', 'MSc', 'MA', 'BA', 'BS', 'BSc', 'MPH', 'MHS', 'MBA', 'DO', 'DDS', 'DVM', 'PharmD', 'ScD', 'DrPH', 'MBBS', 'MBChB', 'FRCR', 'FRCP', 'FACR', 'FACC', 'FAHA', 'FESC', 'FSIR', 'FRCPC', 'MRCP', 'DMD', 'OD', 'PA', 'NP', 'Dr', 'Prof', 'Jr', 'Sr', 'II', 'III']);
-
-/**
- * 署名行 / 作者串 (3.1.3, Goenka 2016 p1、p8 实证): "Nancy A. Obuchowski, PhD"、
- * "Wadih Karim, RT"、"Morsbach F, Bickelhaupt S, Rätzer S," 原样返回被 2.12.12 的回声
- * 规则判成没译 → 反复重试、最后 unrecovered —— 而"人名原样保留"正是提示词要求的。
- * 判据全是形态的:按逗号/分号/and 切段,每段只许由 首字母大写的名字词(含变音符号、
- * 连字符、撇号)、首字母缩写(A. / AB)、学位缩写 组成,且至少含一个名字词;不许出现
- * 任何普通小写词 —— "Nancy and the team" 不算。
- */
-export function looksLikePersonNames(text: string): boolean {
-	const t = text.trim().replace(/[.,;]\s*$/, '');
-	if (!t) {
-		return false;
-	}
-	const segments = t.split(/\s*(?:,|;|\band\b|&)\s*/).filter(Boolean);
-	if (!segments.length || segments.length > 12) {
-		return false;
-	}
-	const nameWord = /^\p{Lu}[\p{Ll}\p{Lu}'’-]*\p{Ll}[\p{Ll}'’-]*$/u;   // Nancy / Obuchowski / Ramirez-Giraldo / O'Neil / Rätzer / McDonald
-	// 首字母缩写:A. / A.B. / AB / F —— 至多两个字母。三个大写字母(CNR / MRI)是缩写词,不是人名。
-	const initials = /^(?:\p{Lu}\.){1,2}$|^\p{Lu}{1,2}$/u;
-	const particle = /^(?:van|von|de|der|den|del|da|di|la|le|du|dos|das|bin|ibn|ter|ten|af|el)$/;
-	// 首字母大写的词串本身证明不了什么 —— "Document Title" / "No Evidence" 形态上与
-	// "Nancy Obuchowski" 无法区分。必须有**人名专属**的证据:首字母缩写或学位缩写。
-	let evidence = false;
-	let named = 0;
-	for (const seg of segments) {
-		const tokens = seg.split(/\s+/).filter(Boolean);
-		if (!tokens.length || tokens.length > 6) {
-			return false;
-		}
-		let segNames = 0;
-		let segDegrees = 0;
-		for (const tok of tokens) {
-			const bare = tok.replace(/[.,]+$/, '');
-			if (DEGREE_TOKENS.has(bare)) {
-				segDegrees++;
-				evidence = true;
-			}
-			else if (nameWord.test(bare)) {
-				segNames++;
-			}
-			else if (initials.test(bare)) {
-				evidence = true;
-			}
-			else if (!particle.test(bare)) {
-				return false;
-			}
-		}
-		// 每一段要么是人名(≥1 个名字词),要么只是跟在人名后的学位("…, MD, PhD")。
-		if (segNames === 0 && !(segDegrees > 0 && segDegrees === tokens.length)) {
-			return false;
-		}
-		named += segNames;
-	}
-	return named > 0 && evidence;
-}
-
-/**
- * 参考文献的期刊尾段 (3.1.3, Goenka 2016 p8): "Radiol 2013;48(1):32–40." /
- * "2013;201(4):W626–W632." —— 刊名缩写 + 年;卷(期):页。原样返回是正当的。
- */
-export function looksLikeCitationTail(text: string): boolean {
-	const t = text.trim();
-	return /^(?:[\p{Lu}][\p{L}.]*\s+){0,5}(?:19|20)\d{2}\s*;\s*\d+\s*(?:\(\d+(?:[–-]\d+)?\))?\s*:\s*[\p{Lu}]?\d+(?:[–-][\p{Lu}]?\d+)?\.?$/u.test(t);
-}
-/** Below this CJK ratio on a prose source, the response was not really translated. */
-const MIN_TARGET_RATIO = 0.45;
-
-/**
- * 短源文分界 (1.1.8): 散文部分不超过这么多字符的块 —— 标题、小标题、署名行、
- * 图注标签 —— 走小样本安全的验收。真正的正文段落差着一个数量级(Horst 2024
- * 第 1 页的三段正文分别是 839 / 1783 / 1761 字符),永远走原来的比率阈值。
- */
-const SHORT_SOURCE_PROSE_CHARS = 80;
-
-/**
- * 「还没翻译的拉丁词」计数: 只算以小写字母开头的普通词。全大写缩写
- * (CT, PCD, MRI, MD, PhD) 与 Title-Case 专名 (Siemens, Naeotom, Siegel,
- * Ramirez-Giraldo) 在忠实译文里本来就该原样保留 —— 把它们算成「未翻译的
- * 拉丁词」正是短标题被反复拒收的直接原因。
- *
- * 注意首词效应: 句首的普通词也是 Title-Case, 所以这个计数在长段落上会偏低。
- * 它因此只用于 SHORT_SOURCE_PROSE_CHARS 以内的短块, 长段落仍用
- * targetLanguageRatio 的全量拉丁词计数。
- */
-export function untranslatedLatinWords(text: string): number {
-	return (text.match(/[A-Za-z][A-Za-z'-]+/g) ?? []).filter(w => /^[a-z]/.test(w)).length;
-}
-
-/**
- * 短源文的验收。两条,都比原来的比率判定更贴合小样本:
- *
- *  1. 专名直接放行: 源文里一个可译的普通词都没有(整块是人名、机构名、
- *     缩写、学位后缀 —— "Marilyn J. Siegel, MD • Juan Carlos Ramirez-Giraldo,
- *     PhD •" 就是这样的一行),那么原样返回就是正确答案,拒收只会白烧请求。
- *     这是 looksLikeAuthorNameList 的推广: 那条规则要求 ≥3 个人名分段,
- *     署名被拆到第二行只剩 2 个名字时就失效了。
- *  2. 否则仍看中文占比,但分母只数「还没翻译的普通词」。
- *
- * 关键不变量: 分子(中文字数)与原来一致,分母只会变小或不变,所以对短块
- * 而言这只可能把「拒」变成「收」,不可能反过来 —— 不存在新的误收路径。
- * 纯回声依然被拒: 回声里的普通词原封不动地留着,中文字数为 0,比率就是 0。
- */
-function shortSourceTranslated(proseSource: string, proseTranslation: string): boolean {
-	if (untranslatedLatinWords(proseSource) === 0) {
-		return true;
-	}
-	const cjk = (proseTranslation.match(CJK_RE) ?? []).length;
-	const residual = untranslatedLatinWords(proseTranslation);
-	const denom = cjk + residual;
-	if (denom === 0) {
-		return false;
-	}
-	return cjk / denom >= MIN_TARGET_RATIO;
-}
-
-/**
- * Fraction of a Chinese translation that is actually Chinese: CJK characters
- * over (CJK characters + Latin words). A whole translation scores high (a few
- * embedded acronyms like PCCT/MRI are normal); a half-translated or mixed
- * response scores low; pure echoed English scores 0.
- */
-function targetLanguageRatio(text: string): number {
-	const cjk = (text.match(CJK_RE) ?? []).length;
-	const latinWords = (text.match(/[A-Za-z]{2,}/g) ?? []).length;
-	const denom = cjk + latinWords;
-	return denom === 0 ? 0 : cjk / denom;
-}
-
 /**
  * Absolute ceiling for one page end to end (extraction + all chunks). Long
  * pages with several chunks are fine at 60 s per request; five minutes means
@@ -538,6 +278,10 @@ const PAGE_IDLE_MS = 150000;
  *  the old whole-page scheduler retry. Small and local so one blip doesn't fail
  *  a chunk, without ever re-running extraction. */
 const REQUEST_RETRIES = 2;
+/** 5.0: 当前页请求多久没回来就对冲(毫秒)。快引擎 1–2 秒一页,8 秒已是明显异常。 */
+let HEDGE_AFTER_MS = 8000;
+/** 测试用: 调整对冲等待。 */
+export function setHedgeAfterMs(ms: number): void { HEDGE_AFTER_MS = ms; }
 /** Chunks of ONE page dispatched concurrently. Audit-verified: nothing in a
  *  chunk's request depends on a previous chunk's RESPONSE (context comes from
  *  SOURCE text), so limited parallelism is safe and roughly halves page time. */
@@ -573,6 +317,11 @@ export interface PageTranslationState {
 	 * ('repeated-failure'). 强制重译 clears the memory and tries again.
 	 */
 	keepOrigin?: Map<string, string>;
+	/**
+	 * 5.0: 跨页整句降级为分栏翻译的段落(显示但不进缓存,下次打开重试整句)。
+	 * 挂在页状态上而不是单次运行上: 压缩重译、单段重译、续跑都要看到它。
+	 */
+	provisional?: Set<string>;
 	/** 最近一次验收拒绝的原因 (仅原因码,无文本): validator | placeholder。 */
 	rejectReasons?: Map<string, string>;
 	rejectHistory?: Map<string, string[]>;
@@ -723,6 +472,14 @@ export interface PageDiagnostics {
 		textLayerWaitMs?: number;
 		plainTextMs: number;
 		buildMs: number;
+		/** 5.0: 旋转排版正文字符数(旋转表格保留原文)。 */
+		rotatedTextChars?: number;
+		/** 5.0 全篇样式(数字,见 ExtractPhases)。 */
+		documentStyleState?: number;
+		documentStyleMs?: number;
+		documentBodyPt?: number;
+		referencesFirstPage?: number;
+		referencesLastPage?: number;
 	};
 }
 
@@ -745,6 +502,8 @@ export interface TranslateHooks {
 	onUsage?: (usage: TokenUsage) => void;
 	onParamHeal?: (param: RejectedParam) => void;
  onProgress?: () => void;
+	/** 5.0 对冲请求: 指定由哪个服务商发出(不传 = 按页分配)。 */
+	provider?: string;
 }
 
 export interface TranslationDeps {
@@ -792,6 +551,11 @@ export interface TranslationDeps {
 	laneFor?(pageIndex: number): string;
 	/** 2.11.1: 当前服务商池大小 —— 1 表示根本没走按页分配。 */
 	poolSize?(): number;
+	/**
+	 * 5.0 对冲: 当前页的请求迟迟不回时,另找一家(测得最快、且不是 `current`)
+	 * 同时再发一次。返回 '' 表示没有合适的备选。
+	 */
+	hedgeProviderFor?(pageIndex: number, current: string): string;
 	/** Config snapshot getters. */
 	getLanguages(sampleText: string): { source: string; target: string };
 	getDocumentTitle(): string;
@@ -984,7 +748,7 @@ export class TranslationManager {
 	 * 经计量的服务商调用 (2.7.0): 两条请求路径(整页运行与压缩重译/单块重译)
 	 * 都从这里出去,响应里的用量按页累加。只碰数字,响应正文原样透传。
 	 */
-	private async meteredTranslate(request: TranslationRequest, signal: AbortSignal, onAttempts?: (n: number) => void, heartbeat?:()=>void): Promise<TranslationResponse> {
+	private async meteredTranslate(request: TranslationRequest, signal: AbortSignal, onAttempts?: (n: number) => void, heartbeat?:()=>void, provider?: string): Promise<TranslationResponse> {
   // Centralized here so missing-ID, slow-lane, residue, plain, compression and
   // single-block retries all retain the same immutable source evidence.
   const sourceById = new Map(this.pages.get(request.pageIndex ?? -1)?.blocks.map(b => [b.id, b]));
@@ -1027,7 +791,8 @@ export class TranslationManager {
             },
 			onUsage: record,
 			onParamHeal: param => bump(this.paramHeals, param),
-   onProgress: heartbeat
+   onProgress: heartbeat,
+			...(provider ? { provider } : {})
 		};
 		try {
 			const response = await this.deps.translateRequest(request, signal, hooks);
@@ -1308,6 +1073,72 @@ export class TranslationManager {
 	}
 
 	/** 当前生效的分页权重 (2.12.0) —— 样本不足时全是 1,即与 2.11.2 行为一致。 */
+	/** 对冲统计: 发了几次、备选先回来几次。 */
+	private hedges = { launched: 0, won: 0 };
+
+	/**
+	 * 当前页请求的对冲 (5.0)。主请求超过 HEDGE_AFTER_MS 还没回来、池里有更快
+	 * 的另一家时,同时让那家也翻一次,先拿到合格响应的用,另一个取消。
+	 * 只对当前页、每个请求最多一次;代价是偶尔多花一次请求的额度。
+	 * 主请求在定时器之前就失败 → 照常抛出,交给原有重试链;两个都失败 →
+	 * 抛主请求的错误。
+	 */
+	private async hedgedTranslate(pageIndex: number, lane: string, request: TranslationRequest, sig: AbortSignal,
+		onAttempts: (n: number) => void, beat: () => void): Promise<TranslationResponse> {
+		const hedgeProvider = this.deps.hedgeProviderFor;
+		if (!hedgeProvider || (this.deps.poolSize?.() ?? 1) < 2) {
+			return this.meteredTranslate(request, sig, onAttempts, beat);
+		}
+		const link = (): AbortController => {
+			const c = new AbortController();
+			if (sig.aborted) c.abort();
+			else sig.addEventListener('abort', () => c.abort(), { once: true });
+			return c;
+		};
+		const primaryCtl = link();
+		const primary = this.meteredTranslate(request, primaryCtl.signal, onAttempts, beat);
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const fired = new Promise<'hedge'>(resolve => { timer = setTimeout(() => resolve('hedge'), HEDGE_AFTER_MS); });
+		const settledPrimary = primary.then(r => ({ ok: true as const, r }), e => ({ ok: false as const, e }));
+		const first = await Promise.race([settledPrimary, fired]);
+		if (first !== 'hedge') {
+			clearTimeout(timer);
+			if (first.ok) return first.r;
+			throw first.e;
+		}
+		const backup = hedgeProvider(pageIndex, lane);
+		if (!backup || backup === lane || sig.aborted || pageIndex !== this.currentPage) {
+			const r = await settledPrimary;
+			if (r.ok) return r.r;
+			throw r.e;
+		}
+		this.hedges.launched++;
+		logger.info(MODULE, `Page ${pageIndex + 1}: request slow after ${HEDGE_AFTER_MS} ms on ${sanitizeProviderId(lane)} → hedging on ${sanitizeProviderId(backup)}`);
+		const backupCtl = link();
+		// 5.0 审核: 备选请求同样占备选服务商的请求名额(前台优先),不额外超出它的并发上限。
+		const settledBackup = this.requestGate.run(backup, true,
+			() => this.meteredTranslate(request, backupCtl.signal, onAttempts, beat, backup), backupCtl.signal)
+			.then(r => ({ ok: true as const, r }), e => ({ ok: false as const, e }));
+		const winner = await Promise.race([settledPrimary.then(x => ({ who: 'primary' as const, x })), settledBackup.then(x => ({ who: 'backup' as const, x }))]);
+		if (winner.x.ok) {
+			(winner.who === 'primary' ? backupCtl : primaryCtl).abort();
+			if (winner.who === 'backup') this.hedges.won++;
+			return winner.x.r;
+		}
+		const other = await (winner.who === 'primary' ? settledBackup : settledPrimary);
+		if (other.ok) {
+			if (winner.who === 'primary') this.hedges.won++;
+			return other.r;
+		}
+		const p = await settledPrimary;
+		throw p.ok ? other.e : p.e;
+	}
+
+	/** 当前阅读页(0 起)。供会话按「当前页优先」改派引擎。 */
+	currentPageIndex(): number {
+		return this.currentPage;
+	}
+
 	providerWeights(): Record<string, number> {
 		return weightsFromThroughput(this.providerThroughput());
 	}
@@ -1523,9 +1354,15 @@ export class TranslationManager {
 						text: pb.text,
 						charBudget: wanted.get(pb.block.id)
 					})),
-					glossary: this.glossaryFor(blocks.map(b => b.sourceText))
+					glossary: this.glossaryFor(blocks.map(b => b.sourceText)),
+					// 5.0 (校验 r22, 3036 p5): a shorter reference is still a reference —
+					// only the title translates. Without the rule the model shortened
+					// "5. Choi MH, MacKenzie JD, Dalinka MK. Imaging features of …" to
+					// "5. 晶体性关节病影像学", dropping authors, journal and pages.
+					referenceContent: blocks.some(b => b.isReference)
 				};
 				const response = await this.requestGate.run(this.laneFor(pageIndex), true, () => this.meteredTranslate(request, signal), signal);
+				const marked = new Set(response.provisionalIds ?? []);
 				for (const t of response.translations) {
 					const pb = protectedBlocks.find(p => p.block.id === t.id);
 					if (!pb || !t.translatedText.trim()) {
@@ -1534,6 +1371,9 @@ export class TranslationManager {
 					if (!pb.reg.ok(t.translatedText)) continue;
 					const restored = pb.reg.restore(t.translatedText);
 					if (technicalUnitIssue(pb.block.sourceText, restored) || numericPowerIssue(pb.block.sourceText, restored)) continue;
+					// Same acceptance as the first translation for a reference: authors,
+					// journal and numbers stay as written.
+					if (pb.block.isReference && !looksTranslated(pb.block.sourceText, restored, target, { isReference: true })) continue;
 					const previous = state.translations.get(t.id);
 					// Only accept a genuinely shorter retry; equal/longer output
 					// cannot help it fit and would burn the result for nothing.
@@ -1543,6 +1383,8 @@ export class TranslationManager {
 					state.translations.set(t.id, restored);
 					accepted.set(t.id, restored);
 				}
+				// 5.0 审核: 压缩结果同样可能是分栏降级的临时译文;临时的不进缓存。
+				noteProvisionalIn(state, { translations: [], provisionalIds: [...marked] }, accepted.keys());
 				if (accepted.size) {
 					// 孤儿 compress 不落盘 (2.0.7, 审核 P2-2): 压缩请求可飞 120s,
 					// 期间用户可能已「刷新本页」—— 新运行接管该页并写入了新缓存。
@@ -1554,9 +1396,7 @@ export class TranslationManager {
 						return;
 					}
 					logger.info(MODULE, `Page ${pageIndex + 1}: ${accepted.size} block(s) re-translated shorter under budget`);
-					const all: TranslatedBlock[] = state.blocks
-						.filter(b => state.translations.has(b.id))
-						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! }));
+					const all: TranslatedBlock[] = pageCacheRows(state, state.blocks);
 					// Only a COMPLETE page enters the page cache (审核 P1): this
 					// path can run while some blocks are keep-origin — writing the
 					// partial set used to freeze the page as a cache entry that hit
@@ -1574,9 +1414,9 @@ export class TranslationManager {
 						// 同上 (2.5.9): 压缩任务跑在**前台 lane** 上,更不该拿
 						// 槽位去等落盘。
 						this.trackWrite(this.deps.writeSegments(pageIndex, [...accepted]
-							.filter(([id]) => byId.has(id))
+							.filter(([id]) => byId.has(id) && !state.provisional?.has(id))
 							.map(([id, text]) => ({
-								hash: segmentHash(byId.get(id)!.sourceText, source, target, byId.get(id)!.continuationContext),
+								hash: blockSegmentHash(byId.get(id)!, source, target),
 								translatedText: text
 							}))
 						));
@@ -1616,7 +1456,7 @@ export class TranslationManager {
 				const sample = prior.blocks.map(b => b.sourceText).join('\n').slice(0, 4000);
 				const { source, target } = this.deps.getLanguages(sample);
 				for (const b of prior.blocks) {
-					this.failedSegments.delete(segmentHash(b.sourceText, source, target, b.continuationContext));
+					this.failedSegments.delete(blockSegmentHash(b, source, target));
 				}
 			}
 			catch { /* language resolution is best-effort here */ }
@@ -1668,7 +1508,7 @@ export class TranslationManager {
 		const { source, target } = this.deps.getLanguages(block.sourceText);
 		const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block), block.styleRuns);
 		const text = reg.text;
-		this.failedSegments.delete(segmentHash(block.sourceText, source, target, block.continuationContext));
+		this.failedSegments.delete(blockSegmentHash(block, source, target));
 		try {
 			return await this.scheduler.enqueue(`page-${pageIndex}-seg-${blockId}`, PRIORITY.CURRENT_RETRANSLATE, async (signal) => {
 				const live = (): boolean => !this.disposed && !signal.aborted && this.pages.get(pageIndex) === state;
@@ -1694,12 +1534,14 @@ export class TranslationManager {
 				const restored = reg.restore(hit.translatedText);
 				state.cached = false; // The replacement is not durable yet.
 				state.translations.set(blockId, restored);
+				noteProvisionalIn(state, resp, [blockId]);
+				const provisional = state.provisional?.has(blockId) ?? false;
 				state.keepOrigin?.delete(blockId);
 				this.docMemory.learn(extractTermPairs(block.sourceText, restored));
 				this.notify(state);
-				if (this.deps.writeSegments) {
+				if (this.deps.writeSegments && !provisional) {
 					await this.deps.writeSegments(pageIndex, [{
-						hash: segmentHash(block.sourceText, source, target, block.continuationContext),
+						hash: blockSegmentHash(block, source, target),
 						translatedText: restored
 					}]).catch(() => { /* best effort */ });
 				}
@@ -1713,9 +1555,7 @@ export class TranslationManager {
 				const pageComplete = state.blocks.every(b =>
 					b.translationMode === 'preserve' || state.translations.has(b.id));
 				if (pageComplete) {
-					await this.persistPage(state, state.blocks
-						.filter(b => state.translations.has(b.id))
-						.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })));
+					await this.persistPage(state, pageCacheRows(state, state.blocks));
 				}
 				return live();
 			}, { foreground: true, lane: this.laneFor(pageIndex), maxRetries: 0 });
@@ -2029,6 +1869,9 @@ export class TranslationManager {
 				// 2.7.7: 真实 HTTP 尝试 (含适配器自愈重试) 与校验失败次数。
 				httpAttempts: this.httpAttempts,
 				validationFailures: this.validationFailures,
+				// 5.0: 当前页对冲请求次数 / 备选先回来的次数。
+				hedgesLaunched: this.hedges.launched,
+				hedgesWon: this.hedges.won,
 				// 2.8.4 (性能第五批): 此刻还持有完整内容的页数("热页面")。
 				// 它与 pageRetention 的上限一起看 —— 上限是否合适,先看这个数字。
 				hotPages: [...this.pages.values()].filter(p => p.evicted !== true).length,
@@ -2349,20 +2192,7 @@ export class TranslationManager {
 		if (this.disposed) return;
 		const existing = this.pages.get(pageIndex);
 		this.touchPage(pageIndex);
-		// 2.8.3: 被卸过内容的已完成页必须能重新装载 —— 否则用户翻回去只剩原文。
-		// 走的是与"从未翻过的页"完全相同的路径: 重新抽取 + 读页面缓存,零 API。
-		if (existing && (existing.status === 'done' || existing.status === 'translating')
-			&& existing.evicted !== true) {
-			return;
-		}
-		// A page may legitimately be mid-extraction — but a state STUCK there
-		// past twice the extraction timeout is a zombie (the bug behind 每页必点
-		// 圆环): fall through and replace it instead of early-returning forever.
-		if (existing?.status === 'extracting'
-			&& Date.now() - (existing.extractingSince ?? Date.now()) < this.extractTimeoutMs * 2) {
-			return;
-		}
-		if (this.scheduler.isScheduled(jobKey)) {
+		if (this.pageAlreadyActive(existing, jobKey)) {
 			return;
 		}
 
@@ -2373,6 +2203,7 @@ export class TranslationManager {
 			status: 'extracting',
 			blocks: resume?.blocks ?? [],
 			translations: new Map(resume?.translations),
+			provisional: new Set(resume?.provisional),
 			extractingSince: Date.now()
 		};
 		const navigationAtStart = this.navigationGeneration;
@@ -2394,91 +2225,11 @@ export class TranslationManager {
 			// getPageData used to occupy a provider slot for up to ~58s without a
 			// single network request in flight). A small local semaphore (2,
 			// current page first) bounds concurrent extractions instead.
-			let blocks: SourceBlock[];
-			try {
-				const zombie = this.extractZombies.get(pageIndex);
-				if (resume) { blocks = resume.blocks; }
-				else if (zombie && this.deps.extractRenderedPage) {
-					// Never start a second PDF-worker extraction while the timed-out
-					// one is still alive. The visible page can still be recovered from
-					// its rendered text layer (timeout-guarded like any extraction).
-					if (pageIndex !== this.currentPage) {
-						this.releasePage(pageIndex, state, 'extract-zombie');
-						return;
-					}
-					blocks = await this.renderedWithRetry(pageIndex);
-					if (!blocks.length) {
-						// 1.0.3 修复 (到页仍要点圆环): the user often ARRIVES at the
-						// page before its text layer exists — the old code marked the
-						// empty result "done" and the page could never auto-translate
-						// again. Surface a retryable error instead.
-						state.status = 'error';
-						state.error = new PaperMirrorError('EXTRACTION_FAILED',
-							`第 ${pageIndex + 1} 页文字层尚未就绪,稍后自动重试或点击刷新。`, { retryable: true });
-						this.notify(state);
-						return;
-					}
-				}
-				else {
-					blocks = await this.withExtractionSlot(pageIndex,
-						() => this.withExtractTimeout(this.deps.extractPage(pageIndex), pageIndex));
-				}
+			const extracted = await this.extractForPage(pageIndex, state, resume);
+			if (!extracted) {
+				return;
 			}
-			catch (extractError) {
-				const err = extractError instanceof PaperMirrorError
-					? extractError
-					: new PaperMirrorError('UNKNOWN', String(extractError));
-				if (err.code === 'TIMEOUT') {
-					// If this is the visible page, recover immediately from the DOM
-					// text layer. Otherwise forget the prefetch state; a later visit
-					// will use the DOM without duplicating the live worker request.
-					if (pageIndex === this.currentPage && this.deps.extractRenderedPage) {
-						const rendered = await this.renderedWithRetry(pageIndex);
-						if (rendered.length) {
-							blocks = rendered;
-							logger.info(MODULE, `Page ${pageIndex + 1}: recovered timed-out extraction from rendered text layer`);
-						}
-						else {
-							// The VISIBLE page has neither worker result nor text layer:
-							// surface a retryable error instead of silently going idle
-							// (审核 P2 — the silent delete re-created the "点击圆环" limbo
-							// for exactly this page).
-							state.status = 'error';
-							state.error = new PaperMirrorError('EXTRACTION_FAILED',
-								`第 ${pageIndex + 1} 页读取超时且文字层不可用,可用刷新重试。`, { retryable: true });
-							this.notify(state);
-							return;
-						}
-					}
-					else {
-						logger.warn(MODULE, `Page ${pageIndex + 1}: extraction timed out after ${this.extractTimeoutMs} ms`);
-						this.releasePage(pageIndex, state, 'extract-timeout');
-						return;
-					}
-				}
-				else if (err.code === 'EXTRACTION_FAILED' && err.retryable) {
-					// 文本层还没渲染 (2.8.13 真机)。这**不是**"这页没有可译内容",
-					// 而是"现在看不见" —— 区别在于前者该标完成、后者必须重来。
-					//
-					// 真机 19 页里有 6 页栽在这上面: 预取在页面渲染之前抽了一次,
-					// 抽到空,页面被永久标成"已完成",用户翻过去一个字都没译,也
-					// 不会自动重试。导出时那几页重解析出 12–14 个块 —— 文字一直都在。
-					if (pageIndex === this.currentPage) {
-						state.status = 'error';
-						state.error = err;
-						this.notify(state);
-						return;
-					}
-					// 预取页: 忘掉这次结果,但**记账并主动补回** (2.9.0) —— 2.8.13 写的
-					// 是"用户真翻过去时会重抽",而单向顺读时用户只经过一次,释放若发生
-					// 在他走过之后就没有第二次。真机第 36/41/45 页正是这么整页消失的。
-					this.releasePage(pageIndex, state, 'text-layer-not-rendered');
-					return;
-				}
-				else {
-					throw err; // real extraction errors keep their error/no-text-layer states
-				}
-			}
+			let blocks = extracted;
 			if (this.disposed || this.pages.get(pageIndex) !== state) {
 				return; // superseded while extracting
 			}
@@ -2490,28 +2241,7 @@ export class TranslationManager {
 				this.releasePage(pageIndex, state, 'navigation-superseded');
 				return;
 			}
-			state.blocks = blocks;
-			// 2.8.5 (P0): 记下这一页走的抽取路径 —— 语料重解析对不上时,
-			// "路径不同"是最可能的原因,此前连问都问不出来。
-			try {
-				const path = this.deps.extractPathOf?.(pageIndex);
-				if (path) {
-					state.extractPath = path;
-				}
-			}
-			catch { /* 记不到就不记,绝不影响翻译 */ }
-			extractedAt = Date.now();
-			let extractPhases: NonNullable<PageDiagnostics['extractPhases']> | undefined;
-			try {
-				extractPhases = this.deps.extractPhasesOf?.(pageIndex);
-			}
-			catch { /* 量不到就不量,绝不影响翻译 */ }
-			this.pageTiming.set(pageIndex, {
-				requestedAt,
-				extractMs: extractedAt - requestedAt,
-				firstTextAt: 0,
-				...(extractPhases ? { extractPhases } : {})
-			});
+			extractedAt = this.recordExtraction(pageIndex, state, blocks, requestedAt);
 			if (!blocks.length) {
 				state.status = 'done';
 				this.notify(state);
@@ -2531,54 +2261,9 @@ export class TranslationManager {
    }
 			state.blocks = blocks;
 
-			await this.scheduler.enqueue(`page-${pageIndex}`, priority, async (signal) => {
-				// 排队时间 = 抽取完到调度器真正让这页开跑 (2.8.4)。
-				const timing = this.pageTiming.get(pageIndex);
-				if (timing) {
-					timing.queuedMs = Date.now() - extractedAt;
-				}
-				// IDLE watchdog with a REAL abort. The old Promise.race watchdog had
-				// two structural bugs: (a) it measured TOTAL page time, so a big page
-				// whose every request succeeded could still be killed; (b) it only
-				// rejected the race — translatePage kept running as a zombie, issuing
-				// requests past the freed scheduler slot, immune to 取消, and later
-				// flipping the errored page back to done. Now: a LOCAL controller is
-				// aborted either by the parent signal or when NO request completes
-				// for PAGE_IDLE_MS — progress (each finished attempt / extraction)
-				// re-arms the clock, so long pages live as long as they keep moving,
-				// and a genuine hang dies quickly AND STOPS FOR REAL.
-				const local = new AbortController();
-				const onParentAbort = (): void => local.abort();
-				signal.addEventListener('abort', onParentAbort, { once: true } as AddEventListenerOptions);
-				let lastBeat = Date.now();
-				let idleFired = false;
-				const heartbeat = (): void => { lastBeat = Date.now(); };
-				const idleTimer = setInterval(() => {
-					if (Date.now() - lastBeat > PAGE_IDLE_MS) {
-						idleFired = true;
-						local.abort();
-					}
-				}, 5000);
-				try {
-					await this.translatePage(state, local.signal, { bypassPageCache: options?.bypassCache ?? false, bypassSegments: options?.bypassSegments ?? false }, heartbeat, blocks);
-				}
-				catch (e) {
-					// An idle-abort must surface as TIMEOUT, not CANCELLED (which
-					// would silently reset the page as if the user navigated away).
-					if (idleFired && !signal.aborted && e instanceof PaperMirrorError && e.code === 'CANCELLED') {
-						throw new PaperMirrorError(
-							'TIMEOUT',
-							`Page ${pageIndex + 1} made no progress for ${PAGE_IDLE_MS / 1000} s. Use 重新翻译 to retry.`,
-							{ retryable: true }
-						);
-					}
-					throw e;
-				}
-				finally {
-					clearInterval(idleTimer);
-					signal.removeEventListener('abort', onParentAbort);
-				}
-			}, {
+			const bypass = { bypassPageCache: options?.bypassCache ?? false, bypassSegments: options?.bypassSegments ?? false };
+			await this.scheduler.enqueue(`page-${pageIndex}`, priority,
+				signal => this.translateWithIdleWatchdog(pageIndex, state, signal, bypass, blocks, extractedAt), {
 				foreground: options?.foreground ?? false,
 				lane: this.laneFor(pageIndex),
 				// A page task runs at MOST once. A retryable failure must NOT re-run
@@ -2615,6 +2300,195 @@ export class TranslationManager {
 		}
 	}
 
+	/** ensurePage 拆出: 这一页已经完成、正在抽取或已在排队时不重复发起。 */
+	private pageAlreadyActive(existing: PageTranslationState | undefined, jobKey: string): boolean {
+		// 2.8.3: 被卸过内容的已完成页必须能重新装载 —— 否则用户翻回去只剩原文。
+		// 走的是与"从未翻过的页"完全相同的路径: 重新抽取 + 读页面缓存,零 API。
+		if (existing && (existing.status === 'done' || existing.status === 'translating')
+			&& existing.evicted !== true) {
+			return true;
+		}
+		// A page may legitimately be mid-extraction — but a state STUCK there
+		// past twice the extraction timeout is a zombie (the bug behind 每页必点
+		// 圆环): fall through and replace it instead of early-returning forever.
+		if (existing?.status === 'extracting'
+			&& Date.now() - (existing.extractingSince ?? Date.now()) < this.extractTimeoutMs * 2) {
+			return true;
+		}
+		return this.scheduler.isScheduled(jobKey);
+	}
+
+	/** ensurePage 拆出: 记下抽取路径、抽取分阶段耗时与计时起点;返回抽取完成时刻。 */
+	private recordExtraction(pageIndex: number, state: PageTranslationState, blocks: SourceBlock[], requestedAt: number): number {
+		state.blocks = blocks;
+		// 2.8.5 (P0): 记下这一页走的抽取路径 —— 语料重解析对不上时,
+		// "路径不同"是最可能的原因,此前连问都问不出来。
+		try {
+			const path = this.deps.extractPathOf?.(pageIndex);
+			if (path) {
+				state.extractPath = path;
+			}
+		}
+		catch { /* 记不到就不记,绝不影响翻译 */ }
+		const extractedAt = Date.now();
+		let extractPhases: NonNullable<PageDiagnostics['extractPhases']> | undefined;
+		try {
+			extractPhases = this.deps.extractPhasesOf?.(pageIndex);
+		}
+		catch { /* 量不到就不量,绝不影响翻译 */ }
+		this.pageTiming.set(pageIndex, {
+			requestedAt,
+			extractMs: extractedAt - requestedAt,
+			firstTextAt: 0,
+			...(extractPhases ? { extractPhases } : {})
+		});
+		return extractedAt;
+	}
+
+	/**
+	 * 抽取一页 (ensurePage 拆出): PDF 抽取跑在服务商 lane 之外,由本地小信号量
+	 * (2 路,当前页优先) 限流;超时/文本层未渲染时按当前页或预取页分别处理。
+	 * 返回 null 表示这一页已被处理(报错、释放待补回),调用方直接结束。
+	 */
+	private async extractForPage(pageIndex: number, state: PageTranslationState, resume: { blocks: SourceBlock[] } | undefined): Promise<SourceBlock[] | null> {
+		try {
+			const zombie = this.extractZombies.get(pageIndex);
+			if (resume) { return resume.blocks; }
+			else if (zombie && this.deps.extractRenderedPage) {
+				// Never start a second PDF-worker extraction while the timed-out
+				// one is still alive. The visible page can still be recovered from
+				// its rendered text layer (timeout-guarded like any extraction).
+				if (pageIndex !== this.currentPage) {
+					this.releasePage(pageIndex, state, 'extract-zombie');
+					return null;
+				}
+				const rendered = await this.renderedWithRetry(pageIndex);
+				if (!rendered.length) {
+					// 1.0.3 修复 (到页仍要点圆环): the user often ARRIVES at the
+					// page before its text layer exists — the old code marked the
+					// empty result "done" and the page could never auto-translate
+					// again. Surface a retryable error instead.
+					state.status = 'error';
+					state.error = new PaperMirrorError('EXTRACTION_FAILED',
+						`第 ${pageIndex + 1} 页文字层尚未就绪,稍后自动重试或点击刷新。`, { retryable: true });
+					this.notify(state);
+					return null;
+				}
+				return rendered;
+			}
+			return await this.withExtractionSlot(pageIndex,
+				() => this.withExtractTimeout(this.deps.extractPage(pageIndex), pageIndex));
+		}
+		catch (extractError) {
+			const err = extractError instanceof PaperMirrorError
+				? extractError
+				: new PaperMirrorError('UNKNOWN', String(extractError));
+			if (err.code === 'TIMEOUT') {
+				// If this is the visible page, recover immediately from the DOM
+				// text layer. Otherwise forget the prefetch state; a later visit
+				// will use the DOM without duplicating the live worker request.
+				if (pageIndex === this.currentPage && this.deps.extractRenderedPage) {
+					const rendered = await this.renderedWithRetry(pageIndex);
+					if (rendered.length) {
+						logger.info(MODULE, `Page ${pageIndex + 1}: recovered timed-out extraction from rendered text layer`);
+						return rendered;
+					}
+					else {
+						// The VISIBLE page has neither worker result nor text layer:
+						// surface a retryable error instead of silently going idle
+						// (审核 P2 — the silent delete re-created the "点击圆环" limbo
+						// for exactly this page).
+						state.status = 'error';
+						state.error = new PaperMirrorError('EXTRACTION_FAILED',
+							`第 ${pageIndex + 1} 页读取超时且文字层不可用,可用刷新重试。`, { retryable: true });
+						this.notify(state);
+						return null;
+					}
+				}
+				else {
+					logger.warn(MODULE, `Page ${pageIndex + 1}: extraction timed out after ${this.extractTimeoutMs} ms`);
+					this.releasePage(pageIndex, state, 'extract-timeout');
+					return null;
+				}
+			}
+			else if (err.code === 'EXTRACTION_FAILED' && err.retryable) {
+				// 文本层还没渲染 (2.8.13 真机)。这**不是**"这页没有可译内容",
+				// 而是"现在看不见" —— 区别在于前者该标完成、后者必须重来。
+				//
+				// 真机 19 页里有 6 页栽在这上面: 预取在页面渲染之前抽了一次,
+				// 抽到空,页面被永久标成"已完成",用户翻过去一个字都没译,也
+				// 不会自动重试。导出时那几页重解析出 12–14 个块 —— 文字一直都在。
+				if (pageIndex === this.currentPage) {
+					state.status = 'error';
+					state.error = err;
+					this.notify(state);
+					return null;
+				}
+				// 预取页: 忘掉这次结果,但**记账并主动补回** (2.9.0) —— 2.8.13 写的
+				// 是"用户真翻过去时会重抽",而单向顺读时用户只经过一次,释放若发生
+				// 在他走过之后就没有第二次。真机第 36/41/45 页正是这么整页消失的。
+				this.releasePage(pageIndex, state, 'text-layer-not-rendered');
+				return null;
+			}
+			else {
+				throw err; // real extraction errors keep their error/no-text-layer states
+			}
+		}
+	}
+
+	/**
+	 * 调度器里的一页任务: 带「空闲看门狗」的 translatePage (ensurePage 拆出)。
+	 */
+	private async translateWithIdleWatchdog(pageIndex: number, state: PageTranslationState, signal: AbortSignal,
+		bypass: { bypassPageCache: boolean; bypassSegments: boolean }, blocks: SourceBlock[], extractedAt: number): Promise<void> {
+		// 排队时间 = 抽取完到调度器真正让这页开跑 (2.8.4)。
+		const timing = this.pageTiming.get(pageIndex);
+		if (timing) {
+			timing.queuedMs = Date.now() - extractedAt;
+		}
+		// IDLE watchdog with a REAL abort. The old Promise.race watchdog had
+		// two structural bugs: (a) it measured TOTAL page time, so a big page
+		// whose every request succeeded could still be killed; (b) it only
+		// rejected the race — translatePage kept running as a zombie, issuing
+		// requests past the freed scheduler slot, immune to 取消, and later
+		// flipping the errored page back to done. Now: a LOCAL controller is
+		// aborted either by the parent signal or when NO request completes
+		// for PAGE_IDLE_MS — progress (each finished attempt / extraction)
+		// re-arms the clock, so long pages live as long as they keep moving,
+		// and a genuine hang dies quickly AND STOPS FOR REAL.
+		const local = new AbortController();
+		const onParentAbort = (): void => local.abort();
+		signal.addEventListener('abort', onParentAbort, { once: true } as AddEventListenerOptions);
+		let lastBeat = Date.now();
+		let idleFired = false;
+		const heartbeat = (): void => { lastBeat = Date.now(); };
+		const idleTimer = setInterval(() => {
+			if (Date.now() - lastBeat > PAGE_IDLE_MS) {
+				idleFired = true;
+				local.abort();
+			}
+		}, 5000);
+		try {
+			await this.translatePage(state, local.signal, bypass, heartbeat, blocks);
+		}
+		catch (e) {
+			// An idle-abort must surface as TIMEOUT, not CANCELLED (which
+			// would silently reset the page as if the user navigated away).
+			if (idleFired && !signal.aborted && e instanceof PaperMirrorError && e.code === 'CANCELLED') {
+				throw new PaperMirrorError(
+					'TIMEOUT',
+					`Page ${pageIndex + 1} made no progress for ${PAGE_IDLE_MS / 1000} s. Use 重新翻译 to retry.`,
+					{ retryable: true }
+				);
+			}
+			throw e;
+		}
+		finally {
+			clearInterval(idleTimer);
+			signal.removeEventListener('abort', onParentAbort);
+		}
+	}
+
 	/**
 	 * 局部英文残留补译: re-translate ONLY the blocks whose (accepted) translation
 	 * still contains an untranslated English clause. Single-block requests, capped
@@ -2637,6 +2511,8 @@ export class TranslationManager {
 			return; // the detector is English-into-Chinese specific
 		}
 		const suspects = blocks
+			// 5.0: 已按「保持原文」接受的参考文献条目不再当残留重译。
+			.filter(b => !(b.isReference && looksLikeReferenceEntry(b.sourceText)))
 			.filter(b => hasEnglishResidue(state.translations.get(b.id) ?? ''))
 			.slice(0, RESIDUE_MAX_PER_PAGE);
 		if (!suspects.length) {
@@ -2700,113 +2576,136 @@ export class TranslationManager {
 	}
 
 	private async translatePage(state: PageTranslationState, signal: AbortSignal, bypass: { bypassPageCache: boolean; bypassSegments: boolean }, heartbeat?: () => void, preBlocks?: SourceBlock[]): Promise<void> {
-		const pageIndex = state.pageIndex;
-		const beat = heartbeat ?? ((): void => { /* no idle watchdog (tests) */ });
-		// 真实性能指标 (per page): how many provider round-trips this page cost
-		// and how many were salvage. High salvage counts point at fragment-heavy
-		// grouping or an id-dropping provider — the log tells which.
-		// requestCount = 逻辑批次 (预算闸 canSpend 的口径); attemptCount = 实际发出的
-		// HTTP 尝试 (含请求级重试, 2.7.5 审核 P2) —— 两次 429 后成功是 1 批 / 3 次。
-		const metrics = {
-			requestCount: 0, attemptCount: 0, salvageCount: 0, rateLimited: 0, timeouts: 0,
-			startedAt: Date.now(),
-			// 2.11.0: 每个请求一条 —— 门内等了多久、发出去之后等了多久、
-			// 出手时本 lane 上还有几个在飞、是不是当前页、喂进去多少字符。
-			// 2.10.2 的数据里同一档输入的页耗时差 113 倍,而页级 queuedMs 全是 0;
-			// 那个字段不含请求闸的等待,于是"等名额"和"等服务端"分不开。
-			requestTimings: [] as RequestTiming[]
-		};
-		// 止损轮次序号 (P3): 本运行的发起顺序,见 failedSegments 注释。
-		const runId = ++this.runSeq;
-		const countedTranslate = async (request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> => {
-			request = { ...request, referenceContent: request.blocks.some(b => refById.has(b.id)) };
-			metrics.requestCount++;
-			// Request-level retry (network/rate-limit; TIMEOUT retried ONCE — a
-			// request that already burned its full timeout usually times out again,
-			// and back-to-back full timeouts were the old "stuck for minutes" path).
-			let lastError: unknown;
-			for (let attempt = 0; attempt <= REQUEST_RETRIES; attempt++) {
-				if (sig.aborted) {
-					throw new PaperMirrorError('CANCELLED', 'cancelled');
-				}
-				// 每次请求即时解析 lane (2.0.5, 审核 P2-16): 此前在页面开始时快照
-				// 一次 —— 熔断 (onProviderUnstable) 把本页剩余请求切到引擎 B 之后,
-				// B 的 429/timeout 仍反馈到 A 的 lane,去砍无辜引擎的自适应限流
-				// 上限,而真正超载的 B 的 lane 学不到任何东西。translateRequest
-				// 也是按请求时刻解析引擎的,两者现在同刻同源,必然一致。
-				const lane = this.laneFor(pageIndex);
-				try {
-					const foreground = pageIndex === this.currentPage;
-					const promptChars = request.blocks.reduce((n, b) => n + (b.text?.length ?? 0), 0);
-					let succeeded = false;
-					const response = await this.requestGate.run(
-						lane, foreground,
-						async () => {
-							const r = await this.meteredTranslate(request, sig, n => { metrics.attemptCount += n; }, beat);
-							succeeded = true;
-							return r;
-						}, sig,
-						t => {
-							// 2.12.0: 只有成功的请求进吞吐统计(见 providerSuccess 注释)。
-							if (succeeded && t.sendMs > 0 && promptChars > 0) {
-								const id = sanitizeProviderId(lane);
-								const acc = this.providerSuccess.get(id) ?? { samples: 0, ms: 0, chars: 0 };
-								acc.samples++;
-								acc.ms += t.sendMs;
-								acc.chars += promptChars;
-								this.providerSuccess.set(id, acc);
-							}
-							// 上限 40 条:一页正常只有个位数请求,留出余量又不让导出膨胀。
-							if (metrics.requestTimings.length < 40) {
-								metrics.requestTimings.push({
-									gateMs: t.gateMs, sendMs: t.sendMs,
-									inFlightAtStart: t.inFlightAtStart,
-									foreground, attempt, blocks: request.blocks.length,
-									chars: promptChars,
-									// lane 就是这一页解析出来的服务商(laneFor → providerForPage)。
-									provider: sanitizeProviderId(lane),
-									poolSize: this.deps.poolSize?.() ?? 1
-								});
-							}
-						});
-					beat(); // progress: a request finished → re-arm the idle watchdog
-					this.laneFeedback(lane, 'success');
-					return response;
-				}
-				catch (e) {
-					beat(); // a settled (failed) attempt is progress too
-					lastError = e;
-					const err = e instanceof PaperMirrorError ? e : new PaperMirrorError('UNKNOWN', String(e));
-					// Feed the REAL 429/timeout to the lane throttling — internal
-					// retries used to swallow them and the adaptive caps went blind.
-					if (err.code === 'RATE_LIMITED') {
-						metrics.rateLimited++;
-						this.laneFeedback(lane, 'rate', (err as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs);
-					}
-					else if (err.code === 'TIMEOUT') {
-						metrics.timeouts++;
-						this.laneFeedback(lane, 'timeout');
-					}
-					const timeoutSpent = err.code === 'TIMEOUT' && attempt >= 1;
-					if (err.code === 'CANCELLED' || !err.retryable || timeoutSpent || attempt === REQUEST_RETRIES) {
-						throw err;
-					}
-					// Honest backoff: honour the server's Retry-After for a 429;
-					// otherwise a real pause (≥1.5s), not the blind 400ms that
-					// re-provoked the limit we just hit.
-					const retryAfter = (err as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs;
-					const wait = err.code === 'RATE_LIMITED'
-						? Math.max(retryAfter ?? 2500, 1500)
-						: Math.min(2000, 400 * (attempt + 1));
-					await this.delayUntilAbort(wait, sig);
-				}
+		const run = new PageRun(state, signal, heartbeat ?? ((): void => { /* no idle watchdog (tests) */ }), ++this.runSeq, FINAL_RECOVERY_MAX);
+		if (!await this.preparePage(run, bypass, preBlocks)) {
+			return;
+		}
+		this.planPage(run);
+		try {
+			await this.runChunks(run);
+			if (!run.results.length && !run.segmentHits) {
+				throw new PaperMirrorError('BAD_RESPONSE', 'The translation service returned no usable translations.');
 			}
-			throw lastError instanceof Error ? lastError : new PaperMirrorError('UNKNOWN', String(lastError));
-		};
+			// 局部英文残留补译: a block that passed looksTranslated can still carry a
+			// run of untranslated English mid-paragraph. Re-translate ONLY those
+			// blocks (single-block requests, capped), patch their entries in place,
+			// and merge into `results` so the fix reaches the cache.
+			if (run.canSpend()) {
+				await this.resolveEnglishResidue(state, run.activeBlocks, run.results, run.source, run.target, signal,
+					(request, sig) => this.requestWithRetry(run, request, sig), run.canSpend);
+			}
+			await this.recoverPlain(run);
+		}
+		catch (e) {
+			await this.persistPartial(run); // P2-3: 任务解绕前落盘完成,取消等待才等得到
+			throw e;
+		}
+		await this.finalizePage(run);
+	}
 
+	/**
+	 * 一次逻辑请求,带请求级重试 (network/rate-limit; TIMEOUT 只重试一次 —— 已经
+	 * 耗尽整段超时的请求通常还会超时)。当前页走对冲 (hedgedTranslate)。
+	 */
+	private async requestWithRetry(run: PageRun, request: TranslationRequest, sig: AbortSignal): Promise<TranslationResponse> {
+		const { metrics, beat, pageIndex } = run;
+		request = { ...request, referenceContent: request.blocks.some(b => run.refById.has(b.id)) };
+		metrics.requestCount++;
+		// Request-level retry (network/rate-limit; TIMEOUT retried ONCE — a
+		// request that already burned its full timeout usually times out again,
+		// and back-to-back full timeouts were the old "stuck for minutes" path).
+		let lastError: unknown;
+		for (let attempt = 0; attempt <= REQUEST_RETRIES; attempt++) {
+			if (sig.aborted) {
+				throw new PaperMirrorError('CANCELLED', 'cancelled');
+			}
+			// 每次请求即时解析 lane (2.0.5, 审核 P2-16): 此前在页面开始时快照
+			// 一次 —— 熔断 (onProviderUnstable) 把本页剩余请求切到引擎 B 之后,
+			// B 的 429/timeout 仍反馈到 A 的 lane,去砍无辜引擎的自适应限流
+			// 上限,而真正超载的 B 的 lane 学不到任何东西。translateRequest
+			// 也是按请求时刻解析引擎的,两者现在同刻同源,必然一致。
+			const lane = this.laneFor(pageIndex);
+			try {
+				const foreground = pageIndex === this.currentPage;
+				const promptChars = request.blocks.reduce((n, b) => n + (b.text?.length ?? 0), 0);
+				let succeeded = false;
+				const response = await this.requestGate.run(
+					lane, foreground,
+					async () => {
+						const r = foreground
+							? await this.hedgedTranslate(pageIndex, lane, request, sig, n => { metrics.attemptCount += n; }, beat)
+							: await this.meteredTranslate(request, sig, n => { metrics.attemptCount += n; }, beat);
+						succeeded = true;
+						return r;
+					}, sig,
+					t => {
+						// 2.12.0: 只有成功的请求进吞吐统计(见 providerSuccess 注释)。
+						if (succeeded && t.sendMs > 0 && promptChars > 0) {
+							const id = sanitizeProviderId(lane);
+							const acc = this.providerSuccess.get(id) ?? { samples: 0, ms: 0, chars: 0 };
+							acc.samples++;
+							acc.ms += t.sendMs;
+							acc.chars += promptChars;
+							this.providerSuccess.set(id, acc);
+						}
+						// 上限 40 条:一页正常只有个位数请求,留出余量又不让导出膨胀。
+						if (metrics.requestTimings.length < 40) {
+							metrics.requestTimings.push({
+								gateMs: t.gateMs, sendMs: t.sendMs,
+								inFlightAtStart: t.inFlightAtStart,
+								foreground, attempt, blocks: request.blocks.length,
+								chars: promptChars,
+								// lane 就是这一页解析出来的服务商(laneFor → providerForPage)。
+								provider: sanitizeProviderId(lane),
+								poolSize: this.deps.poolSize?.() ?? 1
+							});
+						}
+					});
+				beat(); // progress: a request finished → re-arm the idle watchdog
+				this.laneFeedback(lane, 'success');
+				run.noteProvisional(response);
+				return response;
+			}
+			catch (e) {
+				beat(); // a settled (failed) attempt is progress too
+				lastError = e;
+				const err = e instanceof PaperMirrorError ? e : new PaperMirrorError('UNKNOWN', String(e));
+				// Feed the REAL 429/timeout to the lane throttling — internal
+				// retries used to swallow them and the adaptive caps went blind.
+				if (err.code === 'RATE_LIMITED') {
+					metrics.rateLimited++;
+					this.laneFeedback(lane, 'rate', (err as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs);
+				}
+				else if (err.code === 'TIMEOUT') {
+					metrics.timeouts++;
+					this.laneFeedback(lane, 'timeout');
+				}
+				const timeoutSpent = err.code === 'TIMEOUT' && attempt >= 1;
+				if (err.code === 'CANCELLED' || !err.retryable || timeoutSpent || attempt === REQUEST_RETRIES) {
+					throw err;
+				}
+				// Honest backoff: honour the server's Retry-After for a 429;
+				// otherwise a real pause (≥1.5s), not the blind 400ms that
+				// re-provoked the limit we just hit.
+				const retryAfter = (err as PaperMirrorError & { retryAfterMs?: number }).retryAfterMs;
+				const wait = err.code === 'RATE_LIMITED'
+					? Math.max(retryAfter ?? 2500, 1500)
+					: Math.min(2000, 400 * (attempt + 1));
+				await this.delayUntilAbort(wait, sig);
+			}
+		}
+		throw lastError instanceof Error ? lastError : new PaperMirrorError('UNKNOWN', String(lastError));
+	}
+
+	/**
+	 * 第 1–2 步: 抽取、整页缓存、段落缓存、止损过滤与同文去重。返回 false
+	 * 表示这一页已经完成(无可译块 / 整页缓存命中 / 全部来自段落缓存)。
+	 */
+	private async preparePage(run: PageRun, bypass: { bypassPageCache: boolean; bypassSegments: boolean }, preBlocks?: SourceBlock[]): Promise<boolean> {
+		const { state, signal, beat, metrics, pageIndex } = run;
 		// 1. Extract — normally already done OUTSIDE the provider lane by
 		// ensurePage (preBlocks); the inline path remains for direct callers.
-		const blocks = preBlocks ?? await this.contextualizeSource(pageIndex, await this.deps.extractPage(pageIndex));
+		const blocks = run.blocks = preBlocks ?? await this.contextualizeSource(pageIndex, await this.deps.extractPage(pageIndex));
 		beat();
 		if (signal.aborted) {
 			throw new PaperMirrorError('CANCELLED', 'cancelled');
@@ -2815,102 +2714,41 @@ export class TranslationManager {
 		if (!blocks.length) {
 			state.status = 'done';
 			this.notify(state);
-			return;
+			return false;
 		}
-		const activeBlocks = blocks.filter(b => b.translationMode !== 'preserve');
+		const activeBlocks = run.activeBlocks = blocks.filter(b => b.translationMode !== 'preserve');
 		if (!activeBlocks.length) {
 			state.status = 'done';
 			this.notify(state);
-			return;
+			return false;
 		}
 
 		const sampleText = activeBlocks.map(b => b.sourceText).join('\n').slice(0, 4000);
 		const { source, target } = this.deps.getLanguages(sampleText);
-		const glossary = this.glossaryFor(activeBlocks.map(b => b.sourceText));
-		const sourceById = new Map(activeBlocks.map(b => [b.id, b.sourceText]));
-  const sourceBlockById = new Map(activeBlocks.map(b => [b.id, b]));
-		const refById = new Set(activeBlocks.filter(b => b.isReference).map(b => b.id));
-		// Accept a response only if it is actually translated (not echoed English).
-		const accept = (id: string, text: string): boolean =>
-			text.trim().length > 0 && looksTranslated(sourceById.get(id) ?? '', text, target, { isReference: refById.has(id) });
+		run.source = source;
+		run.target = target;
+		run.glossary = this.glossaryFor(activeBlocks.map(b => b.sourceText));
+		run.sourceById = new Map(activeBlocks.map(b => [b.id, b.sourceText]));
+		run.sourceBlockById = new Map(activeBlocks.map(b => [b.id, b]));
+		run.refById = new Set(activeBlocks.filter(b => b.isReference).map(b => b.id));
 
-		// 2. Cache — a hit is only COMPLETE when every active block has a usable
-		// translation (审核 P1): the file being valid never meant it covered the
-		// page. A partial entry (e.g. written by the compress path while some
-		// blocks were keep-origin) used to flip the page straight to done with
-		// blocks silently left in English. Now: cached ids that no longer exist
-		// are dropped, every entry must still pass the same accept() gate as a
-		// live response, and an incomplete hit only PREFILLS — the rest of the
-		// pipeline translates the missing blocks (toTranslate skips prefilled).
-		if (!bypass.bypassPageCache) {
-			this.usage.pageCacheLookups++;
-			const cached = await this.deps.readCache(pageIndex, blocks);
-			if (cached) {
-				const cachedById = new Map(cached.map(t => [t.id, t.translatedText]));
-				let usable = 0;
-				for (const block of activeBlocks) {
-					const text = cachedById.get(block.id);
-					if (typeof text === 'string' && accept(block.id, text)) {
-						state.translations.set(block.id, text);
-						usable++;
-					}
-				}
-				if (usable === activeBlocks.length) {
-					this.usage.pageCacheFullHits++;
-					state.status = 'done';
-					state.fromCache = true;
-					// 整页缓存命中 = 译文就在缓存里 (2.8.3): 这一页当然可以再被
-					// 卸掉。漏了这一条,"翻回旧页"复原出来的页会被永久钉在内存
-					// 里,来回翻几次就把上限彻底架空。
-					state.cached = true;
-					state.diagnostics = {
-						requests: 0, salvage: 0, rateLimited: 0, timeouts: 0,
-						segmentHits: 0, durationMs: Date.now() - metrics.startedAt, fromCache: true
-					};
-					this.notify(state);
-					return;
-				}
-				if (usable) {
-					this.usage.pageCachePartialHits++;
-					logger.info(MODULE, `Page ${pageIndex + 1}: partial cache (${usable}/${activeBlocks.length}) — prefilled, translating the rest`);
-					this.notify(state); // show reused blocks immediately
-				}
-			}
+		if (!bypass.bypassPageCache && await this.prefillFromPageCache(run)) {
+			return false;
 		}
 
 		// 3. Translate chunk by chunk
 		state.status = 'translating';
 		this.notify(state);
 
-		// 2.5 段落级缓存: prefill whatever segments this context has already
-		// translated (content+language hash; provider/model scoping lives in the
-		// store the host injects). 普通刷新 re-enters here with the page cache
-		// bypassed but segments live, so only the segments that actually failed
-		// or changed cost a request. 'force' skips this entirely.
-		const segHash = (b: SourceBlock): string => segmentHash(b.sourceText, source, target, b.continuationContext);
-		let segmentHits = 0;
-		if (!bypass.bypassSegments && this.deps.readSegments) {
-			this.usage.segmentLookups += activeBlocks.length;
-			const cached = await this.deps.readSegments(pageIndex, activeBlocks.map(segHash)).catch(() => null);
-			if (cached?.size) {
-				for (const block of activeBlocks) {
-					const hit = cached.get(segHash(block));
-					if (hit !== undefined && accept(block.id, hit)) {
-						state.translations.set(block.id, hit);
-						segmentHits++;
-					}
-				}
-				if (segmentHits) {
-					this.usage.segmentHits += segmentHits;
-					this.notify(state); // show reused segments immediately
-				}
-			}
+		const segHash = run.segHash = (b: SourceBlock): string => blockSegmentHash(b, source, target);
+		if (!bypass.bypassSegments) {
+			await this.prefillFromSegments(run);
 		}
 		// keep-origin 止损: segments that already failed two whole runs are left
 		// in the original language instead of burning the same requests again.
-		const keepOrigin = new Map<string, string>();
+		const keepOrigin = run.keepOrigin = new Map<string, string>();
 		state.keepOrigin = keepOrigin;
-		const toTranslate = activeBlocks.filter((b) => {
+		const toTranslate = run.toTranslate = activeBlocks.filter((b) => {
 			if (state.translations.has(b.id)) {
 				return false;
 			}
@@ -2926,8 +2764,8 @@ export class TranslationManager {
 		// 同文块在代表译文到达时镜像共享 —— 省下重复块的输入+输出 token,零风险
 		// (segHash = 内容+语言,与段落缓存同一把键)。代表失败时同文块同样保留
 		// 原文,诚实计入 untranslated。
-		const dupOf = new Map<string, string[]>();
-		const uniqueToTranslate: SourceBlock[] = [];
+		const dupOf = run.dupOf = new Map<string, string[]>();
+		const uniqueToTranslate: SourceBlock[] = run.uniqueToTranslate = [];
 		{
 			const repByHash = new Map<string, string>();
 			for (const b of toTranslate) {
@@ -2946,10 +2784,10 @@ export class TranslationManager {
 			state.status = 'done';
 			state.diagnostics = {
 				requests: 0, salvage: 0, rateLimited: 0, timeouts: 0,
-				segmentHits, durationMs: Date.now() - metrics.startedAt, fromCache: false
+				segmentHits: run.segmentHits, durationMs: Date.now() - metrics.startedAt, fromCache: false
 			};
 			this.notify(state);
-			logger.info(MODULE, `Page ${pageIndex + 1}: fully served from the segment cache (${segmentHits} segment(s), 0 requests)`);
+			logger.info(MODULE, `Page ${pageIndex + 1}: fully served from the segment cache (${run.segmentHits} segment(s), 0 requests)`);
 			if (pageIndex === this.currentPage) {
 				this.schedulePrefetch();
 			}
@@ -2958,16 +2796,101 @@ export class TranslationManager {
 			// 采用,被跳过的段落即使止损记忆早已清空也永远不再重试。与主路径
 			// 「a page with unrecovered blocks is NOT cached」同一条规则。
 			if (keepOrigin.size === 0) {
-				await this.persistPage(state, activeBlocks
-					.filter(b => state.translations.has(b.id))
-					.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! })));
+				await this.persistPage(state, pageCacheRows(state, activeBlocks));
 			}
+			return false;
+		}
+		return true;
+	}
+
+	// 2. Cache — a hit is only COMPLETE when every active block has a usable
+	// translation (审核 P1): the file being valid never meant it covered the
+	// page. A partial entry (e.g. written by the compress path while some
+	// blocks were keep-origin) used to flip the page straight to done with
+	// blocks silently left in English. Now: cached ids that no longer exist
+	// are dropped, every entry must still pass the same accept() gate as a
+	// live response, and an incomplete hit only PREFILLS — the rest of the
+	// pipeline translates the missing blocks (toTranslate skips prefilled).
+	/** 返回 true 表示整页缓存完整命中,这一页已完成。 */
+	private async prefillFromPageCache(run: PageRun): Promise<boolean> {
+		const { state, metrics, pageIndex, blocks, activeBlocks, accept } = run;
+		this.usage.pageCacheLookups++;
+		const cached = await this.deps.readCache(pageIndex, blocks);
+		if (cached) {
+			const cachedById = new Map(cached.map(t => [t.id, t.translatedText]));
+			const cachedProvisional = new Set(cached.filter(t => t.provisional).map(t => t.id));
+			const cachedPolicy = new Map(cached.map(t => [t.id, t.policy ?? '']));
+			let usable = 0;
+			let stale = 0;
+			for (const block of activeBlocks) {
+				const text = cachedById.get(block.id);
+				// 5.0: a row produced under an older version of a prompt rule that
+				// concerns this block is dropped; only those blocks are re-translated.
+				if (typeof text === 'string' && cachedPolicy.get(block.id) !== policyStampFor(block)) { stale++; continue; }
+				if (typeof text === 'string' && accept(block.id, text)) {
+					state.translations.set(block.id, text);
+					// Still provisional: never promoted into the segment store.
+					if (cachedProvisional.has(block.id)) run.provisional.add(block.id);
+					usable++;
+				}
+			}
+			if (usable === activeBlocks.length) {
+				this.usage.pageCacheFullHits++;
+				state.status = 'done';
+				state.fromCache = true;
+				// 整页缓存命中 = 译文就在缓存里 (2.8.3): 这一页当然可以再被
+				// 卸掉。漏了这一条,"翻回旧页"复原出来的页会被永久钉在内存
+				// 里,来回翻几次就把上限彻底架空。
+				state.cached = true;
+				state.diagnostics = {
+					requests: 0, salvage: 0, rateLimited: 0, timeouts: 0,
+					segmentHits: 0, durationMs: Date.now() - metrics.startedAt, fromCache: true
+				};
+				this.notify(state);
+				return true;
+			}
+			if (usable) {
+				this.usage.pageCachePartialHits++;
+				logger.info(MODULE, `Page ${pageIndex + 1}: partial cache (${usable}/${activeBlocks.length}${stale ? `, ${stale} under an older prompt rule` : ''}) — prefilled, translating the rest`);
+				this.notify(state); // show reused blocks immediately
+			}
+		}
+		return false;
+	}
+
+	// 2.5 段落级缓存: prefill whatever segments this context has already
+	// translated (content+language hash; provider/model scoping lives in the
+	// store the host injects). 普通刷新 re-enters here with the page cache
+	// bypassed but segments live, so only the segments that actually failed
+	// or changed cost a request. 'force' skips this entirely.
+	private async prefillFromSegments(run: PageRun): Promise<void> {
+		const { state, pageIndex, activeBlocks, accept, segHash } = run;
+		if (!this.deps.readSegments) {
 			return;
 		}
+		this.usage.segmentLookups += activeBlocks.length;
+		const cached = await this.deps.readSegments(pageIndex, activeBlocks.map(segHash)).catch(() => null);
+		if (cached?.size) {
+			for (const block of activeBlocks) {
+				const hit = cached.get(segHash(block));
+				if (hit !== undefined && accept(block.id, hit)) {
+					state.translations.set(block.id, hit);
+					run.segmentHits++;
+				}
+			}
+			if (run.segmentHits) {
+				this.usage.segmentHits += run.segmentHits;
+				this.notify(state); // show reused segments immediately
+			}
+		}
+	}
 
+	/** 第 3 步: 占位符保护与请求分批(快道 / 慢道),定出本页请求上限。 */
+	private planPage(run: PageRun): void {
+		const { state } = run;
 		// Protect formulas / citations / statistics per block (+ 不译词列表) —
 		// 占位符注册表 (1.1.0): 掩蔽/校验/还原共用同一实例,清单不可能串块。
-		const protectedBlocks = uniqueToTranslate.map((block) => {
+		run.protectedBlocks = run.uniqueToTranslate.map((block) => {
 			const reg = PlaceholderRegistry.protect(block.sourceText, this.literalsFor(block), block.styleRuns);
 			return { block, reg, text: reg.text };
 		});
@@ -2975,43 +2898,9 @@ export class TranslationManager {
 		// token (or invented one) is treated as invalid — it flows into the same
 		// retry/salvage chain as a missing id, instead of silently restoring into
 		// a paragraph with the formula/citation gone.
-		const regById = new Map(protectedBlocks.map(p => [p.block.id, p.reg]));
-		// 拒绝原因埋点 (1.1.3): unrecovered 只说"没救回来",不说"为什么每次都被
-		// 拒" —— 记住每块最近一次验收失败的原因码(validator = looksTranslated/
-		// 完整性;placeholder = 清单校验),进诊断导出。
+		const regById = run.regById = new Map(run.protectedBlocks.map(p => [p.block.id, p.reg]));
 		state.rejectReasons = state.rejectReasons ?? new Map();
 		state.rejectHistory = new Map();
-		const noteReject = (id: string, reason: string): void => {
-			state.rejectReasons!.set(id, reason);
-			state.rejectHistory!.set(id, [...(state.rejectHistory!.get(id) ?? []), reason].slice(-8));
-		};
-		const rejectedResponse = (id: string, text: string, phase: string): string => {
-			if (!refById.has(id)) return `${phase}:${translationRejectReason(sourceById.get(id) ?? '', text, target) ?? 'integrity'}`;
-			const source = sourceById.get(id) ?? '';
-			return referenceRejectReason(source, text, phase);
-		};
-		const acceptResponse = (id: string, text: string): boolean => {
-			// 'empty' 与 'validator' 分开 (1.1.8): 引擎带着 id 回了一个空串,
-			// 和「回了英文回声被验收拒掉」是两种完全不同的故障 —— 前者要换
-			// 请求形态(纯文本兜底),后者要换措辞。混成一个原因码时,诊断里
-			// 一个 11 字符的块显示 lastReject: "validator" 会把人引向阈值,
-			// 而阈值那条路对它根本不成立(散文词数不足 6,压根走不到比率判定)。
-			if (!text.trim()) {
-				noteReject(id, 'empty');
-				return false;
-			}
-			const reg = regById.get(id);
-			const restored = reg ? reg.restore(text) : text;
-			if (!accept(id, restored)) {
-				noteReject(id, rejectedResponse(id, restored, 'validator'));
-				return false;
-			}
-			if (reg && !reg.ok(text)) {
-				noteReject(id, reg.status.last?.missing.length ? 'placeholder:missing' : 'placeholder:unexpected');
-				return false;
-			}
-			return true;
-		};
 
 		// Plan requests: semantic modules are SOFT boundaries (context tags), the
 		// character budget is the real request boundary — a page with many short
@@ -3020,7 +2909,7 @@ export class TranslationManager {
 		// isolated into single-block 'slow' chunks appended after the fast
 		// batches — one hard block can no longer sink a whole batch (id drift,
 		// truncation) or delay the fast batches that paint most of the page.
-		const maskedById = new Map(protectedBlocks.map(p => [p.block.id, p.text]));
+		const maskedById = new Map(run.protectedBlocks.map(p => [p.block.id, p.text]));
 		const riskOf = (b: SourceBlock): boolean => {
 			const ph = regById.get(b.id)?.entries.filter(entry => !isTechnicalUnitLiteral(entry.original) && !isNumericPowerLiteral(entry.original)).length ?? 0;
 			return b.type === 'table'
@@ -3030,42 +2919,11 @@ export class TranslationManager {
 				// 前置的组合比单纯计数更早识别高风险块。
 				|| isFormulaDenseRisk(maskedById.get(b.id) ?? b.sourceText, ph);
 		};
-		const chunks = planChunks(uniqueToTranslate, buildLayoutModules(uniqueToTranslate), { riskOf });
+		const chunks = run.chunks = planChunks(run.uniqueToTranslate, buildLayoutModules(run.uniqueToTranslate), { riskOf });
 		// Hard ceiling on requests for this page so a misbehaving engine can never
 		// turn one page into a request storm: 2× the planned chunks, plus 2. Once
 		// hit, salvage stops and the remaining blocks are left for 「刷新本页」.
-		const pageRequestCap = chunks.length * 2 + 2;
-		const canSpend = (): boolean => metrics.requestCount < pageRequestCap;
-		/**
-		 * 兜底预算 (1.1.8, Horst 2024 第 1 页实证): pageRequestCap 由 chunk 数
-		 * 推导,单 chunk 的页面只有 4 次 —— 批次(1) + 缺 id 重试(1) + 两次
-		 * 单块打捞(2) 就正好用尽,该页 metrics 记的就是 requests:4 / salvage:2。
-		 * 于是纯文本兜底 —— 修复链里唯一不受 id 漂移与 JSON 损坏影响的一环 ——
-		 * 永远轮不到,三个块直接落进 unrecovered。给它单独留一份不与打捞共享的
-		 * 预算。上限是硬的: 整页最多多花 FINAL_RECOVERY_MAX 次请求,且该路径
-		 * 自身还有 attempts >= FINAL_RECOVERY_MAX 的计数闸,两道闸都在。
-		 */
-		const canSpendFinal = (): boolean => metrics.requestCount < pageRequestCap + FINAL_RECOVERY_MAX;
-		const results: TranslatedBlock[] = [];
-		let untranslatedCount = 0;
-		// API-2 镜像: 代表块的译文一到,同文重复块立即共享(渐进渲染同帧可见);
-		// 结尾还有一次全量 sweep 兜住 salvage/纯文本兜底等晚到路径。
-		const mirrorDuplicates = (repId: string): void => {
-			const dups = dupOf.get(repId);
-			if (!dups) {
-				return;
-			}
-			const t = state.translations.get(repId);
-			if (t === undefined) {
-				return;
-			}
-			for (const d of dups) {
-				if (!state.translations.has(d)) {
-					state.translations.set(d, t);
-					results.push({ id: d, translatedText: t });
-				}
-			}
-		};
+		run.pageRequestCap = chunks.length * 2 + 2;
 
 		// Context is derived from SOURCE text only (audit-verified: nothing in a
 		// request reads a prior chunk's RESPONSE), so it is precomputable and the
@@ -3075,79 +2933,210 @@ export class TranslationManager {
 		// and a wrong neighbour is worse than none.
 		// 同流才传上下文 (2.7.1): 单元格批不再收到正文段尾 —— 它的语境是表格
 		// 标题 (moduleContext),正文尾句只是噪声与 token。
-		const contexts = chunks.map((c, i) => (
+		run.contexts = chunks.map((c, i) => (
 			c.lane === 'fast' && i > 0 && chunks[i - 1]!.lane === 'fast' && chunks[i - 1]!.kind === c.kind
 				? trailingContext(chunks[i - 1]!.blocks)
 				: ''
 		));
 		// Sentence-specific bidirectional context is prepared before cache lookup,
 		// from complete source pages rather than the already-filtered chunks.
+	}
 
-		const runChunk = async (plan: PlannedChunk, chunkIndex: number): Promise<void> => {
-			const chunk = plan.blocks;
-			if (signal.aborted) {
-				throw new PaperMirrorError('CANCELLED', 'cancelled');
+	// Limited intra-page parallelism: a small worker pool pulls chunks in
+	// order (当前页最多同时 CHUNK_CONCURRENCY 个批次). Mutations are append-only
+	// per block id and the request cap is shared, so the guarantees match the
+	// old serial loop at roughly half the wall-clock on multi-chunk pages.
+	private async runChunks(run: PageRun): Promise<void> {
+		let nextChunk = 0;
+		const workers = Array.from({ length: Math.min(CHUNK_CONCURRENCY, run.chunks.length) }, async () => {
+			for (;;) {
+				const i = nextChunk++;
+				if (i >= run.chunks.length) {
+					return;
+				}
+				await this.runChunk(run, run.chunks[i]!, i);
 			}
-			const request: TranslationRequest = {
-				pageIndex,
-				sourceLanguage: source,
-				targetLanguage: target,
-				documentTitle: this.deps.getDocumentTitle(),
-				previousContext: this.deps.useContext() ? contexts[chunkIndex]! : '',
-				moduleContext: this.deps.useContext() ? (plan.moduleContext || undefined) : undefined,
-				blocks: chunk.map((b) => {
-					const pb = protectedBlocks.find(p => p.block.id === b.id)!;
-					// 首次请求即携带排版预算: most paragraphs then fit on the first
-					// pass, skipping the translate→measure-fail→compress round trip.
-					return { id: b.id, type: b.type, text: pb.text, charBudget: initialCharBudget(b, target) };
-				}),
-				glossary
-			};
+		});
+		const settled = await Promise.allSettled(workers);
+		for (const r of settled) {
+			if (r.status === 'rejected') {
+				throw r.reason;
+			}
+		}
+	}
 
-			const received = new Map<string, string>();
-			// context_bleed: with context injected, the FIRST block of the chunk is
-			// the one the model tends to merge the context INTO — an over-long
-			// first-block translation is rejected and re-earned context-free by
-			// the salvage chain.
-			const hadContext = !!(request.previousContext || request.moduleContext);
-			const acceptChunk = (id: string, text: string): boolean =>
-				acceptResponse(id, text)
-				&& !(id === chunk[0]!.id && looksContextBleed(sourceById.get(id) ?? '', text, hadContext));
-			let response: TranslationResponse = { translations: [] };
+	/**
+	 * 一个批次: 批量请求 → 缺 id 重试一次 → 熔断信号 → 小批补救 → 单块补救,
+	 * 收下的译文还原占位符后立即渲染。
+	 */
+	private async runChunk(run: PageRun, plan: PlannedChunk, chunkIndex: number): Promise<void> {
+		const { signal, pageIndex, source, target, glossary, sourceById, protectedBlocks, acceptResponse } = run;
+		const chunk = plan.blocks;
+		if (signal.aborted) {
+			throw new PaperMirrorError('CANCELLED', 'cancelled');
+		}
+		const request: TranslationRequest = {
+			pageIndex,
+			sourceLanguage: source,
+			targetLanguage: target,
+			documentTitle: this.deps.getDocumentTitle(),
+			previousContext: this.deps.useContext() ? run.contexts[chunkIndex]! : '',
+			moduleContext: this.deps.useContext() ? (plan.moduleContext || undefined) : undefined,
+			blocks: chunk.map((b) => {
+				const pb = protectedBlocks.find(p => p.block.id === b.id)!;
+				// 首次请求即携带排版预算: most paragraphs then fit on the first
+				// pass, skipping the translate→measure-fail→compress round trip.
+				return { id: b.id, type: b.type, text: pb.text, charBudget: initialCharBudget(b, target) };
+			}),
+			glossary
+		};
+
+		const received = new Map<string, string>();
+		// context_bleed: with context injected, the FIRST block of the chunk is
+		// the one the model tends to merge the context INTO — an over-long
+		// first-block translation is rejected and re-earned context-free by
+		// the salvage chain.
+		const hadContext = !!(request.previousContext || request.moduleContext);
+		const acceptChunk = (id: string, text: string): boolean =>
+			acceptResponse(id, text)
+			&& !(id === chunk[0]!.id && looksContextBleed(sourceById.get(id) ?? '', text, hadContext));
+		await this.requestChunkOnce(run, request, chunk, received, acceptChunk);
+
+		// 熔断信号: the batch + retry still left over a quarter of the chunk
+		// missing or invalid — this engine is systematically dropping ids or
+		// echoing. Tell the host ONCE per page so it can reroute the page's
+		// remaining requests to the backup engine before we spend a pile of
+		// salvage requests on a misbehaving service.
+		const afterRetry = chunk.filter(b => !received.has(b.id));
+		this.reportUnstableEngine(pageIndex, afterRetry.length, chunk.length);
+
+		await this.salvageGrouped(run, request, afterRetry, received);
+		await this.salvageSingles(run, request, chunk.filter(b => !received.has(b.id)), received);
+
+		const unrecovered = chunk.filter(b => !received.has(b.id));
+		if (unrecovered.length) {
+			run.untranslatedCount += unrecovered.length;
+			logger.warn(
+				MODULE,
+				`Page ${pageIndex + 1}: ${unrecovered.length} block(s) untranslated after salvage: ${unrecovered.map(b => b.id).join(', ')}`
+			);
+		}
+
+		this.applyChunkResults(run, chunk, received);
+		this.notify(run.state); // progressive rendering per chunk
+	}
+
+	/** runChunk 拆出: 整批请求一次,缺失的 id 再整批重试一次(spec 4.3)。 */
+	private async requestChunkOnce(run: PageRun, request: TranslationRequest, chunk: SourceBlock[], received: Map<string, string>,
+		acceptChunk: (id: string, text: string) => boolean): Promise<void> {
+		const { signal, pageIndex, protectedBlocks, canSpend } = run;
+		let response: TranslationResponse = { translations: [] };
+		try {
+			response = await this.requestWithRetry(run, request, signal);
+		}
+		catch (e) {
+			// The page task no longer retries wholesale, so a chunk's hard
+			// failure must NOT abandon the page — treat its blocks as missing
+			// (salvage may recover them; later chunks still run). Cancellation
+			// still stops everything.
+			if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
+				throw e;
+			}
+			logger.warn(MODULE, `Chunk request failed on page ${pageIndex}; continuing`, e);
+		}
+		for (const t of response.translations) {
+			if (acceptChunk(t.id, t.translatedText)) {
+				received.set(t.id, t.translatedText);
+			}
+		}
+
+		// Retry only missing ids once (spec 4.3)
+		const missing = chunk.filter(b => !received.has(b.id));
+		if (missing.length && canSpend()) {
+			logger.debug(MODULE, `Retrying ${missing.length} missing block(s) on page ${pageIndex}`);
+			const retryRequest: TranslationRequest = {
+				...request,
+				blocks: missing.map((b) => {
+					const pb = protectedBlocks.find(p => p.block.id === b.id)!;
+					return { id: b.id, type: b.type, text: pb.text };
+				})
+			};
 			try {
-				response = await countedTranslate(request, signal);
+				response = await this.requestWithRetry(run, retryRequest, signal);
+				for (const t of response.translations) {
+					if (acceptChunk(t.id, t.translatedText)) {
+						received.set(t.id, t.translatedText);
+					}
+				}
 			}
 			catch (e) {
-				// The page task no longer retries wholesale, so a chunk's hard
-				// failure must NOT abandon the page — treat its blocks as missing
-				// (salvage may recover them; later chunks still run). Cancellation
-				// still stops everything.
 				if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
 					throw e;
 				}
-				logger.warn(MODULE, `Chunk request failed on page ${pageIndex}; continuing`, e);
+				logger.warn(MODULE, 'Missing-id retry failed', e);
 			}
-			for (const t of response.translations) {
-				if (acceptChunk(t.id, t.translatedText)) {
-					received.set(t.id, t.translatedText);
-				}
-			}
+		}
+	}
 
-			// Retry only missing ids once (spec 4.3)
-			const missing = chunk.filter(b => !received.has(b.id));
-			if (missing.length && canSpend()) {
-				logger.debug(MODULE, `Retrying ${missing.length} missing block(s) on page ${pageIndex}`);
-				const retryRequest: TranslationRequest = {
-					...request,
-					blocks: missing.map((b) => {
-						const pb = protectedBlocks.find(p => p.block.id === b.id)!;
-						return { id: b.id, type: b.type, text: pb.text };
-					})
-				};
+	/** runChunk 拆出: 一批里超过四分之一缺失或不合格时,每页通知宿主一次以便换引擎。 */
+	private reportUnstableEngine(pageIndex: number, missing: number, total: number): void {
+		if (missing && missing / total > UNSTABLE_MISSING_RATIO && !this.unstableFired.has(pageIndex)) {
+			this.unstableFired.add(pageIndex);
+			try {
+				this.events.onProviderUnstable?.(pageIndex, missing / total);
+			}
+			catch { /* host handler must not break translation */ }
+		}
+	}
+
+	/** runChunk 拆出: 收下的译文还原占位符、写入页面状态、共享给同文块、学习术语。 */
+	private applyChunkResults(run: PageRun, chunk: SourceBlock[], received: Map<string, string>): void {
+		const { state, protectedBlocks } = run;
+		for (const block of chunk) {
+			const raw = received.get(block.id);
+			if (raw === undefined) {
+				continue;
+			}
+			const pb = protectedBlocks.find(p => p.block.id === block.id)!;
+			const restored = pb.reg.restore(raw);
+			run.results.push({ id: block.id, translatedText: restored });
+			state.translations.set(block.id, restored);
+			run.mirrorDuplicates(block.id); // API-2: 同文块同帧共享
+			// 术语记忆: harvest 「中文术语(ABBR)」 pairs this page established.
+			this.docMemory.learn(extractTermPairs(block.sourceText, restored));
+		}
+	}
+
+	// 分级补救 tier 1: still-missing blocks are retried in SMALL batches
+	// (3–5 blocks — id drift is rare at this size) instead of jumping
+	// straight to one request per block. Only the leftovers of the
+	// grouped pass fall through to single-block salvage.
+	private async salvageGrouped(run: PageRun, request: TranslationRequest, afterRetry: SourceBlock[], received: Map<string, string>): Promise<void> {
+		const { signal, pageIndex, metrics, protectedBlocks, canSpend, acceptResponse } = run;
+		if (afterRetry.length >= 3 && canSpend()) {
+			for (let i = 0; i < afterRetry.length; i += SALVAGE_BATCH_SIZE) {
+				if (signal.aborted) {
+					throw new PaperMirrorError('CANCELLED', 'cancelled');
+				}
+				if (!canSpend()) {
+					break;
+				}
+				const group = afterRetry.slice(i, i + SALVAGE_BATCH_SIZE).filter(b => !received.has(b.id));
+				if (!group.length) {
+					continue;
+				}
 				try {
-					response = await countedTranslate(retryRequest, signal);
-					for (const t of response.translations) {
-						if (acceptChunk(t.id, t.translatedText)) {
+					metrics.salvageCount++;
+					const resp = await this.requestWithRetry(run, {
+						...request,
+						previousContext: '',
+						blocks: group.map((b) => {
+							const pb = protectedBlocks.find(p => p.block.id === b.id)!;
+							return { id: b.id, type: b.type, text: pb.text };
+						})
+					}, signal);
+					for (const t of resp.translations) {
+						if (acceptResponse(t.id, t.translatedText)) {
 							received.set(t.id, t.translatedText);
 						}
 					}
@@ -3156,305 +3145,196 @@ export class TranslationManager {
 					if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
 						throw e;
 					}
-					logger.warn(MODULE, 'Missing-id retry failed', e);
+					logger.warn(MODULE, `Grouped salvage failed on page ${pageIndex}`, e);
 				}
 			}
+		}
+	}
 
-			// 熔断信号: the batch + retry still left over a quarter of the chunk
-			// missing or invalid — this engine is systematically dropping ids or
-			// echoing. Tell the host ONCE per page so it can reroute the page's
-			// remaining requests to the backup engine before we spend a pile of
-			// salvage requests on a misbehaving service.
-			const afterRetry = chunk.filter(b => !received.has(b.id));
-			if (afterRetry.length && afterRetry.length / chunk.length > UNSTABLE_MISSING_RATIO
-				&& !this.unstableFired.has(pageIndex)) {
-				this.unstableFired.add(pageIndex);
-				try {
-					this.events.onProviderUnstable?.(pageIndex, afterRetry.length / chunk.length);
-				}
-				catch { /* host handler must not break translation */ }
+	// 分级补救 tier 2: any id STILL missing gets its own single-block
+	// request. With exactly one block in the request the answer cannot
+	// misalign. Without this pass the block silently stayed English and
+	// the page rendered mixed-language (the JACC report).
+	private async salvageSingles(run: PageRun, request: TranslationRequest, stillMissing: SourceBlock[], received: Map<string, string>): Promise<void> {
+		const { signal, pageIndex, metrics, target, protectedBlocks, canSpend, noteReject, rejectedResponse } = run;
+		if (stillMissing.length && canSpend()) {
+			logger.warn(MODULE, `Salvaging ${stillMissing.length} block(s) on page ${pageIndex} (concurrency ${SALVAGE_CONCURRENCY})`);
+			if (stillMissing.length > SALVAGE_WARN_THRESHOLD) {
+				logger.warn(MODULE, `Page ${pageIndex + 1}: provider dropped ${stillMissing.length} ids — salvaging all, but this engine is misbehaving`);
 			}
-
-			// 分级补救 tier 1: still-missing blocks are retried in SMALL batches
-			// (3–5 blocks — id drift is rare at this size) instead of jumping
-			// straight to one request per block. Only the leftovers of the
-			// grouped pass fall through to single-block salvage.
-			if (afterRetry.length >= 3 && canSpend()) {
-				for (let i = 0; i < afterRetry.length; i += SALVAGE_BATCH_SIZE) {
-					if (signal.aborted) {
-						throw new PaperMirrorError('CANCELLED', 'cancelled');
-					}
-					if (!canSpend()) {
-						break;
-					}
-					const group = afterRetry.slice(i, i + SALVAGE_BATCH_SIZE).filter(b => !received.has(b.id));
-					if (!group.length) {
-						continue;
-					}
-					try {
-						metrics.salvageCount++;
-						const resp = await countedTranslate({
-							...request,
-							previousContext: '',
-							blocks: group.map((b) => {
-								const pb = protectedBlocks.find(p => p.block.id === b.id)!;
-								return { id: b.id, type: b.type, text: pb.text };
-							})
-						}, signal);
-						for (const t of resp.translations) {
-							if (acceptResponse(t.id, t.translatedText)) {
-								received.set(t.id, t.translatedText);
-							}
-						}
-					}
-					catch (e) {
-						if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
-							throw e;
-						}
-						logger.warn(MODULE, `Grouped salvage failed on page ${pageIndex}`, e);
-					}
-				}
-			}
-
-			// 分级补救 tier 2: any id STILL missing gets its own single-block
-			// request. With exactly one block in the request the answer cannot
-			// misalign. Without this pass the block silently stayed English and
-			// the page rendered mixed-language (the JACC report).
-			const stillMissing = chunk.filter(b => !received.has(b.id));
-			if (stillMissing.length && canSpend()) {
-				logger.warn(MODULE, `Salvaging ${stillMissing.length} block(s) on page ${pageIndex} (concurrency ${SALVAGE_CONCURRENCY})`);
-				if (stillMissing.length > SALVAGE_WARN_THRESHOLD) {
-					logger.warn(MODULE, `Page ${pageIndex + 1}: provider dropped ${stillMissing.length} ids — salvaging all, but this engine is misbehaving`);
-				}
-				// Salvage ALL missing ids, but in bounded-parallel waves rather
-				// than strictly one-after-another: single-block requests can't
-				// suffer id drift, and running a few at once keeps a long page
-				// from stalling for a minute on sequential round-trips.
-				const salvageOne = async (block: SourceBlock): Promise<void> => {
-					if (!canSpend()) {
-						return;
-					}
-					const pb = protectedBlocks.find(p => p.block.id === block.id)!;
-					try {
-						metrics.salvageCount++;
-						const single = await countedTranslate(
-							{ ...request, previousContext: '', blocks: [{ id: block.id, type: block.type, text: pb.text }] },
-							signal
-						);
-						// One block in → whatever comes back IS its translation,
-						// even if the model rewrote the id — but only if it is
-						// actually translated, not the English echoed back, and no
-						// protected token was lost or invented.
-						const first = single.translations.find(t =>
-							pb.reg.ok(t.translatedText)
-							&& looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference }));
-						if (first) {
-							received.set(block.id, first.translatedText);
-						}
-						else if (single.translations.length) {
-							noteReject(block.id, rejectedResponse(block.id, single.translations[0]?.translatedText ?? '', 'salvage-validator'));
-						}
-						else {
-							// 死分支修复 (1.1.8): 这里原本是与上面条件完全相同的
-							// 第二个 else if,永不可达 —— 于是「打捞请求回了个空
-							// 数组」这一支从不落原因码,块的 lastReject 停在批次
-							// 阶段的旧值上,诊断读起来就像打捞从没跑过。
-							noteReject(block.id, 'salvage-empty');
-						}
-					}
-					catch (e) {
-						if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
-							throw e;
-						}
-						logger.warn(MODULE, `Salvage request failed for ${block.id}`, e);
-					}
-				};
-				for (let i = 0; i < stillMissing.length; i += SALVAGE_CONCURRENCY) {
-					if (signal.aborted) {
-						throw new PaperMirrorError('CANCELLED', 'cancelled');
-					}
-					if (!canSpend()) {
-						break;
-					}
-					const wave = stillMissing.slice(i, i + SALVAGE_CONCURRENCY);
-					const settled = await Promise.allSettled(wave.map(salvageOne));
-					// Propagate a cancellation raised inside the wave.
-					for (const r of settled) {
-						if (r.status === 'rejected' && r.reason instanceof PaperMirrorError && r.reason.code === 'CANCELLED') {
-							throw r.reason;
-						}
-					}
-				}
-			}
-
-			const unrecovered = chunk.filter(b => !received.has(b.id));
-			if (unrecovered.length) {
-				untranslatedCount += unrecovered.length;
-				logger.warn(
-					MODULE,
-					`Page ${pageIndex + 1}: ${unrecovered.length} block(s) untranslated after salvage: ${unrecovered.map(b => b.id).join(', ')}`
-				);
-			}
-
-			for (const block of chunk) {
-				const raw = received.get(block.id);
-				if (raw === undefined) {
-					continue;
+			// Salvage ALL missing ids, but in bounded-parallel waves rather
+			// than strictly one-after-another: single-block requests can't
+			// suffer id drift, and running a few at once keeps a long page
+			// from stalling for a minute on sequential round-trips.
+			const salvageOne = async (block: SourceBlock): Promise<void> => {
+				if (!canSpend()) {
+					return;
 				}
 				const pb = protectedBlocks.find(p => p.block.id === block.id)!;
-				const restored = pb.reg.restore(raw);
-				results.push({ id: block.id, translatedText: restored });
-				state.translations.set(block.id, restored);
-				mirrorDuplicates(block.id); // API-2: 同文块同帧共享
-				// 术语记忆: harvest 「中文术语(ABBR)」 pairs this page established.
-				this.docMemory.learn(extractTermPairs(block.sourceText, restored));
-			}
-			this.notify(state); // progressive rendering per chunk
-		};
-
-		// 增量持久化: whatever this page has ALREADY translated survives a
-		// cancel/idle-timeout — the old behavior threw everything away, so page
-		// flipping kept re-buying the same translations (audit item).
-		// 返回写盘 promise 并在取消路径 await (2.0.7, 审核 P2-3): 此前
-		// fire-and-forget —— 任务解绕后这笔写仍悬在队列里,resetAllAndWait
-		// 等不到它,「刷新全部」的清盘与它竞态,被丢弃的译文复活。
-		const persistPartial = (): Promise<void> => {
-			if (!this.deps.writeSegments || !results.length) {
-				return Promise.resolve();
-			}
-			return this.deps.writeSegments(pageIndex, results.map(r => ({
-				hash: segmentHash(sourceById.get(r.id) ?? '', source, target, sourceBlockById.get(r.id)?.continuationContext),
-				translatedText: r.translatedText
-			}))).catch(() => { /* best-effort */ });
-		};
-
-		try {
-		// Limited intra-page parallelism: a small worker pool pulls chunks in
-		// order (当前页最多同时 CHUNK_CONCURRENCY 个批次). Mutations are append-only
-		// per block id and the request cap is shared, so the guarantees match the
-		// old serial loop at roughly half the wall-clock on multi-chunk pages.
-		{
-			let nextChunk = 0;
-			const workers = Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, async () => {
-				for (;;) {
-					const i = nextChunk++;
-					if (i >= chunks.length) {
-						return;
-					}
-					await runChunk(chunks[i]!, i);
-				}
-			});
-			const settled = await Promise.allSettled(workers);
-			for (const r of settled) {
-				if (r.status === 'rejected') {
-					throw r.reason;
-				}
-			}
-		}
-
-		if (!results.length && !segmentHits) {
-			throw new PaperMirrorError('BAD_RESPONSE', 'The translation service returned no usable translations.');
-		}
-
-		// 局部英文残留补译: a block that passed looksTranslated can still carry a
-		// run of untranslated English mid-paragraph. Re-translate ONLY those
-		// blocks (single-block requests, capped), patch their entries in place,
-		// and merge into `results` so the fix reaches the cache — the page is not
-		// re-extracted or re-rendered wholesale.
-		if (canSpend()) {
-			await this.resolveEnglishResidue(state, activeBlocks, results, source, target, signal, countedTranslate, canSpend);
-		}
-
-		// 纯文本兜底 (修复链路最后一环, 参照 retain-pdf final recovery): blocks the
-		// whole JSON chain rejected get ONE more shot each in plain mode — the
-		// answer is the bare translation, so id drift and JSON mangling cannot
-		// fail it. Budgeted (≤4/page, shares the page request cap).
-		{
-			const unrecovered = toTranslate.filter(b => !state.translations.has(b.id));
-			let attempts = 0;
-			for (const block of unrecovered) {
-				if (attempts >= FINAL_RECOVERY_MAX || !canSpendFinal()) {
-					break;
-				}
-				if (signal.aborted) {
-					throw new PaperMirrorError('CANCELLED', 'cancelled');
-				}
-				attempts++;
-				const pb = protectedBlocks.find(p => p.block.id === block.id)!;
 				try {
-					const resp = await countedTranslate({
-						pageIndex,
-						sourceLanguage: source,
-						targetLanguage: target,
-						documentTitle: this.deps.getDocumentTitle(),
-						previousContext: '',
-						blocks: [{ id: block.id, type: block.type, text: pb.text }],
-						glossary: this.glossaryFor([block.sourceText]),
-						plain: true
-					}, signal);
-					const translatedHit = resp.translations.find(t =>
-						looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference }));
-					const hit = translatedHit && pb.reg.ok(translatedHit.translatedText) ? translatedHit : undefined;
-					if (hit) {
-						const restored = pb.reg.restore(hit.translatedText);
-						state.translations.set(block.id, restored);
-						results.push({ id: block.id, translatedText: restored });
-						logger.info(MODULE, `Page ${pageIndex + 1}: plain-mode recovery rescued ${block.id}`);
+					metrics.salvageCount++;
+					const single = await this.requestWithRetry(run, 
+						{ ...request, previousContext: '', blocks: [{ id: block.id, type: block.type, text: pb.text }] },
+						signal
+					);
+					// One block in → whatever comes back IS its translation,
+					// even if the model rewrote the id — but only if it is
+					// actually translated, not the English echoed back, and no
+					// protected token was lost or invented.
+					const first = single.translations.find(t =>
+						pb.reg.ok(t.translatedText)
+						&& looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference }));
+					if (first) {
+						received.set(block.id, first.translatedText);
 					}
-					else if (translatedHit && pb.reg.count > 0 && canSpendFinal()) {
-						// 占位符降级重试 (2.5.12, wu2026 摘要实证): 译文本身合格
-						// (looksTranslated 通过),只是占位符清单被模型排坏 ——
-						// 掩码密集的块 (Likert 中位数 + 引用 + 统计式混在一段)
-						// 每一轮都死在 reg.ok 上,整段永远留英。链路最后一环改为
-						// 【不掩码】重发一次: 引用与统计式直接交给模型原样保留,
-						// 只验 looksTranslated。这一块失去公式逐字节保证,但另一
-						// 边的代价是整段不翻;只在掩码链已经失败后才走到这里。
-						const bare = await countedTranslate({
-							pageIndex,
-							sourceLanguage: source,
-							targetLanguage: target,
-							documentTitle: this.deps.getDocumentTitle(),
-							previousContext: '',
-							blocks: [{ id: block.id, type: block.type, text: block.sourceText }],
-							glossary: this.glossaryFor([block.sourceText]),
-							plain: true
-						}, signal);
-						const bareHit = bare.translations.find(t =>
-							looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference }));
-						if (bareHit) {
-							state.translations.set(block.id, bareHit.translatedText);
-							results.push({ id: block.id, translatedText: bareHit.translatedText });
-							logger.info(MODULE, `Page ${pageIndex + 1}: unmasked plain recovery rescued ${block.id} (placeholder chain had failed)`);
-						}
-						else {
-							noteReject(block.id, 'plain-placeholder');
-						}
-					}
-					else if (resp.translations.length) {
-						noteReject(block.id, rejectedResponse(block.id, resp.translations[0]?.translatedText ?? '', 'plain-validator'));
+					else if (single.translations.length) {
+						// 5.0: the reason is computed on the RESTORED text, as acceptance
+						// is. On the masked text every protected keV/kVp looked missing, so
+						// the diagnostics reported 'technical-unit' for unrelated failures.
+						const raw = single.translations[0]?.translatedText ?? '';
+						noteReject(block.id, rejectedResponse(block.id, pb.reg.restore(raw), 'salvage-validator'));
 					}
 					else {
-						// 同一处死分支 (1.1.8): 见上面 salvage 的说明。
-						noteReject(block.id, 'plain-empty');
+						// 死分支修复 (1.1.8): 这里原本是与上面条件完全相同的
+						// 第二个 else if,永不可达 —— 于是「打捞请求回了个空
+						// 数组」这一支从不落原因码,块的 lastReject 停在批次
+						// 阶段的旧值上,诊断读起来就像打捞从没跑过。
+						noteReject(block.id, 'salvage-empty');
 					}
 				}
 				catch (e) {
 					if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
 						throw e;
 					}
-					logger.warn(MODULE, `plain-mode recovery failed for ${block.id}`, e);
+					logger.warn(MODULE, `Salvage request failed for ${block.id}`, e);
+				}
+			};
+			for (let i = 0; i < stillMissing.length; i += SALVAGE_CONCURRENCY) {
+				if (signal.aborted) {
+					throw new PaperMirrorError('CANCELLED', 'cancelled');
+				}
+				if (!canSpend()) {
+					break;
+				}
+				const wave = stillMissing.slice(i, i + SALVAGE_CONCURRENCY);
+				const settled = await Promise.allSettled(wave.map(salvageOne));
+				// Propagate a cancellation raised inside the wave.
+				for (const r of settled) {
+					if (r.status === 'rejected' && r.reason instanceof PaperMirrorError && r.reason.code === 'CANCELLED') {
+						throw r.reason;
+					}
 				}
 			}
-			if (unrecovered.some(b => state.translations.has(b.id))) {
-				this.notify(state);
+		}
+	}
+
+	// 增量持久化: whatever this page has ALREADY translated survives a
+	// cancel/idle-timeout — the old behavior threw everything away, so page
+	// flipping kept re-buying the same translations (audit item).
+	// 返回写盘 promise 并在取消路径 await (2.0.7, 审核 P2-3): 此前
+	// fire-and-forget —— 任务解绕后这笔写仍悬在队列里,resetAllAndWait
+	// 等不到它,「刷新全部」的清盘与它竞态,被丢弃的译文复活。
+	private persistPartial(run: PageRun): Promise<void> {
+		const durable = run.results.filter(r => !run.provisional.has(r.id));
+		if (!this.deps.writeSegments || !durable.length) {
+			return Promise.resolve();
+		}
+		return this.deps.writeSegments(run.pageIndex, durable.map(r => ({
+			hash: blockSegmentHash(run.sourceBlockById.get(r.id) ?? { sourceText: run.sourceById.get(r.id) ?? '' }, run.source, run.target),
+			translatedText: r.translatedText
+		}))).catch(() => { /* best-effort */ });
+	}
+
+	// 纯文本兜底 (修复链路最后一环, 参照 retain-pdf final recovery): blocks the
+	// whole JSON chain rejected get ONE more shot each in plain mode — the
+	// answer is the bare translation, so id drift and JSON mangling cannot
+	// fail it. Budgeted (≤4/page, shares the page request cap).
+	private async recoverPlain(run: PageRun): Promise<void> {
+		const { state, signal, pageIndex, source, target, toTranslate, protectedBlocks, canSpendFinal, noteReject, rejectedResponse } = run;
+		const unrecovered = toTranslate.filter(b => !state.translations.has(b.id));
+		let attempts = 0;
+		for (const block of unrecovered) {
+			if (attempts >= FINAL_RECOVERY_MAX || !canSpendFinal()) {
+				break;
+			}
+			if (signal.aborted) {
+				throw new PaperMirrorError('CANCELLED', 'cancelled');
+			}
+			attempts++;
+			const pb = protectedBlocks.find(p => p.block.id === block.id)!;
+			try {
+				const resp = await this.requestWithRetry(run, {
+					pageIndex,
+					sourceLanguage: source,
+					targetLanguage: target,
+					documentTitle: this.deps.getDocumentTitle(),
+					previousContext: '',
+					blocks: [{ id: block.id, type: block.type, text: pb.text }],
+					glossary: this.glossaryFor([block.sourceText]),
+					plain: true
+				}, signal);
+				const translatedHit = resp.translations.find(t =>
+					looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference }));
+				const hit = translatedHit && pb.reg.ok(translatedHit.translatedText) ? translatedHit : undefined;
+				if (hit) {
+					const restored = pb.reg.restore(hit.translatedText);
+					state.translations.set(block.id, restored);
+					run.results.push({ id: block.id, translatedText: restored });
+					logger.info(MODULE, `Page ${pageIndex + 1}: plain-mode recovery rescued ${block.id}`);
+				}
+				else if (translatedHit && pb.reg.count > 0 && canSpendFinal()) {
+					// 占位符降级重试 (2.5.12, wu2026 摘要实证): 译文本身合格
+					// (looksTranslated 通过),只是占位符清单被模型排坏 ——
+					// 掩码密集的块 (Likert 中位数 + 引用 + 统计式混在一段)
+					// 每一轮都死在 reg.ok 上,整段永远留英。链路最后一环改为
+					// 【不掩码】重发一次: 引用与统计式直接交给模型原样保留,
+					// 只验 looksTranslated。这一块失去公式逐字节保证,但另一
+					// 边的代价是整段不翻;只在掩码链已经失败后才走到这里。
+					const bare = await this.requestWithRetry(run, {
+						pageIndex,
+						sourceLanguage: source,
+						targetLanguage: target,
+						documentTitle: this.deps.getDocumentTitle(),
+						previousContext: '',
+						blocks: [{ id: block.id, type: block.type, text: block.sourceText }],
+						glossary: this.glossaryFor([block.sourceText]),
+						plain: true
+					}, signal);
+					const bareHit = bare.translations.find(t =>
+						looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference }));
+					if (bareHit) {
+						state.translations.set(block.id, bareHit.translatedText);
+						run.results.push({ id: block.id, translatedText: bareHit.translatedText });
+						logger.info(MODULE, `Page ${pageIndex + 1}: unmasked plain recovery rescued ${block.id} (placeholder chain had failed)`);
+					}
+					else {
+						noteReject(block.id, 'plain-placeholder');
+					}
+				}
+				else if (resp.translations.length) {
+					const raw = resp.translations[0]?.translatedText ?? '';
+					noteReject(block.id, rejectedResponse(block.id, pb.reg.restore(raw), 'plain-validator'));
+				}
+				else {
+					// 同一处死分支 (1.1.8): 见上面 salvage 的说明。
+					noteReject(block.id, 'plain-empty');
+				}
+			}
+			catch (e) {
+				if (e instanceof PaperMirrorError && e.code === 'CANCELLED') {
+					throw e;
+				}
+				logger.warn(MODULE, `plain-mode recovery failed for ${block.id}`, e);
 			}
 		}
+		if (unrecovered.some(b => state.translations.has(b.id))) {
+			this.notify(state);
 		}
-		catch (e) {
-			await persistPartial(); // P2-3: 任务解绕前落盘完成,取消等待才等得到
-			throw e;
-		}
+	}
 
+	/** 收尾: 止损记账、同文 sweep、诊断、写段落库;完整页才进页缓存。 */
+	private async finalizePage(run: PageRun): Promise<void> {
+		const { state, pageIndex, metrics, blocks, activeBlocks, toTranslate, keepOrigin, dupOf, segHash, protectedBlocks, chunks } = run;
 		// keep-origin 记账: whatever is STILL untranslated after the whole chain
 		// increments its segment's failure count; at ≥2 future runs skip it.
 		for (const block of toTranslate) {
@@ -3463,8 +3343,8 @@ export class TranslationManager {
 				const rec = this.failedSegments.get(h);
 				// 并发轮次去重 (2.0.6, 审核 P3): 本次运行发起于上一次计数之前
 				// (与记录时已在飞的运行同轮,同一段跨页并发失败)→ 不叠加。
-				// 只有失败记录之后新发起的运行 (runId > rec.seq) 才算下一轮。
-				if (!rec || runId > rec.seq) {
+				// 只有失败记录之后新发起的运行 (run.runId > rec.seq) 才算下一轮。
+				if (!rec || run.runId > rec.seq) {
 					// 近似 LRU (2.0.10, 审核 P3): Map.set 更新既有键不刷新插入序,
 					// 500 上限裁剪按插入序删前半 —— 刚二次失败、正靠 count≥2 保护
 					// 的热点段(页眉/重复题注)若首次失败发生得早会先被淘汰,止损
@@ -3485,9 +3365,9 @@ export class TranslationManager {
 		// API-2 收尾 sweep: salvage/纯文本兜底/残留修复等晚到路径接住的代表译文,
 		// 在这里统一镜像给同文块 —— 然后才如实清点 untranslated。
 		for (const rep of dupOf.keys()) {
-			mirrorDuplicates(rep);
+			run.mirrorDuplicates(rep);
 		}
-		untranslatedCount = toTranslate.filter(b => !state.translations.has(b.id)).length;
+		const untranslatedCount = run.untranslatedCount = toTranslate.filter(b => !state.translations.has(b.id)).length;
 
 		state.status = 'done';
 		state.diagnostics = {
@@ -3496,7 +3376,7 @@ export class TranslationManager {
 			salvage: metrics.salvageCount,
 			rateLimited: metrics.rateLimited,
 			timeouts: metrics.timeouts,
-			segmentHits,
+			segmentHits: run.segmentHits,
 			durationMs: Date.now() - metrics.startedAt,
 			fromCache: false,
 			// 2.11.0: 没有请求就不写这个字段,免得导出里塞满空数组。
@@ -3510,7 +3390,7 @@ export class TranslationManager {
 		// salvageCount(逐块补救) / segmentHits(段落缓存命中).
 		logger.info(
 			MODULE,
-			`Page ${pageIndex + 1} metrics: ${blocks.length} unit(s), ${segmentHits} from segment cache, `
+			`Page ${pageIndex + 1} metrics: ${blocks.length} unit(s), ${run.segmentHits} from segment cache, `
 			+ `${chunks.length} chunk(s), ${metrics.requestCount} request(s), ${metrics.salvageCount} salvage, `
 			+ `${untranslatedCount} untranslated, ${Date.now() - metrics.startedAt} ms`
 		);
@@ -3522,58 +3402,43 @@ export class TranslationManager {
 		// Newly translated segments enter the segment store regardless of page
 		// completeness — a good segment is a good segment; only the PAGE index
 		// below requires completeness.
-		if (this.deps.writeSegments && results.length) {
+		if (this.deps.writeSegments && run.results.length) {
 			const byId = new Map(activeBlocks.map(b => [b.id, b]));
 			// 登记而不等待 (2.5.9): 这一笔坐在调度槽里,await 它就是白占半秒
 			// 以上(落盘有 500ms 合并窗口)。登记后 resetAllAndWait/dispose 仍
 			// 等得到,2.0.7 的清盘竞态防线不受影响。
-			this.trackWrite(this.deps.writeSegments(pageIndex, results
-				.map(r => ({ hash: segHash(byId.get(r.id)!), translatedText: r.translatedText }))
-			).catch(e => { logger.warn(MODULE, 'segment write failed', e); }));
+			const durable = run.results.filter(r => !run.provisional.has(r.id));
+			if (durable.length) {
+				this.trackWrite(this.deps.writeSegments(pageIndex, durable
+					.map(r => ({ hash: segHash(byId.get(r.id)!), translatedText: r.translatedText }))
+				).catch(e => { logger.warn(MODULE, 'segment write failed', e); }));
+			}
 		}
 		// Only a COMPLETE page enters the cache. Caching a partial page would
 		// freeze the mixed-language rendering: every revisit would hit the
 		// cache and never retry the missing blocks. Left uncached, the next
 		// visit (or 重新翻译) runs the whole pipeline again — with the segment
 		// store still saving the segments that DID succeed.
+		const provisionalShown = activeBlocks.filter(b => run.provisional.has(b.id) && state.translations.has(b.id)).length;
+		// 5.0 (联网校验: 9 篇里 8 篇、约 30 页): a page whose only flaw is
+		// provisional (per-part) translations used to stay uncached, and every
+		// revisit paid for the whole page again to get the same parts back.
+		// It is cached now with those blocks flagged: shown on revisit, still
+		// kept out of the segment store, replaced by 刷新本页.
 		if (untranslatedCount === 0 && keepOrigin.size === 0) {
 			// keepOrigin pages stay OUT of the page cache (审核 P1): caching one
 			// froze its English segments forever — every revisit hit the cache and
 			// the repair chain never ran again. Uncached, the segment store still
 			// serves the good segments and the skipped ones get their chance the
 			// moment 普通刷新 clears the 止损 memory below.
-			const all: TranslatedBlock[] = activeBlocks
-				.filter(b => state.translations.has(b.id))
-				.map(b => ({ id: b.id, translatedText: state.translations.get(b.id)! }));
+			const all: TranslatedBlock[] = pageCacheRows(state, activeBlocks);
 			await this.persistPage(state, all);
+			if (provisionalShown) logger.info(MODULE, `Page ${pageIndex + 1} cached with ${provisionalShown} provisional block(s)`);
 		}
 		else {
-			logger.warn(MODULE, `Page ${pageIndex + 1} left uncached (${untranslatedCount} untranslated block(s)) so a revisit retries`);
+			logger.warn(MODULE, `Page ${pageIndex + 1} left uncached (${untranslatedCount} untranslated, ${provisionalShown} provisional block(s)) so a revisit retries`);
 		}
 	}
+
 }
 
-/** Reason codes contain no source or response text and are safe for diagnostics. */
-export function referenceRejectReason(source: string, translated: string, phase: string): string {
- const alignment = referenceAlignmentIssue(source, translated);
- if (alignment) return `${phase}:${alignment}`;
- if(!translated.trim()) return `${phase}:empty`;
- if(isEcho(source,translated)) return `${phase}:reference-echo`;
- if(isTruncatedTranslation(stripProtectable(source),stripProtectable(translated))) return `${phase}:reference-truncated`;
- return `${phase}:reference-${translationRejectReason(source,translated,'zh-CN') ?? 'integrity'}`;
-}
-
-/** Same validator, with a stable, text-free explanation for its rejection. */
-export function translationRejectReason(source: string, translated: string, target: string): string | null {
- if (/[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFD]/.test(translated)) return 'invalid-character';
- const alignment = referenceAlignmentIssue(source, translated);
- if (alignment) return alignment;
- const unitIssue = technicalUnitIssue(source, translated) || numericPowerIssue(source, translated);
- if (unitIssue) return unitIssue;
- if (looksTranslated(source, translated, target)) return null;
- if (!translated.trim()) return 'empty';
- if (isEcho(source, translated)) return 'echo';
- if (isTruncatedTranslation(stripProtectable(source), stripProtectable(translated))) return 'truncated';
- if (hasMixedCopiedResidue(source, translated)) return 'copied-residue';
- return 'target-language-ratio';
-}

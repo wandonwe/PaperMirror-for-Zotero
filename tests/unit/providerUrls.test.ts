@@ -53,7 +53,7 @@ test('provider.endpointFor reflects the real transport URL', () => {
 	// Gemini: NATIVE generateContent endpoint, model in the path.
 	assert.equal(
 		getProvider('gemini').endpointFor!(s('')),
-		'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+		'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent'
 	);
 	// A custom base flows straight through the same builder.
 	assert.equal(getProvider('openai').endpointFor!(s('https://mirror.example/v1')), 'https://mirror.example/v1/chat/completions');

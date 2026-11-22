@@ -21,6 +21,7 @@
  * which rejoins a fragment that ends mid-sentence with the one that follows.
  */
 
+import { isReferenceTailLine, startsReferenceEntry } from './referenceDetect';
 import { endsMidSentence } from './metaFilter';
 
 /** [x1, y1, x2, y2] in PDF coordinates (origin bottom-left, y grows upward). */
@@ -374,6 +375,13 @@ export interface BandedGutter {
 	top: number;
 	/** Lowest (bottom) y the channel spans. */
 	bottom: number;
+	/**
+	 * 5.0 版面模型: the span most of the channel's cells hold (median of the
+	 * per-cell runs). Rows between core and union were reached by a few edge
+	 * cells only — a word gap that happens to sit at the gutter's x.
+	 */
+	coreTop?: number;
+	coreBottom?: number;
 }
 
 /**
@@ -508,11 +516,18 @@ export function detectGuttersBanded(rows: Rect[][], pageWidth: number): BandedGu
 	let endCell = cands[0]!.cell;
 	let top = cands[0]!.top;
 	let bottom = cands[0]!.bottom;
+	let members: Cand[] = [cands[0]!];
+	const median = (xs: number[]): number => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
 	const flush = (): void => {
 		const startX = startCell * STEP;
 		const endX = (endCell + 1) * STEP;
 		if (endX - startX >= 6 && startX > width * 0.12 && endX < width * 0.88) {
-			result.push({ x: (startX + endX) / 2, top, bottom });
+			// 5.0 版面模型 (校验 r22, 2852 p1 / 2721 p1): where MOST of the channel's
+			// cells hold is its core. A keyword line set across the page leaves a
+			// word gap on a few of the gutter's cells ("◼ critical care ◼ disease
+			// management": 292–297 of the 280–304 channel), stretching the union
+			// over it; outside the core a row splits only at a real gap.
+			result.push({ x: (startX + endX) / 2, top, bottom, coreTop: median(members.map(m => m.top)), coreBottom: median(members.map(m => m.bottom)) });
 		}
 	};
 	for (let i = 1; i < cands.length; i++) {
@@ -522,12 +537,14 @@ export function detectGuttersBanded(rows: Rect[][], pageWidth: number): BandedGu
 			endCell = Math.max(endCell, c.cell);
 			top = Math.max(top, c.top);
 			bottom = Math.min(bottom, c.bottom);
+			members.push(c);
 		}
 		else {
 			flush();
 			startCell = endCell = c.cell;
 			top = c.top;
 			bottom = c.bottom;
+			members = [c];
 		}
 	}
 	flush();
@@ -631,9 +648,15 @@ export function bandedColumnStamp(
 	//   假沟,全局 [222,391] 明明是对的 —— 按位置匹配反而判全局"漏")。
 	// - 位置: 容差 20pt (≠ 盖章的 ±8pt 骑缝容差),防跨带行把沟心拉偏。
 	const globalGutters = detectGutters(rows, pageWidth > 0 ? pageWidth : 612);
+	// 校验 r24 (2795 p4): a global gutter that is one of a TABLE regime's column
+	// gaps says nothing about the prose band — counted, it hid that the global
+	// vote missed the body gutter, and the two-column body under a full-width
+	// table was read line by line in turn.
+	const tableXs = regimes.filter(r => r.xs.length > 2).flatMap(r => r.xs);
+	const globalProse = globalGutters.filter(g => !tableXs.some(x => Math.abs(g - x) <= 8));
 	const globalMissed = proseRegimes.some(r =>
-		r.xs.length > globalGutters.length
-		&& r.xs.some(x => !globalGutters.some(g => Math.abs(g - x) <= 20)));
+		r.xs.length > globalProse.length
+		&& r.xs.some(x => !globalProse.some(g => Math.abs(g - x) <= 20)));
 	// 第二触发 (2.6.0, radiology2023-p3 实证): 全局沟虽在,detectColumns 的
 	// x 投影链却被表格格子行焊成一条假单带 —— 散文 regime 知道的栏数
 	// (沟数+1) 超过普通路径的带数时,普通盖章必然把两栏拉成拉链,同样只能
@@ -894,6 +917,11 @@ export function startsContinuation(text: string): boolean {
  * starts a new block even when the text before it looks unfinished.
  */
 export function looksLikeListStart(text: string): boolean {
+	// 5.0: "93. doi: 10.1007/…" is the tail of a reference entry, not item 93.
+	if (isReferenceTailLine(text)) return false;
+	// 5.0 (校验 2757 p10: "100. …" 与 "101. Strain WD, …" 并成一块): three-digit
+	// reference numbers, recognised by the author–initials that follow.
+	if (startsReferenceEntry(text)) return true;
 	return /^(\[\d{1,3}\]|[•▪◦‣·*–—-]\s|\(?\d{1,2}[.)]\s|[（(]\d{1,2}[）)]|[ivxIVX]{1,4}[.)]\s)/.test(text.trim());
 }
 
@@ -1160,35 +1188,63 @@ export interface BreakContext {
 	 * 自成一段,不与上下行合并。
 	 */
 	leaderDots?: boolean;
+	/**
+	 * 5.0: 已知参考文献页上,上一行像条目的结尾(年份、卷期页、DOI),下一行像
+	 * 条目的开头(带编号或不带编号的作者)。
+	 */
+	entryBoundary?: boolean;
 }
 
-export function shouldBreak(ctx: BreakContext): boolean {
+/**
+ * 断段证据 (5.0 结构层重构第 2 步)。
+ *
+ * 原来的 shouldBreak 是一串按顺序执行的 if:先命中谁就听谁的。改成"各项证据
+ * 并列、带权重相加":
+ *   - 强证据(换栏、列表开头、引导点、短行、大间距、缩进、字号跳变、条目边界)各 +3;
+ *   - 行宽撑满本栏(句子在续)−2;
+ *   - 中等间距(> 0.75em)+1;
+ * 总分 > 0 即断。这组权重与旧级联**逐例等价**(任一强证据都压过"撑满";
+ * 撑满压过中等间距;都没有就不断),所以替换本身不改变任何结果 —— 本机语料
+ * 234 页逐页核对。之后加新证据或改权重,改动都落在一处,且每个断点都说得出理由。
+ */
+export type BreakReason = 'new-column' | 'list-start' | 'leader-dots' | 'short-line' | 'large-gap'
+	| 'indent' | 'font-jump' | 'entry-boundary' | 'wrapped' | 'gap';
+
+export interface BreakEvidence { reason: BreakReason; weight: number }
+export interface BreakDecision { brk: boolean; score: number; evidence: BreakEvidence[] }
+
+export const BREAK_WEIGHTS = { strong: 3, wrapped: -2, gap: 1 } as const;
+
+export function decideBreak(ctx: BreakContext): BreakDecision {
 	const size = ctx.fontSize > 0 ? ctx.fontSize : 10;
-	if (ctx.newColumn || ctx.listStart) {
-		return true;
-	}
+	const evidence: BreakEvidence[] = [];
+	const strong = (on: boolean | undefined, reason: BreakReason): void => {
+		if (on) evidence.push({ reason, weight: BREAK_WEIGHTS.strong });
+	};
+	strong(ctx.newColumn, 'new-column');
+	strong(ctx.listStart, 'list-start');
 	// 目录行/短行 (BabelDOC): 连点号行自成一段;明显短于中位行宽的行是段末。
-	if (ctx.leaderDots) {
-		return true;
-	}
-	if (ctx.shortLine && !ctx.wrapped) {
-		return true;
-	}
+	strong(ctx.leaderDots, 'leader-dots');
+	strong(ctx.shortLine && !ctx.wrapped, 'short-line');
 	// A gap this big is a section break no matter what the line looked like.
-	if (ctx.gap > size * 1.7) {
-		return true;
-	}
+	strong(ctx.gap > size * 1.7, 'large-gap');
 	// Indentation is measured against the COLUMN's left margin, and a font-size
 	// change is measured from dominant (not mean) sizes — both are strong
 	// enough to end a paragraph on their own.
-	if (ctx.indented || ctx.fontJump) {
-		return true;
-	}
-	// The decisive guard for the remaining signal: a line that filled its
-	// column wrapped, so the sentence continues. Line-spacing wobble — a tall
-	// glyph, an inline formula, a superscript — must not cut it in half.
-	if (ctx.wrapped) {
-		return false;
-	}
-	return ctx.gap > size * 0.75;
+	strong(ctx.indented, 'indent');
+	strong(ctx.fontJump, 'font-jump');
+	// 5.0: inside a known reference list, the previous line ends an entry and
+	// the next starts one (numbered or not).
+	strong(ctx.entryBoundary, 'entry-boundary');
+	// A line that filled its column wrapped, so the sentence continues.
+	// Line-spacing wobble — a tall glyph, an inline formula, a superscript —
+	// must not cut it in half.
+	if (ctx.wrapped) evidence.push({ reason: 'wrapped', weight: BREAK_WEIGHTS.wrapped });
+	if (ctx.gap > size * 0.75) evidence.push({ reason: 'gap', weight: BREAK_WEIGHTS.gap });
+	const score = evidence.reduce((n, e) => n + e.weight, 0);
+	return { brk: score > 0, score, evidence };
+}
+
+export function shouldBreak(ctx: BreakContext): boolean {
+	return decideBreak(ctx).brk;
 }

@@ -24,50 +24,11 @@ import { tableCellBounds } from '../ir/tableModel';
 
 import type { SourceBlock } from '../types/models';
 import * as adapter from '../reader/zoteroReaderAdapter';
-import type { ReaderLike } from '../reader/zoteroReaderAdapter';
-import { isMetadataBlock } from '../reader/metaFilter';
 import { type Rect } from '../reader/paragraphHeuristics';
 import * as logger from '../utils/logger';
-import { getPref } from '../utils/prefs';
-import { bodyAnchorPt, parseFactor, translatedFontSize } from './pageLayout';
-import {
-	assignColumns,
-	findLayoutProblems,
-	inkToObstacles,
-	obstaclesToBoxes,
-	planFlow,
-	resolveOverlaps,
-	type Box,
-	type FlowItem,
-	type FlowObstacle
-} from './pageFlow';
-import { detectTableRegions } from '../reader/tableGuard';
 
 const MODULE = 'translatedPageView';
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
-
-/**
- * Supersampling for the page bitmap so text-free artwork stays crisp.
- *
- * Two canvases are allocated per draw (artwork + mask), each pageWidth ×
- * pageHeight × BITMAP_SCALE² × 4 bytes. At 2× a large page costs ~35 MB per
- * draw, so the factor is stepped down on big pages: crispness is worth a lot
- * less than not exhausting memory.
- */
-const BITMAP_SCALE_MAX = 2;
-// Lowered from 6M when the pane became a full-document list: several pages
-// are alive at once, and each page carries TWO canvases at this budget.
-const BITMAP_PIXEL_BUDGET = 3_200_000; // per canvas, ≈13 MB at 4 bytes/px
-
-function bitmapScaleFor(widthPx: number, heightPx: number): number {
-	const area = Math.max(1, widthPx * heightPx);
-	const scale = Math.sqrt(BITMAP_PIXEL_BUDGET / area);
-	return Math.max(1, Math.min(BITMAP_SCALE_MAX, scale));
-}
-/** Paper-colour bleed around a blanked paragraph, in page pixels. */
-const MASK_PADDING = 2;
-/** Below this the text is noise, not reading material. */
-const MIN_FONT_PX = 8.5;
 
 // (1.1.2 P2 清理) buildTranslatedPage/settleTranslatedPage/buildFallbackPage 及其
 // 输入/结果接口已删除 —— 自 strict 分屏成为唯一渲染通道后它们再无调用方
@@ -278,10 +239,4 @@ export function pixelBox(block: SourceBlock, render: adapter.PageRender, pxPerVi
 	return { left, top, width: right - left, height: bottom - top };
 }
 
-function medianOf(values: number[]): number {
-	if (!values.length) {
-		return 0;
-	}
-	const sorted = [...values].sort((a, b) => a - b);
-	return sorted[Math.floor(sorted.length / 2)]!;
-}
+

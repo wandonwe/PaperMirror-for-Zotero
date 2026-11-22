@@ -781,7 +781,9 @@ function structureTableCellsUnchecked(
 	// A numbered Table badge can share a caption region with its title. Keep
 	// that type='table' badge as a detector anchor; member selection below
 	// already prevents it from becoming cell content.
-	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox && !isFurniture(b) && b.type !== 'caption' && b.sourceRegion?.kind !== 'legend-item');
+	const geometric = blocks.filter((b): b is SourceBlock & { boundingBox: NonNullable<SourceBlock['boundingBox']> } => !!b.boundingBox && !isFurniture(b) && b.type !== 'caption' && b.sourceRegion?.kind !== 'legend-item'
+		// 校验 r23 (3200): list entries (a book index, an abbreviation list) are never table cells.
+		&& b.sourceRegion?.kind !== 'list-entry');
 	if (!geometric.length || (geometric.length < 2 && !grid)) {
 		return blocks;
 	}

@@ -4,7 +4,7 @@ import {
 	decodePDFRawStream
 } from 'pdf-lib';
 import { parsedDocument } from './legacyTextEncoding';
-import { relationFromGlyphPath, squareBulletFromGlyphPath } from './symbolFontSemantics';
+import { OPERATOR_SLOTS, operatorFromGlyphPath, relationFromGlyphPath, squareBulletFromGlyphPath } from './symbolFontSemantics';
 
 // The browser entry exports the factory on its default object; Node's CJS
 // entry also has a named export, which must not hide a browser build failure.
@@ -18,7 +18,7 @@ export interface SymbolGlyphObservation {
 
 const MAX_FONT_BYTES = 2 * 1024 * 1024;
 const MAX_GLYPHS = 8192;
-const candidateUnicode = new Set(['$', '¼', 'n']);
+const candidateUnicode = new Set(['$', '¼', 'n', ...OPERATOR_SLOTS]);
 const fontKey = PDFName.of('Font');
 const baseFontKey = PDFName.of('BaseFont');
 const subtypeKey = PDFName.of('Subtype');
@@ -193,7 +193,7 @@ function relationForCode(fontDict: PDFDict, parsed: EmbeddedFont, code: number):
 			const path = parsed.font.getGlyph(gid).path as unknown as {
 				commands: Parameters<typeof relationFromGlyphPath>[0];
 			};
-			parsed.relations.set(gid, relationFromGlyphPath(path.commands) ?? squareBulletFromGlyphPath(path.commands));
+			parsed.relations.set(gid, relationFromGlyphPath(path.commands) ?? squareBulletFromGlyphPath(path.commands) ?? operatorFromGlyphPath(path.commands));
 		} catch {
 			parsed.relations.set(gid, undefined);
 		}

@@ -10,7 +10,10 @@ export function checkSplitParagraphExpansion():void {
   const node=built.element.querySelector('[data-pm-block="page-1-region-4::p0"]') as HTMLElement;
   const heading=built.element.querySelector('[data-pm-block="page-1-region-4::p1"]') as HTMLElement;
   if(constrained) {
-   if(node.style.visibility!=='hidden')throw Error('Expansion escaped source band');
+   // 5.0: 原盒内小幅缩字放回不算越出源带;仍不许越过下一个标题、不许重叠。
+   const gentle=node.getAttribute('data-pm-gentle-shrink')==='1'
+    && node.getBoundingClientRect().bottom<=heading.getBoundingClientRect().top-2 && !p.pmGeometryAudit().violations;
+   if(node.style.visibility!=='hidden' && !gentle)throw Error('Expansion escaped source band');
    built.element.remove();continue;
   }
   if(node.style.visibility==='hidden' || node.textContent!=='这项前瞻性体模研究无需机构审查委员会的任何批准。')throw Error('Short methods paragraph not placed at '+scale);

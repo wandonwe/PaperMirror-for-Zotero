@@ -351,21 +351,6 @@ async function getSession(timeoutMs: number, signal?: AbortSignal, forceRefresh 
 	return raceSignal(sessionPromise, signal);
 }
 
-/** Exposed for tests/shutdown hygiene. */
-export function resetBingSession(): void {
-	cachedSession = null;
-	cachedOrigin = API_BASE;
-	cachedAt = 0;
-	iidCounter = 0;
-	pageHost = PAGE_URL;
-	lastEdgeError = null;
-	sessionPromise = null;
-	edgeToken = null;
-	edgeTokenAt = 0;
-	edgeTokenPromise = null;
-	edgeDisabledUntil = 0;
-}
-
 interface BingApiResult {
 	translations?: { text?: string }[];
 	detectedLanguage?: { language?: string };

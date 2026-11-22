@@ -14,6 +14,8 @@
  * drop real content. Anything ambiguous is kept.
  */
 
+import { startsReferenceEntry } from './referenceDetect';
+
 export type Rect = [number, number, number, number];
 
 /**
@@ -67,8 +69,6 @@ function hasNaturalLanguage(body: string, min = 3): boolean {
 const RE_GRANT = /\bgrants?\s?(?:nos?|numbers?|#)\b\.?\s*:?\s*[\w-]/i;
 const RE_CORRESPONDENCE = /\b(corresponding author|correspondence to|e-?mail|电子邮件|通讯作者)\b|@[a-z0-9.-]+\.[a-z]{2,}/i;
 const RE_DOI_URL = /\b(doi|https?):|doi\.org|academic\.oup\.com|downloaded from/i;
-
-const INSTITUTION_WORDS = /\b(university|hospital|department|institute|center|centre|school|laboratory|clinic|college|academy)\b/gi;
 
 /**
  * Running head / running foot: the journal's own furniture repeated on every
@@ -155,8 +155,30 @@ export function isRunningHeadOrFoot(
 	if (!looksLikeJournalFoot && endsMidSentence(t)) {
 		return false;
 	}
+	// 校验 r23 (3363 p2): a numbered reference entry that starts at the column
+	// foot and runs onto the next page ("2. Thomas MA, … enhanced radiation
+	// output,") is content — no running head is a numbered entry or stops on a comma.
+	if (startsReferenceEntry(t) || /,$/.test(t)) {
+		return false;
+	}
+	// 校验 r24: a caption that starts at the page foot (3023 p2 "Figure 1: Study
+	// inclusion…") is content — no running head is labelled "Figure 1:".
+	if (/^(?:figure|fig\.?|table)\s*\d+[a-z]?\s*[.:|]/i.test(t)) {
+		return false;
+	}
 	return lineCount <= 2 && t.length <= 140;
 }
+
+/**
+ * 校验 r24 (2775 p2, 3132 p2, 2638 p2): a section heading set at the head of a
+ * column — "Introduction", "1. Introduction" — sits in the running-head band.
+ * Set as a heading it is the section's name, not a running head (a book's
+ * running head "SUMMARY" is set at body size and stays one).
+ */
+export function isSectionHeadingName(text: string): boolean {
+	return SECTION_NAME.test(text.trim());
+}
+const SECTION_NAME = /^(?:\d{1,2}\.?\s+)?(?:introduction|background|methods?|materials\s+and\s+methods|patients\s+and\s+methods|results|discussion|conclusions?|abstract|summary|acknowledg(?:e)?ments?|limitations)$/i;
 
 /** 虚词表:标题不会以此收尾,折行的正文行经常如此。 */
 const TRAILING_FUNCTION_WORDS = new Set([
