@@ -648,9 +648,15 @@ export function bandedColumnStamp(
 	//   假沟,全局 [222,391] 明明是对的 —— 按位置匹配反而判全局"漏")。
 	// - 位置: 容差 20pt (≠ 盖章的 ±8pt 骑缝容差),防跨带行把沟心拉偏。
 	const globalGutters = detectGutters(rows, pageWidth > 0 ? pageWidth : 612);
+	// 校验 r24 (2795 p4): a global gutter that is one of a TABLE regime's column
+	// gaps says nothing about the prose band — counted, it hid that the global
+	// vote missed the body gutter, and the two-column body under a full-width
+	// table was read line by line in turn.
+	const tableXs = regimes.filter(r => r.xs.length > 2).flatMap(r => r.xs);
+	const globalProse = globalGutters.filter(g => !tableXs.some(x => Math.abs(g - x) <= 8));
 	const globalMissed = proseRegimes.some(r =>
-		r.xs.length > globalGutters.length
-		&& r.xs.some(x => !globalGutters.some(g => Math.abs(g - x) <= 20)));
+		r.xs.length > globalProse.length
+		&& r.xs.some(x => !globalProse.some(g => Math.abs(g - x) <= 20)));
 	// 第二触发 (2.6.0, radiology2023-p3 实证): 全局沟虽在,detectColumns 的
 	// x 投影链却被表格格子行焊成一条假单带 —— 散文 regime 知道的栏数
 	// (沟数+1) 超过普通路径的带数时,普通盖章必然把两栏拉成拉链,同样只能

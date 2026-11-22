@@ -161,8 +161,24 @@ export function isRunningHeadOrFoot(
 	if (startsReferenceEntry(t) || /,$/.test(t)) {
 		return false;
 	}
+	// 校验 r24: a caption that starts at the page foot (3023 p2 "Figure 1: Study
+	// inclusion…") is content — no running head is labelled "Figure 1:".
+	if (/^(?:figure|fig\.?|table)\s*\d+[a-z]?\s*[.:|]/i.test(t)) {
+		return false;
+	}
 	return lineCount <= 2 && t.length <= 140;
 }
+
+/**
+ * 校验 r24 (2775 p2, 3132 p2, 2638 p2): a section heading set at the head of a
+ * column — "Introduction", "1. Introduction" — sits in the running-head band.
+ * Set as a heading it is the section's name, not a running head (a book's
+ * running head "SUMMARY" is set at body size and stays one).
+ */
+export function isSectionHeadingName(text: string): boolean {
+	return SECTION_NAME.test(text.trim());
+}
+const SECTION_NAME = /^(?:\d{1,2}\.?\s+)?(?:introduction|background|methods?|materials\s+and\s+methods|patients\s+and\s+methods|results|discussion|conclusions?|abstract|summary|acknowledg(?:e)?ments?|limitations)$/i;
 
 /** 虚词表:标题不会以此收尾,折行的正文行经常如此。 */
 const TRAILING_FUNCTION_WORDS = new Set([

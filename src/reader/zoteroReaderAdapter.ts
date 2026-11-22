@@ -1,6 +1,6 @@
 import { decodeLegacyText, legacyFontEncodings, resolvedPdfFont, repeatedImageRefs } from './legacyTextEncoding';
 import { embeddedSymbolRepairs, type SymbolGlyphObservation } from './embeddedFontSymbols';
-import { hasSymbolCandidate, repairSymbolText } from './symbolFontSemantics';
+import { OPERATOR_SLOTS, hasSymbolCandidate, repairSymbolText } from './symbolFontSemantics';
 import { onScrollIntent } from './scrollSynchronizer';
 import { canonicalPagePoint, pageQuarterTurn, type PageQuarterTurn } from './overlayGeometry';
 /**
@@ -256,6 +256,7 @@ async function pageSymbolRepairs(reader: ReaderLike, pageIndex: number): Promise
   const fonts = new Map<string, string>();
   const used: {fontId: string; code: number; unicode: string}[] = [];
   let drawingProofComplete = true, squareProofComplete = true;
+  const drawnByFont = new Map<string, number>();
   let fontId = ''; const stack: string[] = [];
   for (let i = 0; i < list.fnArray.length; i++) {
    const fn = list.fnArray[i], args = waive(list.argsArray[i]) as any;
@@ -283,13 +284,21 @@ async function pageSymbolRepairs(reader: ReaderLike, pageIndex: number): Promise
      // A composite glyph containing n prevents a global letter repair, but
      // cannot invalidate independent currency/fraction outline evidence.
      if (glyph.unicode.includes('n') && glyph.unicode !== 'n') squareProofComplete = false;
-     if (glyph && ['$', '¼', 'n'].includes(glyph.unicode)) {
+     drawnByFont.set(fontId, (drawnByFont.get(fontId) ?? 0) + 1);
+     if (glyph && (['$', '¼', 'n'].includes(glyph.unicode) || OPERATOR_SLOTS.has(glyph.unicode))) {
       used.push({fontId, code: typeof glyph.originalCharCode === 'number' ? glyph.originalCharCode : NaN, unicode: glyph.unicode});
      }
     }
    }
   }
   if (!drawingProofComplete) {complete = false; return emptySymbols();}
+  // 校验 r24: operator slots ("," "." "1" "2" "3") are checked only in fonts
+  // that draw a handful of glyphs on the page — a math font, not the body
+  // font whose every comma would be read from its outline (cost only: the
+  // outline still decides).
+  for (let i = used.length - 1; i >= 0; i--) {
+   if (OPERATOR_SLOTS.has(used[i]!.unicode) && (drawnByFont.get(used[i]!.fontId) ?? 0) > 60) used.splice(i, 1);
+  }
   if (!used.length) return emptySymbols();
   for (const id of new Set(used.map(g => g.fontId))) {
    if (!id) {complete = false; continue;}
@@ -306,6 +315,8 @@ async function pageSymbolRepairs(reader: ReaderLike, pageIndex: number): Promise
   }
   const pageWide = new Map<string, string>();
   for (const unicode of new Set(used.map(g => g.unicode))) {
+   // A page-wide "," → "<" would rewrite every body comma in a span without a font.
+   if (OPERATOR_SLOTS.has(unicode)) continue;
    const targets = used.filter(g => g.unicode === unicode).map(g => byFont.get(g.fontId)?.get(unicode));
    if (targets.length && targets.every(t => t !== undefined && t === targets[0])) pageWide.set(unicode, targets[0]!);
   }

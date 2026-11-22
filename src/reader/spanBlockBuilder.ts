@@ -41,7 +41,7 @@ import type { BlockType, SourceBlock } from '../types/models';
 import { detectTableRegions } from './tableGuard';
 import type { BorderGrid } from './tableBorders';
 import { insideObstacle, obstacleBetween } from './figureBarriers';
-import { isFooterDate, isJournalFurniture, isIdentifierLabel, classifyContent, endsMidSentence, isPublisherBoilerplateLine, isRunningHeadOrFoot, type PreserveReason } from './metaFilter';
+import { isFooterDate, isJournalFurniture, isIdentifierLabel, classifyContent, endsMidSentence, isPublisherBoilerplateLine, isRunningHeadOrFoot, isSectionHeadingName, type PreserveReason } from './metaFilter';
 import {
 	columnOf,
 	detectColumns,
@@ -610,7 +610,12 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 				const slack = Math.min(6, size * 0.6);
 				const crossesGutter = (gap >= size * 0.8 && confirmedGutters.some(k => previous.rect[2] <= k + slack && item.rect[0] >= k - 1))
 					|| ((!captionRows.has(row) || gap >= size * 0.8) && rowGutters.some(g => crossesLineGutter(previous.rect[2], item.rect[0], g, slack, size) && beatsWordGap(g, gap)
-						&& (inChannelCore(g, rowMid) || gap >= size * 0.8)))
+						&& (inChannelCore(g, rowMid) || gap >= size * 0.8)
+						// 校验 r24 (2795 p2): a channel only the banded vote sees, far from
+						// every page-wide gutter, splits at a column-sized gap, not a word gap
+						// (five sparse wide rows — a heading beside the other column — made a
+						// "gutter" inside the left column of a justified page).
+						&& (gap >= size * 0.8 || pageGutterXs.length === 0 || pageGutterXs.some(x => Math.abs(x - g.x) <= 20))))
 					|| (gap >= size * 1.05
 						&& weakGutterXs.some(x => previous.rect[2] <= x + slack && item.rect[0] >= x));
 				const repeatedLocalGap = gap >= size * 1.05
@@ -1765,7 +1770,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			// band, and losing it is far worse than translating one running head.
 			// 2.12.13:保留为 preserve('running-head') 而不是丢弃 —— 墨迹几何进遮挡物,摘要里看得见。
 			if (isJournalFurniture(p.text, p.rect, options.pageHeight)
-				|| p.type !== 'title' && isRunningHeadOrFoot(p.rect, options.pageHeight, p.group.length, p.text)) {
+				|| p.type !== 'title' && !((p.type === 'heading' || /^\d/.test(p.text.trim())) && isSectionHeadingName(p.text)) && isRunningHeadOrFoot(p.rect, options.pageHeight, p.group.length, p.text)) {
 				keepReason = keepReason ?? 'running-head';
 			}
 			// 字距拉开的标题 (2.7.2, 审核 C-2, jacc2020-p15 实证): "R E F E R E N C E S"
