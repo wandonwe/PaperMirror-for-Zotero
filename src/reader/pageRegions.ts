@@ -51,6 +51,7 @@ export function assignPageRegions(blocks:SourceBlock[],pageHeight:number):Source
 }
 /** Shared stage for char, text-content and text-layer extraction paths. */
 export function finalizePageRegions(blocks:SourceBlock[],pageHeight:number,obstacles:Rect[]=[]):SourceBlock[] {
+ blocks=joinContactRecords(blocks);
  const repaired=repairBodyColumnOwnership(blocks,obstacles);
  const repairedColumns=repaired!==blocks;
  blocks=repaired;
@@ -65,4 +66,39 @@ export function finalizePageRegions(blocks:SourceBlock[],pageHeight:number,obsta
  const body=blocks.filter(b=>!protectedBlocks.includes(b));
  const prose=coalesceRegions(hasPanel||repairedColumns?orderBlocksForReading(body):body,[...obstacles,...formulas,...captions]);
  return assignPageRegions(orderBlocksForReading([...prose,...protectedBlocks]),pageHeight);
+}
+
+const PERSON_NAME=/^\p{Lu}[\p{L}'’.-]+(?:\s+\p{Lu}[\p{L}'’.-]+){1,3}$/u;
+const BARE_EMAIL=/^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$/;
+
+/**
+ * 5.0 第 5 步 (wu2026-p1): a contact record set as a name over its e-mail
+ * address is one block. Whether the two lines met used to hang on how a
+ * contact box was gridded as a table elsewhere on the page — one layout
+ * change away and "Weifeng Han" stood alone, open to transliteration.
+ * Joined here, after table structuring, so neither path can split it.
+ */
+export function joinContactRecords(blocks:SourceBlock[]):SourceBlock[] {
+ const lone=(b:SourceBlock,re:RegExp):boolean=>(b.lineRectsPdf?.length??0)===1 && re.test(b.sourceText.trim());
+ const out=[...blocks];
+ for(let i=0;i<out.length;i++) {
+  const name=out[i]!;
+  if(name.translationMode==='preserve' || !lone(name,PERSON_NAME)) continue;
+  const a=name.lineRectsPdf![0]!, size=name.fontSize??10;
+  const j=out.findIndex(b=>b!==name && b.pageIndex===name.pageIndex && lone(b,BARE_EMAIL) && (()=>{
+   const e=b.lineRectsPdf![0]!, gap=a[1]-e[3];
+   return gap>=-size*0.3 && gap<size*0.8 && Math.abs(a[0]-e[0])<=size*0.5;
+  })());
+  if(j<0) continue;
+  const mail=out[j]!, e=mail.lineRectsPdf![0]!;
+  const x=Math.min(a[0],e[0]), right=Math.max(a[2],e[2]), top=Math.max(a[3],e[3]);
+  const bounds=name.sourceRegion?.boundsPdf;
+  out[i]={...name,sourceText:`${name.sourceText.trim()} ${mail.sourceText.trim()}`,lineRectsPdf:[a,e],
+   ...(name.tableContentRectPdf?{tableContentRectPdf:[Math.min(name.tableContentRectPdf[0],e[0]),Math.min(name.tableContentRectPdf[1],e[1]),Math.max(name.tableContentRectPdf[2],e[2]),Math.max(name.tableContentRectPdf[3],e[3])] as Rect}:{}),
+   ...(name.sourceRegion&&bounds?{sourceRegion:{...name.sourceRegion,boundsPdf:[Math.min(bounds[0],e[0]),Math.min(bounds[1],e[1]),Math.max(bounds[2],e[2]),Math.max(bounds[3],e[3])]}}:{}),
+   ...(name.boundingBox?{boundingBox:{x,y:name.boundingBox.y,width:right-x,height:(top-Math.min(a[1],e[1]))}}:{})};
+  out.splice(j,1);
+  if(j<i) i--;
+ }
+ return out;
 }

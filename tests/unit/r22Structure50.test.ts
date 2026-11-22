@@ -8,6 +8,9 @@ import { extractPanelTitles } from '../../src/reader/panelTitles';
 import { TranslationManager, type TranslationDeps } from '../../src/translation/translationManager';
 import type { TranslationRequest, TranslationResponse } from '../../src/types/models';
 import { looksTranslated } from '../../src/translation/translationValidation';
+import type { BorderGrid } from '../../src/reader/tableBorders';
+import { joinContactRecords } from '../../src/reader/pageRegions';
+type Rect5 = [number, number, number, number];
 import { entryNumberOf, groupIntoLines, groupIntoParagraphs, lineText, type SpanItem } from '../../src/reader/spanBlockBuilder';
 
 const SIZE = 8;
@@ -231,4 +234,69 @@ test('5.0 r22 (3036 p2): a translation opening with a stand-in "（无）" is no
 	assert.equal(looksTranslated(source, '（无） 同一扫描重复评分两次以评估评定者内重复性。', 'zh-CN'), false);
 	assert.equal(looksTranslated(source, '每个指标痛风石，以评估评定者间重复性。同一扫描重复评分两次以评估评定者内重复性。', 'zh-CN'), true);
 	assert.equal(looksTranslated('(None) of the patients withdrew.', '（无）患者退出。', 'zh-CN'), true, 'the source itself opens that way');
+});
+
+// ---- 5.0 版面模型: channel core (2852 p1 / 2721 p1 keyword line) ----
+test('5.0 第 5 步 (2852 p1): a keyword line set across a two-column page stays one line', () => {
+	const items: SpanItem[] = [];
+	const it = (text: string, x0: number, y: number, x1: number, size = 9.5): void => { items.push({ text, rect: [x0, y, x1, y + size], fontSize: size }); };
+	// a full-width abstract above
+	for (let i = 0; i < 4; i++) it(`Abstract line ${i} of the guideline runs across the whole measure of the page here.`, 58, 640 - i * 12, 538, 10);
+	// keyword rows: word gaps at 292–297 and 290–294, inside the body channel 280–304
+	it('Key Words: AHA Scientific Statements', 61, 581, 228, 10); it('◼', 233, 581, 240, 10); it('critical care', 244, 581, 292.5, 10);
+	it('◼', 296.6, 581, 303.6, 10); it('disease management', 307.7, 581, 391.8, 10); it('◼ emergency medical services', 396, 581, 523, 10);
+	it('◼', 191.4, 569, 198.4, 10); it('secondary prevention', 202.5, 569, 289.5, 10); it('◼', 293.6, 569, 300.6, 10); it('stroke ◼ therapeutics', 304.6, 569, 393, 10);
+	// two-column body below
+	for (let i = 0; i < 14; i++) {
+		const y = 537 - i * 11.4;
+		it(`left column body text line number ${i} continues to the right edge`, 46, y, 280);
+		it(`right column body text line number ${i} continues to the right edge`, 304, y, 538);
+	}
+	const lines = groupIntoLines(items, 612, 792).map(lineText);
+	assert.ok(lines.some(l => l.startsWith('Key Words:') && l.includes('disease management')), lines.slice(0, 8).join(' | '));
+	assert.ok(lines.some(l => l.startsWith('◼ secondary prevention') && l.includes('therapeutics')));
+	assert.ok(lines.some(l => l.startsWith('left column body text line number 3')) && lines.some(l => l.startsWith('right column body text line number 3')), 'body rows still split at the gutter');
+});
+
+// ---- 5.0 第 5 步: ruled recommendation tables (2852 p50) ----
+
+test('5.0 第 5 步 (2852 p50): cells of stacked ruled tables stay apart — heading, recommendation, knowledge byte', () => {
+	const H = 792;
+	const items: SpanItem[] = [];
+	const line = (text: string, x0: number, topDown: number, x1: number, size = 8): void => { items.push({ text, rect: [x0, H - topDown - size, x1, H - topDown], fontSize: size }); };
+	const table = (y0: number, title: string): BorderGrid => {
+		line(title, 54, y0 + 4, 126);
+		line('1. For most patients with the condition in this setting, it is', 54, y0 + 19, 276);
+		line('reasonable to start the treatment between 4 and 14 days after', 62, y0 + 29, 298);
+		line('onset of symptoms.', 62, y0 + 39, 165);
+		line('IIa', 332, y0 + 29, 340); line('B-NR', 376, y0 + 29, 392);
+		line('A multicenter prospective cohort of 1029 patients showed a better', 54, y0 + 55, 388);
+		line('composite outcome when treatment was started 4 to 14 days from onset', 54, y0 + 65, 392);
+		line('than when it was started earlier; large lesions predicted poor outcome.', 54, y0 + 75, 397);
+		return { columns: [47, 408, 538], rows: [y0, y0 + 15, y0 + 50, y0 + 90], region: { left: 47, top: y0, width: 491, height: 90 } };
+	};
+	const grids = [table(66, '6.6.2. Atrial Fibrillation'), table(310, '6.6.3. Arterial Dissection')];
+	const blocks = structureSpanPage({ items, pageWidth: 612, pageHeight: H }, { pageIndex: 50, includeReferences: false, referencesAlreadyStarted: false, bodyFontSize: 8, grids, grid: grids[0]! }).blocks;
+	const texts = blocks.map(b => b.sourceText);
+	for (const heading of ['6.6.2. Atrial Fibrillation', '6.6.3. Arterial Dissection']) {
+		assert.ok(texts.includes(heading), `heading on its own: ${texts.join(' | ')}`);
+	}
+	assert.ok(!texts.some(t => /onset of symptoms\. A multicenter/.test(t)), 'recommendation and knowledge byte stay apart');
+	assert.ok(!texts.some(t => /Atrial Fibrillation 1\./.test(t) || /Dissection 1\./.test(t)));
+	assert.ok(!texts.some(t => /^B-NR A multicenter/.test(t)), 'the LOE cell does not join the row below');
+});
+
+test('5.0 第 5 步 (wu2026-p1): a name over its e-mail address is one contact block, whatever the table guess', () => {
+	const blk = (id: string, text: string, rect: Rect5, mode?: 'preserve'): SourceBlock => ({ id, pageIndex: 0, order: 0, type: 'paragraph', sourceText: text, fontSize: 8.5,
+		lineRectsPdf: [rect], ...(mode ? { translationMode: mode } : {}) });
+	const out = joinContactRecords([
+		blk('n', 'Weifeng Han', [65, 212.4, 109.8, 220.9]),
+		blk('x', 'Department of Radiology', [320, 212.4, 400, 220.9]),
+		blk('e', 'hanweifeng1981@example.org', [65, 202.4, 158.7, 210.9], 'preserve')
+	]);
+	assert.deepEqual(out.map(b => b.sourceText), ['Weifeng Han hanweifeng1981@example.org', 'Department of Radiology']);
+	assert.equal(out[0]!.lineRectsPdf!.length, 2);
+	// Not a name over its address: a heading over an address far below stays apart.
+	const apart = joinContactRecords([blk('n', 'Corresponding Author', [65, 300, 160, 309]), blk('e', 'office@example.org', [65, 202, 150, 211])]);
+	assert.equal(apart.length, 2);
 });

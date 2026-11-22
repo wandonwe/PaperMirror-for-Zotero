@@ -11,8 +11,9 @@
  * 3. 每页的结构指纹写到 <out>/fp/<doc>.json;给了 --compare 就逐页与基线比对,
  *    打印哪些页的块变了、变成什么。
  *
- * 与插件的已知差异:没有图片障碍物、边框网格和图例线段(这些要页面图像或
- * 算子列表)。所以它比较的是**同一输入下两版代码的差异**,不是逐像素复刻真机。
+ * 与插件的已知差异:没有图片障碍物和图例线段(要页面图像)。边框网格默认也不算;
+ * 加 --edges 时按算子列表取线段、算网格(5.0 第 5 步:推荐表、带框表格),缓存在
+ * <out>/edges/。所以它比较的是**同一输入下两版代码的差异**,不是逐像素复刻真机。
  *
  * 论文 PDF 有版权:语料目录和输出都放在仓库外,不提交。
  */
@@ -21,8 +22,10 @@ import { basename, join } from 'node:path';
 import { structureSpanPage, type SpanPage } from '../../src/reader/pagePipeline';
 import { textContentItemRect } from '../../src/reader/zoteroReaderAdapter';
 import { buildDocumentStyle, referencesContinueOnto, type DocumentStyle } from '../../src/reader/documentStyle';
+import { borderGrid, borderGrids, segmentsFromOperatorList, type BorderGrid, type Segment } from '../../src/reader/tableBorders';
 
-interface DocSpans { doc: string; pages: SpanPage[] }
+interface DocSpans { doc: string; pages: SpanPage[]; edges?: Segment[][] }
+const EDGES = process.argv.includes('--edges');
 interface BlockPrint { id: string; mode: string; ref: boolean; text: string }
 interface PagePrint { page: number; blocks: BlockPrint[] }
 
@@ -51,6 +54,23 @@ async function readSpans(pdf: string, cacheDir: string): Promise<DocSpans> {
 		pages.push({ items, pageWidth: vp.width, pageHeight: vp.height });
 	}
 	const out = { doc, pages };
+	writeFileSync(cache, JSON.stringify(out));
+	return out;
+}
+
+/** 每页的绘图线段(与插件 getPageEdgesPdf 同一套解析),缓存在 <out>/edges/。 */
+async function readEdges(pdf: string, cacheDir: string): Promise<Segment[][]> {
+	const doc = basename(pdf).replace(/\.pdf$/i, '');
+	const cache = join(cacheDir, `${doc}.json`);
+	if (existsSync(cache)) return JSON.parse(readFileSync(cache, 'utf8')) as Segment[][];
+	const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+	const pdfDoc = await getDocument({ data: new Uint8Array(readFileSync(pdf)), useSystemFonts: true, verbosity: 0 }).promise;
+	const out: Segment[][] = [];
+	for (let n = 1; n <= pdfDoc.numPages; n++) {
+		const page = await pdfDoc.getPage(n);
+		const ops = await page.getOperatorList();
+		out.push(segmentsFromOperatorList(ops.fnArray, ops.argsArray, OPS as unknown as Record<string, number>, 20000));
+	}
 	writeFileSync(cache, JSON.stringify(out));
 	return out;
 }
@@ -85,7 +105,10 @@ function printDoc(spans: DocSpans): PagePrint[] {
 	const prints: PagePrint[] = [];
 	let started = false;
 	spans.pages.forEach((page, pageIndex) => {
-		const result = structureSpanPage(page, contextFor(pageIndex, style, started));
+		const segs = spans.edges?.[pageIndex];
+		const grids: { grid?: BorderGrid | null; grids?: BorderGrid[] } = segs?.length
+			? { grid: borderGrid(segs, { pageHeight: page.pageHeight }), grids: borderGrids(segs, { pageHeight: page.pageHeight }) } : {};
+		const result = structureSpanPage(page, { ...contextFor(pageIndex, style, started), ...grids });
 		started ||= result.referencesStarted;
 		prints.push({
 			page: pageIndex + 1,
@@ -134,6 +157,10 @@ async function main(): Promise<void> {
 	const summary: string[] = [];
 	for (const file of pdfs) {
 		const spans = await readSpans(join(pdfDir, file), join(outDir, 'spans'));
+		if (EDGES) {
+			mkdirSync(join(outDir, 'edges'), { recursive: true });
+			spans.edges = await readEdges(join(pdfDir, file), join(outDir, 'edges'));
+		}
 		const prints = printDoc(spans);
 		const st = buildDocumentStyle(spans.pages);
 		summary.push(`${spans.doc}: body ${st.bodyFontSize}pt, gutters [${st.columnGutters.join(',')}], indent ${st.paragraphIndent}pt, furniture ${st.furniture.length}, references ${st.referenceRanges.map(([a, b]) => `p${a + 1}–p${b + 1}`).join(', ') || 'none'} of ${st.pageCount}`);

@@ -375,6 +375,13 @@ export interface BandedGutter {
 	top: number;
 	/** Lowest (bottom) y the channel spans. */
 	bottom: number;
+	/**
+	 * 5.0 版面模型: the span most of the channel's cells hold (median of the
+	 * per-cell runs). Rows between core and union were reached by a few edge
+	 * cells only — a word gap that happens to sit at the gutter's x.
+	 */
+	coreTop?: number;
+	coreBottom?: number;
 }
 
 /**
@@ -509,11 +516,18 @@ export function detectGuttersBanded(rows: Rect[][], pageWidth: number): BandedGu
 	let endCell = cands[0]!.cell;
 	let top = cands[0]!.top;
 	let bottom = cands[0]!.bottom;
+	let members: Cand[] = [cands[0]!];
+	const median = (xs: number[]): number => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
 	const flush = (): void => {
 		const startX = startCell * STEP;
 		const endX = (endCell + 1) * STEP;
 		if (endX - startX >= 6 && startX > width * 0.12 && endX < width * 0.88) {
-			result.push({ x: (startX + endX) / 2, top, bottom });
+			// 5.0 版面模型 (校验 r22, 2852 p1 / 2721 p1): where MOST of the channel's
+			// cells hold is its core. A keyword line set across the page leaves a
+			// word gap on a few of the gutter's cells ("◼ critical care ◼ disease
+			// management": 292–297 of the 280–304 channel), stretching the union
+			// over it; outside the core a row splits only at a real gap.
+			result.push({ x: (startX + endX) / 2, top, bottom, coreTop: median(members.map(m => m.top)), coreBottom: median(members.map(m => m.bottom)) });
 		}
 	};
 	for (let i = 1; i < cands.length; i++) {
@@ -523,12 +537,14 @@ export function detectGuttersBanded(rows: Rect[][], pageWidth: number): BandedGu
 			endCell = Math.max(endCell, c.cell);
 			top = Math.max(top, c.top);
 			bottom = Math.min(bottom, c.bottom);
+			members.push(c);
 		}
 		else {
 			flush();
 			startCell = endCell = c.cell;
 			top = c.top;
 			bottom = c.bottom;
+			members = [c];
 		}
 	}
 	flush();

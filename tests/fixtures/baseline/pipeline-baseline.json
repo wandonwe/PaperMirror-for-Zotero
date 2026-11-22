@@ -368,7 +368,7 @@
 		"fastChunks": 2,
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 29,
-		"payloadChars": 3438,
+		"payloadChars": 3439,
 		"dupBlocks": 10
 	},
 	"radiology2023-p2": {
@@ -445,14 +445,14 @@
 	},
 	"wu2026-p1": {
 		"blocks": 26,
-		"translatable": 20,
+		"translatable": 19,
 		"tableCells": 16,
-		"modules": 7,
+		"modules": 4,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
 		"maxBlocksPerChunk": 12,
-		"payloadChars": 2950,
+		"payloadChars": 2870,
 		"dupBlocks": 0
 	},
 	"wu2026-p3": {
@@ -492,15 +492,15 @@
 		"dupBlocks": 0
 	},
 	"wu2026-p6": {
-		"blocks": 119,
-		"translatable": 53,
+		"blocks": 115,
+		"translatable": 49,
 		"tableCells": 94,
 		"modules": 11,
 		"chunks": 2,
 		"fastChunks": 2,
 		"slowChunks": 0,
-		"maxBlocksPerChunk": 20,
-		"payloadChars": 2698,
+		"maxBlocksPerChunk": 19,
+		"payloadChars": 2677,
 		"dupBlocks": 13
 	}
 }

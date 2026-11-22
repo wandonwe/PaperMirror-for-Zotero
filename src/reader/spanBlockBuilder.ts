@@ -116,6 +116,11 @@ export function crossesLineGutter(previousRight: number, nextLeft: number,
 		&& (Number.isFinite(gutter.top) || previousRight <= gutter.x || gap >= fontSize * 0.25);
 }
 
+/** 5.0 版面模型: the row lies where most of the channel's cells hold (or the channel has no core recorded). */
+function inChannelCore(g: BandedGutter, rowMid: number): boolean {
+	return g.coreTop === undefined || g.coreBottom === undefined || (rowMid <= g.coreTop + 2 && rowMid >= g.coreBottom - 2);
+}
+
 function union(a: Rect, b: Rect): Rect {
 	return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
 }
@@ -512,7 +517,7 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 		: detectGutters(rowRects, pageWidth).flatMap((x): BandedGutter[] => {
 			const matches = bandedAll.filter(g => Math.abs(g.x - x) <= 20);
 			return matches.length
-				? matches.map(g => ({ x, top: g.top, bottom: g.bottom }))
+				? matches.map(g => ({ x, top: g.top, bottom: g.bottom, coreTop: g.coreTop, coreBottom: g.coreBottom }))
 				: [{ x, top: Infinity, bottom: -Infinity }];
 		});
 	// 弱沟 (审核 2.6.3): 分带通道之外的行不是"这条沟不存在",而是"分带没
@@ -600,7 +605,8 @@ export function groupIntoLines(items: SpanItem[], pageWidth = 612, pageHeight = 
 				// two columns into one scrambled line (三栏页连字符悬垂焊行).
 				const slack = Math.min(6, size * 0.6);
 				const crossesGutter = (gap >= size * 0.8 && confirmedGutters.some(k => previous.rect[2] <= k + slack && item.rect[0] >= k - 1))
-					|| ((!captionRows.has(row) || gap >= size * 0.8) && rowGutters.some(g => crossesLineGutter(previous.rect[2], item.rect[0], g, slack, size) && beatsWordGap(g, gap)))
+					|| ((!captionRows.has(row) || gap >= size * 0.8) && rowGutters.some(g => crossesLineGutter(previous.rect[2], item.rect[0], g, slack, size) && beatsWordGap(g, gap)
+						&& (inChannelCore(g, rowMid) || gap >= size * 0.8)))
 					|| (gap >= size * 1.05
 						&& weakGutterXs.some(x => previous.rect[2] <= x + slack && item.rect[0] >= x));
 				const repeatedLocalGap = gap >= size * 1.05
@@ -706,6 +712,37 @@ export function lineText(line: SpanLine): string {
  */
 /** 5.0: a line that ends the way a reference entry ends — year, volume:pages, DOI, URL, PubMed tag. */
 const ENTRY_END = /(?:\b(?:19|20)\d{2}[a-z]?\)?|\d+\s*[-–]\s*[eE]?\d+|\d+:\s*[eE]?\d+[A-Z]?|doi:\s*\S+|https?:\/\/\S+|\[PubMed[^\]]*\]|PMID:?\s*\d+)\s*\.?\s*$/;
+
+/** "Weifeng Han" / "Mary-Jo O'Neil" — two to four capitalised words, nothing else. */
+const PERSON_NAME_LINE = /^\p{Lu}[\p{L}'’.-]+(?:\s+\p{Lu}[\p{L}'’.-]+){1,3}$/u;
+const BARE_EMAIL_LINE = /^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$/;
+/** Directly below, left-aligned, at most a line gap apart. */
+function lineStacksOver(a: SpanLine, b: SpanLine): boolean {
+	const size = a.fontSize > 0 ? a.fontSize : 10;
+	const gap = a.rect[1] - b.rect[3];
+	return gap >= -size * 0.3 && gap < size * 0.8 && Math.abs(a.rect[0] - b.rect[0]) <= size * 0.5;
+}
+
+/**
+ * 5.0 第 5 步 (wu2026-p1): a contact record set as a name over its e-mail
+ * address is one item. Two contact columns side by side interleave in line
+ * order, so the pair is never adjacent there; the name broke off alone
+ * ("Weifeng Han", open to transliteration) and whether the two were rejoined
+ * hung on a table guess elsewhere on the page. Join them by geometry.
+ */
+function joinContactStacks(paragraphs: SpanLine[][]): SpanLine[][] {
+	const out = paragraphs.map(p => [...p]);
+	for (let i = 0; i < out.length; i++) {
+		const name = out[i]!;
+		if (name.length !== 1 || !PERSON_NAME_LINE.test(lineText(name[0]!).trim())) continue;
+		const j = out.findIndex((p, k) => k !== i && p.length === 1 && BARE_EMAIL_LINE.test(lineText(p[0]!).trim()) && lineStacksOver(name[0]!, p[0]!));
+		if (j < 0) continue;
+		out[i] = [...name, ...out[j]!];
+		out.splice(j, 1);
+		if (j < i) i--;
+	}
+	return out;
+}
 
 /** How far a numbered list may jump (a mis-set label, a dropped line) and still count as the same list. */
 const ENTRY_NUMBER_SKIP = 5;
@@ -1036,7 +1073,7 @@ function gridRowBetween(a: Rect, b: Rect, rows: GridRowBarriers | GridRowBarrier
  * 被单独切成一块,译文页上留着英文。在段落层做而不是行层:那一行在行序里排在第 0 位
  * (行序是老问题),行层的相邻判断根本碰不到它。
  */
-export function mergeGridCellStacks(paragraphs: SpanLine[][], rows: GridRowBarriers | null): SpanLine[][] {
+export function mergeGridCellStacks(paragraphs: SpanLine[][], rows: GridRowBarriers | null, allRows: GridRowBarriers[] = []): SpanLine[][] {
 	if (!rows || paragraphs.length < 2) { return paragraphs; }
 	const out = paragraphs.map(p => [...p]);
 	const bottomLine = (p: SpanLine[]): SpanLine => p.reduce((m, l) => (l.rect[1] < m.rect[1] ? l : m), p[0]!);
@@ -1048,7 +1085,7 @@ export function mergeGridCellStacks(paragraphs: SpanLine[][], rows: GridRowBarri
 			const b = bottomLine(out[i]!);
 			for (let j = 0; j < out.length; j++) {
 				if (i === j) { continue; }
-				if (sameGridCellStack(b, topLine(out[j]!), rows)) {
+				if (sameGridCellStack(b, topLine(out[j]!), rows, allRows)) {
 					out[i] = [...out[i]!, ...out[j]!];
 					out.splice(j, 1);
 					merged = true;
@@ -1060,10 +1097,14 @@ export function mergeGridCellStacks(paragraphs: SpanLine[][], rows: GridRowBarri
 	return out;
 }
 
-function sameGridCellStack(a: SpanLine, b: SpanLine, rows: GridRowBarriers): boolean {
+function sameGridCellStack(a: SpanLine, b: SpanLine, rows: GridRowBarriers, allRows: GridRowBarriers[]): boolean {
 	const inGrid = (r: Rect): boolean => r[0] >= rows.left - 1 && r[2] <= rows.right + 1;
 	if (!inGrid(a.rect) || !inGrid(b.rect)) { return false; }
-	if (gridRowBetween(a.rect, b.rect, rows)) { return false; }
+	// 5.0 第 5 步 (校验 r22, 2852 p50): a rule of ANY table on the page stops it.
+	// Two recommendation tables share one x range down the page; the lower
+	// table's pass merged the upper table's section heading into its first
+	// recommendation, because none of the LOWER table's rules lies between them.
+	if (gridRowBetween(a.rect, b.rect, allRows.length ? allRows : rows)) { return false; }
 	const overlapX = Math.min(a.rect[2], b.rect[2]) - Math.max(a.rect[0], b.rect[0]);
 	if (overlapX <= 0) { return false; }
 	const size = a.fontSize > 0 ? a.fontSize : 10;
@@ -1334,7 +1375,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	// (3165 "Chapter Outline").
 	const furnitureLines = furnitureSet.size ? proseLines.filter(l => furnitureSet.has(l)) : [];
 	const streamLines = furnitureLines.length ? proseLines.filter(l => !furnitureSet.has(l)) : proseLines;
-	const paragraphs = gridRows.reduce((groups, rows) => mergeGridCellStacks(groups, rows),
+	const paragraphs = joinContactStacks(gridRows.reduce((groups, rows) => mergeGridCellStacks(groups, rows, gridRows),
 		[...groupIntoParagraphs(streamLines, pageWidth, options.pageHeight, [...obstacles,...(options.textRuleRectsPdf??[])], gridRows,
 			{
 				referencePage: referencePageKnown || (!!options.referencesAlreadyStarted && !referenceHeadingHere),
@@ -1345,8 +1386,27 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 				paragraphIndent: options.paragraphIndent,
 				bodyFontSize: options.bodyFontSize,
 				...(furnitureLines.length ? { medianLineWidth: medianLineWidthOf(proseLines) } : {})
-			}), ...groupIntoParagraphs(furnitureLines, pageWidth, options.pageHeight)]);
+			}), ...groupIntoParagraphs(furnitureLines, pageWidth, options.pageHeight)]));
 
+	// 5.0 第 5 步 (校验 r22, 2852 p50): a block inside a ruled table carries
+	// that table's horizontal rules as layout barriers, so the region coalescer
+	// never welds two cells of one column across a rule ("B-NR" + the knowledge
+	// byte below it). Rules are given a 4pt band: a hairline would not count as
+	// lying between two blocks.
+	// Only the rules between rows, and only for a block wholly inside the table:
+	// a caption or a table note beside a ruled frame is not cut by it.
+	const gridRules: Rect[][] = gridRows.map(r => {
+		const top = Math.max(...r.ys), bottom = Math.min(...r.ys);
+		return r.ys.filter(y => y < top - 0.5 && y > bottom + 0.5).map(y => [r.left, y - 2, r.right, y + 2] as Rect);
+	});
+	const layoutBarriersFor = (rect: Rect): Pick<SourceBlock, 'layoutBarriersPdf'> => {
+		const rules = gridRows.flatMap((r, i) => {
+			const top = Math.max(...r.ys), bottom = Math.min(...r.ys);
+			return rect[0] >= r.left - 1 && rect[2] <= r.right + 1 && rect[1] >= bottom - 1 && rect[3] <= top + 1 ? gridRules[i]! : [];
+		});
+		const all = [...(options.textRuleRectsPdf ?? []), ...rules];
+		return all.length ? { layoutBarriersPdf: all.map(r => [...r] as Rect) } : {};
+	};
 	// Materialise, then repair anything still split mid-sentence.
 	const bands = detectColumns(lines.map(l => l.rect), pageWidth, options.pageHeight);
 	const draft = paragraphs.map((group) => {
@@ -1390,7 +1450,12 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
    const last = groups[groups.length - 1];
    const isPageNumber=(i:number):boolean=>draft[i]!.rect[3]<options.pageHeight*0.1 && /^\d{1,4}$/.test(draft[i]!.text.trim());
    if (!last || isPageNumber(last[last.length-1]!) || isPageNumber(index) || semanticBoundary(draft[last[last.length - 1]!]!.text, draft[index]!.text)
-    || obstacleBetween(draft[last[last.length-1]!]!.rect,draft[index]!.rect,options.textRuleRectsPdf??[])) groups.push([index]);
+    || obstacleBetween(draft[last[last.length-1]!]!.rect,draft[index]!.rect,options.textRuleRectsPdf??[])
+    // 5.0 第 5 步 (校验 r22, 2852 p50): a table rule is a hard edge for the
+    // continuation repair too. Paragraph grouping already stops at it, but this
+    // merge rejoined what grouping kept apart — the section heading, recommendation
+    // 1, its knowledge byte and recommendation 2, four cells, became one block.
+    || (gridRows.length > 0 && gridRowBetween(draft[last[last.length-1]!]!.rect,draft[index]!.rect,gridRows))) groups.push([index]);
    else last.push(index);
   }
   return groups;
@@ -1666,7 +1731,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 				height: p.rect[3] - p.rect[1]
 			},
 			lineRectsPdf: p.group.map(l => [...l.rect] as Rect),
-			...(options.textRuleRectsPdf?.length ? {layoutBarriersPdf:options.textRuleRectsPdf.map(r=>[...r] as Rect)} : {}),
+			...layoutBarriersFor(p.rect),
 			fontSize: p.fontSize,
 			column: stampColumn(p.rect, !!p.isTableLine),
 			isReference: isRef,
