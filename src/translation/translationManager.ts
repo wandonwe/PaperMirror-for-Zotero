@@ -1354,7 +1354,12 @@ export class TranslationManager {
 						text: pb.text,
 						charBudget: wanted.get(pb.block.id)
 					})),
-					glossary: this.glossaryFor(blocks.map(b => b.sourceText))
+					glossary: this.glossaryFor(blocks.map(b => b.sourceText)),
+					// 5.0 (校验 r22, 3036 p5): a shorter reference is still a reference —
+					// only the title translates. Without the rule the model shortened
+					// "5. Choi MH, MacKenzie JD, Dalinka MK. Imaging features of …" to
+					// "5. 晶体性关节病影像学", dropping authors, journal and pages.
+					referenceContent: blocks.some(b => b.isReference)
 				};
 				const response = await this.requestGate.run(this.laneFor(pageIndex), true, () => this.meteredTranslate(request, signal), signal);
 				const marked = new Set(response.provisionalIds ?? []);
@@ -1366,6 +1371,9 @@ export class TranslationManager {
 					if (!pb.reg.ok(t.translatedText)) continue;
 					const restored = pb.reg.restore(t.translatedText);
 					if (technicalUnitIssue(pb.block.sourceText, restored) || numericPowerIssue(pb.block.sourceText, restored)) continue;
+					// Same acceptance as the first translation for a reference: authors,
+					// journal and numbers stay as written.
+					if (pb.block.isReference && !looksTranslated(pb.block.sourceText, restored, target, { isReference: true })) continue;
 					const previous = state.translations.get(t.id);
 					// Only accept a genuinely shorter retry; equal/longer output
 					// cannot help it fit and would burn the result for nothing.

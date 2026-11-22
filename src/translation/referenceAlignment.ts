@@ -8,6 +8,8 @@ export function referenceAlignmentIssue(source: string, translated: string): str
  if (Number(s[1]) !== Number(t[1])) return 'reference-number-mismatch';
  // Only compare retained Latin author names. Localized names are not guessed.
  const surname = (name: string) => name.replace(/\s+[A-Z]{1,4}$/, '').toLowerCase();
- if (surname(s[2]!) !== surname(t[2]!)) return 'reference-author-mismatch';
+ // Glued initials ("MasdeuJC,IrimiaP" in the PDF text) may come back spaced: same name.
+ const a = surname(s[2]!).replace(/\s+/g, ''), b = surname(t[2]!).replace(/\s+/g, '');
+ if (a !== b && !(a.startsWith(b) && /^[a-z]{1,4}$/.test(a.slice(b.length))) && !(b.startsWith(a) && /^[a-z]{1,4}$/.test(b.slice(a.length)))) return 'reference-author-mismatch';
  return null;
 }

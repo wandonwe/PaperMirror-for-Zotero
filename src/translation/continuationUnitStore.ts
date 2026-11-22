@@ -115,6 +115,9 @@ export function sameNumericInventory(source: string, text: string): boolean {
 	return numericInventory(source) === numericInventory(text) || numericInventory(source, 'join') === numericInventory(text, 'join');
 }
 
+/** A part "translated" as nothing: （无） / (空) / N/A / none / — / … */
+const PART_STAND_IN = /^[（(【\[]?\s*(?:无|空|略|省略|同上|none|empty|n\/?a|nil|—+|-+|…+|\.{3,})\s*[)）】\]]?$/i;
+
 type IntegrityReason = 'part-count' | 'empty-or-invalid-text' | 'raw-placeholder-residue'
 	| 'numeric-inventory' | 'technical-unit' | 'technical-unit-value' | 'numeric-power'
 	| 'placeholder-reencode' | 'placeholder-validation';
@@ -129,7 +132,11 @@ function validateRawTexts(group: Group, registries: PlaceholderRegistry[], texts
 	// 数字从一栏挪到另一栏是正常的;逐栏要求数字一致,让跨页句子反复判废、
 	// 整段留英文。整句里一个不少、一个不多才是要守的底线。占位符(上标等)
 	// 仍逐栏校验 —— 它们的编号本来就属于各自那一栏。
-	if (texts.some(text => typeof text !== 'string' || !text.trim())) return reject('empty-or-invalid-text', texts.findIndex(text => typeof text !== 'string' || !text.trim()));
+	// 5.0 (校验 r22, 3036 p1→p2): a model that moved the whole sentence into the
+	// first part may fill the other with a stand-in — "（无）", "N/A", "…" —
+	// and the reader then sees "（无） 同一扫描重复评分两次…". A stand-in is empty.
+	const blank = (text: unknown): boolean => typeof text !== 'string' || !text.trim() || PART_STAND_IN.test(text.trim());
+	if (texts.some(blank)) return reject('empty-or-invalid-text', texts.findIndex(blank));
 	const sourceJoined = group.parts.map(rawText).join(' '), textJoined = (texts as string[]).join(' ');
 	if (!sameNumericInventory(sourceJoined, textJoined)) return reject('numeric-inventory', -1);
 	const technical = technicalUnitIssue(sourceJoined, textJoined);

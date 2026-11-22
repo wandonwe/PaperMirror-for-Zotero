@@ -5,6 +5,9 @@ import { buildContinuityContexts } from '../../src/translation/sourceContinuity'
 import { buildDocumentStyle, isFurnitureLine, type StylePage } from '../../src/reader/documentStyle';
 import { structureSpanPage } from '../../src/reader/pagePipeline';
 import { extractPanelTitles } from '../../src/reader/panelTitles';
+import { TranslationManager, type TranslationDeps } from '../../src/translation/translationManager';
+import type { TranslationRequest, TranslationResponse } from '../../src/types/models';
+import { looksTranslated } from '../../src/translation/translationValidation';
 import { entryNumberOf, groupIntoLines, groupIntoParagraphs, lineText, type SpanItem } from '../../src/reader/spanBlockBuilder';
 
 const SIZE = 8;
@@ -178,4 +181,47 @@ test('5.0 r22 (3036): an inline caption whose lines return under "Figure 1" is n
 		it('scans for gout in the peripheral joints of the patient', 80.7, 518.1, 271.2)
 	];
 	assert.equal(extractPanelTitles(badge, 1, 792).blocks.length, 2);
+});
+
+// ---- compress keeps the reference rule (3036 p5 on 4.99.22) ----
+
+test('5.0 r22 (3036 p5): a compressed reference keeps authors and journal, and asks with the reference rule', async () => {
+	const REF = '5. Choi MH, MacKenzie JD, Dalinka MK. Imaging features of crystal-induced arthropathy. Rheum Dis Clin North Am 2006;32:427–46.';
+	const FULL = '5. Choi MH, MacKenzie JD, Dalinka MK. 晶体诱导性关节病的影像学特征。Rheum Dis Clin North Am 2006;32:427–46.';
+	const block: SourceBlock = { id: 'r5', pageIndex: 5, order: 0, type: 'paragraph', sourceText: REF, isReference: true };
+	const requests: TranslationRequest[] = [];
+	let shorter = '5. 晶体性关节病影像学';
+	const deps: TranslationDeps = {
+		extractPage: async () => [block],
+		translateRequest: async (r: TranslationRequest): Promise<TranslationResponse> => {
+			requests.push(r);
+			return { translations: r.blocks.map(b => ({ id: b.id, translatedText: requests.length === 1 ? FULL : shorter })) };
+		},
+		readCache: async () => null, writeCache: async () => {},
+		getLanguages: () => ({ source: 'en', target: 'zh-CN' }), getDocumentTitle: () => 't', getGlossary: () => [],
+		useContext: () => true, pageCount: () => 6
+	};
+	const manager = new TranslationManager(deps, { onPageUpdate: () => {} }, { prefetch: false, delayFn: () => Promise.resolve() });
+	try {
+		await manager.ensurePage(5, 6);
+		assert.equal(manager.getPageState(5)?.translations.get('r5'), FULL);
+		assert.equal((await manager.compressBlocks(5, [{ id: 'r5', maxChars: 40 }])).size, 0, 'title-only shortening is refused');
+		assert.equal(requests.at(-1)?.referenceContent, true, 'the compress request carries the reference rule');
+		assert.equal(manager.getPageState(5)?.translations.get('r5'), FULL);
+		shorter = '5. Choi MH, MacKenzie JD, Dalinka MK. 晶体诱导关节病影像特征。Rheum Dis Clin North Am 2006;32:427–46.';
+		assert.equal((await manager.compressBlocks(5, [{ id: 'r5', maxChars: 90 }])).get('r5'), shorter, 'a shorter title with the entry intact is fine');
+	} finally { manager.dispose(); }
+});
+
+// ---- reference acceptance judged on the part that was not copied (2852 p74) ----
+
+test('5.0 r22 (2852 p74): a long author list does not sink a translated title', () => {
+	const head = '530. Katsanos AH, Giannopoulos S, Frogoudaki A, Vrettou AR, Ikonomidis I, Paraskevaidis I, Zompola C, Vadikolias K, Boviatsis E, Parissis J, et al. The diagnostic yield of transesophageal echocardiography in patients';
+	const authors = '530. Katsanos AH, Giannopoulos S, Frogoudaki A, Vrettou AR, Ikonomidis I, Paraskevaidis I, Zompola C, Vadikolias K, Boviatsis E, Parissis J, et al. ';
+	assert.equal(looksTranslated(head, authors + '经食管超声心动图在患者中的诊断价值', 'zh-CN', { isReference: true }), true);
+	assert.equal(looksTranslated(head, authors + '经食管 echocardiography in patients 的诊断价值', 'zh-CN', { isReference: true }), false, 'half the title left in English');
+	assert.equal(looksTranslated(head, '530. 经食管超声心动图在患者中的诊断价值', 'zh-CN', { isReference: true }), false, 'authors dropped');
+	const glued = '525. MasdeuJC,IrimiaP,AsenbaumS,BogousslavskyJ,BraininM,ChabriatH, Herholz K, Markus HS, Martínez-Vila E, Niederkorn K, et al; EFNS. EFNS guidelineonneuroimaginginacutestroke:reportofanEFNStaskforce.Eur J Neurol. 2006;13:1271–1283. doi: 10.1111/j.1468-1331.2006.01507.x';
+	const spaced = '525. Masdeu JC, Irimia P, Asenbaum S, Bogousslavsky J, Brainin M, Chabriat H, Herholz K, Markus HS, Martínez-Vila E, Niederkorn K, et al; EFNS. EFNS急性卒中神经影像指南：EFNS工作组报告。Eur J Neurol. 2006;13:1271–1283. doi: 10.1111/j.1468-1331.2006.01507.x';
+	assert.equal(looksTranslated(glued, spaced, 'zh-CN', { isReference: true }), true, 'glued initials may come back spaced');
 });

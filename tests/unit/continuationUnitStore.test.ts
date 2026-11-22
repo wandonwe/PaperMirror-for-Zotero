@@ -320,3 +320,16 @@ test('5.0 联网校验: citation lists survive either comma reading in the whole
 	assert.equal(sameNumericInventory('the scan delay (113,197) was used', '扫描延迟(113, 198)'), false, 'a changed number is still caught');
 	assert.equal(sameNumericInventory('10–20 mL in 2 groups', '10–20 mL'), false, 'a dropped number is still caught');
 });
+
+test('5.0 r22 (3036 p1→p2): a part filled with a stand-in such as "（无）" is an empty part', async () => {
+	const [left] = pair('Two radiologists quantified the urate volume of', 'each index tophus using a computer automated procedure.');
+	const before = recentProblems().length;
+	for (const standIn of ['（无）', '(N/A)', '…', '无']) {
+		const result = await new ContinuationUnitStore().translate(left, async payload => ({
+			translations: payload.blocks.map((part, index) => ({ id: part.id,
+				translatedText: index ? standIn : '两名放射科医师使用计算机自动化程序定量了每个指标痛风石的尿酸盐体积。' }))
+		}), signal());
+		assert.ok(!result.translations.some(t => t.translatedText === standIn), standIn);
+	}
+	assert.ok(recentProblems().slice(before).some(line => line.endsWith('unit-integrity:empty-or-invalid-text;partIndex:1')));
+});

@@ -65,6 +65,14 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 		&& (isEcho(source, t) || hasMixedCopiedResidue(source, t))) {
 		return true;
 	}
+	// 5.0 (校验 r22, 2852 p74): a reference whose author list dwarfs its title —
+	// "Katsanos AH, Giannopoulos S, … Parissis J, et al." before eight title
+	// words — fails the whole-entry ratio although every copied part is copied
+	// BY RULE. Judge the part that was not copied: it must be Chinese and cover
+	// the source words that are not in the translation.
+	if (opts?.isReference && looksLikeReferenceEntryOrHead(source) && referenceTitleTranslated(source, t)) {
+		return true;
+	}
 	// PROSE-ONLY scoring (审核项: 统计密集行被误拒): citations, p-values, CIs and
 	// formulas are byte-identical in source and translation BY DESIGN — counting
 	// them as "untranslated Latin" rejected perfect translations of stats-dense
@@ -286,6 +294,38 @@ export function contactNamesChanged(source: string, translated: string): boolean
 /** "Naying He, hny12267@rjh.com.cn": a person's name and address, kept as written (5.0). */
 export function isContactRecord(source: string): boolean {
 	return /^\s*(?:\p{Lu}[\p{L}'’-]+\s){1,3}\p{Lu}[\p{L}'’-]+,\s*[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\s*[.;]?\s*$/u.test(source);
+}
+
+/** An entry, or the head of one cut at a column end ("530. Katsanos AH, …, et al. The diagnostic yield of … in patients"). */
+function looksLikeReferenceEntryOrHead(source: string): boolean {
+	return looksLikeReferenceEntry(source) || /^\s*\[?\d{1,4}[.\]]\s+\p{Lu}[\p{L}'’-]+\s+\p{Lu}{1,3},\s/u.test(source);
+}
+
+/**
+ * The translation with every Latin run copied verbatim from the source taken
+ * out (authors, journal, volume, DOI) must still carry the title in Chinese:
+ * ≥ 0.8 hanzi per source word missing from the translation, and next to no
+ * Latin left over. A title echoed in English leaves nothing Chinese → false.
+ */
+export function referenceTitleTranslated(source: string, translated: string): boolean {
+	const norm = (x: string): string => x.replace(/\s+/g, ' ');
+	const src = norm(source);
+	let rest = norm(translated);
+	const runs = rest.match(/[A-Za-z0-9][A-Za-z0-9 .,;:'’&()/–—-]*[A-Za-z0-9.)]/g) ?? [];
+	// Spaces do not count: glued initials in the PDF text ("MasdeuJC,IrimiaP")
+	// may come back spaced, and that is still the source spelling.
+	const compact = src.replace(/\s+/g, '');
+	// Title words left in English are not "copied by rule": a run with two or
+	// more lower-case words is prose and stays counted against the translation.
+	const prose = (run: string): boolean => (run.match(/\b[a-z]{4,}\b/g) ?? []).length >= 2;
+	for (const run of runs.sort((a, b) => b.length - a.length)) {
+		if (!prose(run) && compact.includes(run.replace(/\s+/g, ''))) rest = rest.split(run).join(' ');
+	}
+	const cjk = (rest.match(CJK_RE) ?? []).length;
+	const latinLeft = (rest.match(/[A-Za-z]/g) ?? []).length;
+	const kept = new Set((translated.match(/[A-Za-z]{2,}/g) ?? []).map(w => w.toLowerCase()));
+	const missing = (source.match(/[A-Za-z]{2,}/g) ?? []).filter(w => !kept.has(w.toLowerCase())).length;
+	return cjk >= 4 && latinLeft <= cjk * 0.5 && cjk >= missing * 0.8;
 }
 
 /** True when a translated reference entry lost a leading author's source spelling. */
