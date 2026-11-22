@@ -21,7 +21,7 @@ export interface BoundingBox {
 /** Explicit source ownership carried from extraction into layout. Coordinates are raw PDF points. */
 export interface SourceRegion {
  id: string;
- kind: 'caption' | 'body-column' | 'table-cell' | 'page-furniture' | 'legend-item';
+ kind: 'caption' | 'body-column' | 'table-cell' | 'page-furniture' | 'legend-item' | 'list-entry';
  boundsPdf: [number,number,number,number];
  evidence: 'label-aligned-lines' | 'caption-continuation' | 'column-geometry' | 'table-model' | 'page-margin' | 'marker-aligned-lines' | 'document-repeat';
  /** Proven leading painted segment for a legend. A horizontal segment has

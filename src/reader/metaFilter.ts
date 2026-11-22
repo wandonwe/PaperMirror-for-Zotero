@@ -14,6 +14,8 @@
  * drop real content. Anything ambiguous is kept.
  */
 
+import { startsReferenceEntry } from './referenceDetect';
+
 export type Rect = [number, number, number, number];
 
 /**
@@ -151,6 +153,12 @@ export function isRunningHeadOrFoot(
 	// 断开,断点常落在虚词或连字符上;页眉页脚是自足的标题/引文短语,绝不会以
 	// 「with」「of」「and」收尾。
 	if (!looksLikeJournalFoot && endsMidSentence(t)) {
+		return false;
+	}
+	// 校验 r23 (3363 p2): a numbered reference entry that starts at the column
+	// foot and runs onto the next page ("2. Thomas MA, … enhanced radiation
+	// output,") is content — no running head is a numbered entry or stops on a comma.
+	if (startsReferenceEntry(t) || /,$/.test(t)) {
 		return false;
 	}
 	return lineCount <= 2 && t.length <= 140;

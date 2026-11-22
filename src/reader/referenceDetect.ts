@@ -9,13 +9,23 @@
  */
 
 /** "12. Zhang X," / "[12] J. Smith," / "12 Smith AB," —— 编号后跟姓与首字母。 */
-const ENTRY_START = /(?:^|\s)(?:\[\d{1,3}\]|\d{1,3}\.)\s+(?:[A-Z]\.\s?){0,3}[A-Z][\p{L}'’\-]+(?:\s+[A-Z][\p{L}'’\-]+)?,?\s+(?:[A-Z]{1,3}\b|[A-Z]\.)/u;
-const YEAR = /\b(?:19|20)\d{2}\b/;
+// 校验 r23: surname particles ("1 van Everdingen KJ", "1. de Castro SM") and
+// initials glued to the surname by the PDF's spacing ("3. SmitsFJ, van
+// SantvoortHC", "4. NakataK,MoriY") — 3007 and 2845 had no reference pages at all.
+const PARTICLES = String.raw`(?:(?:van|von|de|der|den|du|da|di|del|della|des|dos|das|le|la|ten|ter|zu|el|al)\s+){0,3}`;
+// IEEE / book bibliographies put the initials first and may name one author:
+// "[17] R. F. Ahlswede and G. Dueck." / "[27] R. B. Ash. Information Theory." (3200).
+const SURNAME_INITIALS = String.raw`(?:(?:[A-Z]\.\s?){0,3}[A-Z][\p{L}'’\-]+(?:\s+[A-Z][\p{L}'’\-]+)?,?\s+(?:[A-Z]{1,3}\b|[A-Z]\.)|[A-Z][\p{L}'’\-]*\p{Ll}[A-Z]{1,3}[,.]|(?:[A-Z]\.\s?(?:-?[A-Z]\.\s?)?){1,3}${PARTICLES}[A-Z][\p{L}'’\-¨´\u0060]+(?:,|\.|\s+and\s))`;
+// Without the period the label needs Vancouver punctuation after the initials
+// ("20 Bogousslavsky J," — not the running head "3 The CT Coronary Analysis…").
+const ENTRY_START = new RegExp(String.raw`^\s*(?:(?:\[\d{1,3}\]|\d{1,3}\.)\s+${PARTICLES}${SURNAME_INITIALS}|\d{1,3}\s+${PARTICLES}[A-Z][\p{L}'’\-]+(?:\s+[A-Z][\p{L}'’\-]+)?\s+[A-Z]{1,3}[,.:])`, 'u');
+// A year glued to the journal by the PDF's spacing still counts ("Br J Surg2005;92", 校验 r23 3007).
+const YEAR = /(?<![\d.])(?:19|20)\d{2}(?!\d)/;
 
 /** One line or paragraph that starts like a numbered reference entry. */
 export function startsReferenceEntry(text: string): boolean {
 	if (SUPERSCRIPT_ENTRY.test(text) || SUPERSCRIPT_ORG_ENTRY.test(text)) return true;
-	return ENTRY_START.test(' ' + text.trim().slice(0, 80)) && /^\s*(?:\[\d{1,3}\]|\d{1,3}\.)/.test(text);
+	return ENTRY_START.test(text.trim().slice(0, 80));
 }
 
 /**
@@ -49,7 +59,8 @@ export function isReferenceTailLine(text: string): boolean {
 /** 真机 4.99.16 (3084 p8): an organization as author — "³International Commission on Radiation Units…,". */
 const SUPERSCRIPT_ORG_ENTRY = /^\s*[⁰¹²³⁴⁵⁶⁷⁸⁹]{1,3}\s*\p{Lu}[\p{L}'’\-]+(?:\s(?:(?:of|on|for|and|the|in)\s)*\p{Lu}[\p{L}'’\-]+){1,8}\s?,/u;
 const SUPERSCRIPT_ENTRY_GLOBAL = /(?:^|\s)[⁰¹²³⁴⁵⁶⁷⁸⁹]{1,3}\s*(?:[A-Z]\.\s?){1,3}[A-Z][\p{L}'’\-]+/gu;
-const ENTRY_START_GLOBAL = /(?:^|\s)(?:\[\d{1,3}\]|\d{1,3}\.)\s+(?:[A-Z]\.\s?){0,3}[A-Z][\p{L}'’\-]+(?:\s+[A-Z][\p{L}'’\-]+)?,?\s+(?:[A-Z]{1,3}\b|[A-Z]\.)/gu;
+// Raw page text has no line starts to anchor on: here the label keeps its period.
+const ENTRY_START_GLOBAL = new RegExp(String.raw`(?:^|\s)(?:\[\d{1,3}\]|\d{1,3}\.)\s+${PARTICLES}${SURNAME_INITIALS}`, 'gu');
 
 /**
  * The same judgement on raw page text, before lines exist (word order within
@@ -86,4 +97,26 @@ const UNNUMBERED_ENTRY = /^\s*\p{Lu}[\p{L}'’-]+(?:[\s-]\p{Lu}[\p{L}'’-]+)?\s
 const APA_ENTRY = /^\s*\p{Lu}[\p{L}'’-]+(?:\s\p{Lu}[\p{L}'’-]+)?,\s(?:\p{Lu}\.\s?){1,3}(?:,\s\p{Lu}|\s?&\s\p{Lu}|\s\((?:19|20)\d{2})/u;
 export function startsUnnumberedEntry(text: string): boolean {
 	return UNNUMBERED_ENTRY.test(text) || APA_ENTRY.test(text);
+}
+
+/**
+ * 校验 r23 (3200, a book's index): an alphabetical index — "transition matrix,
+ * 77, 92, 98", "Trofimov, V.K., 706", locator-only wrap lines "517–519, 546,"
+ * and "see also" cross references. Its two aligned columns of locators read
+ * as a table, and every page of it was cut into ~90 table cells.
+ */
+const INDEX_LOCATOR = String.raw`(?:\d{1,4}|[ivxlc]{1,7})(?:[–-]\d{1,4})?[a-z]?`;
+const INDEX_ENTRY = new RegExp(String.raw`^\s*\S.{0,90}?,\s*${INDEX_LOCATOR}(?:,\s*${INDEX_LOCATOR})*,?\s*$`, 'u');
+const INDEX_WRAP = new RegExp(String.raw`^\s*${INDEX_LOCATOR}(?:,\s*${INDEX_LOCATOR})*,?\s*$`, 'u');
+const INDEX_CROSS = /(?:^|,\s*)see(?:\s+also)?\s+\S/i;
+export function looksLikeIndexPage(lines: string[]): boolean {
+	const texts = lines.map(l => l.trim()).filter(Boolean);
+	if (texts.length < 15) return false;
+	const entries = texts.filter(t => INDEX_ENTRY.test(t) || INDEX_CROSS.test(t)).length;
+	const wraps = texts.filter(t => INDEX_WRAP.test(t)).length;
+	return entries >= texts.length * 0.5 && entries + wraps >= texts.length * 0.7;
+}
+/** A wrapped index line that holds only locators ("517–519, 546, 573,"). */
+export function isIndexLocatorLine(text: string): boolean {
+	return INDEX_WRAP.test(text);
 }

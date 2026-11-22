@@ -107,7 +107,8 @@ const FURNITURE_Y = 4;
 const FURNITURE_X = 3;
 
 const REFERENCES_HEADING_LINE = /^\s*(?:\d{1,2}\.?\s*)?(?:r\s?e\s?f\s?e\s?r\s?e\s?n\s?c\s?e\s?s(?:\s+and\s+notes)?|bibliography|literature\s+cited|works\s+cited|参考文献|參考文獻|引用文献)\s*:?\s*$/i;
-const YEAR = /\b(?:19|20)\d{2}\b/;
+// A year glued to the journal by the PDF's spacing still counts ("Br J Surg2005;92", 校验 r23 3007).
+const YEAR = /(?<![\d.])(?:19|20)\d{2}(?!\d)/;
 
 function furnitureOf(pages: StylePage[], linesOf: (pageIndex: number) => SpanLine[]): FurnitureLine[] {
 	const n = pages.length;
@@ -221,8 +222,12 @@ export function buildDocumentStyle(pages: StylePage[]): DocumentStyle {
 			: isList(i) && (isList(i + 1) || i >= n / 2);
 		if (!startsHere) continue;
 		let end = i;
-		const continues = (j: number): boolean => !evidence[j]!.heading
-			&& (isList(j) || entries(j) || evidence[j]!.leadsWithReference && evidence[j]!.years >= 1);
+		// A book repeats "BIBLIOGRAPHY" as the running head of every list page
+		// (校验 r23, 3200): a page that is itself a list continues the range
+		// whatever heading it carries; only a page that merely leads with an
+		// entry needs to be heading-free.
+		const continues = (j: number): boolean => isList(j) || entries(j)
+			|| !evidence[j]!.heading && evidence[j]!.leadsWithReference && evidence[j]!.years >= 1;
 		while (end + 1 < n && continues(end + 1)) end++;
 		ranges.push([i, end]);
 		i = end;
