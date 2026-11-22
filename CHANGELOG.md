@@ -34,7 +34,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - 单元与集成测试 2101 项全部通过；Firefox / macOS 浏览器门槛（强制）：显示块 421（下限 417），被裁像素 0。
 - 开发期间在 Zotero 真机上做了 6 轮校验，共 34 篇文献（联网 9 篇、最便宜模型 5 篇、推荐模型 5 篇、随机抽样 r22–r24 各 5 篇），每轮发现的问题都带回归测试修复。随机抽样每轮需要新增的特例规则从结构层重构前的 5–6 条降到 2–3 条。
-- 发布前实机 A/B 见 [验证记录](docs/RELEASE-5.0.0-VALIDATION.md)。
+- 本版没有做以往发布前的「公开版对候选版」仅缓存 A/B（分块变化需要先联网预热，预热未完成时决定直接发布），详见 [验证记录](docs/RELEASE-5.0.0-VALIDATION.md)。
 
 ### 已知问题
 
