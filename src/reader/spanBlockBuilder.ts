@@ -1424,7 +1424,12 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 	const referencePageKnown = referenceListByContent
 		|| (!!options.referencesAlreadyStarted && !referenceHeadingHere && entryLineShare >= 0.25);
 	const indexPage = !referencePageKnown && looksLikeIndexPage(lineTexts);
-	const tableLineIdx = referencePageKnown || indexPage ? new Set<number>() : detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10), obstacles,options.panelAnchors);
+	// 校验 r23 (3200, a 774-page book: no document style): a list page headed by
+	// its "BIBLIOGRAPHY" at the top is a list from top to bottom — its entry tails
+	// ("2(5):270–305, 1996.") are not table cells.
+	const headedListPage = options.pageHeight > 0 && looksLikeReferencePage(lineTexts)
+		&& lines.some((l, i) => REFERENCES_HEADINGS.test(lineTexts[i]!.trim()) && l.rect[1] > options.pageHeight * 0.85);
+	const tableLineIdx = referencePageKnown || indexPage || headedListPage ? new Set<number>() : detectTableLineIndices(lines, options.pageHeight, Math.max(6, bodySize || 10), obstacles,options.panelAnchors);
 	const proseLines = tableLineIdx.size ? lines.filter((_, i) => !tableLineIdx.has(i)) : lines;
  // After isolating numbered panels, order prose using prose columns, not
  // numeric table columns: a short paragraph tail must stay between its lines.

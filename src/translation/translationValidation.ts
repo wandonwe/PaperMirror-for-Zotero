@@ -54,6 +54,9 @@ export function looksTranslated(source: string, translated: string, targetLang: 
 	// 5.0 (联网校验 3384): authors stay in their source spelling — "Simsek ME"
 	// must not come back as "西姆谢克 ME".
 	if (opts?.isReference && referenceAuthorsChanged(source, t)) return false;
+	// 校验 r23 (3007 p7): "1. 胰十二指肠切除术后胰漏的发生率及处理。" — the title
+	// alone, authors, journal and year gone. A reference keeps its year.
+	if (opts?.isReference && referenceYearDropped(source, t)) return false;
 	if (contactNamesChanged(source, t)) return false;
 	// Preserve only identifiable author/journal fragments, never all reference prose.
 	if (opts?.isReference && isEcho(source, t) && (looksLikeAuthorNameList(source.replace(/^\d+\.\s*/, ''))
@@ -215,7 +218,8 @@ const PROSE_WORD_GATE = 6;
  */
 export function looksLikeReferenceEntry(source: string): boolean {
 	const text = source.replace(/\s+/g, ' ').trim();
-	if (!text || text.length > 600 || !/\b(?:19|20)\d{2}[a-z]?\b/.test(text)) return false;
+	// A year glued to the journal ("Br J Surg2005;92") is still the year (校验 r23, 3007).
+	if (!text || text.length > 600 || !/(?<![\d.])(?:19|20)\d{2}[a-z]?(?!\d)/.test(text)) return false;
 	const features = [
 		/^\[?\d{1,3}[\].)]\s/.test(text),
 		/\b[A-Z][A-Za-z'’-]+,?\s+(?:[A-Z]\.?\s?){1,3}[,.]/.test(text),
@@ -267,9 +271,13 @@ export function referenceLeadSurnames(source: string): string[] {
 	if (!looksLikeReferenceEntry(source)) return [];
 	const head = source.replace(/\s+/g, ' ').trim().replace(/^\[?\d{1,3}[\].)]?\s*/, '').slice(0, 140);
 	const out: string[] = [];
-	const vancouver = /(?:^|,\s*)([A-Z][\p{L}'’-]+(?:\s+[A-Z][\p{L}'’-]+)?)\s+(?:[A-Z]{1,3}|(?:[A-Z]\.\s?){1,3})(?=[,.\s]|$)/gu;
+	// 校验 r23: surname particles ("van Everdingen KJ", "de Castro SM") and
+	// initials the PDF glued to the surname ("de CastroSM, BuschOR") — kept as written.
+	const particles = String.raw`(?:(?:van|von|de|der|den|du|da|di|del|della|des|dos|le|la|ten|ter)\s+){0,3}`;
+	const vancouver = new RegExp(String.raw`(?:^|,\s*)${particles}([A-Z][\p{L}'’-]+(?:\s+[A-Z][\p{L}'’-]+)?)\s+(?:[A-Z]{1,3}|(?:[A-Z]\.\s?){1,3})(?=[,.:\s]|$)`, 'gu');
+	const glued = new RegExp(String.raw`(?:^|,\s*)${particles}([A-Z][\p{L}'’-]*\p{Ll}[A-Z]{1,3})(?=[,.])`, 'gu');
 	const initialsFirst = /(?:^|,\s*)(?:[A-Z]\.\s?){1,3}\s?([A-Z][\p{L}'’-]+)/gu;
-	for (const re of [vancouver, initialsFirst]) {
+	for (const re of [vancouver, glued, initialsFirst]) {
 		re.lastIndex = 0;
 		let m: RegExpExecArray | null;
 		while ((m = re.exec(head)) && out.length < 2) {
@@ -336,9 +344,17 @@ export function referenceTitleTranslated(source: string, translated: string): bo
 }
 
 /** True when a translated reference entry lost a leading author's source spelling. */
+export function referenceYearDropped(source: string, translated: string): boolean {
+	if (!looksLikeReferenceEntry(source)) return false;
+	const years = source.match(/(?<![\d.])(?:19|20)\d{2}(?!\d)/g) ?? [];
+	return years.length > 0 && !years.some(y => translated.includes(y));
+}
+
 export function referenceAuthorsChanged(source: string, translated: string): boolean {
 	const names = referenceLeadSurnames(source);
-	return names.length > 0 && names.some(n => !translated.includes(n));
+	// Glued initials may come back spaced ("MasdeuJC" → "Masdeu JC").
+	const flat = translated.replace(/\s+/g, '');
+	return names.length > 0 && names.some(n => !translated.includes(n) && !flat.includes(n.replace(/\s+/g, '')));
 }
 
 function isEcho(source: string, translated: string): boolean {

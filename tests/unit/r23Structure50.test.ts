@@ -95,22 +95,29 @@ test('5.0 r23 (3363 p2): an entry at the column foot is content, not a running f
 	assert.ok(isRunningHeadOrFoot([300, 30, 540, 38], 792, 1, 'Radiology: Volume 321: Number 1—October 2026'), 'a real foot stays furniture');
 });
 
-/** A book bibliography page: "BIBLIOGRAPHY" running head, initials-first entries. */
+/** A book bibliography page: "BIBLIOGRAPHY" running head, initials-first entries,
+ *  first lines set in three runs (author, italic title, journal) as the PDF has them. */
 function bibliographyPage(i: number, first: number): StylePage {
-	const items: SpanItem[] = [{ text: 'BIBLIOGRAPHY', rect: [200, 640, 290, 650], fontSize: 9 }];
+	void i;
+	const items: SpanItem[] = [{ text: '694', rect: [52.3, 614, 67.2, 624], fontSize: 10 }, { text: 'BIBLIOGRAPHY', rect: [85.1, 614.4, 142.6, 622.4], fontSize: 8 }];
 	for (let k = 0; k < 10; k++) {
 		const n = first + k;
-		const y = 600 - k * 40;
+		const y = 589 - k * 26;
 		const name = 'Writer' + String.fromCharCode(97 + (n % 26)) + String.fromCharCode(97 + ((n * 7) % 26));
-		items.push({ text: `[${n}] R. F. ${name} and G. Other. A study of channels number ${n}. IEEE Trans. Inf. Theory,`, rect: [60, y, 400, y + 10], fontSize: 10 });
-		items.push({ text: `pages ${n}–${n + 9}, Sept. 19${50 + (n % 49)}.`, rect: [80, y - 12, 220, y - 2], fontSize: 10 });
+		if (k % 2) {
+			items.push({ text: `[${n}] G. J. ${name}.`, rect: [57.2, y, 135.6, y + 10], fontSize: 10 });
+			items.push({ text: `The limits of channel ${n}.`, rect: [147, y, 263.2, y + 10], fontSize: 10 });
+			items.push({ text: 'J. Universal Comput. Sci.,', rect: [274.6, y, 387, y + 10], fontSize: 10 });
+		}
+		else items.push({ text: `[${n}] G. J. ${name}. On the length of programs for computing binary sequences.`, rect: [57.2, y, 387.1, y + 10], fontSize: 10 });
+		items.push({ text: `${n}(5):270–305, 19${50 + (n % 49)}.`, rect: [78.8, y - 12, 163.1, y - 2], fontSize: 10 });
 	}
-	return { items, pageWidth: 432, pageHeight: 648 };
+	return { items, pageWidth: 441, pageHeight: 666 };
 }
 function proseBookPage(): StylePage {
 	const items: SpanItem[] = [];
 	for (let k = 0; k < 30; k++) items.push({ text: `This is body prose line ${k} of a chapter about information and its measures.`, rect: [60, 600 - k * 14, 400, 610 - k * 14], fontSize: 11 });
-	return { items, pageWidth: 432, pageHeight: 648 };
+	return { items, pageWidth: 441, pageHeight: 666 };
 }
 
 test('5.0 r23 (3200): a bibliography whose running head repeats "BIBLIOGRAPHY" is one range, every page a list', () => {
@@ -177,4 +184,25 @@ test('5.0 r23: a table row label beside numbers is not an abbreviation row', () 
 	});
 	const texts = groupIntoLines(items, 612, 792).map(lineText);
 	assert.ok(!texts.some(t => /^CP 1\.09/.test(t)));
+});
+
+test('5.0 r23 真机 (3007 p7): a reference translated to its title alone is refused — authors, glued or with particles, and year stay', async () => {
+	const { looksTranslated, referenceLeadSurnames } = await import('../../src/translation/translationValidation');
+	const glued = '1. de CastroSM, BuschOR, van GulikTM, ObertopH. Incidence and management of leakage after surgery. Br J Surg2005;92(9):1117–1123.';
+	assert.deepEqual(referenceLeadSurnames(glued), ['CastroSM', 'BuschOR']);
+	assert.equal(looksTranslated(glued, '1. 术后漏的发生率及处理。', 'zh-CN', { isReference: true }), false, 'title only');
+	assert.equal(looksTranslated(glued, '1. de CastroSM, BuschOR, van GulikTM, ObertopH. 术后漏的发生率及处理。Br J Surg2005;92(9):1117–1123.', 'zh-CN', { isReference: true }), true);
+	assert.equal(looksTranslated(glued, '1. de Castro SM, Busch OR, van Gulik TM, Obertop H. 术后漏的发生率及处理。Br J Surg 2005;92(9):1117–1123.', 'zh-CN', { isReference: true }), true, 'glued initials may come back spaced');
+	const karger = '1 van Dalen KJ, van der Berg J, Kapper LJ, et al: Diffusion-weighted imaging in acute stroke. Stroke 1998; 29:1783–1790.';
+	assert.equal(looksTranslated(karger, '1 急性卒中的弥散加权成像。', 'zh-CN', { isReference: true }), false);
+	assert.equal(looksTranslated(karger, '1 van Dalen KJ, van der Berg J, Kapper LJ, et al: 急性卒中的弥散加权成像。Stroke 1998; 29:1783–1790.', 'zh-CN', { isReference: true }), true);
+});
+
+test('5.0 r23 真机 (3200 p720, no document style): a list page under its top "BIBLIOGRAPHY" keeps entry tails with their entries', () => {
+	const page = bibliographyPage(2, 21);
+	const blocks = structureSpanPage(page, { pageIndex: 719, includeReferences: true, referencesAlreadyStarted: false, bodyFontSize: 11 }).blocks;
+	assert.ok(!blocks.some(b => b.tableId), 'no table cells');
+	const entries = blocks.filter(b => /^\[\d+\]/.test(b.sourceText));
+	assert.equal(entries.length, 10);
+	assert.ok(entries.every(b => /19\d\d\.$/.test(b.sourceText)));
 });
