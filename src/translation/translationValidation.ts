@@ -10,6 +10,7 @@ import { numericPowerIssue } from './numericPowers';
 import { technicalUnitIssue, protectTechnicalUnits } from './technicalUnits';
 import { referenceAlignmentIssue } from './referenceAlignment';
 import { stripProtectable } from '../reader/formulaGuard';
+import { SURNAME_PARTICLES, YEAR } from '../reader/referenceDetect';
 import {
 	hasMixedCopiedResidue,
 	isTruncatedTranslation,
@@ -273,7 +274,7 @@ export function referenceLeadSurnames(source: string): string[] {
 	const out: string[] = [];
 	// 校验 r23: surname particles ("van Everdingen KJ", "de Castro SM") and
 	// initials the PDF glued to the surname ("de CastroSM, BuschOR") — kept as written.
-	const particles = String.raw`(?:(?:van|von|de|der|den|du|da|di|del|della|des|dos|le|la|ten|ter)\s+){0,3}`;
+	const particles = SURNAME_PARTICLES;
 	const vancouver = new RegExp(String.raw`(?:^|,\s*)${particles}([A-Z][\p{L}'’-]+(?:\s+[A-Z][\p{L}'’-]+)?)\s+(?:[A-Z]{1,3}|(?:[A-Z]\.\s?){1,3})(?=[,.:\s]|$)`, 'gu');
 	const glued = new RegExp(String.raw`(?:^|,\s*)${particles}([A-Z][\p{L}'’-]*\p{Ll}[A-Z]{1,3})(?=[,.])`, 'gu');
 	const initialsFirst = /(?:^|,\s*)(?:[A-Z]\.\s?){1,3}\s?([A-Z][\p{L}'’-]+)/gu;
@@ -346,7 +347,7 @@ export function referenceTitleTranslated(source: string, translated: string): bo
 /** True when a translated reference entry lost a leading author's source spelling. */
 export function referenceYearDropped(source: string, translated: string): boolean {
 	if (!looksLikeReferenceEntry(source)) return false;
-	const years = source.match(/(?<![\d.])(?:19|20)\d{2}(?!\d)/g) ?? [];
+	const years = source.match(new RegExp(YEAR.source, 'g')) ?? [];
 	return years.length > 0 && !years.some(y => translated.includes(y));
 }
 

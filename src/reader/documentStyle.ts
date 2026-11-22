@@ -13,7 +13,7 @@
  */
 import { groupIntoLines, groupIntoRows, lineText, type SpanItem, type SpanLine } from './spanBlockBuilder';
 import { detectGutters } from './paragraphHeuristics';
-import { looksLikeBibliographicFragment, looksLikeReferencePage, startsReferenceEntry, startsUnnumberedEntry } from './referenceDetect';
+import { YEAR, looksLikeBibliographicFragment, looksLikeReferencePage, startsReferenceEntry, startsUnnumberedEntry } from './referenceDetect';
 
 export interface StylePage {
 	items: SpanItem[];
@@ -107,8 +107,6 @@ const FURNITURE_Y = 4;
 const FURNITURE_X = 3;
 
 const REFERENCES_HEADING_LINE = /^\s*(?:\d{1,2}\.?\s*)?(?:r\s?e\s?f\s?e\s?r\s?e\s?n\s?c\s?e\s?s(?:\s+and\s+notes)?|bibliography|literature\s+cited|works\s+cited|参考文献|參考文獻|引用文献)\s*:?\s*$/i;
-// A year glued to the journal by the PDF's spacing still counts ("Br J Surg2005;92", 校验 r23 3007).
-const YEAR = /(?<![\d.])(?:19|20)\d{2}(?!\d)/;
 
 function furnitureOf(pages: StylePage[], linesOf: (pageIndex: number) => SpanLine[]): FurnitureLine[] {
 	const n = pages.length;

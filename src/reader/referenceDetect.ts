@@ -12,15 +12,16 @@
 // 校验 r23: surname particles ("1 van Everdingen KJ", "1. de Castro SM") and
 // initials glued to the surname by the PDF's spacing ("3. SmitsFJ, van
 // SantvoortHC", "4. NakataK,MoriY") — 3007 and 2845 had no reference pages at all.
-const PARTICLES = String.raw`(?:(?:van|von|de|der|den|du|da|di|del|della|des|dos|das|le|la|ten|ter|zu|el|al)\s+){0,3}`;
+/** Surname particles, as a regex source matching up to three of them (shared with translation acceptance). */
+export const SURNAME_PARTICLES = String.raw`(?:(?:van|von|de|der|den|du|da|di|del|della|des|dos|das|le|la|ten|ter|zu|el|al)\s+){0,3}`;
 // IEEE / book bibliographies put the initials first and may name one author:
 // "[17] R. F. Ahlswede and G. Dueck." / "[27] R. B. Ash. Information Theory." (3200).
-const SURNAME_INITIALS = String.raw`(?:(?:[A-Z]\.\s?){0,3}[A-Z][\p{L}'’\-]+(?:\s+[A-Z][\p{L}'’\-]+)?,?\s+(?:[A-Z]{1,3}\b|[A-Z]\.)|[A-Z][\p{L}'’\-]*\p{Ll}[A-Z]{1,3}[,.]|(?:[A-Z]\.\s?(?:-?[A-Z]\.\s?)?){1,3}${PARTICLES}[A-Z][\p{L}'’\-¨´\u0060]+(?:,|\.|\s+and\s))`;
+const SURNAME_INITIALS = String.raw`(?:(?:[A-Z]\.\s?){0,3}[A-Z][\p{L}'’\-]+(?:\s+[A-Z][\p{L}'’\-]+)?,?\s+(?:[A-Z]{1,3}\b|[A-Z]\.)|[A-Z][\p{L}'’\-]*\p{Ll}[A-Z]{1,3}[,.]|(?:[A-Z]\.\s?(?:-?[A-Z]\.\s?)?){1,3}${SURNAME_PARTICLES}[A-Z][\p{L}'’\-¨´\u0060]+(?:,|\.|\s+and\s))`;
 // Without the period the label needs Vancouver punctuation after the initials
 // ("20 Bogousslavsky J," — not the running head "3 The CT Coronary Analysis…").
-const ENTRY_START = new RegExp(String.raw`^\s*(?:(?:\[\d{1,3}\]|\d{1,3}\.)\s+${PARTICLES}${SURNAME_INITIALS}|\d{1,3}\s+${PARTICLES}[A-Z][\p{L}'’\-]+(?:\s+[A-Z][\p{L}'’\-]+)?\s+[A-Z]{1,3}[,.:])`, 'u');
+const ENTRY_START = new RegExp(String.raw`^\s*(?:(?:\[\d{1,3}\]|\d{1,3}\.)\s+${SURNAME_PARTICLES}${SURNAME_INITIALS}|\d{1,3}\s+${SURNAME_PARTICLES}[A-Z][\p{L}'’\-]+(?:\s+[A-Z][\p{L}'’\-]+)?\s+[A-Z]{1,3}[,.:])`, 'u');
 // A year glued to the journal by the PDF's spacing still counts ("Br J Surg2005;92", 校验 r23 3007).
-const YEAR = /(?<![\d.])(?:19|20)\d{2}(?!\d)/;
+export const YEAR = /(?<![\d.])(?:19|20)\d{2}(?!\d)/;
 
 /** One line or paragraph that starts like a numbered reference entry. */
 export function startsReferenceEntry(text: string): boolean {
@@ -60,7 +61,7 @@ export function isReferenceTailLine(text: string): boolean {
 const SUPERSCRIPT_ORG_ENTRY = /^\s*[⁰¹²³⁴⁵⁶⁷⁸⁹]{1,3}\s*\p{Lu}[\p{L}'’\-]+(?:\s(?:(?:of|on|for|and|the|in)\s)*\p{Lu}[\p{L}'’\-]+){1,8}\s?,/u;
 const SUPERSCRIPT_ENTRY_GLOBAL = /(?:^|\s)[⁰¹²³⁴⁵⁶⁷⁸⁹]{1,3}\s*(?:[A-Z]\.\s?){1,3}[A-Z][\p{L}'’\-]+/gu;
 // Raw page text has no line starts to anchor on: here the label keeps its period.
-const ENTRY_START_GLOBAL = new RegExp(String.raw`(?:^|\s)(?:\[\d{1,3}\]|\d{1,3}\.)\s+${PARTICLES}${SURNAME_INITIALS}`, 'gu');
+const ENTRY_START_GLOBAL = new RegExp(String.raw`(?:^|\s)(?:\[\d{1,3}\]|\d{1,3}\.)\s+${SURNAME_PARTICLES}${SURNAME_INITIALS}`, 'gu');
 
 /**
  * The same judgement on raw page text, before lines exist (word order within
