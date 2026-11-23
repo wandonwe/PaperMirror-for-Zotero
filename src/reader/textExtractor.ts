@@ -311,14 +311,17 @@ export class TextExtractor implements PageParser {
 		return adapter.probeTextContentApi(this.reader);
 	}
 
-	constructor(reader: ReaderLike, options: { includeReferences: boolean; noTranslate?: () => string[]; documentStyleWaitMs?: number }) {
+	constructor(reader: ReaderLike, options: { includeReferences: boolean; noTranslate?: () => string[]; documentStyleWaitMs?: number; documentStyleDelayMs?: number }) {
 		this.reader = reader;
 		this.includeReferences = options.includeReferences;
 		this.noTranslate = options.noTranslate ?? (() => []);
 		this.documentStyleWaitMs = options.documentStyleWaitMs ?? DOCUMENT_STYLE_WAIT_MS;
+		this.documentStyleDelayMs = options.documentStyleDelayMs ?? 0;
 	}
 
 	private readonly documentStyleWaitMs: number;
+	/** 验收专用:推迟全篇样式的计算,复现慢机上的「样式晚到」。 */
+	private readonly documentStyleDelayMs: number;
 
 	private noTranslateSafe(): string[] {
 		try {
@@ -1001,6 +1004,7 @@ export class TextExtractor implements PageParser {
 		const startedAt = Date.now();
 		this.documentStylePromise = (async () => {
 			try {
+				if (this.documentStyleDelayMs > 0) await new Promise(r => setTimeout(r, this.documentStyleDelayMs));
 				const count = adapter.getPageCount(this.reader);
 				if (!count || count > DOCUMENT_STYLE_MAX_PAGES) throw new Error(`page count ${count}`);
 				const pages: adapter.TextLayerPage[] = new Array(count);

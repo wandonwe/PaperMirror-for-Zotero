@@ -44,8 +44,8 @@ export type PrefKey
 	| 'apiKeyFallback'
 	| 'parallelProviders'
 	| 'layoutMigration'
-	// 验收专用(无界面): 全篇样式的等待毫秒数,用来在真机上复现「样式晚到」。
-	| 'debugDocumentStyleWaitMs';
+	// 验收专用(无界面): 全篇样式推迟这么多毫秒才开始算,用来在真机上复现「样式晚到」。
+	| 'debugDocumentStyleDelayMs';
 
 export function getPref<T = unknown>(key: PrefKey, fallback?: T): T {
 	try {

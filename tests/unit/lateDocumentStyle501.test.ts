@@ -64,3 +64,11 @@ test('5.0.1: a failed document style (over the page limit) reports nothing', asy
   await x.extractPage(3);
   assert.deepEqual(x.pagesBuiltBeforeStyle(), []);
 });
+
+test('5.0.1: the acceptance-only style delay reproduces the late style on a fast reader', async () => {
+  const x = new TextExtractor(slowReader(pages, 0), {includeReferences: true, documentStyleWaitMs: 1, documentStyleDelayMs: 40});
+  await x.extractPage(3);
+  assert.equal(x.extractPhasesFor(3)?.documentStyleState, 4);
+  await x.ensureDocumentStyle();
+  assert.deepEqual(x.pagesBuiltBeforeStyle(), [3]);
+});

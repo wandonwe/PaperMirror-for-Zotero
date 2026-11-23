@@ -375,7 +375,7 @@ export class ReaderSession {
 		this.extractor = new TextExtractor(reader, {
 			includeReferences: getPref<boolean>('translateReferences', true),
 			noTranslate: () => readNoTranslateList(),
-			documentStyleWaitMs: documentStyleWaitOverride()
+			documentStyleDelayMs: documentStyleDelayOverride()
 		});
 	}
 
@@ -3831,8 +3831,8 @@ export class ReaderSession {
 	}
 }
 
-/** 验收专用: `debugDocumentStyleWaitMs` 为 0–6000 的数字时覆盖全篇样式的等待时间。 */
-function documentStyleWaitOverride(): number | undefined {
-	const v = getPref<unknown>('debugDocumentStyleWaitMs', undefined);
-	return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 6000 ? v : undefined;
+/** 验收专用: `debugDocumentStyleDelayMs` 为 1–60000 的数字时,全篇样式推迟这么久才开始算。 */
+function documentStyleDelayOverride(): number | undefined {
+	const v = getPref<unknown>('debugDocumentStyleDelayMs', undefined);
+	return typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= 60000 ? v : undefined;
 }
