@@ -311,11 +311,14 @@ export class TextExtractor implements PageParser {
 		return adapter.probeTextContentApi(this.reader);
 	}
 
-	constructor(reader: ReaderLike, options: { includeReferences: boolean; noTranslate?: () => string[] }) {
+	constructor(reader: ReaderLike, options: { includeReferences: boolean; noTranslate?: () => string[]; documentStyleWaitMs?: number }) {
 		this.reader = reader;
 		this.includeReferences = options.includeReferences;
 		this.noTranslate = options.noTranslate ?? (() => []);
+		this.documentStyleWaitMs = options.documentStyleWaitMs ?? DOCUMENT_STYLE_WAIT_MS;
 	}
+
+	private readonly documentStyleWaitMs: number;
 
 	private noTranslateSafe(): string[] {
 		try {
@@ -722,6 +725,21 @@ export class TextExtractor implements PageParser {
 		return inputs ? { ...inputs, ...(this.pathByPage.get(pageIndex) ? { path: this.pathByPage.get(pageIndex) } : {}) } : undefined;
 	}
 
+	/**
+	 * 5.0.1: 全篇样式到得比等待时间晚时,先抽的页用的是逐页取法;样式就绪后
+	 * 同一页会建出不同的块(参考文献状态、正文字号),块文本不同,缓存键也
+	 * 不同 —— 发布后复跑里 Kitagawa、Bae 的前几页在仅缓存时因此成了原图。
+	 * 返回样式已就绪、而当时的抽取输入与现在不一致的页,供会话重建。
+	 */
+	pagesBuiltBeforeStyle(): number[] {
+		if (!this.documentStyle) return [];
+		const out: number[] = [];
+		for (const [page, inputs] of this.inputsByPage) {
+			if (JSON.stringify(inputs) !== JSON.stringify(this.currentExtractInputs(page))) out.push(page);
+		}
+		return out.sort((a, b) => a - b);
+	}
+
 	/** 此刻重新解析这一页会用到的可变输入 —— 与上面那份比对即可判断能否核。 */
 	currentExtractInputs(pageIndex: number): Omit<ExtractInputs, 'path'> {
 		return {
@@ -1019,12 +1037,12 @@ export class TextExtractor implements PageParser {
 		if (this.documentStyle || this.documentStyleState === 'failed' || this.documentStyleState === 'timeout') return;
 		const pending = this.ensureDocumentStyle();
 		let timer: ReturnType<typeof setTimeout> | undefined;
-		const timeout = new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), DOCUMENT_STYLE_WAIT_MS); });
+		const timeout = new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), this.documentStyleWaitMs); });
 		const style = await Promise.race([pending, timeout]);
 		if (timer) clearTimeout(timer);
 		if (!style && this.documentStyleState === 'pending') {
 			this.documentStyleState = 'timeout';
-			logger.warn(MODULE, `Document style not ready after ${DOCUMENT_STYLE_WAIT_MS} ms; this page uses per-page context`);
+			logger.warn(MODULE, `Document style not ready after ${this.documentStyleWaitMs} ms; this page uses per-page context`);
 		}
 	}
 

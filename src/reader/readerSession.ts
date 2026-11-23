@@ -450,7 +450,11 @@ export class ReaderSession {
 
 		// 5.0: 全篇样式在后台先开算(逐页轻量读文字),与首页渲染并行;
 		// 首次抽取最多等它 6 秒。
-		void this.extractor.ensureDocumentStyle();
+		// 5.0.1: 样式晚于等待时间到达时,先抽的页按逐页取法建了块;样式就绪后
+		// 把结构会变的页重建一次(段落库照常复用,只有文本真变了的块才请求)。
+		void this.extractor.ensureDocumentStyle().then(style => {
+			if (style) void this.rebuildPagesBuiltBeforeStyle();
+		});
 		await this.extractor.prime();
 		if (this.destroyed) {
 			return; // 同上: prime 期间被销毁,后续注册一律不做
@@ -2556,6 +2560,29 @@ export class ReaderSession {
 			}
 		}
 		this.ledger.resetCompress(page);
+	}
+
+	/**
+	 * 5.0.1 (发布后复跑): 全篇样式超过等待时间才到时,先翻到的页用的是逐页
+	 * 取法,与之后(以及下次打开、样式按时到达时)建出的块不同 —— 缓存键不同,
+	 * 仅缓存时成原图,联网时重译。样式到达后把这些页按样式重建。
+	 */
+	private async rebuildPagesBuiltBeforeStyle(): Promise<void> {
+		const manager = this.manager;
+		if (this.destroyed || !manager) return;
+		const pages = this.extractor.pagesBuiltBeforeStyle().filter(p => manager.getPageState(p));
+		if (!pages.length) return;
+		logger.info(MODULE, `Document style arrived late; rebuilding ${pages.length} page(s) built without it`);
+		await Promise.all(pages.map(async page => {
+			if (this.destroyed || this.manager !== manager) return;
+			this.clearPageRounds(page);
+			try {
+				await manager.retranslatePage(page, 'normal');
+			}
+			catch (e) {
+				logger.warn(MODULE, `Rebuild after late document style failed for page ${page + 1}`, e);
+			}
+		}));
 	}
 
 	/**
