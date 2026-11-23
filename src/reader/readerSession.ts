@@ -375,7 +375,8 @@ export class ReaderSession {
 		this.extractor = new TextExtractor(reader, {
 			includeReferences: getPref<boolean>('translateReferences', true),
 			noTranslate: () => readNoTranslateList(),
-			documentStyleDelayMs: documentStyleDelayOverride()
+			documentStyleDelayMs: documentStyleDelayOverride(),
+			evidenceTimeoutMs: evidenceTimeoutOverride()
 		});
 	}
 
@@ -3835,4 +3836,10 @@ export class ReaderSession {
 function documentStyleDelayOverride(): number | undefined {
 	const v = getPref<unknown>('debugDocumentStyleDelayMs', undefined);
 	return typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= 60000 ? v : undefined;
+}
+
+/** 验收专用: `debugEvidenceTimeoutMs` 为 1–3000 的数字时覆盖取证超时。 */
+function evidenceTimeoutOverride(): number | undefined {
+	const v = getPref<unknown>('debugEvidenceTimeoutMs', undefined);
+	return typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= 3000 ? v : undefined;
 }

@@ -45,7 +45,9 @@ export type PrefKey
 	| 'parallelProviders'
 	| 'layoutMigration'
 	// 验收专用(无界面): 全篇样式推迟这么多毫秒才开始算,用来在真机上复现「样式晚到」。
-	| 'debugDocumentStyleDelayMs';
+	| 'debugDocumentStyleDelayMs'
+	// 验收专用(无界面): 图片矩形 / 边框线取证的超时毫秒数。
+	| 'debugEvidenceTimeoutMs';
 
 export function getPref<T = unknown>(key: PrefKey, fallback?: T): T {
 	try {

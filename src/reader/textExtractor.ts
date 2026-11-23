@@ -311,13 +311,17 @@ export class TextExtractor implements PageParser {
 		return adapter.probeTextContentApi(this.reader);
 	}
 
-	constructor(reader: ReaderLike, options: { includeReferences: boolean; noTranslate?: () => string[]; documentStyleWaitMs?: number; documentStyleDelayMs?: number }) {
+	constructor(reader: ReaderLike, options: { includeReferences: boolean; noTranslate?: () => string[]; documentStyleWaitMs?: number; documentStyleDelayMs?: number; evidenceTimeoutMs?: number }) {
 		this.reader = reader;
 		this.includeReferences = options.includeReferences;
 		this.noTranslate = options.noTranslate ?? (() => []);
 		this.documentStyleWaitMs = options.documentStyleWaitMs ?? DOCUMENT_STYLE_WAIT_MS;
 		this.documentStyleDelayMs = options.documentStyleDelayMs ?? 0;
+		this.evidenceTimeoutMs = options.evidenceTimeoutMs;
 	}
+
+	/** 验收专用:覆盖图片矩形 / 边框线取证的超时(默认 2500 / 3000 ms)。 */
+	private readonly evidenceTimeoutMs: number | undefined;
 
 	private readonly documentStyleWaitMs: number;
 	/** 验收专用:推迟全篇样式的计算,复现慢机上的「样式晚到」。 */
@@ -398,7 +402,7 @@ export class TextExtractor implements PageParser {
 		}
 		let rects: [number, number, number, number][] = [];
 		try {
-			const got = await withTimeout(adapter.getImageRectsPdf(this.reader, pageIndex), 2500, 'getImageRectsPdf');
+			const got = await withTimeout(adapter.getImageRectsPdf(this.reader, pageIndex), this.evidenceTimeoutMs ?? 2500, 'getImageRectsPdf');
 			rects = got ?? [];
 		}
 		catch {
@@ -434,7 +438,7 @@ export class TextExtractor implements PageParser {
 		let segCount = 0;
 		let pathsReady = false;
 		try {
-			const segs = await withTimeout(adapter.getPageEdgesPdf(this.reader, pageIndex), 3000, 'getPageEdgesPdf');
+			const segs = await withTimeout(adapter.getPageEdgesPdf(this.reader, pageIndex), this.evidenceTimeoutMs ?? 3000, 'getPageEdgesPdf');
 			segCount = segs?.length ?? 0;
 			pathsReady = Array.isArray(segs);
 			if (pathsReady) this.legendSegments.set(pageIndex, segs!);
