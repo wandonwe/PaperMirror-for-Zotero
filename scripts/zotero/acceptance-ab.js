@@ -21,7 +21,10 @@
 // - right after an install the first paper restored its cache late and its
 //   pages stayed original bitmaps: a warm-up paper is opened first, and an
 //   original page outside cfg.originalPages is treated as invalid and retried;
-// - create output/STOP to abort; the finally block still restores everything.
+// - create output/<tag>-STOP to abort; the finally block still restores everything;
+// - add-on auto-update is off during the run: in the 5.0.0 post-release run
+//   Zotero updated the reinstalled 4.10.2 back to 5.0.0 mid-run, and the
+//   "4.10.2" step measured 5.0.0. Each item also checks the running version.
 (async () => {
   // Repository root: the folder that holds scripts/ and output/.
   const ROOT = '/Users/wangdongwei/Documents/Developer/PaperMirror for Zotero/', DIR = ROOT + 'output/';
@@ -29,8 +32,12 @@
   const win = Zotero.getMainWindow(), sleep = ms => new Promise(r => win.setTimeout(r, ms));
   const { AddonManager } = ChromeUtils.importESModule('resource://gre/modules/AddonManager.sys.mjs');
   const run = eval(await Zotero.File.getContentsAsync(ROOT + 'scripts/zotero/ink-clip-check.js'));
-  const stopRequested = () => IOUtils.exists(DIR + 'STOP');
-  const painting = () => new Promise(r => { let ok = false; win.requestAnimationFrame(() => { ok = true; r(true); }); win.setTimeout(() => r(ok), 2000); });
+  const stopRequested = () => IOUtils.exists(DIR + cfg.tag + '-STOP');
+  // Painting AND visible: PaperMirror stops following page changes while the
+  // main window's document is hidden (2.2.9 不可见即停 — occluded, minimised,
+  // screen locked), so pages visited then stay original bitmaps by design.
+  // The 5.0.0 post-release "cache misses" were exactly that.
+  const painting = () => new Promise(r => { let ok = false; win.requestAnimationFrame(() => { ok = true; r(!win.document.hidden); }); win.setTimeout(() => r(ok && !win.document.hidden), 2000); });
   const install = async (file, ver) => {
     const inst = await AddonManager.getInstallForFile(Zotero.File.pathToFile(DIR + file));
     await inst.install(); await sleep(4000);
@@ -49,6 +56,8 @@
     await sleep(2000);
   };
   const PREF = 'extensions.zotero.bilingualReader.localOnlyMode', prev = Zotero.Prefs.get(PREF, true);
+  const stepPrefs = [];
+  const UPDATE_PREF = 'extensions.update.enabled', prevUpdate = Services.prefs.getBoolPref(UPDATE_PREF, true);
   const realRequest = Zotero.HTTP.request; let blocked = 0;
   const status = { tool: 'pm-ab', started: new Date().toISOString(), startVersion: Zotero.PaperMirror.version, runs: [], pauses: [], retries: [], errors: [], closedTabs: [] };
   const save = () => Zotero.File.putContentsAsync(DIR + cfg.tag + '-status.json', JSON.stringify(status));
@@ -71,10 +80,17 @@
   await sleep(1500); await save();
   try {
     Zotero.Prefs.set(PREF, true, true);
+    Services.prefs.setBoolPref(UPDATE_PREF, false);
     Zotero.HTTP.request = async () => { blocked++; throw new Error('blocked during audit'); };
     for (const step of cfg.steps) {
       if (await stopRequested()) throw new Error('stop requested');
-      await install(step.xpi, step.version);
+      // step.install === false: keep the running build (long-session runs).
+      if (step.install !== false) await install(step.xpi, step.version);
+      // step.prefs: full pref names set for this step only (e.g. the
+      // acceptance-only debugDocumentStyleWaitMs), cleared afterwards.
+      for (const k of stepPrefs) Zotero.Prefs.clear(k, true);
+      stepPrefs.length = 0;
+      for (const [k, v] of Object.entries(step.prefs || {})) { Zotero.Prefs.set(k, v, true); stepPrefs.push(k); }
       const merged = { tool: 'ink-clip-check', version: step.version, items: [], errors: [], phases: cfg.phases, started: new Date().toISOString() };
       for (const item of cfg.items) {
         let r;
@@ -91,6 +107,7 @@
           status.retries.push({ step: step.name, item: item.label, attempt, stillPainting, bad: bad.map(p => p.pageIndex) }); await save();
           if (stillPainting && attempt >= 3) break; // painting throughout: keep the reading, it is listed in retries
         }
+        if (Zotero.PaperMirror.version !== step.version) throw new Error(`${step.name}: running ${Zotero.PaperMirror.version}, expected ${step.version}`);
         merged.items.push(r.items[0]); merged.errors.push(...r.errors);
         merged.totals = totalsOf(merged.items.flatMap(i => i.pages));
         await Zotero.File.putContentsAsync(DIR + cfg.tag + '-' + step.name + '.json', JSON.stringify(merged));
@@ -101,10 +118,11 @@
     }
   } catch (e) { status.errors.push(String(e)); }
   finally {
-    Zotero.HTTP.request = realRequest; Zotero.Prefs.set(PREF, prev, true);
+    Zotero.HTTP.request = realRequest; Zotero.Prefs.set(PREF, prev, true); Services.prefs.setBoolPref(UPDATE_PREF, prevUpdate);
+    for (const k of stepPrefs) Zotero.Prefs.clear(k, true);
     try { await install(cfg.finalXpi, cfg.finalVersion); } catch (e) { status.errors.push('restore: ' + e); }
     status.installed = Zotero.PaperMirror.version; status.blockedHTTP = blocked; status.httpRestored = Zotero.HTTP.request === realRequest;
-    status.localOnly = Zotero.Prefs.get(PREF, true); status.finished = new Date().toISOString(); await save();
+    status.localOnly = Zotero.Prefs.get(PREF, true); status.autoUpdate = Services.prefs.getBoolPref(UPDATE_PREF, true); status.finished = new Date().toISOString(); await save();
   }
   return JSON.stringify(status);
 })()
