@@ -80,7 +80,8 @@
     Zotero.HTTP.request = async () => { blocked++; throw new Error('blocked during audit'); };
     for (const step of cfg.steps) {
       if (await stopRequested()) throw new Error('stop requested');
-      await install(step.xpi, step.version);
+      // step.install === false: keep the running build (long-session runs).
+      if (step.install !== false) await install(step.xpi, step.version);
       // step.prefs: full pref names set for this step only (e.g. the
       // acceptance-only debugDocumentStyleWaitMs), cleared afterwards.
       for (const k of stepPrefs) Zotero.Prefs.clear(k, true);

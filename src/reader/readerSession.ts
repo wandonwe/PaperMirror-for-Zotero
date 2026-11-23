@@ -781,8 +781,13 @@ export class ReaderSession {
 			// glossary, beneath the page cache. 普通刷新 (圆环) reuses it.
 			readSegments: async (pageIndex, hashes) => {
 				const parts = await this.segmentContext(pageIndex);
-				return parts ? cacheManager.readSegments(parts, hashes) : null;
+				if (!parts) { this.traceCache(pageIndex, { seg: 'nokey' }); return null; }
+				const t: { store?: string } = {};
+				const got = await cacheManager.readSegments(parts, hashes, t);
+				this.traceCache(pageIndex, { seg: t.store ?? 'pending', segAsked: hashes.length, segGot: got.size });
+				return got;
 			},
+			traceCache: (pageIndex, info) => this.traceCache(pageIndex, info),
 			writeSegments: async (pageIndex, entries) => {
 				const parts = await this.segmentContext(pageIndex);
 				if (parts) {
@@ -845,8 +850,11 @@ export class ReaderSession {
 			const texts = blocks.map(contextualSourceText);
      const sample = blocks.map(b=>b.sourceText).join('\n').slice(0,2000);
 			const parts = await this.cacheKey(pageIndex, texts, undefined, sample);
+			const read: { outcome?: cacheManager.PageReadOutcome } = {};
+			this.traceCache(pageIndex, { at: Date.now(), blocks: blocks.length, key: parts ? cacheKeyFingerprint(parts) : 'none', pool: this.pool.length });
 			if (parts) {
-				const hit = await cacheManager.readPage(parts);
+				const hit = await cacheManager.readPage(parts, read);
+				this.traceCache(pageIndex, { page: read.outcome ?? '?' });
 				if (hit) {
 					return hit;
 				}
@@ -2564,6 +2572,25 @@ export class ReaderSession {
 		this.ledger.resetCompress(page);
 	}
 
+	/** 5.0.1 诊断: 每页最近一次缓存查找的经过(只有类别、计数和哈希前缀,不含原文/译文)。 */
+	private readonly cacheTraces = new Map<number, Record<string, string | number>>();
+
+	private traceCache(pageIndex: number, info: Record<string, string | number>): void {
+		if ('at' in info) this.cacheTraces.set(pageIndex, {});
+		Object.assign(this.cacheTraces.get(pageIndex) ?? this.cacheTraces.set(pageIndex, {}).get(pageIndex)!, info);
+	}
+
+	/** 验收用: 某页的缓存查找经过,连同抽取时取证是否超时、全篇样式状态。 */
+	cacheTrace(pageIndex: number): Record<string, unknown> {
+		const phases = this.extractor.extractPhasesFor(pageIndex);
+		return {
+			...(this.cacheTraces.get(pageIndex) ?? {}),
+			style: this.extractor.documentStyleSummary().state,
+			...(phases ? { styleAtExtract: phases.documentStyleState, evidenceTimeouts: phases.evidenceTimeouts ?? 0, imageRects: phases.imageRects ?? -1, edgeSegments: phases.edgeSegments ?? -1, structureCacheHit: phases.structureCacheHit ? 1 : 0 } : {}),
+			status: this.manager?.getPageState(pageIndex)?.status ?? 'none'
+		};
+	}
+
 	/**
 	 * 5.0.1 (发布后复跑): 全篇样式超过等待时间才到时,先翻到的页用的是逐页
 	 * 取法,与之后(以及下次打开、样式按时到达时)建出的块不同 —— 缓存键不同,
@@ -3842,4 +3869,14 @@ function documentStyleDelayOverride(): number | undefined {
 function evidenceTimeoutOverride(): number | undefined {
 	const v = getPref<unknown>('debugEvidenceTimeoutMs', undefined);
 	return typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= 3000 ? v : undefined;
+}
+
+/** 5.0.1 诊断: 缓存键各部分的短哈希,用来比对两次运行的键哪一部分变了。 */
+function cacheKeyFingerprint(p: CacheKeyParts): string {
+	const h = (v: string): string => hashSourceTexts([v]).slice(0, 6);
+	return [
+		`lang=${p.sourceLanguage}>${p.targetLanguage}`, `prov=${p.provider}`, `model=${h(p.model)}`,
+		`cfg=${h(p.customPromptHash + p.glossaryHash + p.noTranslateHash)}`, `set=${h(p.settingsHash)}`,
+		`file=${h(p.fileHash)}`, `src=${p.sourceTextHash.slice(0, 8)}`
+	].join(' ');
 }

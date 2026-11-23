@@ -172,6 +172,8 @@ export async function startup(params: StartupParams): Promise<void> {
 		verifyOverlay: () => toolbarController?.verifyOverlay() ?? 'Plugin not initialized.',
 		/** Cycle 覆盖模式: 原文淡化 → 仅译文 → 悬停显示 */
 		cycleOverlayMode: () => toolbarController?.cycleOverlayMode() ?? 'Plugin not initialized.',
+		/** 5.0.1 诊断: return Zotero.PaperMirror.cacheTrace(pageIndex) — 当前页签某页缓存查找的经过 */
+		cacheTrace: (pageIndex: number) => toolbarController?.cacheTraceCurrent(pageIndex) ?? 'Plugin not initialized.',
 		/** Set the toolbar switcher state: 'original' | 'overlay' | 'split' */
 		setMode: (mode: 'original' | 'overlay' | 'split') =>
 			toolbarController?.setModeOnCurrent(mode) ?? Promise.resolve('Plugin not initialized.'),

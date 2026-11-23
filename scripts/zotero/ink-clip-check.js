@@ -253,6 +253,8 @@
       for (const p of pages) {
         let page = await visit(p, shellPolls);
         for (let retry = 0; retry < 2 && page.rebuilt; retry++) { page = await visit(p, shellPolls); page.retries = retry + 1; }
+        // 5.0.1+: the plugin's own record of this page's cache lookup (categories, counts, hash prefixes only).
+        try { const t = Zotero.PaperMirror.cacheTrace?.(p); if (t && typeof t === 'object') page.cacheTrace = t; } catch (e) { /* older plugin */ }
         entry.pages.push(page);
         await save();
       }
@@ -261,6 +263,7 @@
         if (!entry.pages[i].original) continue;
         let page = await visit(entry.pages[i].pageIndex, shellPolls);
         for (let retry = 0; retry < 2 && page.rebuilt; retry++) page = await visit(entry.pages[i].pageIndex, shellPolls);
+        try { const t = Zotero.PaperMirror.cacheTrace?.(entry.pages[i].pageIndex); if (t && typeof t === 'object') page.cacheTrace = t; } catch (e) { /* older plugin */ }
         page.secondLook = true; entry.pages[i] = page;
         await save();
       }

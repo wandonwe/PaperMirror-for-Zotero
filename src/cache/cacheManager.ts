@@ -72,21 +72,29 @@ function pagePath(parts: CacheKeyParts): string {
 	return PathUtils.join(cacheRootDir(), attachmentDirName(parts.attachmentKey, parts.fileHash), pageFileName(parts));
 }
 
-export async function readPage(parts: CacheKeyParts): Promise<TranslatedBlock[] | null> {
+/** 5.0.1 诊断: 一次页缓存读取的结果类别(不含内容)。 */
+export type PageReadOutcome = 'hit' | 'missing' | 'invalid' | 'error';
+
+export async function readPage(parts: CacheKeyParts, trace?: { outcome?: PageReadOutcome }): Promise<TranslatedBlock[] | null> {
 	const path = pagePath(parts);
+	const mark = (o: PageReadOutcome): void => { if (trace) trace.outcome = o; };
 	try {
 		if (!(await IOUtils.exists(path))) {
+			mark('missing');
 			return null;
 		}
 		const data = await IOUtils.readJSON(path);
 		if (!isValidCachedPage(data, parts)) {
+			mark('invalid');
 			logger.warn(MODULE, `Corrupt or mismatched cache entry removed: ${PathUtils.filename(path)}`);
 			await IOUtils.remove(path, { ignoreAbsent: true });
 			return null;
 		}
+		mark('hit');
 		return data.translations;
 	}
 	catch (e) {
+		mark('error');
 		logger.warn(MODULE, 'Cache read failed; treating as miss', e);
 		// 同 P2-13: 只有内容确认损坏 (SyntaxError) 才删;瞬时 I/O 失败不删,
 		// 文件下次读取很可能是好的。
@@ -469,7 +477,7 @@ async function flushSegments(path: string): Promise<void> {
  * segment just written by a concurrent page is visible before its flush), then
  * from the on-disk store. Misses are simply absent. Any read problem is a miss.
  */
-export async function readSegments(parts: SegmentContextParts, hashes: string[]): Promise<Map<string, string>> {
+export async function readSegments(parts: SegmentContextParts, hashes: string[], trace?: { store?: string }): Promise<Map<string, string>> {
 	const out = new Map<string, string>();
 	if (!hashes.length) {
 		return out;
@@ -501,6 +509,7 @@ export async function readSegments(parts: SegmentContextParts, hashes: string[])
 			// 命中解析缓存时这里一次整库 parse 都不做 —— 那正是「越往后翻越慢」
 			// 的来源 (2.5.3)。
 			const loaded = await loadSegmentStore(storePath, context);
+			if (trace) trace.store = (trace.store ? trace.store + ',' : '') + loaded.kind;
 			if (loaded.kind === 'invalid' && removeInvalid) {
 				storeCache.delete(storePath);
 				await IOUtils.remove(storePath, { ignoreAbsent: true });

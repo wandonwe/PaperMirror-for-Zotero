@@ -135,6 +135,8 @@ export interface ExtractInputs {
 export interface ExtractPhases {
  fontRepair?: adapter.TextLayerPage['fontRepair'];
  structureCacheHit?: boolean;
+	/** 5.0.1 诊断: 图片矩形 / 边框线取证超时或失败的次数。 */
+	evidenceTimeouts?: number;
 	obstaclesMs: number;
 	/**
 	 * 2.12.6 边框取证的可观测性。上一版把网格接进了建格却**没有任何遥测**,
@@ -407,6 +409,8 @@ export class TextExtractor implements PageParser {
 		}
 		catch {
 			// best-effort: no obstacles = old behavior
+			const ph = this.phasesByPage.get(pageIndex);
+			if (ph) ph.evidenceTimeouts = (ph.evidenceTimeouts ?? 0) + 1;
 		}
 		this.imageRects.set(pageIndex, rects);
 		const phases = this.phasesByPage.get(pageIndex);
@@ -451,6 +455,8 @@ export class TextExtractor implements PageParser {
 		}
 		catch {
 			// best-effort: 没有边框证据 = 老行为
+			const ph = this.phasesByPage.get(pageIndex);
+			if (ph) ph.evidenceTimeouts = (ph.evidenceTimeouts ?? 0) + 1;
 		}
 		const phases = this.phasesByPage.get(pageIndex);
 		if (phases) {

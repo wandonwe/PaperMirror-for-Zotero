@@ -542,6 +542,8 @@ export interface TranslationDeps {
 	 * paragraphs reuse their translation across pages.
 	 */
 	readSegments?(pageIndex: number, hashes: string[]): Promise<Map<string, string> | null>;
+	/** 5.0.1 诊断: 缓存查找的计数(不含内容)。 */
+	traceCache?(pageIndex: number, info: Record<string, string | number>): void;
 	writeSegments?(pageIndex: number, entries: { hash: string; translatedText: string }[]): Promise<void>;
 	/**
 	 * The provider LANE a page belongs to (its provider id). Lets the scheduler
@@ -2834,6 +2836,7 @@ export class TranslationManager {
 					usable++;
 				}
 			}
+			this.deps.traceCache?.(pageIndex, { rows: cached.length, active: activeBlocks.length, usable, stale });
 			if (usable === activeBlocks.length) {
 				this.usage.pageCacheFullHits++;
 				state.status = 'done';

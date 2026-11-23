@@ -538,6 +538,14 @@ export class ReaderToolbarController {
 	}
 
 	/** Switch a reader to one of the three states, creating a session if needed. */
+	/** 5.0.1 诊断: 当前阅读器某页的缓存查找经过(验收脚本用)。 */
+	cacheTraceCurrent(pageIndex: number): Record<string, unknown> | string {
+		const reader = this.activeReader();
+		if (!reader) return 'No active reader.';
+		const session = this.sessions.get(this.sessionKey(reader));
+		return session ? session.cacheTrace(pageIndex) : 'No PaperMirror session on this tab.';
+	}
+
 	async setMode(reader: ReaderLike, mode: ViewMode): Promise<void> {
 		const key = this.sessionKey(reader);
 		if (this.busy.has(key)) {
