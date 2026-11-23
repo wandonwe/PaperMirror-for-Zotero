@@ -33,7 +33,11 @@
   const { AddonManager } = ChromeUtils.importESModule('resource://gre/modules/AddonManager.sys.mjs');
   const run = eval(await Zotero.File.getContentsAsync(ROOT + 'scripts/zotero/ink-clip-check.js'));
   const stopRequested = () => IOUtils.exists(DIR + cfg.tag + '-STOP');
-  const painting = () => new Promise(r => { let ok = false; win.requestAnimationFrame(() => { ok = true; r(true); }); win.setTimeout(() => r(ok), 2000); });
+  // Painting AND visible: PaperMirror stops following page changes while the
+  // main window's document is hidden (2.2.9 不可见即停 — occluded, minimised,
+  // screen locked), so pages visited then stay original bitmaps by design.
+  // The 5.0.0 post-release "cache misses" were exactly that.
+  const painting = () => new Promise(r => { let ok = false; win.requestAnimationFrame(() => { ok = true; r(!win.document.hidden); }); win.setTimeout(() => r(ok && !win.document.hidden), 2000); });
   const install = async (file, ver) => {
     const inst = await AddonManager.getInstallForFile(Zotero.File.pathToFile(DIR + file));
     await inst.install(); await sleep(4000);
