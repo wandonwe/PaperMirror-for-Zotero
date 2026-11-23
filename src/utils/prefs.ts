@@ -43,7 +43,9 @@ export type PrefKey
 	| 'glossaryGlobal'
 	| 'apiKeyFallback'
 	| 'parallelProviders'
-	| 'layoutMigration';
+	| 'layoutMigration'
+	// 验收专用(无界面): 全篇样式的等待毫秒数,用来在真机上复现「样式晚到」。
+	| 'debugDocumentStyleWaitMs';
 
 export function getPref<T = unknown>(key: PrefKey, fallback?: T): T {
 	try {

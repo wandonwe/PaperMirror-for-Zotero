@@ -374,7 +374,8 @@ export class ReaderSession {
 		this.onClosed = onClosed;
 		this.extractor = new TextExtractor(reader, {
 			includeReferences: getPref<boolean>('translateReferences', true),
-			noTranslate: () => readNoTranslateList()
+			noTranslate: () => readNoTranslateList(),
+			documentStyleWaitMs: documentStyleWaitOverride()
 		});
 	}
 
@@ -3828,4 +3829,10 @@ export class ReaderSession {
 		this.split = null;
 		logger.info(MODULE, `Session destroyed for tab ${this.reader.tabID}`);
 	}
+}
+
+/** 验收专用: `debugDocumentStyleWaitMs` 为 0–6000 的数字时覆盖全篇样式的等待时间。 */
+function documentStyleWaitOverride(): number | undefined {
+	const v = getPref<unknown>('debugDocumentStyleWaitMs', undefined);
+	return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 6000 ? v : undefined;
 }

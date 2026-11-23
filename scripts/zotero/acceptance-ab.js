@@ -52,6 +52,7 @@
     await sleep(2000);
   };
   const PREF = 'extensions.zotero.bilingualReader.localOnlyMode', prev = Zotero.Prefs.get(PREF, true);
+  const stepPrefs = [];
   const UPDATE_PREF = 'extensions.update.enabled', prevUpdate = Services.prefs.getBoolPref(UPDATE_PREF, true);
   const realRequest = Zotero.HTTP.request; let blocked = 0;
   const status = { tool: 'pm-ab', started: new Date().toISOString(), startVersion: Zotero.PaperMirror.version, runs: [], pauses: [], retries: [], errors: [], closedTabs: [] };
@@ -80,6 +81,11 @@
     for (const step of cfg.steps) {
       if (await stopRequested()) throw new Error('stop requested');
       await install(step.xpi, step.version);
+      // step.prefs: full pref names set for this step only (e.g. the
+      // acceptance-only debugDocumentStyleWaitMs), cleared afterwards.
+      for (const k of stepPrefs) Zotero.Prefs.clear(k, true);
+      stepPrefs.length = 0;
+      for (const [k, v] of Object.entries(step.prefs || {})) { Zotero.Prefs.set(k, v, true); stepPrefs.push(k); }
       const merged = { tool: 'ink-clip-check', version: step.version, items: [], errors: [], phases: cfg.phases, started: new Date().toISOString() };
       for (const item of cfg.items) {
         let r;
@@ -108,6 +114,7 @@
   } catch (e) { status.errors.push(String(e)); }
   finally {
     Zotero.HTTP.request = realRequest; Zotero.Prefs.set(PREF, prev, true); Services.prefs.setBoolPref(UPDATE_PREF, prevUpdate);
+    for (const k of stepPrefs) Zotero.Prefs.clear(k, true);
     try { await install(cfg.finalXpi, cfg.finalVersion); } catch (e) { status.errors.push('restore: ' + e); }
     status.installed = Zotero.PaperMirror.version; status.blockedHTTP = blocked; status.httpRestored = Zotero.HTTP.request === realRequest;
     status.localOnly = Zotero.Prefs.get(PREF, true); status.autoUpdate = Services.prefs.getBoolPref(UPDATE_PREF, true); status.finished = new Date().toISOString(); await save();
