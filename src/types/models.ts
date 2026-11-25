@@ -192,6 +192,8 @@ export interface TranslationRequest {
 		 * an over-long translation with this set). Absent = unconstrained.
 		 */
 		charBudget?: number;
+		/** 5.1: a table cell's column and row headers, for understanding only. */
+		tableHeaders?: { row?: string; column?: string };
 	}[];
 	glossary?: GlossaryRule[];
 	/**

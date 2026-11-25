@@ -89,6 +89,10 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 	if (request.previousContext || request.moduleContext) {
 		lines.push('- The previousContext and moduleContext fields are for understanding only — do NOT translate or repeat them in the output.');
 	}
+	// 5.1: table cells with their headers (3023: scanner models "Alpha", "Force" → 阿尔法 / 力).
+	if (request.blocks.some(b => b.tableHeaders)) {
+		lines.push('- A block\'s "tableHeaders" (the column and row headers of that table cell) is for understanding only — do NOT translate or return it. Product, device, scanner, software and model names in table cells are proper names: copy them exactly as written.');
+	}
 	lines.push(
 		'- Respond with ONLY a JSON object of this exact shape, no markdown fences, no commentary:',
 		'  {"translations":[{"id":"<block id>","translatedText":"<translation>"}]}',
