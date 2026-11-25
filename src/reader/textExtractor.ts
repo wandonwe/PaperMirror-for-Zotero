@@ -27,7 +27,7 @@ import * as logger from '../utils/logger';
 import { buildBlocks, buildBlocksFromPlainText, medianFontSize } from './blockBuilder';
 import { sidewaysBodyChars, ROTATED_TABLE_MIN_CHARS } from './spanBlockBuilder';
 import { structureSpanPage } from './pagePipeline';
-import { buildDocumentStyle, referencesContinueOnto, type DocumentStyle } from './documentStyle';
+import { buildSampledDocumentStyle, documentStyleSample, referencesContinueOnto, type DocumentStyle } from './documentStyle';
 import { borderGrid, borderGrids, columnOfX, rowOfTop, type BorderGrid } from './tableBorders';
 import { orderBlocksForReading } from './readingOrder';
 import { structureTableCells } from './tableStructure';
@@ -40,7 +40,6 @@ const MODULE = 'textExtractor';
 /** 5.0 全篇样式:首次抽取最多等这么久;超时的页退回逐页取法,样式照样在后台算完。 */
 const DOCUMENT_STYLE_WAIT_MS = 6000;
 /** 超过这么多页的文献(书、合订本)不做全篇统计。 */
-const DOCUMENT_STYLE_MAX_PAGES = 400;
 
 /**
  * Hard ceiling on one getPageData round-trip.
@@ -984,21 +983,23 @@ export class TextExtractor implements PageParser {
 		this.documentStylePromise = (async () => {
 			try {
 				const count = adapter.getPageCount(this.reader);
-				if (!count || count > DOCUMENT_STYLE_MAX_PAGES) throw new Error(`page count ${count}`);
-				const pages: adapter.TextLayerPage[] = new Array(count);
+				if (!count) throw new Error(`page count ${count}`);
+				// 5.1: over DOCUMENT_STYLE_SAMPLE pages, read a sample instead of giving up.
+				const indices = documentStyleSample(count);
+				const pages: adapter.TextLayerPage[] = new Array(indices.length);
 				let next = 0;
 				const worker = async (): Promise<void> => {
-					while (next < count) {
-						const i = next++;
-						pages[i] = (await adapter.getTextContentItemsLight(this.reader, i)) ?? { items: [], pageWidth: 612, pageHeight: 792 };
+					while (next < indices.length) {
+						const k = next++;
+						pages[k] = (await adapter.getTextContentItemsLight(this.reader, indices[k]!)) ?? { items: [], pageWidth: 612, pageHeight: 792 };
 					}
 				};
-				await Promise.all(Array.from({ length: Math.min(4, count) }, worker));
-				const style = buildDocumentStyle(pages);
+				await Promise.all(Array.from({ length: Math.min(4, indices.length) }, worker));
+				const style = buildSampledDocumentStyle(indices, pages, count);
 				this.documentStyle = style;
 				this.documentStyleState = 'ready';
 				if (style.bodyFontSize > 0) this.bodyFontSize = style.bodyFontSize;
-				logger.info(MODULE, `Document style: body ${style.bodyFontSize}pt, references ${style.referenceRanges.map(([a, b]) => `p${a + 1}-p${b + 1}`).join(', ') || 'none'} (${count} pages, ${Date.now() - startedAt} ms)`);
+				logger.info(MODULE, `Document style: body ${style.bodyFontSize}pt, references ${style.referenceRanges.map(([a, b]) => `p${a + 1}-p${b + 1}`).join(', ') || 'none'} (${indices.length === count ? count : `${indices.length} of ${count}`} pages, ${Date.now() - startedAt} ms)`);
 				return style;
 			}
 			catch (e) {
