@@ -1193,6 +1193,8 @@ export interface BreakContext {
 	 * 条目的开头(带编号或不带编号的作者)。
 	 */
 	entryBoundary?: boolean;
+	/** 5.1: an all-bold short heading line meets a regular line. */
+	weightChange?: boolean;
 }
 
 /**
@@ -1208,7 +1210,7 @@ export interface BreakContext {
  * 234 页逐页核对。之后加新证据或改权重,改动都落在一处,且每个断点都说得出理由。
  */
 export type BreakReason = 'new-column' | 'list-start' | 'leader-dots' | 'short-line' | 'large-gap'
-	| 'indent' | 'font-jump' | 'entry-boundary' | 'wrapped' | 'gap';
+	| 'indent' | 'font-jump' | 'entry-boundary' | 'weight-change' | 'wrapped' | 'gap';
 
 export interface BreakEvidence { reason: BreakReason; weight: number }
 export interface BreakDecision { brk: boolean; score: number; evidence: BreakEvidence[] }
@@ -1236,6 +1238,7 @@ export function decideBreak(ctx: BreakContext): BreakDecision {
 	// 5.0: inside a known reference list, the previous line ends an entry and
 	// the next starts one (numbered or not).
 	strong(ctx.entryBoundary, 'entry-boundary');
+	strong(ctx.weightChange, 'weight-change');
 	// A line that filled its column wrapped, so the sentence continues.
 	// Line-spacing wobble — a tall glyph, an inline formula, a superscript —
 	// must not cut it in half.

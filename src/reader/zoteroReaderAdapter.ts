@@ -1,4 +1,5 @@
 import { decodeLegacyText, legacyFontEncodings, resolvedPdfFont, repeatedImageRefs } from './legacyTextEncoding';
+import { isBoldFontName } from './paragraphHeuristics';
 import { embeddedSymbolRepairs, type SymbolGlyphObservation } from './embeddedFontSymbols';
 import { OPERATOR_SLOTS, hasSymbolCandidate, repairSymbolText } from './symbolFontSemantics';
 import { onScrollIntent } from './scrollSynchronizer';
@@ -250,7 +251,7 @@ async function pageSymbolRepairs(reader: ReaderLike, pageIndex: number): Promise
  const pending = (async (): Promise<SymbolRepairMap> => {
   const page = waive(await doc.getPage!(pageIndex + 1)) as any;
   if (typeof page?.getOperatorList !== 'function') {complete = false; return emptySymbols();}
-  const list = waive(await page.getOperatorList()) as any;
+  const list = waive(await operatorListOnce(page)) as any;
   if (!Array.isArray(list?.fnArray) || !Array.isArray(list?.argsArray)) {complete = false; return emptySymbols();}
   const ops = waive(waive(pdfWindow(reader))?.pdfjsLib)?.OPS as Record<string, number> | undefined;
   const fonts = new Map<string, string>();
@@ -525,7 +526,7 @@ export async function getTextContentItems(
         fontRepair.controlRuns=raw.filter(i=>/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(String((i as {str?:string}).str??''))).length;
         if(raw.some(entry=>/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(String((entry as {str?:string}).str ?? '')))) {
             try {
-                await page.getOperatorList?.();
+                await operatorListOnce(page);
                 let encodings=new Map<string,Record<number,string>>();
                 try { encodings=await legacyFontEncodings(doc,pageIndex); } catch(e) { fontRepair.error='font-resources-unavailable'; logger.warn(MODULE,'PDF font resource fallback unavailable',e); }
                 fontRepair.encodingFonts=encodings.size;
@@ -539,6 +540,24 @@ export async function getTextContentItems(
                 }
             } catch(e) {fontRepair.error='font-access-unavailable'; logger.warn(MODULE,'Legacy font decoding unavailable',e); }
         }
+        // 5.1: which runs are bold, from the embedded fonts' PostScript names.
+        // Fonts are bound once the operator list is ready; failure = no weight
+        // evidence (the 5.0 behaviour), reported in fontRepair.weights.
+        const boldFonts=new Set<string>();
+        let weights:'none'|'ok'|'unavailable'='none';
+        try {
+            const ids=[...new Set(raw.map(i=>(i as {fontName?:string}).fontName).filter((x):x is string=>!!x))];
+            if(ids.length&&typeof page.getOperatorList==='function') {
+                await operatorListOnce(page);
+                const common=waive(page.commonObjs) as typeof page.commonObjs;
+                let resolved=0;
+                for(const id of ids) {
+                    const font=waive(await resolvedPdfFont(common,id)) as {name?:string}|undefined;
+                    if(typeof font?.name==='string'){resolved++;if(isBoldFontName(font.name))boldFonts.add(id);}
+                }
+                weights=resolved===ids.length?'ok':'unavailable';
+            }
+        } catch(e) { weights='unavailable'; logger.debug(MODULE,'Font weights unavailable',e); }
         const items: TextLayerItem[] = [];
 		for (const entry of raw) {
 			const it = entry as { str?: unknown; transform?: unknown; width?: unknown; fontName?:string };
@@ -553,8 +572,9 @@ export async function getTextContentItems(
 			if (!box) {
 				continue;
 			}
-			items.push({ text, rect: box.rect, ...(box.fontSize ? { fontSize: box.fontSize } : {}) });
+			items.push({ text, rect: box.rect, ...(box.fontSize ? { fontSize: box.fontSize } : {}), ...(it.fontName && boldFonts.has(it.fontName) ? { bold: true } : {}) });
 		}
+		(fontRepair as {weights?:string}).weights=weights;
 		if (!items.length) {
 			return say(raw.length ? 'all-filtered' : 'no-items');
 		}
@@ -835,6 +855,25 @@ export function getPageView(reader: ReaderLike, pageIndex: number): PageViewHand
  * src/pdf/lib/coordinates.js v2p).
  * ------------------------------------------------------------------------ */
 
+/**
+ * 5.1: one operator-list read per page proxy, shared by symbol repair, legacy
+ * decoding and font weights (fonts are bound in commonObjs once it resolves).
+ * Kept for 30 s only.
+ */
+const operatorLists = new WeakMap<object, Promise<unknown>>();
+function operatorListOnce(page: { getOperatorList?: () => Promise<unknown> }): Promise<unknown> {
+	let pending = operatorLists.get(page);
+	if (!pending) {
+		pending = Promise.resolve(page.getOperatorList?.());
+		operatorLists.set(page, pending);
+		pending.catch(() => operatorLists.delete(page));
+		// Not held for the page's lifetime: an operator list can be megabytes, and
+		// pdf.js frees its own copy on page cleanup.
+		setTimeout(() => { if (operatorLists.get(page) === pending) operatorLists.delete(page); }, 30000);
+	}
+	return pending;
+}
+
 export interface TextLayerItem {
 	text: string;
 	/** PDF.js font identity when the layer exposes it; CSS generic families are not identities. */
@@ -842,10 +881,12 @@ export interface TextLayerItem {
 	/** [x1, y1, x2, y2] in raw PDF coordinates (origin bottom-left). */
 	rect: [number, number, number, number];
 	fontSize?: number;
+	/** 5.1: the run is set in a bold face (from the embedded font's PostScript name). */
+	bold?: boolean;
 }
 
 export interface TextLayerPage {
- fontRepair?:{controlRuns:number;resolvedFonts:number;encodingFonts:number;remainingRuns:number;error:string;symbolGlyphs?:number;symbolFonts?:number};
+ fontRepair?:{controlRuns:number;resolvedFonts:number;encodingFonts:number;remainingRuns:number;error:string;symbolGlyphs?:number;symbolFonts?:number;weights?:string};
 	items: TextLayerItem[];
 	pageWidth: number;
 	pageHeight: number;

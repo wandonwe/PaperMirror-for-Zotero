@@ -21,10 +21,11 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { basename, join } from 'node:path';
 import { structureSpanPage, type SpanPage } from '../../src/reader/pagePipeline';
 import { textContentItemRect } from '../../src/reader/zoteroReaderAdapter';
+import { isBoldFontName } from '../../src/reader/paragraphHeuristics';
 import { buildDocumentStyle, referencesContinueOnto, type DocumentStyle } from '../../src/reader/documentStyle';
 import { borderGrid, borderGrids, segmentsFromOperatorList, type BorderGrid, type Segment } from '../../src/reader/tableBorders';
 
-interface DocSpans { doc: string; pages: SpanPage[]; edges?: Segment[][] }
+interface DocSpans { doc: string; pages: SpanPage[]; edges?: Segment[][]; weights?: 1 }
 const EDGES = process.argv.includes('--edges');
 interface BlockPrint { id: string; mode: string; ref: boolean; text: string }
 interface PagePrint { page: number; blocks: BlockPrint[] }
@@ -37,7 +38,11 @@ function arg(name: string): string | undefined {
 async function readSpans(pdf: string, cacheDir: string): Promise<DocSpans> {
 	const doc = basename(pdf).replace(/\.pdf$/i, '');
 	const cache = join(cacheDir, `${doc}.json`);
-	if (existsSync(cache)) return JSON.parse(readFileSync(cache, 'utf8')) as DocSpans;
+	if (existsSync(cache)) {
+		const cached = JSON.parse(readFileSync(cache, 'utf8')) as DocSpans;
+		// 5.1: caches written before font weights were recorded are re-read.
+		if (cached.weights) return cached;
+	}
 	const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
 	const pdfDoc = await getDocument({ data: new Uint8Array(readFileSync(pdf)), useSystemFonts: true, verbosity: 0 }).promise;
 	const pages: SpanPage[] = [];
@@ -45,15 +50,21 @@ async function readSpans(pdf: string, cacheDir: string): Promise<DocSpans> {
 		const page = await pdfDoc.getPage(n);
 		const vp = page.getViewport({ scale: 1 });
 		const content = await page.getTextContent();
+		// 5.1: bold runs, from the embedded font names — the plugin's adapter does the same.
+		await page.getOperatorList();
+		const bold = new Set<string>();
+		for (const id of new Set((content.items as Array<{ fontName?: string }>).map(i => i.fontName).filter(Boolean) as string[])) {
+			try { const f = page.commonObjs.get(id) as { name?: string }; if (f?.name && isBoldFontName(f.name)) bold.add(id); } catch { /* not bound */ }
+		}
 		const items = [];
-		for (const raw of content.items as Array<{ str?: string; transform?: number[]; width?: number }>) {
+		for (const raw of content.items as Array<{ str?: string; transform?: number[]; width?: number; fontName?: string }>) {
 			if (!raw.str?.trim() || !Array.isArray(raw.transform) || typeof raw.width !== 'number') continue;
 			const r = textContentItemRect(raw.transform, raw.width);
-			if (r) items.push({ text: raw.str, rect: r.rect, fontSize: r.fontSize });
+			if (r) items.push({ text: raw.str, rect: r.rect, fontSize: r.fontSize, ...(raw.fontName && bold.has(raw.fontName) ? { bold: true } : {}) });
 		}
 		pages.push({ items, pageWidth: vp.width, pageHeight: vp.height });
 	}
-	const out = { doc, pages };
+	const out: DocSpans = { doc, pages, weights: 1 };
 	writeFileSync(cache, JSON.stringify(out));
 	return out;
 }
