@@ -33,12 +33,16 @@ import { join } from 'node:path';
 import { selectInkObstacleBlocks, shrinkStepsFor, allowsFontShrink } from '../../src/ui/strictPageReplacement';
 
 const read = (p: string): string => readFileSync(join(process.cwd(), p), 'utf8');
+// 5.1: spanBlockBuilder.ts was split; its line and paragraph steps live in
+// spanLines.ts and spanParagraphs.ts. The rule below holds for the family.
+const SPLIT: Record<string, string[]> = { 'src/reader/spanBlockBuilder.ts': ['src/reader/spanLines.ts', 'src/reader/spanParagraphs.ts'] };
+const readFamily = (p: string): string => [p, ...(SPLIT[p] ?? [])].map(read).join('\n');
 
 // ---- 1. 前提: 'table' 只表示表题 --------------------------------------------
 
 test("'table' 类型只在分类【标题行】时产生 —— 表格主体永远不是 'table' (前提闸, 2.8.14)", () => {
 	for (const file of ['src/reader/blockBuilder.ts', 'src/reader/spanBlockBuilder.ts']) {
-		const src = read(file);
+		const src = readFamily(file);
 		const sites = [...src.matchAll(/'table'\s*:\s*'caption'/g)];
 		assert.equal(sites.length, 1,
 			`${file}: 'table' 应当恰好在一处产生,且与 'caption' 二选一 —— 这正是"这一行是不是标题"`);
