@@ -24,7 +24,7 @@
 
 **PaperMirror(文镜)** —— 文字之镜,原文与译文两相映照。在 Zotero 自带的 PDF 阅读器里直接对照阅读外文文献:一边是**原版 PDF**(排版、图表、公式原封不动),另一边是**按版面重排的整页译文**,大小与原文一致、逐段对齐。图表、表格、公式、分栏、页眉页脚等都从原页原样保留,只有正文被替换并重新排版,不会被硬塞进原文的换行里。
 
-**5.0.0**：结构识别改为先读全篇再逐页建块——参考文献、页眉页脚、正文字号和段首缩进按整篇判断，同一页每次打开分块一致；参考文献逐条翻译、作者期刊原样；数学字体里的 < > + − × 按字形认回；各翻译引擎按 2026-11-19 官方文档更新，菜单只列已设置的引擎。升级后约 1/4 到 1/3 的已翻译段落会重新翻译一次。详见 [更新记录](CHANGELOG.md#500--2026-11-23) 和 [5.0.0 验证记录](docs/RELEASE-5.0.0-VALIDATION.md)。
+**5.1.0**：粗体小节标题单独成标题；表格单元格带着行、列标题去翻译，扫描仪等型号名原样保留、药名照常翻译；超过 400 页的书也做全篇预读。升级后表格单元格会重新翻译一次（一篇论文约 1/4 的段落）。详见 [更新记录](CHANGELOG.md#510--2026-11-27) 和 [5.1.0 验证记录](docs/RELEASE-5.1.0-VALIDATION.md)。5.0.0 起：结构识别先读全篇再逐页建块，参考文献逐条翻译、作者期刊原样。
 
 ### 三种阅读模式
 
@@ -103,7 +103,7 @@ for paragraph. Figures, tables, equations, columns and running heads are kept
 from the rendered page exactly; only body text is replaced and re‑flowed, never
 crammed back into the original line breaks.
 
-**5.0.0**: structure recognition now reads the whole document first, then builds each page — references, running heads and footers, body size and first-line indent are judged once per document, so a page splits the same way every time it is opened. References are translated entry by entry with authors and journals kept verbatim; <, >, +, −, × drawn by math fonts are recovered from their glyph outlines; every engine is updated to the providers' documentation of 2026-11-19 and the menu lists only engines you have set up. After upgrading, roughly a quarter to a third of previously translated paragraphs are translated once more. See the [notes](CHANGELOG.md#500--2026-11-23) and the [5.0.0 validation record](docs/RELEASE-5.0.0-VALIDATION.md).
+**5.1.0**: bold section headings become their own headings instead of merging into the next paragraph; table cells are translated with their row and column headers as context, so scanner, device and software names ("Alpha", "Force") stay as written while drug names are still translated; books over 400 pages get a sampled whole-document read. Table cells are re-translated once after upgrading (about a quarter of a paper's paragraphs). See the [changelog](CHANGELOG.md#510--2026-11-27) and the [5.1.0 validation record](docs/RELEASE-5.1.0-VALIDATION.md). Since 5.0.0: structure is recognised from the whole document first, and references are translated entry by entry with authors and journals kept verbatim.
 
 ### Three reading modes
 
