@@ -1,6 +1,7 @@
 // On-device A/B acceptance for PaperMirror in Zotero (Tools > Developer > Run JavaScript).
 //
 // Load with:  eval(Zotero.File.getContents('<repo>/scripts/zotero/acceptance-ab.js'))
+// (needs scripts/zotero/ink-clip-check.js and scripts/zotero/ab-guard.js next to it)
 // after copying this file and a config to <repo>/output/ (see acceptance-ab.example.json):
 //   output/pm-run.config.json  tag, phases, items, steps [{name, xpi, version}],
 //                              finalXpi/finalVersion (installed at the end, also on error),
@@ -11,8 +12,10 @@
 //
 // Cache only: local-only mode is on and Zotero.HTTP.request is replaced by a
 // function that refuses every request for the whole run; both are restored in
-// a finally block. If Zotero quits mid-run that block cannot run: check the
-// installed version and extensions.zotero.bilingualReader.localOnlyMode after.
+// a finally block. If Zotero quits mid-run that block cannot run; the prefs it
+// found are kept in output/pm-ab-guard.json and the next run puts them back
+// before anything else (status.recovered). The installed version is not
+// recovered that way: the next run installs its own builds and finalXpi.
 //
 // Robustness (learnt in the 4.10 releases):
 // - one paper at a time; after each, requestAnimationFrame must still fire.
@@ -32,6 +35,9 @@
   const win = Zotero.getMainWindow(), sleep = ms => new Promise(r => win.setTimeout(r, ms));
   const { AddonManager } = ChromeUtils.importESModule('resource://gre/modules/AddonManager.sys.mjs');
   const run = eval(await Zotero.File.getContentsAsync(ROOT + 'scripts/zotero/ink-clip-check.js'));
+  const guard = eval(await Zotero.File.getContentsAsync(ROOT + 'scripts/zotero/ab-guard.js'))(DIR + 'pm-ab-guard.json', { Zotero, Services, IOUtils });
+  // Before reading any "previous" value: undo a run that Zotero quit in the middle of.
+  const recovered = await guard.recover();
   const stopRequested = () => IOUtils.exists(DIR + cfg.tag + '-STOP');
   // Painting AND visible: PaperMirror stops following page changes while the
   // main window's document is hidden (2.2.9 不可见即停 — occluded, minimised,
@@ -59,7 +65,7 @@
   const stepPrefs = [];
   const UPDATE_PREF = 'extensions.update.enabled', prevUpdate = Services.prefs.getBoolPref(UPDATE_PREF, true);
   const realRequest = Zotero.HTTP.request; let blocked = 0;
-  const status = { tool: 'pm-ab', started: new Date().toISOString(), startVersion: Zotero.PaperMirror.version, runs: [], pauses: [], retries: [], errors: [], closedTabs: [] };
+  const status = { tool: 'pm-ab', started: new Date().toISOString(), startVersion: Zotero.PaperMirror.version, runs: [], pauses: [], retries: [], errors: [], closedTabs: [], ...(recovered ? { recovered } : {}) };
   const save = () => Zotero.File.putContentsAsync(DIR + cfg.tag + '-status.json', JSON.stringify(status));
   const waitForPainting = async where => {
     if (await painting()) return;
@@ -78,6 +84,7 @@
   status.env = { dpr: win.devicePixelRatio, inner: [win.innerWidth, win.innerHeight], dark: win.matchMedia('(prefers-color-scheme: dark)').matches };
   for (const r of [...(Zotero.Reader._readers || [])]) if (cfg.items.some(i => i.attachmentID === r.itemID) && r.tabID) { try { win.Zotero_Tabs.close(r.tabID); status.closedTabs.push(r.itemID); } catch (e) {} }
   await sleep(1500); await save();
+  await guard.arm(cfg.tag);
   try {
     Zotero.Prefs.set(PREF, true, true);
     Services.prefs.setBoolPref(UPDATE_PREF, false);
@@ -90,6 +97,7 @@
       // acceptance-only debugDocumentStyleWaitMs), cleared afterwards.
       for (const k of stepPrefs) Zotero.Prefs.clear(k, true);
       stepPrefs.length = 0;
+      await guard.stepPrefs(Object.keys(step.prefs || {}));
       for (const [k, v] of Object.entries(step.prefs || {})) { Zotero.Prefs.set(k, v, true); stepPrefs.push(k); }
       const merged = { tool: 'ink-clip-check', version: step.version, items: [], errors: [], phases: cfg.phases, started: new Date().toISOString() };
       for (const item of cfg.items) {
@@ -120,6 +128,7 @@
   finally {
     Zotero.HTTP.request = realRequest; Zotero.Prefs.set(PREF, prev, true); Services.prefs.setBoolPref(UPDATE_PREF, prevUpdate);
     for (const k of stepPrefs) Zotero.Prefs.clear(k, true);
+    await guard.disarm();
     try { await install(cfg.finalXpi, cfg.finalVersion); } catch (e) { status.errors.push('restore: ' + e); }
     status.installed = Zotero.PaperMirror.version; status.blockedHTTP = blocked; status.httpRestored = Zotero.HTTP.request === realRequest;
     status.localOnly = Zotero.Prefs.get(PREF, true); status.autoUpdate = Services.prefs.getBoolPref(UPDATE_PREF, true); status.finished = new Date().toISOString(); await save();
