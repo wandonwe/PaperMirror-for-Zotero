@@ -193,7 +193,7 @@ export interface TranslationRequest {
 		 */
 		charBudget?: number;
 		/** 5.1: a table cell's column and row headers, for understanding only. */
-		tableHeaders?: { row?: string; column?: string };
+		tableHeaders?: { row?: string; column?: string; productName?: true };
 	}[];
 	glossary?: GlossaryRule[];
 	/**

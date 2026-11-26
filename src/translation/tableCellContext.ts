@@ -8,7 +8,7 @@
  */
 import type { SourceBlock } from '../types/models';
 
-export interface TableHeaders { row?: string; column?: string }
+export interface TableHeaders { row?: string; column?: string; productName?: true }
 
 type Cell = Pick<SourceBlock, 'id' | 'sourceText'> & Partial<Pick<SourceBlock, 'tableId' | 'tableRow' | 'tableCol' | 'tableRowSpan' | 'tableColSpan' | 'translationMode'>>;
 
@@ -54,19 +54,45 @@ export function tableHeadersByBlock(blocks: Cell[]): Map<string, TableHeaders> {
 /** Header words that say the column / row lists products: scanners, systems, software. */
 const PRODUCT_HEADER = /\b(?:scanners?|systems?|models?|devices?|vendors?|manufacturers?|software|platforms?|products?|machines?|equipment|kernels?|algorithms?)\b/i;
 /** One to three capitalised or alphanumeric words: "Alpha", "Naeotom Alpha", "SOMATOM Force", "Revolution CT". */
-const NAME_LIKE = /^(?=.*\p{L})[A-Z0-9][\p{L}\d+.\-]*(?:\s+[A-Z0-9][\p{L}\d+.\-]*){0,2}$/u;
+const NAME_LIKE = /^(?=.*\p{L})[A-Z0-9][\p{L}\d+./\-]*(?:\s+[A-Z0-9][\p{L}\d+./\-]*){0,2}$/u;
+
+/** A short label naming a product category — not a prose row that mentions "food manufacturers" (3064) or "Devices to …" (2852). */
+const productHeader = (header: string | undefined): boolean => !!header && header.length <= 40 && PRODUCT_HEADER.test(header);
+
+/** A cell listing names: "Alpha", "Edge/Edge+, Force", "Revolution CT and Force". */
+const nameParts = (text: string): string[] | null => {
+	const t = text.replace(/\s+/g, ' ').trim();
+	if (!t || t.length > 60) return null;
+	const parts = t.split(/\s*,\s*|\s+and\s+/).filter(Boolean);
+	return parts.length > 0 && parts.length <= 4 && parts.every(p => p.length <= 30 && NAME_LIKE.test(p)) ? parts : null;
+};
 
 /**
  * 5.1: cells that are product names. The model now copies "Alpha" as asked;
  * the validator used to reject that echo as untranslated and the plain-mode
  * recovery then forced 阿尔法 (3023, device check 11-26). For these cells an
  * echo is accepted.
+ *
+ * A name listed in a product row is also a name where it comes back elsewhere
+ * in the same table: 3023 lists "Edge/Edge+, Force" as the EID CT scanners,
+ * then uses "Edge/Edge+" and "Force" as sub-row labels under Collimation, where
+ * the only header is "Parameter" (device check 11-26: Force → 力).
  */
 export function productNameCells(blocks: Cell[]): Set<string> {
 	const out = new Set<string>();
+	const namesByTable = new Map<string, Set<string>>();
 	for (const [id, h] of tableHeadersByBlock(blocks)) {
-		const text = blocks.find(b => b.id === id)?.sourceText.trim() ?? '';
-		if (text.length <= 30 && NAME_LIKE.test(text) && (PRODUCT_HEADER.test(h.row ?? '') || PRODUCT_HEADER.test(h.column ?? ''))) out.add(id);
+		const block = blocks.find(b => b.id === id);
+		const parts = nameParts(block?.sourceText ?? '');
+		if (!block || !parts || !(productHeader(h.row) || productHeader(h.column))) continue;
+		out.add(id);
+		const names = namesByTable.get(block.tableId!) ?? namesByTable.set(block.tableId!, new Set()).get(block.tableId!)!;
+		for (const part of parts) names.add(part.toLowerCase());
+	}
+	for (const b of blocks) {
+		if (!isCell(b) || out.has(b.id)) continue;
+		const text = b.sourceText.replace(/\s+/g, ' ').trim().replace(/:$/, '');
+		if (NAME_LIKE.test(text) && namesByTable.get(b.tableId)?.has(text.toLowerCase())) out.add(b.id);
 	}
 	return out;
 }

@@ -1,5 +1,5 @@
 import { policyStampFor } from './promptPolicies';
-import { productNameCells, tableHeadersByBlock } from './tableCellContext';
+import { productNameCells, tableHeadersByBlock, type TableHeaders } from './tableCellContext';
 import { numericPowerIssue, isNumericPowerLiteral } from './numericPowers';
 import { technicalUnitIssue, isTechnicalUnitLiteral } from './technicalUnits';
 /**
@@ -756,7 +756,8 @@ export class TranslationManager {
   const sourceById = new Map(pageBlocks.map(b => [b.id, b]));
   const useContext = this.deps.useContext();
   // 5.1: table cells carry their column / row headers (understanding only).
-  const headers = request.plain ? new Map() : tableHeadersByBlock(pageBlocks);
+  const headers: Map<string, TableHeaders> = request.plain ? new Map() : tableHeadersByBlock(pageBlocks);
+  if (!request.plain) for (const id of productNameCells(pageBlocks)) headers.set(id, { ...headers.get(id), productName: true });
   request = { ...request, blocks: request.blocks.map(block => {
    const {continuationContext: _old, protectedLiterals: _literals, sourceText: _sourceText, tableHeaders: _headers, ...rest} = block;
    const tableHeaders = headers.get(block.id);

@@ -91,7 +91,7 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 	}
 	// 5.1: table cells with their headers (3023: scanner models "Alpha", "Force" → 阿尔法 / 力).
 	if (request.blocks.some(b => b.tableHeaders)) {
-		lines.push('- A block\'s "tableHeaders" (the column and row headers of that table cell) is for understanding only — do NOT translate or return it. Product, device, scanner, software and model names in table cells are proper names: copy them exactly as written.');
+		lines.push('- A block\'s "tableHeaders" (the column and row headers of that table cell) is for understanding only — do NOT translate or return it. Product, device, scanner, software and model names in table cells are proper names: copy them exactly as written. "productName": true marks a cell that is such a name (also where it is reused as a row label): return it unchanged.');
 	}
 	lines.push(
 		'- Respond with ONLY a JSON object of this exact shape, no markdown fences, no commentary:',

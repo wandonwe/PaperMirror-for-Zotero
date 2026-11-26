@@ -46,7 +46,7 @@ test('5.1: the prompt explains tableHeaders only when a block carries them, and 
 });
 
 test('5.1: cells below the header row are re-translated once under the new rule; prose and header cells keep their keys', () => {
-	assert.equal(policyStampFor({ sourceText: 'Alpha', tableId: 't1', tableRow: 1 }), 'tableCells3');
+	assert.equal(policyStampFor({ sourceText: 'Alpha', tableId: 't1', tableRow: 1 }), 'tableCells4');
 	assert.equal(policyStampFor({ sourceText: 'Parameter', tableId: 't1', tableRow: 0 }), '');
 	assert.equal(policyStampFor({ sourceText: 'Body text.' }), '');
 });
@@ -66,7 +66,7 @@ test('5.1: the translation manager sends each table cell with its headers', asyn
 	}, { onPageUpdate: () => {} }, { prefetch: false, maxConcurrent: 2 });
 	try {
 		await m.ensurePage(0, 10);
-		assert.deepEqual(seen.get('t-r1c1'), { column: 'PCD-CT system', row: 'Scanner' });
+		assert.deepEqual(seen.get('t-r1c1'), { column: 'PCD-CT system', row: 'Scanner', productName: true });
 		assert.equal(seen.get('t-r0c1'), undefined);
 	} finally { m.dispose(); }
 });
@@ -82,4 +82,48 @@ test('5.1 (device check 11-26): an unchanged product name in a scanner row is ac
 	assert.equal(looksTranslated('Alpha', 'Alpha', 'zh-CN', { keepAsName: true }), true);
 	assert.equal(looksTranslated('Alpha', 'Alpha', 'zh-CN'), false, 'elsewhere an echo is still untranslated');
 	assert.equal(looksTranslated('Male', 'Male', 'zh-CN', { keepAsName: names.has('t-r2c1') }), false, 'an ordinary word in a non-product row must be translated');
+});
+
+test('5.1 (device check 11-26, 3023 Table 1): scanner names listed in the model row are names again as sub-row labels', () => {
+	// Structure as detected on 3023 p3: "Edge/Edge+, Force" in the scanner row, then
+	// "Edge/Edge+" and "Force" as indented sub-rows of "Collimation (mm)" in column 0.
+	const blocks = [
+		cell(0, 0, 'Parameter'), cell(0, 1, 'EID CT'), cell(0, 2, 'PCD CT'),
+		cell(1, 0, 'Scanner model name'), cell(1, 1, 'Edge/Edge+, Force'), cell(1, 2, 'Alpha'),
+		cell(2, 0, 'Collimation (mm)'), cell(2, 2, '120 × 0.2'),
+		cell(3, 0, 'Edge/Edge+'), cell(3, 1, '128 × 0.6'),
+		cell(4, 0, 'Force'), cell(4, 1, '192 × 0.6'),
+		cell(5, 0, 'Pitch'), cell(5, 1, '1'), cell(5, 2, '0.85')
+	];
+	const names = productNameCells(blocks);
+	assert.deepEqual([...names].sort(), ['t-r1c1', 't-r1c2', 't-r3c0', 't-r4c0']);
+	assert.ok(!names.has('t-r5c0'), '"Pitch" was never listed as a product');
+	// a name from one table does not leak into another table
+	const other = blocks.map(b => ({ ...b, id: b.id + 'x', tableId: 't9' })).filter(b => b.tableRow !== 1);
+	assert.equal(productNameCells([...blocks, ...other]).has('t-r4c0x'), false);
+	// a prose row that merely mentions manufacturers is not a product label (3064)
+	const prose = [cell(0, 0, 'Treatment'), cell(0, 1, 'Rationale'), cell(1, 0, 'oxalate content is not provided by food manufacturers and'), cell(1, 1, 'Article Information')];
+	assert.equal(productNameCells(prose).size, 0);
+});
+
+test('5.1: a reused product name is flagged productName in the request, and the prompt explains the flag', async () => {
+	const { TranslationManager } = await import('../../src/translation/translationManager');
+	const rows = [['Parameter', 'EID CT', 'PCD CT'], ['Scanner model name', 'Edge/Edge+, Force', 'Alpha'], ['Force', '192 × 0.6', ''], ['Pitch', '1', '0.85']];
+	const cells = rows.flatMap((row, r) => row.map((text, c) => ({ id: `t-r${r}c${c}`, pageIndex: 0, order: r * 3 + c, type: 'paragraph' as const, sourceText: text,
+		tableId: 't1', tableRow: r, tableCol: c, translationMode: 'translate' as const }))).filter(c => c.sourceText);
+	const seen = new Map<string, unknown>();
+	const m = new TranslationManager({
+		extractPage: async () => cells,
+		readCache: async () => null, writeCache: async () => true,
+		translateRequest: async request => { for (const b of request.blocks) seen.set(b.id, b.tableHeaders); return { translations: request.blocks.map(b => ({ id: b.id, translatedText: `译${b.text}` })) }; },
+		getLanguages: () => ({ source: 'en', target: 'zh-CN' }), getDocumentTitle: () => '', getGlossary: () => [], useContext: () => false,
+		pageCount: () => 1, laneFor: () => 'openai', poolSize: () => 1
+	}, { onPageUpdate: () => {} }, { prefetch: false, maxConcurrent: 2 });
+	try {
+		await m.ensurePage(0, 10);
+		assert.deepEqual(seen.get('t-r2c0'), { column: 'Parameter', productName: true });
+		assert.deepEqual(seen.get('t-r3c0'), { column: 'Parameter' });
+	} finally { m.dispose(); }
+	const req = { sourceLanguage: 'en', targetLanguage: 'zh-CN', blocks: [{ id: 'a', type: 'paragraph', text: 'Force', tableHeaders: { column: 'Parameter', productName: true } }] } as TranslationRequest;
+	assert.match(buildSystemPrompt(req), /"productName": true.*unchanged/s);
 });
