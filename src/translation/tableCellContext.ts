@@ -50,3 +50,23 @@ export function tableHeadersByBlock(blocks: Cell[]): Map<string, TableHeaders> {
 	}
 	return out;
 }
+
+/** Header words that say the column / row lists products: scanners, systems, software. */
+const PRODUCT_HEADER = /\b(?:scanners?|systems?|models?|devices?|vendors?|manufacturers?|software|platforms?|products?|machines?|equipment|kernels?|algorithms?)\b/i;
+/** One to three capitalised or alphanumeric words: "Alpha", "Naeotom Alpha", "SOMATOM Force", "Revolution CT". */
+const NAME_LIKE = /^(?=.*\p{L})[A-Z0-9][\p{L}\d+.\-]*(?:\s+[A-Z0-9][\p{L}\d+.\-]*){0,2}$/u;
+
+/**
+ * 5.1: cells that are product names. The model now copies "Alpha" as asked;
+ * the validator used to reject that echo as untranslated and the plain-mode
+ * recovery then forced 阿尔法 (3023, device check 11-26). For these cells an
+ * echo is accepted.
+ */
+export function productNameCells(blocks: Cell[]): Set<string> {
+	const out = new Set<string>();
+	for (const [id, h] of tableHeadersByBlock(blocks)) {
+		const text = blocks.find(b => b.id === id)?.sourceText.trim() ?? '';
+		if (text.length <= 30 && NAME_LIKE.test(text) && (PRODUCT_HEADER.test(h.row ?? '') || PRODUCT_HEADER.test(h.column ?? ''))) out.add(id);
+	}
+	return out;
+}

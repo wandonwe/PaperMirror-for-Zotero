@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { tableHeadersByBlock } from '../../src/translation/tableCellContext';
+import { productNameCells, tableHeadersByBlock } from '../../src/translation/tableCellContext';
+import { looksTranslated } from '../../src/translation/translationValidation';
 import { buildSystemPrompt, buildUserPayload } from '../../src/translation/promptBuilder';
 import { policyStampFor } from '../../src/translation/promptPolicies';
 import type { TranslationRequest } from '../../src/types/models';
@@ -45,7 +46,7 @@ test('5.1: the prompt explains tableHeaders only when a block carries them, and 
 });
 
 test('5.1: cells below the header row are re-translated once under the new rule; prose and header cells keep their keys', () => {
-	assert.equal(policyStampFor({ sourceText: 'Alpha', tableId: 't1', tableRow: 1 }), 'tableCells2');
+	assert.equal(policyStampFor({ sourceText: 'Alpha', tableId: 't1', tableRow: 1 }), 'tableCells3');
 	assert.equal(policyStampFor({ sourceText: 'Parameter', tableId: 't1', tableRow: 0 }), '');
 	assert.equal(policyStampFor({ sourceText: 'Body text.' }), '');
 });
@@ -68,4 +69,17 @@ test('5.1: the translation manager sends each table cell with its headers', asyn
 		assert.deepEqual(seen.get('t-r1c1'), { column: 'PCD-CT system', row: 'Scanner' });
 		assert.equal(seen.get('t-r0c1'), undefined);
 	} finally { m.dispose(); }
+});
+
+test('5.1 (device check 11-26): an unchanged product name in a scanner row is accepted, so recovery no longer forces 阿尔法', () => {
+	const blocks = [
+		cell(0, 0, 'Parameter'), cell(0, 1, 'PCD CT'), cell(0, 2, 'EID CT'),
+		cell(1, 0, 'Scanner model name'), cell(1, 1, 'Alpha'), cell(1, 2, 'Force'),
+		cell(2, 0, 'Sex'), cell(2, 1, 'Male'), cell(2, 2, 'Female')
+	];
+	const names = productNameCells(blocks);
+	assert.deepEqual([...names].sort(), ['t-r1c1', 't-r1c2']);
+	assert.equal(looksTranslated('Alpha', 'Alpha', 'zh-CN', { keepAsName: true }), true);
+	assert.equal(looksTranslated('Alpha', 'Alpha', 'zh-CN'), false, 'elsewhere an echo is still untranslated');
+	assert.equal(looksTranslated('Male', 'Male', 'zh-CN', { keepAsName: names.has('t-r2c1') }), false, 'an ordinary word in a non-product row must be translated');
 });

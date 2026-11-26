@@ -54,6 +54,8 @@ export class PageRun {
 	sourceById!: Map<string, string>;
 	sourceBlockById!: Map<string, SourceBlock>;
 	refById!: Set<string>;
+	/** 5.1: table cells that are product names (an unchanged answer is accepted). */
+	nameCellIds: Set<string> = new Set();
 	keepOrigin!: Map<string, string>;
 	toTranslate!: SourceBlock[];
 	/** 同页同文去重 (API-2): 代表块 id → 同文块 id。 */
@@ -98,7 +100,7 @@ export class PageRun {
 
 	/** Accept a response only if it is actually translated (not echoed English). */
 	readonly accept = (id: string, text: string): boolean =>
-		text.trim().length > 0 && looksTranslated(this.sourceById.get(id) ?? '', text, this.target, { isReference: this.refById.has(id) });
+		text.trim().length > 0 && looksTranslated(this.sourceById.get(id) ?? '', text, this.target, { isReference: this.refById.has(id), keepAsName: this.nameCellIds.has(id) });
 
 	/**
 	 * 拒绝原因埋点 (1.1.3): unrecovered 只说"没救回来",不说"为什么每次都被

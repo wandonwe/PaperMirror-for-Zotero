@@ -1,5 +1,5 @@
 import { policyStampFor } from './promptPolicies';
-import { tableHeadersByBlock } from './tableCellContext';
+import { productNameCells, tableHeadersByBlock } from './tableCellContext';
 import { numericPowerIssue, isNumericPowerLiteral } from './numericPowers';
 import { technicalUnitIssue, isTechnicalUnitLiteral } from './technicalUnits';
 /**
@@ -2737,6 +2737,7 @@ export class TranslationManager {
 		run.sourceById = new Map(activeBlocks.map(b => [b.id, b.sourceText]));
 		run.sourceBlockById = new Map(activeBlocks.map(b => [b.id, b]));
 		run.refById = new Set(activeBlocks.filter(b => b.isReference).map(b => b.id));
+		run.nameCellIds = productNameCells(this.pages.get(run.pageIndex)?.blocks ?? activeBlocks);
 
 		if (!bypass.bypassPageCache && await this.prefillFromPageCache(run)) {
 			return false;
@@ -3189,7 +3190,7 @@ export class TranslationManager {
 					// protected token was lost or invented.
 					const first = single.translations.find(t =>
 						pb.reg.ok(t.translatedText)
-						&& looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference }));
+						&& looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference, keepAsName: run.nameCellIds.has(block.id) }));
 					if (first) {
 						received.set(block.id, first.translatedText);
 					}
@@ -3280,7 +3281,7 @@ export class TranslationManager {
 					plain: true
 				}, signal);
 				const translatedHit = resp.translations.find(t =>
-					looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference }));
+					looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference, keepAsName: run.nameCellIds.has(block.id) }));
 				const hit = translatedHit && pb.reg.ok(translatedHit.translatedText) ? translatedHit : undefined;
 				if (hit) {
 					const restored = pb.reg.restore(hit.translatedText);
@@ -3307,7 +3308,7 @@ export class TranslationManager {
 						plain: true
 					}, signal);
 					const bareHit = bare.translations.find(t =>
-						looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference }));
+						looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference, keepAsName: run.nameCellIds.has(block.id) }));
 					if (bareHit) {
 						state.translations.set(block.id, bareHit.translatedText);
 						run.results.push({ id: block.id, translatedText: bareHit.translatedText });
