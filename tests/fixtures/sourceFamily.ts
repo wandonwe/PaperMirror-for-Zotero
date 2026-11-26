@@ -10,7 +10,7 @@ import { join } from 'node:path';
 export const SOURCE_FAMILIES: Record<string, string[]> = {
 	'src/reader/spanBlockBuilder.ts': ['src/reader/spanLines.ts', 'src/reader/spanParagraphs.ts'],
 	'src/reader/paragraphHeuristics.ts': ['src/reader/columnGeometry.ts'],
-	'src/translation/translationManager.ts': ['src/translation/translationManagerTypes.ts', 'src/translation/chunkRecovery.ts'],
+	'src/translation/translationManager.ts': ['src/translation/translationManagerTypes.ts', 'src/translation/chunkRecovery.ts', 'src/translation/managerDiagnostics.ts', 'src/translation/manualRetranslation.ts', 'src/translation/pagePlanning.ts'],
 	'src/reader/readerSession.ts': ['src/reader/sessionExports.ts']
 };
 

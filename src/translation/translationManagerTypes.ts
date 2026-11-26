@@ -66,7 +66,6 @@ export function hasShownProvisional(state: Pick<PageTranslationState, 'provision
 	return false;
 }
 
-
 /**
  * 页被"释放等重试"的原因 (2.9.0 真机第三轮)。
  *
@@ -424,3 +423,24 @@ export interface ManagerEvents {
 	 */
 	onProviderUnstable?(pageIndex: number, missingRatio: number): void;
 }
+
+/**
+ * Scheduler priorities. The current visible page and its work always dominate
+ * neighbour prefetch, so the page the reader is looking at is never queued
+ * behind pages they have not scrolled to yet. Numeric gaps leave room to insert
+ * finer tiers later without renumbering.
+ */
+export const PRIORITY = {
+	/** 重新翻译本页 — an explicit user action, the most urgent thing there is. */
+	CURRENT_RETRANSLATE: 1000,
+	/** The visible page's first translation. */
+	CURRENT_PAGE: 900,
+	/** The visible page's strict-layout compress-and-retry. */
+	CURRENT_COMPRESS: 850,
+	/** Prefetch: the next page is likelier to be read than the previous. */
+	NEXT_PAGE: 100,
+	PREVIOUS_PAGE: 80,
+	SECOND_NEXT_PAGE: 20,
+	/** 被释放的页补回来 (2.9.0) —— 比预取低,绝不跟当前页抢。 */
+	RELEASED_RETRY: 10
+} as const;

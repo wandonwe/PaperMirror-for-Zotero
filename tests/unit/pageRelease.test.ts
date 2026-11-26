@@ -197,7 +197,7 @@ test('页状态的删除只剩两个合法出口: releasePage 与用户重译 (�
 	const src = raw.split('\n').map(line => /^\s*(\*|\/\/)/.test(line) ? '' : line).join('\n');
 	// `this.pages.delete(` 允许出现的地方只有两处: releasePage 自己,和
 	// retranslatePage(用户亲手发起的重置,不是"释放等重试")。
-	const sites = [...src.matchAll(/this\.pages\.delete\(/g)].map(m => m.index!);
+	const sites = [...src.matchAll(/(?:this|ctx)\.pages\.delete\(/g)].map(m => m.index!); // 5.1: retranslatePage is in manualRetranslation.ts
 	assert.equal(sites.length, 2,
 		'多出来的每一处裸 delete 都是一页可能从诊断里凭空消失 —— 真机第 36/41/45 页就是这么没的');
 	const funnel = src.indexOf('private releasePage(');
@@ -205,7 +205,7 @@ test('页状态的删除只剩两个合法出口: releasePage 与用户重译 (�
 	const inFunnel = sites.filter(i => i > funnel && i < funnelEnd).length;
 	assert.equal(inFunnel, 1, '其中一处必须在 releasePage 里');
 	// 另一处在用户重译里,且必须同时清掉释放计数。
-	assert.ok(/this\.unstableFired\.delete\(pageIndex\);[\s\S]{0,200}this\.released\.delete\(pageIndex\);/.test(src),
+	assert.ok(/(?:this|ctx)\.unstableFired\.delete\(pageIndex\);[\s\S]{0,200}(?:this|ctx)\.released\.delete\(pageIndex\);/.test(src),
 		'用户重译要清掉释放计数');
 });
 
@@ -469,7 +469,7 @@ test('每一道闸挡掉多少次都要计数 (结构性回归闸, 2.9.4)', () =
 			`${kind} 这道闸必须记数 —— 2.9.3 上第 42–45 页 renderRetries 全是 0,`
 			+ '而日志分不出是哪一道挡的,只能猜;猜出来的结论不配写进代码');
 	}
-	assert.ok(/renderRetryBlocked: countsOf\(this\.renderRetryBlocked\)/.test(src),
+	assert.ok(/renderRetryBlocked: countsOf\((?:this|ctx)\.renderRetryBlocked\)/.test(src),
 		'计数要进导出,否则下一轮还是看不见');
 });
 
