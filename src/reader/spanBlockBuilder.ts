@@ -72,6 +72,8 @@ export interface SpanItem {
 	text: string;
 	rect: Rect;
 	fontSize?: number;
+	/** 5.1: set in a bold face (embedded font name). Absent = not known / not bold. */
+	bold?: boolean;
 }
 
 export interface SpanLine {
@@ -751,6 +753,20 @@ function rejoinGlossaryRows(lines: SpanLine[]): void {
 }
 
 /** Join the runs of a line into text, inserting spaces where there are gaps. */
+/**
+ * 5.1: a line set entirely in bold — the letters, not the punctuation or a
+ * section number, decide ("4. Discussion" has a bold "4." too, but a regular
+ * "2." before a bold word still counts). Undefined weights read as regular.
+ */
+export function lineIsBold(line: SpanLine): boolean {
+	let bold = 0, regular = 0;
+	for (const it of line.items) {
+		const letters = it.text.replace(/[^\p{L}]/gu, '').length;
+		if (it.bold) bold += letters; else regular += letters;
+	}
+	return bold >= 3 && regular <= bold * 0.05;
+}
+
 export function lineText(line: SpanLine): string {
 	return joinSemanticSpans(line.items, {fontSize: line.fontSize, spaceThreshold: .18});
 }
@@ -974,6 +990,14 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 				&& !startsContinuation(lineText(next))
 				&& (!referenceContext || startsReferenceEntry(lineText(next)) || startsUnnumberedEntry(lineText(next))),
 			leaderDots: hasLeaderDots(lineText(line)),
+			// 5.1: a body-size heading set in bold ("4. Discussion" in 2638) sits on
+			// the paragraph above with a gap under 1.7em and is short, so only the
+			// break after it fired — it was welded onto the previous paragraph's
+			// last line. A change between an all-bold short line and a regular line
+			// ends the paragraph. Not in reference lists (bold volume numbers,
+			// bold author names) and not for a bold line that fills the column
+			// (a bold sentence inside a paragraph, a highlighted finding).
+			weightChange: !referenceContext && weightBoundary(line, next, medianLineWidth),
 			// 5.0 (2877 p18): unnumbered entries ("…In, 2011" / "Benomar A, Zarour E, …")
 			// were welded in pairs — the first line filled its column. On a known
 			// reference page an entry end followed by an entry start is a boundary.
@@ -988,6 +1012,25 @@ export function groupIntoParagraphs(lines: SpanLine[], pageWidth = 612, pageHeig
 	return paragraphs;
 }
 
+/** 5.1: one of the two lines is a short all-bold heading line and the other is regular text. */
+function weightBoundary(line: SpanLine, next: SpanLine, medianLineWidth: number): boolean {
+	const a = lineIsBold(line), b = lineIsBold(next);
+	if (a === b) return false;
+	const heading = a ? line : next;
+	const text = lineText(heading).trim();
+	const width = heading.rect[2] - heading.rect[0];
+	const other = lineText(a ? next : line).trim();
+	return text.length <= 90 && (medianLineWidth <= 0 || width < medianLineWidth * 0.85)
+		// the regular side must be text, not a lone page number or a symbol
+		&& /\p{L}{2,}/u.test(other)
+		// a bold caption label keeps its caption ("Fig. 4. Follow-up MRI of the brain." + panels, 2827)
+		&& !/^(?:fig(?:ure)?\.?|table|图|表)\s*\d/i.test(text)
+		// a bold run inside a sentence is not a heading: before a bold line the
+		// regular line must have ended its sentence ("…Mono+ or" / "Conv. CT.", 3225);
+		// after one, the regular line must not start in lower case
+		&& (a ? !/^[a-z]/.test(other) : /[.:!?)\]]$/.test(other));
+}
+
 /**
  * A block that is ONLY a figure label — "Figure 6:", "Fig. 2.", "图 3" —
  * with the caption text torn into the next block.
@@ -996,11 +1039,24 @@ export function isBareFigureLabel(text: string): boolean {
 	return /^(figure|fig\.?|图)\s*\d+\s*[.:：]?\s*$/i.test(text.trim());
 }
 
-function classify(text: string, fontSize: number, bodySize: number, lineCount: number, lines: string[] = [], isTableLine = false): BlockType {
+function classify(text: string, fontSize: number, bodySize: number, lineCount: number, lines: string[] = [], isTableLine = false, allBold = false): BlockType {
 	if (/^(figure|fig\.?|table|图|表|圖)\s*\d+/i.test(text)) {
 		return /^(table|表)/i.test(text) ? 'table' : 'caption';
 	}
 	const ratio = bodySize > 0 ? fontSize / bodySize : 1;
+	// 5.1: the weight the text layer never had. Before the list arms: "4."
+	// opens an ordered list at body size, and the coalescer welds lists onto
+	// the paragraph above. A short block whose every line
+	// is bold, at body size or larger, is a subheading ("4. Discussion" in 2638,
+	// glued onto the paragraph above by the region coalescer as a "paragraph").
+	// A bold run that ends a sentence and runs on is a highlighted finding, not a
+	// heading — the length cap keeps those out.
+	// Larger bold type is left to the title arm below (a wrapped title arrives line
+	// by line and is rejoined only as 'title').
+	if (allBold && !isTableLine && lineCount <= 2 && text.length < 90 && ratio >= 0.9 && ratio < 1.35
+		&& !/^[a-z]/.test(text.trim()) && !/[,;]$/.test(text.trim())) {
+		return 'heading';
+	}
 	// Bullet lists are always lists; a single-level numbered item ("1." "2)"
 	// "10.") is a list ONLY at body font size — a larger "3. Model Architecture"
 	// is a section heading, so it falls through to the heading test below. This is
@@ -1499,7 +1555,7 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 		// span, or a heading-styled lead-in, and using it skewed the whole
 		// block's translated type size.
 		const repSize = dominantFontSize(group.map(l => l.fontSize)) || group[0]!.fontSize;
-		const type = classify(text, repSize, bodySize, group.length, group.map(lineText));
+		const type = classify(text, repSize, bodySize, group.length, group.map(lineText), false, group.every(lineIsBold));
 		// Body text is typeset at the MINIMUM of its own body cluster (drop
 		// caps and superscripts excluded); headings keep the dominant size.
 		const fontSize = (type === 'paragraph' || type === 'list' || type === 'caption')
@@ -1516,8 +1572,32 @@ export function buildBlocksFromSpans(items: SpanItem[], options: SpanBuildOption
 			isTableLine: false
 		};
 	}).filter(p => p.text.length >= 2 || (p.text.length === 1 && gridList.some(g=>columnOfX(g,(p.rect[0]+p.rect[2])/2)>=0 && rowOfTop(g,options.pageHeight-(p.rect[1]+p.rect[3])/2)>=0)));
+	// 5.1: a bold heading that wraps after a function word ("Diseases of the" /
+	// "Biliary Tract", 3165) arrives as two short lines; rejoin them.
+	for (let i = draft.length - 1; i > 0; i--) {
+		const p = draft[i]!, prev = draft[i - 1]!;
+		if (prev.type !== 'heading' || p.type !== 'heading' || !prev.group.every(lineIsBold) || !p.group.every(lineIsBold)) continue;
+		if (!/\b(?:of|the|and|for|in|to|with|on|a|an|or|by|from)$/i.test(prev.text.trim()) || !linesShareColumn(prev.rect, p.rect)) continue;
+		const size = prev.fontSize > 0 ? prev.fontSize : 10;
+		const gap = prev.rect[1] - p.rect[3];
+		if (gap > size * 1.2 || gap < -size * 0.5) continue;
+		prev.group = [...prev.group, ...p.group];
+		prev.text = joinLines(prev.group.map(lineText));
+		prev.rect = union(prev.rect, p.rect);
+		draft.splice(i, 1);
+	}
 	for (let i = 0; i < draft.length - 1; i++) {
 		draft[i]!.gapAfter = draft[i]!.rect[1] - draft[i + 1]!.rect[3];
+	}
+	// 5.1: a short bold line under a line that has not finished its sentence is
+	// a bold word in running text ("…either Mono+ or" / "Conv. CT.", 3225), not a
+	// subheading — it stays a paragraph so the merge below can rejoin it.
+	for (let i = 1; i < draft.length; i++) {
+		const p = draft[i]!, prev = draft[i - 1]!;
+		if (p.type !== 'heading' || !p.group.every(lineIsBold) || prev.type !== 'paragraph' && prev.type !== 'list') continue;
+		const size = prev.fontSize > 0 ? prev.fontSize : 10;
+		if (!/[.:!?)\]]$/.test(prev.text.trim()) && linesShareColumn(prev.rect, p.rect)
+			&& prev.gapAfter !== undefined && prev.gapAfter <= size * 1.2 && prev.gapAfter >= -size * 0.5) p.type = 'paragraph';
 	}
 
 	// An index page keeps its one-entry-per-line paragraphs (校验 r23, 3200).

@@ -89,6 +89,10 @@ export function buildSystemPrompt(request: TranslationRequest, customPrompt?: st
 	if (request.previousContext || request.moduleContext) {
 		lines.push('- The previousContext and moduleContext fields are for understanding only — do NOT translate or repeat them in the output.');
 	}
+	// 5.1: table cells with their headers (3023: scanner models "Alpha", "Force" → 阿尔法 / 力).
+	if (request.blocks.some(b => b.tableHeaders)) {
+		lines.push('- A block\'s "tableHeaders" (the column and row headers of that table cell) is for understanding only — do NOT translate or return it. Names of scanners, devices, software and their model or version names (e.g. "Alpha", "Force", "syngo.via") are proper names: copy them exactly as written. Everything else in a cell is translated as usual — drug names, diseases, methods and measured quantities included (gefitinib → 吉非替尼). "productName": true marks a cell that is such a scanner, device or software name (also where it is reused as a row label): return it unchanged.');
+	}
 	lines.push(
 		'- Respond with ONLY a JSON object of this exact shape, no markdown fences, no commentary:',
 		'  {"translations":[{"id":"<block id>","translatedText":"<translation>"}]}',

@@ -89,7 +89,10 @@ export interface FurnitureLine {
 
 /** 同一行在各页之间的比较键:小写、数字归一、空白折叠。 */
 export function furnitureKey(text: string): string {
-	return text.toLowerCase().replace(/\d+/g, '#').replace(/\s+/g, ' ').trim();
+	const key = text.toLowerCase().replace(/\d+/g, '#').replace(/\s+/g, ' ').trim();
+	// 5.1: a front-matter page number in roman numerals ("xvi", 3200) is the same
+	// furniture as the arabic one at that position.
+	return /^(?=[ivxlc])c{0,3}(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})$/.test(key) ? '#' : key;
 }
 
 /** 这一行(PDF 坐标)是不是全篇的固定元素。 */
@@ -298,4 +301,52 @@ function paragraphIndentOf(pageLineSets: SpanLine[][], bodySize: number): number
 /** 本页之前是否已进入参考文献、且本页仍在参考文献范围内。 */
 export function referencesContinueOnto(style: DocumentStyle, pageIndex: number): boolean {
 	return style.referenceRanges.some(([start, end]) => pageIndex > start && pageIndex <= end);
+}
+
+/**
+ * 5.1: how many pages the whole-document style reads. Longer documents (a 774-page
+ * textbook, 3200) used to get no style at all — running heads, the bibliography
+ * range and the column gutters fell back to per-page guesses.
+ */
+export const DOCUMENT_STYLE_SAMPLE = 400;
+
+/**
+ * Pages to read for a document of `count` pages: all of them up to `max`;
+ * otherwise the front matter, the last 15 % (bibliography, index) read
+ * contiguously, and an even stride through the middle.
+ */
+export function documentStyleSample(count: number, max = DOCUMENT_STYLE_SAMPLE): number[] {
+	if (count <= max) return Array.from({ length: count }, (_, i) => i);
+	const head = Math.min(30, Math.floor(max * 0.1));
+	const tail = Math.min(Math.ceil(count * 0.15), Math.floor(max * 0.45));
+	const middleBudget = max - head - tail;
+	const from = head, to = count - tail; // middle is [from, to)
+	const out: number[] = [];
+	for (let i = 0; i < head; i++) out.push(i);
+	const stride = (to - from) / middleBudget;
+	for (let k = 0; k < middleBudget; k++) out.push(from + Math.floor(k * stride));
+	for (let i = to; i < count; i++) out.push(i);
+	return [...new Set(out)].sort((a, b) => a - b);
+}
+
+/**
+ * The style of a sampled document, in real page indices. A reference range found
+ * in the sample spans the real pages between its first and last sampled page.
+ */
+export function buildSampledDocumentStyle(indices: number[], pages: StylePage[], pageCount: number): DocumentStyle {
+	const style = buildDocumentStyle(pages);
+	if (indices.length === pageCount && indices.every((v, i) => v === i)) return style;
+	const real = (i: number): number => indices[i] ?? i;
+	const ranges = style.referenceRanges.map(([a, b]) => [real(a), real(b)] as [number, number]);
+	const empty = evidenceFor([]);
+	const evidence: PageEvidence[] = Array.from({ length: pageCount }, () => empty);
+	style.pages.forEach((e, i) => { evidence[real(i)] = e; });
+	return {
+		...style,
+		pageCount,
+		referenceRanges: ranges,
+		referencesStartPage: ranges[0]?.[0] ?? -1,
+		referencesEndPage: ranges[0]?.[1] ?? -1,
+		pages: evidence
+	};
 }

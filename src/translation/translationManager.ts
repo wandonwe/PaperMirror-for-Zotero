@@ -1,4 +1,5 @@
 import { policyStampFor } from './promptPolicies';
+import { productNameCells, tableHeadersByBlock, type TableHeaders } from './tableCellContext';
 import { numericPowerIssue, isNumericPowerLiteral } from './numericPowers';
 import { technicalUnitIssue, isTechnicalUnitLiteral } from './technicalUnits';
 /**
@@ -53,12 +54,12 @@ export function noteProvisionalIn(state: Pick<PageTranslationState, 'provisional
  * (per-part) translations are kept, flagged, so a revisit shows them without
  * paying again; the flag keeps them out of the segment store after restore.
  */
-export function pageCacheRows(state: Pick<PageTranslationState, 'provisional' | 'translations'>, blocks: Array<{ id: string; sourceText?: string; isReference?: boolean }>): TranslatedBlock[] {
+export function pageCacheRows(state: Pick<PageTranslationState, 'provisional' | 'translations'>, blocks: Array<{ id: string; sourceText?: string; isReference?: boolean; tableId?: string; tableRow?: number }>): TranslatedBlock[] {
 	return blocks
 		.filter(b => state.translations.has(b.id))
 		.map(b => {
 			// 5.0: the prompt-policy stamp this row was produced under (see promptPolicies.ts).
-			const policy = typeof b.sourceText === 'string' ? policyStampFor({ sourceText: b.sourceText, isReference: b.isReference }) : '';
+			const policy = typeof b.sourceText === 'string' ? policyStampFor({ sourceText: b.sourceText, isReference: b.isReference, tableId: b.tableId, tableRow: b.tableRow }) : '';
 			return {
 				id: b.id,
 				translatedText: state.translations.get(b.id)!,
@@ -73,7 +74,7 @@ export function pageCacheRows(state: Pick<PageTranslationState, 'provisional' | 
  * 版本 > 1 的规则戳 —— 与规则无关的块键不变(旧缓存照常命中),相关的块在规则
  * 升版后换键,旧译文不再被取到。
  */
-export function blockSegmentHash(block: Pick<SourceBlock, 'sourceText' | 'continuationContext'> & { isReference?: boolean }, sourceLang: string, targetLang: string): string {
+export function blockSegmentHash(block: Pick<SourceBlock, 'sourceText' | 'continuationContext'> & { isReference?: boolean; tableId?: string; tableRow?: number }, sourceLang: string, targetLang: string): string {
 	const base = segmentHash(block.sourceText, sourceLang, targetLang, block.continuationContext);
 	const stamp = policyStampFor(block);
 	return stamp ? fnv1a64(`${base}\u0001${stamp}`) : base;
@@ -751,10 +752,16 @@ export class TranslationManager {
 	private async meteredTranslate(request: TranslationRequest, signal: AbortSignal, onAttempts?: (n: number) => void, heartbeat?:()=>void, provider?: string): Promise<TranslationResponse> {
   // Centralized here so missing-ID, slow-lane, residue, plain, compression and
   // single-block retries all retain the same immutable source evidence.
-  const sourceById = new Map(this.pages.get(request.pageIndex ?? -1)?.blocks.map(b => [b.id, b]));
+  const pageBlocks = this.pages.get(request.pageIndex ?? -1)?.blocks ?? [];
+  const sourceById = new Map(pageBlocks.map(b => [b.id, b]));
   const useContext = this.deps.useContext();
+  // 5.1: table cells carry their column / row headers (understanding only).
+  const headers: Map<string, TableHeaders> = request.plain ? new Map() : tableHeadersByBlock(pageBlocks);
+  if (!request.plain) for (const id of productNameCells(pageBlocks)) headers.set(id, { ...headers.get(id), productName: true });
   request = { ...request, blocks: request.blocks.map(block => {
-   const {continuationContext: _old, protectedLiterals: _literals, sourceText: _sourceText, ...textBlock} = block;
+   const {continuationContext: _old, protectedLiterals: _literals, sourceText: _sourceText, tableHeaders: _headers, ...rest} = block;
+   const tableHeaders = headers.get(block.id);
+   const textBlock = tableHeaders ? { ...rest, tableHeaders } : rest;
    const sourceBlock = sourceById.get(block.id);
    const context = useContext ? sourceBlock?.continuationContext : undefined;
    if (!context || !sourceBlock) return textBlock;
@@ -2731,6 +2738,7 @@ export class TranslationManager {
 		run.sourceById = new Map(activeBlocks.map(b => [b.id, b.sourceText]));
 		run.sourceBlockById = new Map(activeBlocks.map(b => [b.id, b]));
 		run.refById = new Set(activeBlocks.filter(b => b.isReference).map(b => b.id));
+		run.nameCellIds = productNameCells(this.pages.get(run.pageIndex)?.blocks ?? activeBlocks);
 
 		if (!bypass.bypassPageCache && await this.prefillFromPageCache(run)) {
 			return false;
@@ -3183,7 +3191,7 @@ export class TranslationManager {
 					// protected token was lost or invented.
 					const first = single.translations.find(t =>
 						pb.reg.ok(t.translatedText)
-						&& looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference }));
+						&& looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference, keepAsName: run.nameCellIds.has(block.id) }));
 					if (first) {
 						received.set(block.id, first.translatedText);
 					}
@@ -3274,7 +3282,7 @@ export class TranslationManager {
 					plain: true
 				}, signal);
 				const translatedHit = resp.translations.find(t =>
-					looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference }));
+					looksTranslated(block.sourceText, pb.reg.restore(t.translatedText), target, { isReference: block.isReference, keepAsName: run.nameCellIds.has(block.id) }));
 				const hit = translatedHit && pb.reg.ok(translatedHit.translatedText) ? translatedHit : undefined;
 				if (hit) {
 					const restored = pb.reg.restore(hit.translatedText);
@@ -3301,7 +3309,7 @@ export class TranslationManager {
 						plain: true
 					}, signal);
 					const bareHit = bare.translations.find(t =>
-						looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference }));
+						looksTranslated(block.sourceText, t.translatedText, target, { isReference: block.isReference, keepAsName: run.nameCellIds.has(block.id) }));
 					if (bareHit) {
 						state.translations.set(block.id, bareHit.translatedText);
 						run.results.push({ id: block.id, translatedText: bareHit.translatedText });
