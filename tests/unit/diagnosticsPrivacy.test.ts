@@ -51,21 +51,21 @@ test('会话侧的诊断载荷不再拼进 currentPageCorpus(结构性回归闸)
 	// 防止有人再次把语料并回「诊断」。
 	const src = readSource('src/reader/readerSession.ts');
 	// 2.3.0: copyDiagnostics 变 async(引擎自检需 await 服务商配置),签名两种都认。
-	const sigMatch = /private (?:async )?copyDiagnostics\(/.exec(src);
+	const sigMatch = /export (?:async )?function copyDiagnostics\(/.exec(src); // 5.1: moved to sessionExports.ts
 	const start = sigMatch ? sigMatch.index : -1;
 	assert.ok(start > 0, '找不到 copyDiagnostics');
-	const end = src.indexOf('private copyLayoutCorpus(', start);
+	const end = src.indexOf('export function copyLayoutCorpus(', start);
 	assert.ok(end > start, '找不到 copyLayoutCorpus —— 语料必须是独立动作');
 	const body = src.slice(start, end);
-	assert.ok(!/currentPageCorpus|this\.layoutCorpus\(\)/.test(body),
+	assert.ok(!/currentPageCorpus|(?:this|ctx)\.layoutCorpus\(\)/.test(body),
 		'copyDiagnostics 不得包含语料/原文');
 });
 
 test('语料导出仍然可用,且自我声明含原文', () => {
 	const src = readSource('src/reader/readerSession.ts');
-	const start = src.indexOf('private copyLayoutCorpus(');
+	const start = src.indexOf('export function copyLayoutCorpus(');
 	const body = src.slice(start, start + 1400);
-	assert.ok(/this\.layoutCorpus\(\)/.test(body), '语料按钮必须真的导出语料');
+	assert.ok(/ctx\.layoutCorpus\(\)/.test(body), '语料按钮必须真的导出语料');
 	assert.ok(/CONTAINS SOURCE TEXT/.test(body), '载荷需自带含原文声明');
 	assert.ok(/含本页原文/.test(body), 'toast 需提醒用户含原文');
 });
@@ -221,9 +221,9 @@ test('诊断不再导出真实端点主机名 (2.8.6 P1)', () => {
 	// 2.3.0–2.8.5 期间诊断里带的是 endpointHost —— 用户自建网关的域名、公司内网
 	// 主机名会随一份"可以放心贴进 issue"的诊断一起公开。改为 endpointKind 枚举。
 	const src = readSource('src/reader/readerSession.ts');
-	const start = src.indexOf('private async engineSelfCheck(');
+	const start = src.indexOf('export async function engineSelfCheck(');
 	assert.ok(start > 0, '找不到 engineSelfCheck');
-	const body = src.slice(start, src.indexOf('async diagnosticsExportSource('));
+	const body = src.slice(start, src.indexOf('export async function diagnosticsExportSource('));
 	assert.ok(!/endpointHost|new URL\(/.test(body),
 		'自检不得再取主机名 —— 端点只报 endpointKind 枚举');
 	assert.ok(!/selfCheckError|e instanceof Error \? e\.message/.test(body),
@@ -316,12 +316,12 @@ test('加权分页可审计:测量与权重都进导出 (2.12.0)', () => {
 	// 只断言"存在"是不够的 —— 漏掉其中两条,断言照样为真(变异验证 M9b 就这么活下来的)。
 	// 拿 engineRotations 当基准:它是同一批汇总字段里最老的一个,
 	// 哪天新增第四条导出路径而忘了带上新字段,这条闸会当场发现。
-	const paths = (src.match(/engineRotations: this\.pageProviderOffset\.size,/g) ?? []).length;
+	const paths = (src.match(/engineRotations: (?:this|ctx)\.pageProviderOffset\.size,/g) ?? []).length;
 	assert.ok(paths >= 3, `会话级汇总应有至少三条导出路径,实得 ${paths}`);
 	for (const [field, why] of [
-		['providerThroughput: this\\.manager\\?\\.providerThroughput\\(\\)', '权重是从哪些测量算出来的,要能在导出里对上'],
-		['providerWeights: this\\.manager\\?\\.providerWeights\\(\\)', '算成了多少也要能对上 —— 否则"自调"就是黑箱'],
-		['poolSize: this\\.pool\\.length', '池大小决定了分页有没有意义']
+		['providerThroughput: (?:this|ctx)\\.manager\\?\\.providerThroughput\\(\\)', '权重是从哪些测量算出来的,要能在导出里对上'],
+		['providerWeights: (?:this|ctx)\\.manager\\?\\.providerWeights\\(\\)', '算成了多少也要能对上 —— 否则"自调"就是黑箱'],
+		['poolSize: (?:this|ctx)\\.pool\\.length', '池大小决定了分页有没有意义']
 	] as const) {
 		const n = (src.match(new RegExp(field, 'g')) ?? []).length;
 		assert.equal(n, paths, `${why}(${n}/${paths} 条导出路径带了这个字段)`);

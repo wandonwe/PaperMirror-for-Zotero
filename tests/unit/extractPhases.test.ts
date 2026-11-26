@@ -146,7 +146,7 @@ test('两个探针都是同步的,不发 RPC (2.9.6)', () => {
 
 test('出路探针进了导出 (结构性回归闸, 2.9.6)', () => {
 	const src = readSource('src/reader/readerSession.ts');
-	assert.ok(/textContentApi: this\.extractor\.textContentApiState\(\)/.test(src),
+	assert.ok(/textContentApi: (?:this|ctx)\.extractor\.textContentApiState\(\)/.test(src),
 		'getTextContent 是公开 API 且不依赖渲染 —— 它可用与否决定下一步往哪走,必须进文件');
 });
 
@@ -168,7 +168,7 @@ test('路径 1 的结局只记枚举,不带原文或路径 (隐私闸, 2.9.5)', 
 
 test('结局分布进了导出 (结构性回归闸, 2.9.5)', () => {
 	const src = readSource('src/reader/readerSession.ts');
-	assert.ok(/charsPath: this\.extractor\.charsPathOutcomes\(\)/.test(src),
+	assert.ok(/charsPath: (?:this|ctx)\.extractor\.charsPathOutcomes\(\)/.test(src),
 		'不进导出就等于没量');
 });
 

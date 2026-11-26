@@ -388,18 +388,18 @@ test('宿主接线: 内存里有原件就用原件,没有才重解析 (结构性
 	const src = readSource('src/reader/readerSession.ts');
 	const start = src.indexOf('readPage: async (pageIndex: number): Promise<CorpusPageRecord>');
 	assert.ok(start > 0, '找不到语料的 readPage');
-	const body = src.slice(start, src.indexOf('pin: (pageIndex: number) => { this.exportPins.add(pageIndex); }', start));
+	const body = src.slice(start, src.indexOf('pin: (pageIndex: number) => { ctx.exportPins.add(pageIndex); }', start)); // 5.1: sessionExports.ts
 
 	// 1. 最短路径优先: 没被淘汰的页,内存里那份就是翻译当时用的结构。
 	const live = body.indexOf('if (state && state.blocks.length) {');
-	const reExtract = body.indexOf('await this.extractor.extractPage(pageIndex)');
+	const reExtract = body.indexOf('await ctx.extractor.extractPage(pageIndex)');
 	assert.ok(live > 0 && live < reExtract,
 		'内存里有原件就直接用 —— 重解析是退路,不是首选');
 	assert.ok(/blocks: JSON\.parse\(JSON\.stringify\(state\.blocks\)\) as SourceBlock\[\],\s*\n\s*blocksSource: 'live',\s*\n\s*check: \{ structureMatch: 'as-translated'/.test(body),
 		'原件要标 as-translated: 它就是那份结构,不是"重建得一样"');
 
 	// 2. 退路仍然走与翻译相同的流水线,并且先查四项可变输入。
-	assert.ok(/const rebuilt = await this\.extractor\.extractPage\(pageIndex\);/.test(body),
+	assert.ok(/const rebuilt = await ctx\.extractor\.extractPage\(pageIndex\);/.test(body),
 		'重解析必须直接调 extractor.extractPage —— 不能另写一份"检查用的解析"');
 	assert.ok(/const inputsChanged = changedExtractInputs\(before, \{/.test(body)
 		&& /checkStructure\(null, rebuilt, \{ inputsChanged \}\)/.test(body),
@@ -417,7 +417,7 @@ test('宿主接线: 内存里有原件就用原件,没有才重解析 (结构性
 	assert.ok(!/translateRequest|retranslate|ensurePage/.test(body), '导出绝不发起翻译');
 
 	// 译文来路三分,缺失原因分开说。
-	const translations = src.slice(src.indexOf('private async corpusTranslations('), src.indexOf('private pageSpans('));
+	const translations = src.slice(src.indexOf('export async function corpusTranslations('), src.indexOf('export function pageSpans('));
 	assert.ok(/translationSource: 'live'/.test(translations)
 		&& /translationSource: 'restored-from-cache'/.test(translations));
 	assert.ok(/state\.evicted \? 'missing:evicted' : 'missing:cache-miss'/.test(translations),

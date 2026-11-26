@@ -289,13 +289,13 @@ test('逐页导出与整份导出走同一条口径 (2.8.6 P1)', async () => {
 
 test('会话汇总不重复整份页数据 (2.8.6 P1, 结构性回归闸)', () => {
 	const src = readSource('src/reader/readerSession.ts');
-	const start = src.indexOf('async diagnosticsExportSource(');
+	const start = src.indexOf('export async function diagnosticsExportSource('); // 5.1: sessionExports.ts
 	assert.ok(start > 0, '找不到 diagnosticsExportSource');
-	const body = src.slice(start, src.indexOf('private async copyDiagnostics('));
+	const body = src.slice(start, src.indexOf('export async function runExportInner(', start));
 	assert.ok(/const \{ pages: _pages, \.\.\.session \} = diag;/.test(body),
 		'summary 行必须剥掉 pages —— 否则整份文档的页数据出现两遍,文件大一倍且两处口径可能不一致');
-	assert.ok(/pin: \(pageIndex: number\) => \{ this\.exportPins\.add\(pageIndex\); \}/.test(body)
-		&& /unpin: \(pageIndex: number\) => \{ this\.exportPins\.delete\(pageIndex\); \}/.test(body),
+	assert.ok(/pin: \(pageIndex: number\) => \{ ctx\.exportPins\.add\(pageIndex\); \}/.test(body)
+		&& /unpin: \(pageIndex: number\) => \{ ctx\.exportPins\.delete\(pageIndex\); \}/.test(body),
 		'逐页短时保护必须接上');
 	assert.ok(/placementProbe.*\?\? 'not-sampled'/.test(body),
 		'探针没采样要如实说,不能冒充"这页没问题"');

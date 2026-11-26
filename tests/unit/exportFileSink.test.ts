@@ -274,14 +274,14 @@ test('保存对话框三级尝试的顺序不能乱 (结构性回归闸, 2.8.8 �
 	// "无法打开保存对话框" —— Firefox 111+ 起 init() 的第一个参数是
 	// BrowsingContext,不是 window。这个闸钉住三条路都在、且顺序对。
 	const src = readSource('src/reader/readerSession.ts');
-	const body = src.slice(src.indexOf('private createSavePicker('), src.indexOf('/** `Zotero.File.reveal` 不一定存在'));
+	const body = src.slice(src.indexOf('export function createSavePicker('), src.indexOf('export async function corpusExportSource(')); // 5.1: sessionExports.ts
 	const zoteroWrapper = body.indexOf("importESModule('chrome://zotero/content/modules/filePicker.mjs')");
 	const rawComponent = body.indexOf("Components.classes['@mozilla.org/filepicker;1']");
 	assert.ok(zoteroWrapper > 0, 'Zotero 7 自带的 FilePicker 包装必须是第一选择 —— 它就是来抹平这件事的');
 	assert.ok(rawComponent > zoteroWrapper, '裸 nsIFilePicker 只作后备');
 	// 光是"文本在前面"不够: 必须真的先拿它去用(否则把它塞进一个没人读的变量,
 	// 顺序看着还是对的)。
-	const earlyReturn = body.indexOf('if (zoteroPicker) {\n\t\t\treturn zoteroPicker;');
+	const earlyReturn = body.indexOf('if (zoteroPicker) {\n\t\treturn zoteroPicker;');
 	assert.ok(earlyReturn > zoteroWrapper && earlyReturn < rawComponent,
 		'包装拿到手就得直接返回 —— 不能构造完又不用');
 	assert.ok(/\[\(win as \{ browsingContext\?: unknown \} \| null\)\?\.browsingContext, win\]/.test(body),
@@ -300,21 +300,21 @@ test('导出流程的四条规矩都在代码里 (结构性回归闸, 2.8.8)', (
 	const src = readSource('src/reader/readerSession.ts');
 	// 兜底 catch: 调用方是 `void this.runExport(...)`,漏出去的 rejection 会被静默
 	// 吞掉 —— 真机上就成了"点了 Save 毫无反应"。导出可以失败,但不能没有回音。
-	const outer = src.slice(src.indexOf('private async runExport('), src.indexOf('private async runExportInner('));
+	const outer = src.slice(src.indexOf('private async runExport('), src.indexOf('private runExportInner('));
 	assert.ok(/await this\.runExportInner\(kind\);/.test(outer) && /catch \(e\) \{/.test(outer)
 		&& /this\.flashNotice\(`导出失败/.test(outer),
 		'runExport 必须有兜底 catch —— 任何漏出去的异常都要变成一句提示');
-	const body = src.slice(src.indexOf('private async runExportInner('), src.indexOf('private confirmCorpusPrivacy('));
-	assert.ok(/if \(kind === 'corpus' && !this\.confirmCorpusPrivacy\(\)\) \{\s*\n\s*return;/.test(body),
+	const body = src.slice(src.indexOf('export async function runExportInner('), src.indexOf('export function confirmCorpusPrivacy('));
+	assert.ok(/if \(kind === 'corpus' && !ctx\.confirmCorpusPrivacy\(\)\) \{\s*\n\s*return;/.test(body),
 		'语料必须先过隐私确认,不同意就直接结束');
 	assert.ok(/await sink\.discardPartial\(\);/.test(body) && /导出失败\(\$\{stage\}\)/.test(body),
 		'失败要报阶段并清掉半份文件,绝不提示成功');
 	assert.ok(!/翻译成功|已完成/.test(body.slice(body.indexOf('catch'))), '失败分支里不许出现成功字样');
-	assert.ok(/revealFile\(target, this\.revealFn\(\)\)/.test(body)
+	assert.ok(/revealFile\(target, ctx\.revealFn\(\)\)/.test(body)
 		&& /shown \? '' : ` —— \$\{target\}`/.test(body),
 		'reveal 不可用时要把路径告诉用户');
 
-	const save = src.slice(src.indexOf('private async resolveSavePath('), src.indexOf('private revealFn('));
+	const save = src.slice(src.indexOf('export async function resolveSavePath('), src.indexOf('export function createSavePicker('));
 	assert.ok(/target\.kind === 'cancelled'[\s\S]{0,120}return null;/.test(save),
 		'取消即结束');
 	assert.ok(/是否改为保存到 \$\{target\.suggestedDir\}/.test(save)
