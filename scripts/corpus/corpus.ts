@@ -22,7 +22,7 @@ import { basename, join } from 'node:path';
 import { structureSpanPage, type SpanPage } from '../../src/reader/pagePipeline';
 import { textContentItemRect } from '../../src/reader/zoteroReaderAdapter';
 import { isBoldFontName } from '../../src/reader/paragraphHeuristics';
-import { buildDocumentStyle, referencesContinueOnto, type DocumentStyle } from '../../src/reader/documentStyle';
+import { buildSampledDocumentStyle, documentStyleSample, referencesContinueOnto, type DocumentStyle } from '../../src/reader/documentStyle';
 import { borderGrid, borderGrids, segmentsFromOperatorList, type BorderGrid, type Segment } from '../../src/reader/tableBorders';
 
 interface DocSpans { doc: string; pages: SpanPage[]; edges?: Segment[][]; weights?: 1 }
@@ -112,7 +112,9 @@ function contextFor(pageIndex: number, style: DocumentStyle, startedSoFar: boole
 }
 
 function printDoc(spans: DocSpans): PagePrint[] {
-	const style = buildDocumentStyle(spans.pages);
+	// 5.1: the plugin samples long documents; so does the corpus tool.
+	const sample = documentStyleSample(spans.pages.length);
+	const style = buildSampledDocumentStyle(sample, sample.map(i => spans.pages[i]!), spans.pages.length);
 	const prints: PagePrint[] = [];
 	let started = false;
 	spans.pages.forEach((page, pageIndex) => {
@@ -173,7 +175,8 @@ async function main(): Promise<void> {
 			spans.edges = await readEdges(join(pdfDir, file), join(outDir, 'edges'));
 		}
 		const prints = printDoc(spans);
-		const st = buildDocumentStyle(spans.pages);
+		const sampleIdx = documentStyleSample(spans.pages.length);
+		const st = buildSampledDocumentStyle(sampleIdx, sampleIdx.map(i => spans.pages[i]!), spans.pages.length);
 		summary.push(`${spans.doc}: body ${st.bodyFontSize}pt, gutters [${st.columnGutters.join(',')}], indent ${st.paragraphIndent}pt, furniture ${st.furniture.length}, references ${st.referenceRanges.map(([a, b]) => `p${a + 1}–p${b + 1}`).join(', ') || 'none'} of ${st.pageCount}`);
 		writeFileSync(join(outDir, 'fp', `${spans.doc}.json`), JSON.stringify(prints, null, 1));
 		totalPages += prints.length;
