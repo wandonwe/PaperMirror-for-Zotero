@@ -18,12 +18,14 @@ export const PROMPT_POLICIES = {
 	/** v2 (4.99.7): 参考文献只译标题,作者、期刊、卷期页原样。 */
 	references: 2,
 	/** v2 (4.99.15): 人名保留原文拼写,不再音译。 */
-	personNames: 2
+	personNames: 2,
+	/** v2 (5.1): 表格单元格带行 / 列标题作为语境,型号名原样保留。 */
+	tableCells: 2
 } as const;
 
 export type PolicyName = keyof typeof PROMPT_POLICIES;
 
-type PolicyBlock = Pick<SourceBlock, 'sourceText'> & { isReference?: boolean };
+type PolicyBlock = Pick<SourceBlock, 'sourceText'> & { isReference?: boolean; tableId?: string; tableRow?: number };
 
 const CONTACT = /\p{Lu}[\p{L}'’-]+(?:\s\p{Lu}[\p{L}'’-]+){0,3},\s*[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}/u;
 /** "Naying He¹, Youmin Zhang², …" — three or more capitalised names in a comma list. */
@@ -36,7 +38,9 @@ const BYLINE = /^(?:\s*\p{Lu}[\p{Ll}'’-]+(?:[\s-]\p{Lu}\.?)*(?:\s\p{Lu}[\p{Ll}
  */
 const RELEVANT: Record<PolicyName, (b: PolicyBlock) => boolean> = {
 	references: b => !!b.isReference,
-	personNames: b => !!b.isReference || CONTACT.test(b.sourceText) || BYLINE.test(b.sourceText) || looksLikePersonNames(b.sourceText)
+	personNames: b => !!b.isReference || CONTACT.test(b.sourceText) || BYLINE.test(b.sourceText) || looksLikePersonNames(b.sourceText),
+	// Structured cells below the header row: they are the ones that now get headers.
+	tableCells: b => typeof b.tableId === 'string' && typeof b.tableRow === 'number' && b.tableRow > 0
 };
 
 /** 本块的规则戳:相关、且版本 > 1 的规则,如 "personNames2|references2";无关则为空串。 */
