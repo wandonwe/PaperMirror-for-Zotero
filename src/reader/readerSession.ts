@@ -1,6 +1,5 @@
 import { contextualSourceText } from '../translation/sourceContinuity';
 import { ContinuationUnitStore } from '../translation/continuationUnitStore';
-import { sourceBlockAtPoint } from './sourceBlockAtPoint';
 import { idleProgressFor, ROTATED_TABLE_NOTE } from '../ui/statusCapsule';
 import { temporaryPageArchive, pageContentKey } from '../export/pageArchive';
 import { showUnplacedTranslations } from '../ui/unplacedTranslations';
@@ -11,7 +10,7 @@ import { showUnplacedTranslations } from '../ui/unplacedTranslations';
 
 import * as cacheManager from '../cache/cacheManager';
 import { hashSourceTexts, type CacheKeyParts, type SegmentContextParts } from '../cache/cacheSchema';
-import { buildAttachmentSelectURI, explanationToPlainText, saveExplanationNote, saveTranslationNote } from '../notes/noteService';
+import { buildAttachmentSelectURI, saveExplanationNote } from '../notes/noteService';
 import { getApiKey, providersWithSavedKeys } from '../security/credentialStore';
 import { configuredProviderIds } from '../translation/providerAvailability';
 import { registerUrlCredentials } from '../security/logSanitizer';
@@ -30,8 +29,8 @@ import {
 	GLOBAL_MAX_DEFAULT,
 	type ProviderCapability
 } from '../translation/providerPool';
-import { endpointHost, supportsCharBudget } from '../translation/providers/types';
-import { canExplain, explainText, parseExplanationSections, type ExplanationSection } from '../translation/explainer';
+import { endpointHost } from '../translation/providers/types';
+import { type ExplanationSection } from '../translation/explainer';
 import {
 	TranslationManager,
 	type ManagerEvents,
@@ -48,7 +47,7 @@ import type { CorpusExportSource, TranslationSource, TranslationMissing } from '
 import { ExportStageError } from '../export/diagnosticsJsonl';
 import { type ExportKind } from '../export/exportNaming';
 import { stageLabel, type PickerHandle } from '../export/fileSink';
-import { parseGlossaryJSON, serializeGlossary, dedupeLearnedTerms } from '../translation/glossary';
+import { parseGlossaryJSON } from '../translation/glossary';
 import { parseProviderProfiles, effectiveProviderConfig } from '../translation/providerProfiles';
 import type {
 	GlossaryRule,
@@ -61,23 +60,7 @@ import type {
 import { PaperMirrorError } from '../types/models';
 import { TranslationPane, type PageRenderResult, type PaneStrings } from '../ui/translationPane';
 import { buildOriginalPage } from '../ui/translatedPageView';
-import {
-	buildStrictPage,
-	revertStrictBlocks,
-	settleStrictPage,
-	shrinkStrictBlocks,
-	expandStrictBlocks,
-	applyCompressedStrict,
-	planStrictRetry,
-	strictPageStats,
-	placementTally,
-	auditStrictGeometry,
-	probeStrictPlacement,
-	strictAbandonedBlocks,
-	flashKeptIndicator,
-	type UnfitBlock
-} from '../ui/strictPageReplacement';
-import { buildTranslatedPdf, type PageTranslationData } from '../pdfgen/translatedPdfBuilder';
+import { buildStrictPage, settleStrictPage, placementTally, flashKeptIndicator, type UnfitBlock } from '../ui/strictPageReplacement';
 import { getString } from '../utils/l10n';
 import * as logger from '../utils/logger';
 import { getPref, setPref, registerPrefObserver, unregisterPrefObserver } from '../utils/prefs';
@@ -90,7 +73,7 @@ import { TextExtractor } from './textExtractor';
 import * as adapter from './zoteroReaderAdapter';
 import type { ReaderLike, PageRender } from './zoteroReaderAdapter';
 import { LruCache } from '../util/lru';
-import { watchAutoExplainSelection, type AutoExplanationWatcher } from './autoExplainSelection';
+import { type AutoExplanationWatcher } from './autoExplainSelection';
 import {
 	corpusExportSource,
 	diagnosticsExportSource,
@@ -105,6 +88,18 @@ import {
 	engineSelfCheck,
 	type SessionExportView
 } from './sessionExports';
+import { saveSelectionToNote, previewSaveLearnedTerms, copyTermsTsv, copyExplanation, type SessionNotesView } from './sessionNotes';
+import { exportTranslatedPdf, exportBuiltin, type SessionPdfExportView } from './sessionPdfExport';
+import {
+	runStrictCompress,
+	resolveStrictUnfit,
+	reportPlacement,
+	collectPlacementDiagnostics,
+	auditFinalGeometry,
+	auditPartialGeometry,
+	type PlacementReportingView
+} from './placementReporting';
+import { explainSelection, watchAutomaticExplanation, type SessionExplanationsView } from './sessionExplanations';
 
 const MODULE = 'readerSession';
 
@@ -251,6 +246,104 @@ export class ReaderSession {
 			get createSavePicker() { return self.createSavePicker.bind(self); },
 			get confirmCorpusPrivacy() { return self.confirmCorpusPrivacy.bind(self); },
 			get engineSelfCheck() { return self.engineSelfCheck.bind(self); }
+		};
+	}
+	/** 5.1: the view the sessionNotes functions get (a getter, so it also exists on instances built without the constructor). */
+	private get notesView(): SessionNotesView {
+		const self = this;
+		return {
+			get flashNotice() { return self.flashNotice.bind(self); },
+			get glossaryUndo() { return self.glossaryUndo; },
+			set glossaryUndo(value) { self.glossaryUndo = value; },
+			get lastExplanation() { return self.lastExplanation; },
+			get manager() { return self.manager; },
+			get pane() { return self.pane; },
+			get pushFailure() { return self.pushFailure.bind(self); },
+			get reader() { return self.reader; },
+			get saveSelectionToNote() { return self.saveSelectionToNote.bind(self); },
+			get previewSaveLearnedTerms() { return self.previewSaveLearnedTerms.bind(self); },
+			get copyTermsTsv() { return self.copyTermsTsv.bind(self); },
+			get copyExplanation() { return self.copyExplanation.bind(self); }
+		};
+	}
+	/** 5.1: the view the sessionPdfExport functions get (a getter, so it also exists on instances built without the constructor). */
+	private get pdfExportView(): SessionPdfExportView {
+		const self = this;
+		return {
+			get exportingPdf() { return self.exportingPdf; },
+			set exportingPdf(value) { self.exportingPdf = value; },
+			get flashNotice() { return self.flashNotice.bind(self); },
+			get manager() { return self.manager; },
+			get pushExport() { return self.pushExport.bind(self); },
+			get reader() { return self.reader; },
+			get setCapsuleCollapsed() { return self.setCapsuleCollapsed.bind(self); },
+			get startTranslating() { return self.startTranslating.bind(self); },
+			get waitForPage() { return self.waitForPage.bind(self); },
+			get exportTranslatedPdf() { return self.exportTranslatedPdf.bind(self); },
+			get exportBuiltin() { return self.exportBuiltin.bind(self); }
+		};
+	}
+	/** 5.1: the view the placementReporting functions get (a getter, so it also exists on instances built without the constructor). */
+	private get placementView(): PlacementReportingView {
+		const self = this;
+		return {
+			get abandonedBlocks() { return self.abandonedBlocks; },
+			get archivePage() { return self.archivePage; },
+			get compressRounds() { return self.compressRounds; },
+			get destroyed() { return self.destroyed; },
+			get geometryAudits() { return self.geometryAudits; },
+			get lastPartial() { return self.lastPartial; },
+			set lastPartial(value) { self.lastPartial = value; },
+			get ledger() { return self.ledger; },
+			get manager() { return self.manager; },
+			get pageNote() { return self.pageNote.bind(self); },
+			get placementKeys() { return self.placementKeys; },
+			get placementProbe() { return self.placementProbe; },
+			get placementStats() { return self.placementStats; },
+			get providerForPage() { return self.providerForPage.bind(self); },
+			get pushOverlayProgress() { return self.pushOverlayProgress.bind(self); },
+			get reader() { return self.reader; },
+			get renderToken() { return self.renderToken; },
+			get translatedPages() { return self.translatedPages; },
+			get runStrictCompress() { return self.runStrictCompress.bind(self); },
+			get resolveStrictUnfit() { return self.resolveStrictUnfit.bind(self); },
+			get reportPlacement() { return self.reportPlacement.bind(self); },
+			get collectPlacementDiagnostics() { return self.collectPlacementDiagnostics.bind(self); },
+			get auditFinalGeometry() { return self.auditFinalGeometry.bind(self); },
+			get auditPartialGeometry() { return self.auditPartialGeometry.bind(self); }
+		};
+	}
+	/** 5.1: the view the sessionExplanations functions get (a getter, so it also exists on instances built without the constructor). */
+	private get explanationsView(): SessionExplanationsView {
+		const self = this;
+		return {
+			get assertProviderEndpointAllowed() { return self.assertProviderEndpointAllowed.bind(self); },
+			get autoExplainPrefObserver() { return self.autoExplainPrefObserver; },
+			set autoExplainPrefObserver(value) { self.autoExplainPrefObserver = value; },
+			get destroyed() { return self.destroyed; },
+			get disposeAutoExplain() { return self.disposeAutoExplain; },
+			set disposeAutoExplain(value) { self.disposeAutoExplain = value; },
+			get disposeOriginalDoubleClick() { return self.disposeOriginalDoubleClick; },
+			set disposeOriginalDoubleClick(value) { self.disposeOriginalDoubleClick = value; },
+			get explainCache() { return self.explainCache; },
+			get explanationIsAutomatic() { return self.explanationIsAutomatic; },
+			set explanationIsAutomatic(value) { self.explanationIsAutomatic = value; },
+			get explanationRequest() { return self.explanationRequest; },
+			set explanationRequest(value) { self.explanationRequest = value; },
+			get isWindowHidden() { return self.isWindowHidden.bind(self); },
+			get lastExplanation() { return self.lastExplanation; },
+			set lastExplanation(value) { self.lastExplanation = value; },
+			get localOnlyPrefObserver() { return self.localOnlyPrefObserver; },
+			set localOnlyPrefObserver(value) { self.localOnlyPrefObserver = value; },
+			get manager() { return self.manager; },
+			get pane() { return self.pane; },
+			get providerEndpointAllowed() { return self.providerEndpointAllowed.bind(self); },
+			get providerSettings() { return self.providerSettings.bind(self); },
+			get reader() { return self.reader; },
+			get resolveLanguages() { return self.resolveLanguages.bind(self); },
+			get viewMode() { return self.viewMode; },
+			get explainSelection() { return self.explainSelection.bind(self); },
+			get watchAutomaticExplanation() { return self.watchAutomaticExplanation.bind(self); }
 		};
 	}
 	private manager: TranslationManager | null = null;
@@ -1946,228 +2039,24 @@ export class ReaderSession {
 		}
 	}
 
-	/**
-	 * Resolve blocks whose translation did not fit their fixed rectangle,
-	 * WITHOUT ever having shown them translated (the strict renderer keeps them
-	 * hidden with the original text visible until they are accepted). Order:
-	 *   1. budget-capable engine, rounds left → a compressed retry, applied in
-	 *      place; blocks that then fit are revealed, the rest recurse;
-	 *   2. otherwise → one bounded font shrink;
-	 *   3. still won't fit → abandon (the original simply stays).
-	 * `token` ties every async step to the render that started it: a newer
-	 * render for this page makes this one bow out.
-	 */
+	/** Moved to placementReporting.ts (5.1). */
 	private resolveStrictUnfit(pageIndex: number, element: HTMLElement, unfit: UnfitBlock[], token: number): void {
-		const live = (): boolean => !this.destroyed && element.isConnected && this.renderToken.get(pageIndex) === token;
-		if (!live() || !unfit.length) {
-			return;
-		}
-		// (0) 无损空白扩边优先 (2.2.2, 计划 第三批 item3): 在缩写/缩字之前,先把靠
-		// 邻近安全空白就能放下的块无损救回 —— 不牺牲译文、不费一次 API。仍不适配
-		// 的块才进入后续的「压缩→缩字→保留原文」。扩边幂等(已提交块跳过),
-		// 递归回来时会对压缩后的更短文本再扩一次。
-		const stillAfterExpand = new Set(expandStrictBlocks(element, unfit.map(u => u.id)));
-		const remaining = unfit.filter(u => stillAfterExpand.has(u.id));
-		if (!remaining.length) {
-			this.reportPlacement(pageIndex, element);
-			return;
-		}
-		const budgetCapable = supportsCharBudget(getProvider(this.providerForPage(pageIndex)));
-		const plan = planStrictRetry(remaining, {
-			roundsFor: id => this.compressRounds.get(id) ?? 0,
-			maxRounds: 2,
-			budgetCapable
-		});
-
-		// (2)+(3): blocks that get no (more) budgeted retry — shrink, then abandon.
-		if (plan.shrink.length) {
-			const still = shrinkStrictBlocks(element, plan.shrink);
-			if (still.length) {
-				revertStrictBlocks(element, still);
-				logger.info(MODULE, `page ${pageIndex + 1}: ${still.length} block(s) kept original (no fit within fixed geometry)`);
-			}
-		}
-
-		// (1): budgeted compress for the rest — at most one page-level request
-		// in flight, patched into the live page (no full re-render).
-		const compressPending = this.ledger.isCompressPending(pageIndex);
-		if (!plan.compress.length || compressPending || !this.manager) {
-			// shrink-only 路径此前静默结束,页面的最终清点从未发生(1.1.0
-			// 顺手补上的诚实计数缺口)——几何复核与 tally 都挂在 reportPlacement。
-			if (!plan.compress.length && !compressPending) {
-				this.reportPlacement(pageIndex, element);
-			}
-			// 丢失唤醒补接力 (2.0.9, 审核 P2-10): 被在飞压缩挡回的渲染记下
-			// 待办,压缩 finally 里续跑 —— 否则这次渲染的未适配块永远无人处理。
-			else if (plan.compress.length && compressPending) {
-				this.ledger.deferRender(pageIndex, { element, unfit: remaining, token });
-			}
-			// 5.0 (联网校验 3064/3384: 胶囊停在「正在适配 · 排版 0/N」): 这一趟只剩
-			// 缩字/保留原文、却撞上一个属于旧渲染的在飞压缩 —— 两条分支都不成立,
-			// 最终清点无人执行。登记一个空待办,压缩收尾时替这次渲染做清点。
-			else if (compressPending) {
-				this.ledger.deferRender(pageIndex, { element, unfit: [], token });
-			}
-			return;
-		}
-		this.runStrictCompress(pageIndex, element, remaining, plan.compress, token, live, this.manager);
+		return resolveStrictUnfit(this.placementView, pageIndex, element, unfit, token);
 	}
 
-	/**
-	 * resolveStrictUnfit 拆出: 对这些块发一次页级压缩重译(同页最多一个在飞),
-	 * 结果就地套用;仍放不下的进入下一轮,全部处理完做最终清点。
-	 */
+	/** Moved to placementReporting.ts (5.1). */
 	private runStrictCompress(pageIndex: number, element: HTMLElement, remaining: UnfitBlock[], compressIds: string[], token: number, live: () => boolean, manager: TranslationManager): void {
-		const generation = this.ledger.beginCompress(pageIndex);
-		if (!generation) return; // resolveStrictUnfit already checked; defensive
-		// A render turned away during the previous round (released early to let
-		// this round start) joins this round instead of being lost.
-		this.ledger.adoptCarried(pageIndex);
-		for (const id of compressIds) {
-			this.compressRounds.set(id, (this.compressRounds.get(id) ?? 0) + 1);
-		}
-		const entries = remaining.filter(u => compressIds.includes(u.id));
-		void manager.compressBlocks(pageIndex, entries)
-			.then((accepted) => {
-				if (!live()) {
-					// 注意: compressPending 的清理在下面的 finally,不在这里 ——
-					// 这条早退路径此前不清理,而 catch 分支清理,那个不对称正是
-					// 缺陷本身 (审核 P1-6)。压缩请求可飞行 120 s,期间只要该页
-					// 被重渲染或滚出可视区(releaseFarSlots / relayoutSlots),
-					// live() 即为假,pageIndex 就永久留在 compressPending 里。
-					// 此后该页任何渲染都被 resolveStrictUnfit 的入口闸挡回,且
-					// 「无压缩计划」那条分支也因同一个标记恒假 —— reportPlacement
-					// 永不执行: 几何复核不跑、tally 不产出、胶囊停在「正在适配
-					// 排版」、未适配块永远显示英文且不计入 kept。只有手动
-					// 「刷新本页」能恢复。
-					return;
-				}
-				// Apply shorter retries in place; whatever still overflows (plus
-				// any block the service failed to shorten) goes round again.
-				const stillUnfit = applyCompressedStrict(element, accepted);
-				const noProgress = entries.filter(e => !accepted.has(e.id));
-				const next = [...stillUnfit, ...noProgress.filter(e => !stillUnfit.some(s => s.id === e.id))];
-				// 这处 delete 必须留在递归调用之前,不能只靠下面的 finally ——
-				// finally 在 then 体跑完之后才执行,而 resolveStrictUnfit 的入口
-				// 就查 compressPending,届时下一轮会被自己挡回。
-				this.ledger.releaseCompress(pageIndex, generation);
-				if (next.length) {
-					this.resolveStrictUnfit(pageIndex, element, next, token);
-				}
-				else {
-					this.reportPlacement(pageIndex, element);
-				}
-			})
-			.catch(() => {
-				// 压缩请求异常退出也必须走一次最终清点 (1.2.2, 审核项): 否则
-				// 几何复核与 placement tally 永不发生,胶囊停在「排版中」。
-				// (清理交给 finally。)
-				if (live()) {
-					this.reportPlacement(pageIndex, element);
-				}
-			})
-			.finally(() => {
-				// 兜底清理 (审核 P1-6): 无论 then 早退、then 正常、还是 catch,
-				// 这个标记都必须落地清除。Set.delete 幂等,与上面 then 里那次
-				// 提前清除并存无害。
-				// 5.0: release only THIS generation. Before, this delete also wiped the
-				// flag of a round that the then-branch had just started, so a third
-				// render could start a concurrent compress for the same page.
-				// P2-10 (2.0.9): 压缩期间被挡回的最新渲染在这里接力 —— 旧 token
-				// 由 resolveStrictUnfit 自己的 live() 拦截,无需在此判活。若下一轮已
-				// 经开始,被挡回的渲染已交给它(adoptCarried),这里拿到的是 null。
-				const blocked = this.ledger.endCompress(pageIndex, generation) ?? this.ledger.takeCarried(pageIndex);
-				if (blocked) {
-					if (!this.destroyed && blocked.unfit.length) {
-						this.resolveStrictUnfit(pageIndex, blocked.element, blocked.unfit, blocked.token);
-					}
-					else if (!this.destroyed && blocked.element.isConnected && this.renderToken.get(pageIndex) === blocked.token) {
-						this.reportPlacement(pageIndex, blocked.element);
-					}
-				}
-			});
+		return runStrictCompress(this.placementView, pageIndex, element, remaining, compressIds, token, live, manager);
 	}
 
-	/**
-	 * Honest placement accounting (#6): after a page settles, log the full
-	 * tally and — if any block could NOT be shown translated — surface a
-	 * non-blocking note rather than silently leaving English on the page.
-	 * "Translation complete" and "every block placed" are now distinct: the
-	 * text was translated; some rectangles are mathematically too small for it.
-	 */
-	/**
-	 * 半成品页的几何审计 (2.8.2 第三批): 只跑审计本身(违例块回退/保留原文),
-	 * **不**写 geometryAudits —— 半成品的数字不该进诊断,终版渲染会写真的那份。
-	 */
+	/** Moved to placementReporting.ts (5.1). */
 	private auditPartialGeometry(pageIndex: number, element: HTMLElement): void {
-		try {
-			auditStrictGeometry(element);
-		}
-		catch (e) {
-			logger.debug(MODULE, `partial geometry audit failed on page ${pageIndex + 1} (ignored)`, e);
-		}
+		return auditPartialGeometry(this.placementView, pageIndex, element);
 	}
 
+	/** Moved to placementReporting.ts (5.1). */
 	private reportPlacement(pageIndex: number, element: HTMLElement): void {
-  const state = this.manager?.getPageState(pageIndex);
-  if (!state || element.getAttribute('data-pm-content-key') !== pageContentKey(state.blocks,state.translations)) return;
-  this.placementKeys.set(pageIndex, pageContentKey(state.blocks,state.translations));
-  this.placementProbe.delete(pageIndex);
-
-		this.auditFinalGeometry(pageIndex, element);
-		const s = strictPageStats(element);
-		if (!s) {
-			return;
-		}
-		this.placementStats.set(pageIndex, s); // P3 (2.0.10): 供诊断导出
-		this.collectPlacementDiagnostics(pageIndex, element);
-		this.archivePage(state, true);
-		logger.info(
-			MODULE,
-			`page ${pageIndex + 1} placement: ${s.committed}/${s.replaceable} shown, `
-			+ `${s.abandoned} won't fit, ${s.untranslated} untranslated, `
-			+ `${s.tableFailed} table-failed, ${s.tableIntentional} table-kept, `
-			+ `${s.imageExcluded} on images, ${s.tooSmall} too small`
-		);
-		if (this.destroyed) {
-			return;
-		}
-		// ONE consistent 口径, no double counting: `committed` ALREADY includes the
-		// table text cells that were placed (they are items like any block), so
-		// `placed` is just `committed`. Failures that must count as kept: blocks
-		// that wouldn't fit (abandoned), blocks the service didn't translate
-		// (untranslated), and table cells that failed to translate/place
-		// (tableFailed). Intentionally-original content (data cells, figures,
-		// metadata, tiny fragments) is neither placed nor a failure.
-		const { placed, kept, segTotal, phase } = placementTally(s);
-		// 记账先于「仅当前页」早退 (2.0.9, 审核 P2-11): 预取页(±1~2 页)在
-		// 视口缓冲内 settle 时通常不是当前页 —— 旧实现连 translatedPages 与
-		// lastPartial 一起跳过: 用户随后滚到该页,槽位已渲染不再触发 settle,
-		// 常驻圆环显示「点击翻译本页」而该页实际已翻完;「查看保留原文」的
-		// 直达定位也失效。胶囊推送(下方)仍只对当前页。
-		// This page has now been translated → the idle ring shows ✓ (not ↻) for it.
-		this.translatedPages.add(pageIndex);
-		// Remember where the kept-original segments live so 「查看保留原文」can
-		// jump straight to them; clear it once the page places everything.
-		if (kept > 0) {
-			this.lastPartial = { pageIndex, element };
-		}
-		else if (this.lastPartial?.pageIndex === pageIndex) {
-			this.lastPartial = null;
-		}
-		if (pageIndex !== adapter.getCurrentPageIndex(this.reader)) {
-			return; // only annotate (capsule) the page the reader is actually on
-		}
-		this.pushOverlayProgress({
-			phase,
-			currentPage: pageIndex + 1,
-			totalPages: adapter.getPageCount(this.reader),
-			segTotal,
-			segTranslated: segTotal, // translation itself is complete at this point
-			segPlaced: placed,
-			kept,
-			...this.pageNote(pageIndex)
-		});
+		return reportPlacement(this.placementView, pageIndex, element);
 	}
 
 	/** 5.0: a rotated table is kept original by policy — say so instead of silently skipping it. */
@@ -2175,50 +2064,14 @@ export class ReaderSession {
 		return this.extractor.hasRotatedTable(pageIndex) ? { note: ROTATED_TABLE_NOTE } : {};
 	}
 
-	/** reportPlacement 拆出: 终版几何安全复核(违例块回退或保留原文),必须先于取数。 */
+	/** Moved to placementReporting.ts (5.1). */
 	private auditFinalGeometry(pageIndex: number, element: HTMLElement): void {
-		// 几何安全复核 (1.1.0 目标架构第 5 步): FINAL 状态下审计一次;违例的
-		// 块回退扩展/缩字重试,仍不适配则保留原文——处置结果反映进随后的
-		// stats/tally,所以必须先审计后取数。
-		try {
-			const audit = auditStrictGeometry(element);
-			if (audit) {
-				this.geometryAudits.set(pageIndex, audit);
-			}
-			if (audit && audit.violations > 0) {
-				logger.info(
-					MODULE,
-					`page ${pageIndex + 1} geometry audit: ${audit.violations} violation(s) → `
-					+ `${audit.adjusted} re-fit within original box, ${audit.reverted} kept original`
-				);
-			}
-		}
-		catch (e) {
-			logger.warn(MODULE, `geometry audit failed on page ${pageIndex + 1} (ignored)`, e);
-		}
+		return auditFinalGeometry(this.placementView, pageIndex, element);
 	}
 
-	/** reportPlacement 拆出: 收放弃清单与轻量排版探针,供诊断导出。 */
+	/** Moved to placementReporting.ts (5.1). */
 	private collectPlacementDiagnostics(pageIndex: number, element: HTMLElement): void {
-		// 放弃清单 (2.7.0): 不采样像素、零成本,无论是否开调试日志都收。
-		try {
-			const abandoned = strictAbandonedBlocks(element);
-			if (abandoned) {
-				this.abandonedBlocks.set(pageIndex, abandoned);
-			}
-		}
-		catch (e) {
-			logger.debug(MODULE, `abandoned list failed on page ${pageIndex + 1} (ignored)`, e);
-		}
-		// Always archive lightweight placement measurements. Pixel sampling is
-		// still debug-only; bitmapSampled=false distinguishes omitted samples.
-		try {
-			const probe = probeStrictPlacement(element, getPref<boolean>('debugLogging', false));
-			if (probe) this.placementProbe.set(pageIndex, probe);
-		}
-		catch (e) {
-			logger.debug(MODULE, `placement probe failed on page ${pageIndex + 1} (ignored)`, e);
-		}
+		return collectPlacementDiagnostics(this.placementView, pageIndex, element);
 	}
 
 	/**
@@ -2306,99 +2159,9 @@ export class ReaderSession {
 		this.syncCapsuleCollapsedState();
 	}
 
-	/**
-	 * Build translated/bilingual PDFs locally and import them as attachments.
-	 * The current reader stays available while export runs.
-	 */
-	async exportTranslatedPdf(): Promise<void> {
-		// 点击必须立刻可见 (2.3.8, 修「点击后没反应」): 状态胶囊在每页翻完后会
-		// 自动折叠成 56px 圆环,而胶囊尊重折叠状态 —— 导出进度乃至失败信息全部
-		// 渲染进一个折叠的小环里,用户看起来就是「没反应」。导出是用户显式点击
-		// 的动作,启动时强制展开胶囊,并在任何 await 之前先推一条 0% 进度。
-		this.setCapsuleCollapsed(false);
-		if (this.exportingPdf) {
-			this.pushExport('translating', { message: getString('papermirror-export-running').replace('%n%', '…') });
-			return;
-		}
-		this.exportingPdf = true;
-		this.pushExport('translating', { pct: 0, message: getString('papermirror-export-running').replace('%n%', '0') });
-		const report = (pct: number): void => {
-			this.pushExport('translating', {
-				pct,
-				message: getString('papermirror-export-running').replace('%n%', String(Math.round(pct)))
-			});
-		};
-		try {
-			// 条目/路径解析也在 try 里 (2.3.8): 旧版这两个 await 在 try 之外,
-			// 一旦抛错整个 void 调用被静默吞掉 —— 正是「点击后没反应」的另一个洞。
-			const item = adapter.getReaderItem(this.reader);
-			const filePath = item ? await (item as unknown as { getFilePathAsync(): Promise<string | false> }).getFilePathAsync() : null;
-			if (!item || !filePath) {
-				this.pushExport('failed', { message: `${getString('papermirror-export-failed')}: 找不到 PDF 附件文件` });
-				return;
-			}
-			const bytes = new Uint8Array(await IOUtils.read(String(filePath)));
-			// 导出恒走内置生成 (2.1.6): 零配置、无外部依赖、无网络面。此前的
-			// 「完整 PDF 服务模式」(BabelDOC 本地 HTTP 桥接)连同其令牌/握手安全面
-			// 一并移除 —— 无界面、少人用,且带来一整套本地服务攻击面。
-			const { monoBytes, dualBytes } = await this.exportBuiltin(bytes, report);
-			const parentID = (item as unknown as { parentItemID?: number }).parentItemID ?? undefined;
-			const stem = (String(filePath).split(/[\\/]/).pop() || 'paper').replace(/\.pdf$/i, '');
-			const saveOne = async (data: Uint8Array | null, suffix: string): Promise<void> => {
-				if (!data) {
-					return;
-				}
-				// 临时文件加固 (2.0.6, 审核 P3): 旧路径 `${stem}.${suffix}.pdf` 在
-				// 共享 /tmp 里完全可预测 —— 共享主机上他人可预先占位/符号链接,
-				// 或在删除前的窗口读取。文件名混入密码学随机成分;写入后立即
-				// 收紧权限到 0600(尽力而为: 平台不支持时忽略,随机名仍是主防线)。
-				const rand = (() => {
-					try {
-						const buf = new Uint8Array(12);
-						(globalThis as { crypto?: { getRandomValues(b: Uint8Array): Uint8Array } }).crypto!.getRandomValues(buf);
-						return Array.from(buf, b => b.toString(16).padStart(2, '0')).join('');
-					}
-					catch {
-						// crypto 不可用的兜底: 仍强于旧的完全固定名。
-						return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
-					}
-				})();
-				const tmp = PathUtils.join((PathUtils as unknown as { tempDir: string }).tempDir, `${stem}.${suffix}.${rand}.pdf`);
-				try {
-					await IOUtils.write(tmp, data);
-					try {
-						await (IOUtils as unknown as { setPermissions?(path: string, permissions: number): Promise<void> }).setPermissions?.(tmp, 0o600);
-					}
-					catch { /* 权限收紧尽力而为 */ }
-					await (Zotero as unknown as {
-						Attachments: { importFromFile(options: { file: string; parentItemID?: number; title?: string }): Promise<unknown> };
-					}).Attachments.importFromFile({
-						file: tmp,
-						parentItemID: parentID,
-						title: suffix === 'mono' ? `${stem} (译文)` : `${stem} (双语对照)`
-					});
-				}
-				finally {
-					// A failed write/import can still leave a complete private PDF.
-					// Clean it on every outcome, including attachment import failure.
-					try { await IOUtils.remove(tmp, { ignoreAbsent: true }); }
-					catch { /* temp cleanup is best-effort */ }
-				}
-			};
-			await saveOne(monoBytes, 'mono');
-			await saveOne(dualBytes, 'dual');
-			// Export completion is shown ONCE, in the capsule — no extra toast.
-			this.pushExport('done', { message: getString('papermirror-export-done') });
-		}
-		catch (e) {
-			const message = e instanceof PaperMirrorError ? e.message : String(e);
-			logger.warn(MODULE, 'exportTranslatedPdf failed', e);
-			this.setCapsuleCollapsed(false); // 失败必须可见,即使用户中途又把胶囊折叠了
-			this.pushExport('failed', { message: `${getString('papermirror-export-failed')}: ${message}` });
-		}
-		finally {
-			this.exportingPdf = false;
-		}
+	/** Moved to sessionPdfExport.ts (5.1). */
+	exportTranslatedPdf(): Promise<void> {
+		return exportTranslatedPdf(this.pdfExportView);
 	}
 
 	/** PDF-export progress → the same capsule (task: export). */
@@ -2432,44 +2195,12 @@ export class ReaderSession {
 		}
 	}
 
-	/**
-	 * 内置生成 (default): translate every page through the normal pipeline
-	 * (cache-aware), then write the translations back into a real PDF with the
-	 * bundled builder. No external service, no Python.
-	 */
-	private async exportBuiltin(
+	/** Moved to sessionPdfExport.ts (5.1). */
+	private exportBuiltin(
 		sourceBytes: Uint8Array,
 		report: (pct: number) => void
 	): Promise<{ monoBytes: Uint8Array | null; dualBytes: Uint8Array | null }> {
-		if (!this.manager) {
-			this.startTranslating();
-		}
-		const count = adapter.getPageCount(this.reader);
-		if (count <= 0) {
-			throw new PaperMirrorError('EXTRACTION_FAILED', '无法确定页数。', { retryable: false });
-		}
-		const pages = new Map<number, PageTranslationData>();
-		for (let p = 0; p < count; p++) {
-			await this.waitForPage(p);
-			const state = this.manager?.getPageState(p);
-			if (state && state.status === 'done' && state.blocks.length) {
-				pages.set(p, { blocks: state.blocks, translations: state.translations });
-			}
-			report((p + 1) / count * 70);
-		}
-		if (!pages.size) {
-			throw new PaperMirrorError('EXTRACTION_FAILED', '没有任何页面翻译成功。', { retryable: true });
-		}
-		const built = await buildTranslatedPdf(sourceBytes, pages, {
-			dual: true,
-			onProgress: (done, total) => report(70 + (done / total) * 28)
-		});
-		if (built.keptOriginal > 0) {
-			// LO-1 (2.2.8): 放不下的块保留原文,不再涂白截断丢正文。
-			logger.info(MODULE, `${built.keptOriginal} block(s) kept original in exported PDF (translation would not fit)`);
-			this.flashNotice(`导出完成:${built.keptOriginal} 段译文放不下原区域,已保留原文(内容零丢失)`);
-		}
-		return { monoBytes: built.monoBytes, dualBytes: built.dualBytes };
+		return exportBuiltin(this.pdfExportView, sourceBytes, report);
 	}
 
 	/** Per-path text extraction report for the active page (diagnostics). */
@@ -2734,222 +2465,24 @@ export class ReaderSession {
 		}
 	}
 
-	private async saveSelectionToNote(): Promise<void> {
-		if (!this.pane || !this.manager) {
-			return;
-		}
-		const item = adapter.getReaderItem(this.reader);
-		if (!item) {
-			return;
-		}
-		const page = adapter.getCurrentPageIndex(this.reader);
-		const state = this.manager.getPageState(page);
-		if (!state) {
-			return;
-		}
-		// Selection in pane, or the highlighted block, or the whole page
-		const selection = this.pane.getSelectionText();
-		let original = '';
-		let translated = '';
-		const selectedId = this.pane.getSelectedBlockId();
-		if (selection) {
-			translated = selection;
-			original = adapter.getSelectedText(this.reader) || (selectedId
-				? state.blocks.find(b => b.id === selectedId)?.sourceText ?? ''
-				: '');
-		}
-		else if (selectedId) {
-			const block = state.blocks.find(b => b.id === selectedId);
-			original = block?.sourceText ?? '';
-			translated = state.translations.get(selectedId) ?? '';
-		}
-		else {
-			original = state.blocks.map(b => b.sourceText).join('\n\n');
-			translated = this.pane.getPageText(page, state.blocks, state.translations, 'plain');
-		}
-		if (!translated) {
-			return;
-		}
-		const noteID = await saveTranslationNote(item, {
-			originalText: original,
-			translatedText: translated,
-			documentTitle: item.getDisplayTitle?.() ?? '',
-			pageNumber: page + 1,
-			attachmentURI: buildAttachmentSelectURI(item)
-		});
-		if (noteID) {
-			this.flashNotice(getString('papermirror-toast-saved'));
-		}
-		else {
-			this.pushFailure(getString('papermirror-status-error'));
-		}
+	/** Moved to sessionNotes.ts (5.1). */
+	private saveSelectionToNote(): Promise<void> {
+		return saveSelectionToNote(this.notesView);
 	}
 
-	/**
-	 * 选中句子解析 (Read Frog-style analysis): explain the current PDF
-	 * selection — or the highlighted block — using the configured LLM.
-	 */
+	/** Moved to sessionExplanations.ts (5.1). */
 	private watchAutomaticExplanation(): void {
-		// This policy also applies to manual explanations, even when the native
-		// PDF selection document is temporarily unavailable.
-		try {
-			this.localOnlyPrefObserver = registerPrefObserver('localOnlyMode', () => {
-				this.explanationRequest?.abort();
-				this.explanationRequest = null;
-				this.pane?.hideExplanation();
-			});
-		}
-		catch { /* The policy is checked again before dispatch and response commit. */ }
-		const doc = adapter.getOriginalSelectionDocument(this.reader);
-		if (!doc) return;
-		this.pane?.setExplanationDismissDocument(doc);
-		const cancelAutomatic = () => {
-			if (this.explanationIsAutomatic) {
-				this.explanationRequest?.abort();
-				this.explanationRequest = null;
-				this.pane?.hideExplanation();
-			}
-		};
-		this.disposeAutoExplain = watchAutoExplainSelection({
-			document: doc,
-			readText: () => adapter.getOriginalSelectedText(this.reader),
-			enabled: () => !this.destroyed && !this.isWindowHidden()
-				&& getPref<boolean>('privacyNoticeAccepted', false)
-				&& getPref<boolean>('autoExplainSelection', true),
-			onChange: cancelAutomatic,
-			onSelection: text => { void this.explainSelection(text, true); }
-		});
-		// Hover-to-peek hides translated nodes, so native PDF text receives the
-		// double click. Resolve the paragraph geometrically instead of using
-		// PDF.js's word selection.
-		const doubleClick = (event: MouseEvent) => {
-			if (this.viewMode !== 'overlay' || this.destroyed) return;
-			const target = event.target as Element | null;
-			if (!target?.closest?.('.textLayer')) return;
-			const pageElement = target.closest('.page');
-			const pageIndex = Number(pageElement?.getAttribute('data-page-number')) - 1;
-			if (!Number.isInteger(pageIndex) || pageIndex < 0) return;
-			const view = adapter.getPageView(this.reader, pageIndex);
-			const blocks = this.manager?.getPageState(pageIndex)?.blocks;
-			if (!view || !blocks) return;
-			const rect = view.div.getBoundingClientRect();
-			const block = sourceBlockAtPoint(blocks, event.clientX - rect.left - view.div.clientLeft,
-				event.clientY - rect.top - view.div.clientTop, view.toCss);
-			if (!block?.sourceText.trim()) return;
-			void this.explainSelection(block.sourceText);
-		};
-		doc.addEventListener('dblclick', doubleClick, true);
-		this.disposeOriginalDoubleClick = () => doc.removeEventListener('dblclick', doubleClick, true);
-		try {
-			this.autoExplainPrefObserver = registerPrefObserver('autoExplainSelection', value => {
-				if (!value) cancelAutomatic();
-			});
-		}
-		catch { /* The trigger still reads the preference before every request. */ }
+		return watchAutomaticExplanation(this.explanationsView);
 	}
 
-	async explainSelection(explicitText?: string, automatic = false): Promise<void> {
-		if (!this.pane || this.destroyed || !getPref<boolean>('privacyNoticeAccepted', false)) {
-			return;
-		}
-		if (!automatic) this.disposeAutoExplain?.suppressCurrentSelection();
-		this.explanationRequest?.abort();
-		const request = new AbortController();
-		this.explanationRequest = request;
-		this.explanationIsAutomatic = automatic;
-		let endpointStillAllowed = () => true;
-		const live = () => !this.destroyed && !request.signal.aborted
-			&& this.explanationRequest === request && !!this.pane && endpointStillAllowed()
-			&& (!automatic || (getPref<boolean>('autoExplainSelection', true)
-				&& !this.isWindowHidden() && adapter.getOriginalSelectedText(this.reader).trim() === text));
-		// 1. Resolve the passage: explicit text > PDF selection > selected block
-		let text = (explicitText ?? '').trim() || adapter.getSelectedText(this.reader).trim();
-		let context = '';
-		const page = adapter.getCurrentPageIndex(this.reader);
-		const state = this.manager?.getPageState(page);
-		const selectedId = this.pane.getSelectedBlockId();
-		if (!text && selectedId && state) {
-			text = state.blocks.find(b => b.id === selectedId)?.sourceText ?? '';
-		}
-		if (!text) {
-			this.pane.showExplanation({ error: getString('papermirror-explain-no-selection') });
-			return;
-		}
-		if (state) {
-			context = state.blocks.map(b => b.sourceText).join('\n').slice(0, 600);
-		}
-		// 2. Resolve an LLM-capable provider
-		try {
-			const settings = await this.providerSettings();
-			if (!live()) return;
-			const provider = getProvider(settings.providerId);
-			if (!canExplain(provider)) {
-				if (!automatic) this.pane.showExplanation({ passage: text, error: getString('papermirror-explain-needs-llm') });
-				return;
-			}
-			if (automatic && provider.requiresApiKey && !settings.apiKey) return;
-			// Automatic selections stay quiet when the configured cloud endpoint
-			// is disallowed. A manual action explains the policy in its card.
-			if (automatic && !this.providerEndpointAllowed(settings, provider.defaultBaseURL)) return;
-			this.assertProviderEndpointAllowed(settings, provider.defaultBaseURL);
-			endpointStillAllowed = () => this.providerEndpointAllowed(settings, provider.defaultBaseURL);
-			// 3. Run — 讲解缓存 (2.3.5, 第四批 item7 · API-8): 同段落+同引擎/模型/语言
-			// 的解析在会话内缓存,重复选中/误触零请求(重读一段是常态,按次计费)。
-			this.pane.showExplanation({ passage: text, loading: true });
-			const { target } = this.resolveLanguages(text);
-			const cacheKey = hashSourceTexts([text, settings.providerId, settings.model ?? '', target]);
-			const cached = this.explainCache.get(cacheKey);
-			if (cached) {
-				this.lastExplanation = { passage: text, sections: cached, pageNumber: page + 1 };
-				this.pane.showExplanation({ passage: text, sections: cached });
-				return;
-			}
-			const item = adapter.getReaderItem(this.reader);
-			const result = await explainText(provider, settings, {
-				text,
-				targetLanguage: target,
-				documentTitle: item?.getDisplayTitle?.() ?? '',
-				context,
-				signal: request.signal
-			});
-			if (!live()) return;
-			const sections = parseExplanationSections(result);
-			this.explainCache.set(cacheKey, sections);
-			this.lastExplanation = { passage: text, sections, pageNumber: page + 1 };
-			this.pane.showExplanation({ passage: text, sections });
-		}
-		catch (e) {
-			if (!live()) return;
-			const error = e instanceof PaperMirrorError ? e : new PaperMirrorError('UNKNOWN', String(e));
-			const message = error.code === 'NO_API_KEY'
-				? getString('papermirror-error-no-api-key')
-				: error.message;
-			this.pane.showExplanation({ error: message });
-			logger.warn(MODULE, 'explainSelection failed', e);
-		}
+	/** Moved to sessionExplanations.ts (5.1). */
+	explainSelection(explicitText?: string, automatic = false): Promise<void> {
+		return explainSelection(this.explanationsView, explicitText, automatic);
 	}
 
-	/** Copy the current deep explanation as plain text. */
+	/** Moved to sessionNotes.ts (5.1). */
 	private copyExplanation(): void {
-		if (!this.pane || !this.lastExplanation) {
-			return;
-		}
-		const item = adapter.getReaderItem(this.reader);
-		const text = explanationToPlainText({
-			passage: this.lastExplanation.passage,
-			sections: this.lastExplanation.sections,
-			documentTitle: item?.getDisplayTitle?.() ?? '',
-			pageNumber: this.lastExplanation.pageNumber
-		});
-		try {
-			Components.classes['@mozilla.org/widget/clipboardhelper;1']
-				.getService(Components.interfaces.nsIClipboardHelper)
-				.copyString(text);
-			this.flashNotice(getString('papermirror-toast-copied'));
-		}
-		catch (e) {
-			logger.warn(MODULE, 'Clipboard copy failed', e);
-		}
+		return copyExplanation(this.notesView);
 	}
 
 	/** Moved to sessionExports.ts (5.1). */
@@ -3055,98 +2588,14 @@ export class ReaderSession {
 	/** 上次「保存术语到词汇表」前的快照 —— 一键撤销 (2.3.1, item3 · WF-8)。 */
 	private glossaryUndo: { json: string; added: number } | null = null;
 
+	/** Moved to sessionNotes.ts (5.1). */
 	private copyTermsTsv(terms: { source: string; target: string }[]): void {
-		try {
-			const tsv = terms.map(t => `${t.source}\t${t.target}`).join('\n');
-			Components.classes['@mozilla.org/widget/clipboardhelper;1']
-				.getService(Components.interfaces.nsIClipboardHelper)
-				.copyString(tsv);
-			this.flashNotice(`已复制 ${terms.length} 条术语对照(TSV)`);
-		}
-		catch (e) {
-			logger.warn(MODULE, 'term table copy failed', e);
-		}
+		return copyTermsTsv(this.notesView, terms);
 	}
 
-	/**
-	 * 「术语」名称与行为统一 (2.3.1, 计划 第四批 item3 · WF-8): 不再只复制 TSV,
-	 * 而是**预览并保存到词汇表** —— 与既有词汇表去重、确认框预览、保存为
-	 * 'suggested'(参考,不强制模型)、支持一键撤销;「编辑」在设置页词汇表
-	 * 编辑器闭环。确认框如实提示: 词汇表是译文身份的一部分(glossaryHash 入
-	 * 缓存键),保存会使本篇已缓存译文在下次打开时按新术语重译。
-	 * 「仅复制 TSV」保留为确认框第二按钮(旧行为不丢)。
-	 */
+	/** Moved to sessionNotes.ts (5.1). */
 	private previewSaveLearnedTerms(): void {
-		const terms = this.manager?.learnedTerms() ?? [];
-		if (!terms.length) {
-			this.flashNotice('本篇尚未学得术语对(翻译几页后再试)');
-			return;
-		}
-		const existingJson = getPref<string>('glossaryGlobal', '[]');
-		const existing = parseGlossaryJSON(existingJson);
-		// 去重: 先对既有词汇表,再对本篇自身(纯函数,单测覆盖)。
-		const fresh = dedupeLearnedTerms(existing, terms);
-		const prompt = (Services as unknown as {
-			prompt?: {
-				confirm(parent: unknown, title: string, text: string): boolean;
-				confirmEx?(parent: unknown, title: string, text: string, flags: number,
-					b0: string | null, b1: string | null, b2: string | null,
-					check: string | null, state: { value: boolean }): number;
-			};
-		}).prompt;
-		const win = (Zotero as unknown as { getMainWindow?(): unknown }).getMainWindow?.() ?? null;
-		if (!fresh.length) {
-			// 全部已在词汇表 → 提供撤销上次保存(若有)。
-			if (this.glossaryUndo && prompt?.confirm) {
-				const undo = this.glossaryUndo;
-				if (prompt.confirm(win, '术语已全部在词汇表中',
-					`本篇学得的 ${terms.length} 条术语已全部在词汇表中。撤销上次保存的 ${undo.added} 条?`)) {
-					setPref('glossaryGlobal', undo.json);
-					this.glossaryUndo = null;
-					this.flashNotice(`已撤销上次保存的 ${undo.added} 条术语`);
-				}
-			}
-			else {
-				this.flashNotice(`本篇学得的 ${terms.length} 条术语已全部在词汇表中(设置 → 词汇表可编辑)`);
-			}
-			return;
-		}
-		const PREVIEW_MAX = 12;
-		const previewLines = fresh.slice(0, PREVIEW_MAX).map(t => `${t.source} → ${t.target}`);
-		if (fresh.length > PREVIEW_MAX) {
-			previewLines.push(`…等共 ${fresh.length} 条`);
-		}
-		const text = `本篇新学得 ${fresh.length} 条术语(已与词汇表现有 ${existing.length} 条去重):\n\n`
-			+ previewLines.join('\n')
-			+ '\n\n保存为「参考」术语(不强制模型);可在设置 → 词汇表中编辑,再点一次「术语」可撤销。'
-			+ '\n注意:词汇表变化会使本篇已缓存译文在下次打开时按新术语重译。';
-		let choice = 0; // 0=保存 1=仅复制TSV 2=取消
-		try {
-			if (prompt?.confirmEx) {
-				// STD flags: (BUTTON_TITLE_IS_STRING=127) 每键位 <<0/8/16。
-				const IS_STRING = 127;
-				choice = prompt.confirmEx(win, '保存术语到词汇表', text,
-					IS_STRING | (IS_STRING << 8) | (IS_STRING << 16),
-					'保存到词汇表', '仅复制 TSV', '取消', null, { value: false });
-			}
-			else if (prompt?.confirm) {
-				choice = prompt.confirm(win, '保存术语到词汇表', text) ? 0 : 2;
-			}
-		}
-		catch {
-			choice = 2; // 无法弹框时不做破坏性动作
-		}
-		if (choice === 1) {
-			this.copyTermsTsv(terms);
-			return;
-		}
-		if (choice !== 0) {
-			return;
-		}
-		this.glossaryUndo = { json: existingJson, added: fresh.length };
-		const merged = [...existing, ...fresh.map(t => ({ source: t.source, target: t.target, mode: 'suggested' as const }))];
-		setPref('glossaryGlobal', serializeGlossary(merged));
-		this.flashNotice(`已保存 ${fresh.length} 条术语到词汇表(设置中可编辑;再点「术语」可撤销)`);
+		return previewSaveLearnedTerms(this.notesView);
 	}
 
 	/**

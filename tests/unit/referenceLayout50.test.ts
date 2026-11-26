@@ -107,16 +107,16 @@ import { readSource } from '../fixtures/sourceFamily';
 // compress left the capsule on 「正在适配 · 排版 0/N」 forever.
 test('a shrink-only render blocked by an in-flight compress still gets its final placement report (结构性回归闸)', () => {
 	const src = readSource('src/reader/readerSession.ts');
-	const resolve = src.slice(src.indexOf('private resolveStrictUnfit('), src.indexOf('private runStrictCompress('));
+	const resolve = src.slice(src.indexOf('export function resolveStrictUnfit('), src.indexOf('export function runStrictCompress(')); // 5.1: placementReporting.ts
 	// 5.0 step 4: compress state lives in the page ledger. A shrink-only render that
 	// meets an in-flight compress is deferred with an EMPTY unfit list…
-	assert.match(resolve, /else if \(compressPending\) \{\s*this\.ledger\.deferRender\(pageIndex, \{ element, unfit: \[\], token \}\);/);
-	const run = src.slice(src.indexOf('private runStrictCompress('));
+	assert.match(resolve, /else if \(compressPending\) \{\s*ctx\.ledger\.deferRender\(pageIndex, \{ element, unfit: \[\], token \}\);/);
+	const run = src.slice(src.indexOf('export function runStrictCompress('));
 	const fin = run.slice(run.indexOf('.finally('));
 	// …and the compress's finally (its own generation only) reports placement for it.
-	assert.match(fin, /this\.ledger\.endCompress\(pageIndex, generation\) \?\? this\.ledger\.takeCarried\(pageIndex\)/);
+	assert.match(fin, /ctx\.ledger\.endCompress\(pageIndex, generation\) \?\? ctx\.ledger\.takeCarried\(pageIndex\)/);
 	assert.match(fin, /blocked\.unfit\.length/);
-	assert.match(fin, /this\.renderToken\.get\(pageIndex\) === blocked\.token\) \{\s*this\.reportPlacement\(pageIndex, blocked\.element\);/);
+	assert.match(fin, /ctx\.renderToken\.get\(pageIndex\) === blocked\.token\) \{\s*ctx\.reportPlacement\(pageIndex, blocked\.element\);/);
 });
 
 test('between a block\'s own lines the bleed may use the whole line gap', () => {

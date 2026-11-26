@@ -11,7 +11,7 @@ export const SOURCE_FAMILIES: Record<string, string[]> = {
 	'src/reader/spanBlockBuilder.ts': ['src/reader/spanLines.ts', 'src/reader/spanParagraphs.ts'],
 	'src/reader/paragraphHeuristics.ts': ['src/reader/columnGeometry.ts'],
 	'src/translation/translationManager.ts': ['src/translation/translationManagerTypes.ts', 'src/translation/chunkRecovery.ts', 'src/translation/managerDiagnostics.ts', 'src/translation/manualRetranslation.ts', 'src/translation/pagePlanning.ts'],
-	'src/reader/readerSession.ts': ['src/reader/sessionExports.ts']
+	'src/reader/readerSession.ts': ['src/reader/sessionExports.ts', 'src/reader/sessionNotes.ts', 'src/reader/sessionPdfExport.ts', 'src/reader/placementReporting.ts', 'src/reader/sessionExplanations.ts']
 };
 
 /** The file's text followed by the text of the modules split out of it. */

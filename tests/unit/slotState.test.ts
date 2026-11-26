@@ -133,7 +133,7 @@ test('readerSession 的半成品重建不结算、不报统计 (结构性回归�
 	// 否则半成品页可能带着叠印显示出去。
 	assert.ok(/this\.auditPartialGeometry\(pageIndex, element\);\s*\n\s*return;/.test(body),
 		'半成品页必须先跑几何审计再返回');
-	const audit = src.slice(src.indexOf('private auditPartialGeometry('), src.indexOf('private reportPlacement('));
+	const audit = src.slice(src.indexOf('export function auditPartialGeometry('), src.indexOf('export function reportPlacement(')); // 5.1: placementReporting.ts
 	assert.ok(/auditStrictGeometry\(element\)/.test(audit), '审计必须真的跑');
 	assert.ok(!/geometryAudits\.set/.test(audit), '半成品的审计数字不进诊断');
 	assert.ok(!/resolveStrictUnfit|strictPageStats/.test(audit), '半成品不压缩重试、不取统计');

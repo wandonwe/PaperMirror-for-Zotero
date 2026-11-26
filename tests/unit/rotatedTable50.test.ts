@@ -35,7 +35,7 @@ test('5.0: the capsule says the rotated table stays in the source language', () 
 
 test('5.0: the session attaches the rotated-table note to the final placement and the resting ring (结构性回归闸)', () => {
 	const src = readSource('src/reader/readerSession.ts');
-	assert.match(src, /kept,\s*\.\.\.this\.pageNote\(pageIndex\)/);
+	assert.match(src, /kept,\s*\.\.\.(?:this|ctx)\.pageNote\(pageIndex\)/); // 5.1: reportPlacement is in placementReporting.ts
 	assert.match(src, /placementTally\(stats\) : undefined, this\.pageNote\(pageIndex\)\.note\)/);
 	assert.match(src, /this\.extractor\.hasRotatedTable\(pageIndex\)/);
 });

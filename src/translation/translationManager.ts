@@ -1777,7 +1777,7 @@ export class TranslationManager {
 		translateFn: (req: TranslationRequest, sig: AbortSignal) => Promise<TranslationResponse>,
 		canSpend?: () => boolean
 	): Promise<void> {
-		return resolveEnglishResidue(this.recovery, state, blocks, results, source, target, signal, translateFn);
+		return resolveEnglishResidue(this.recovery, state, blocks, results, source, target, signal, translateFn, canSpend);
 	}
 
 	private async translatePage(state: PageTranslationState, signal: AbortSignal, bypass: { bypassPageCache: boolean; bypassSegments: boolean }, heartbeat?: () => void, preBlocks?: SourceBlock[]): Promise<void> {
