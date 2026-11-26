@@ -29,8 +29,10 @@ import {
 /** A block opening with a stand-in for missing text: "（无）…", "(N/A) …". */
 const STAND_IN_LEAD = /^[（(]\s*(?:无|空|略|省略|none|n\/?a)\s*[)）]/i;
 
-export function looksTranslated(source: string, translated: string, targetLang: string, opts?: { isReference?: boolean }): boolean {
+export function looksTranslated(source: string, translated: string, targetLang: string, opts?: { isReference?: boolean; keepAsName?: boolean }): boolean {
 	const t = translated.trim();
+	// 5.1: a table cell that is a product name ("Alpha" under "Scanner") may come back unchanged.
+	if (opts?.keepAsName && t && t === source.trim()) return true;
 	if (technicalUnitIssue(source, t) || numericPowerIssue(source, t)) return false;
 	if (introducesInvalidCharacters(source, t)) return false;
 	if (referenceAlignmentIssue(source, t)) return false;

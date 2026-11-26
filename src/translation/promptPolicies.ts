@@ -19,8 +19,9 @@ export const PROMPT_POLICIES = {
 	references: 2,
 	/** v2 (4.99.15): 人名保留原文拼写,不再音译。 */
 	personNames: 2,
-	/** v2 (5.1): 表格单元格带行 / 列标题作为语境,型号名原样保留。 */
-	tableCells: 2
+	/** v2 (5.1): 表格单元格带行 / 列标题作为语境,型号名原样保留。
+	 *  v3 (5.1 真机): 原样返回的型号名不再被判为没翻、被兜底强译(v2 期间缓存的「阿尔法」作废)。 */
+	tableCells: 3
 } as const;
 
 export type PolicyName = keyof typeof PROMPT_POLICIES;
