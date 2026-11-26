@@ -77,3 +77,12 @@ test('5.1: acceptance-ab.js recovers before it reads the previous values, arms b
 	assert.ok(at('guard.stepPrefs(') < at('Zotero.Prefs.set(k, v, true)'));
 	assert.ok(at('Zotero.Prefs.set(PREF, prev, true)') < at('guard.disarm()'));
 });
+
+test('5.1: prime-cache.js restores local-only mode and auto-update in its finally block and hands over to the A/B only after a clean prime', () => {
+	const prime = readFileSync(resolve('scripts/zotero/prime-cache.js'), 'utf8');
+	const at = (s: string) => { const i = prime.indexOf(s); assert.ok(i >= 0, s); return i; };
+	assert.ok(at('prev = Zotero.Prefs.get(PREF, true)') < at('Zotero.Prefs.set(PREF, false, true)'));
+	assert.ok(at('finally {') < at('Zotero.Prefs.set(PREF, prev, true)'));
+	assert.ok(at('Zotero.Prefs.set(PREF, prev, true)') < at("cfg.prime.then === 'ab' && !out.errors.length"));
+	assert.doesNotThrow(() => new Function(prime));
+});
