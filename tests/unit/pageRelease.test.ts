@@ -26,10 +26,9 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { TranslationManager, MAX_RELEASES, MAX_RENDER_RETRIES, RELEASE_RETRY_RADIUS, type TranslationDeps } from '../../src/translation/translationManager';
 import { PaperMirrorError, type SourceBlock, type TranslationRequest, type TranslationResponse } from '../../src/types/models';
+import { readSource } from '../fixtures/sourceFamily';
 
 function blocksFor(pageIndex: number): SourceBlock[] {
 	return [{
@@ -192,7 +191,7 @@ test('用户亲手重译能清掉释放计数 (2.9.0)', async () => {
 // ---- 4. 结构闸: 五处删除必须全都走同一个出口 ----------------------------------
 
 test('页状态的删除只剩两个合法出口: releasePage 与用户重译 (结构性回归闸, 2.9.0)', () => {
-	const raw = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const raw = readSource('src/translation/translationManager.ts');
 	// 注释里提到这个调用是可以的(本文件的注释就在讲它),只数**语句**:
 	// 行首缩进后直接是它,且这一行不是注释。
 	const src = raw.split('\n').map(line => /^\s*(\*|\/\/)/.test(line) ? '' : line).join('\n');
@@ -211,7 +210,7 @@ test('页状态的删除只剩两个合法出口: releasePage 与用户重译 (�
 });
 
 test('补回有界、低优先级、不与当前页抢 (结构性回归闸, 2.9.0)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const src = readSource('src/translation/translationManager.ts');
 	const fn = src.slice(src.indexOf('private retryReleasedPages()'), src.indexOf('\n\t}', src.indexOf('private retryReleasedPages()')));
 	assert.ok(/record\.count >= MAX_RELEASES/.test(fn), '必须有次数闸');
 	assert.ok(/Math\.abs\(pageIndex - this\.currentPage\) > RELEASE_RETRY_RADIUS/.test(fn), '必须有距离闸');
@@ -355,7 +354,7 @@ test('一页都没碰过时也不报洞 (2.9.2)', () => {
 });
 
 test('事件补回接线在 readerSession 里,且只认 textlayerrendered (结构性回归闸, 2.9.2)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	assert.ok(/onPdfRenderEvents\(this\.reader, \(pageIndex\) => \{[\s\S]{0,300}this\.manager\?\.onPageRendered\(pageIndex\);[\s\S]{0,120}\}, \['textlayerrendered'\]\)/.test(src),
 		"必须单独订阅 textlayerrendered —— 上面那个订阅收全部渲染事件、分不出种类,"
 		+ "而 pagerendered(画布画完)早于文本层,拿它当信号会又一次落空");
@@ -447,7 +446,7 @@ test('仍在窗口内的"看不见"型释放,事件照常拉起 —— 2.9.2 的
 });
 
 test('事件补回的两道新条件都在 (结构性回归闸, 2.9.3)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const src = readSource('src/translation/translationManager.ts');
 	const fn = src.slice(src.indexOf('onPageRendered(pageIndex: number): void'),
 		src.indexOf('void this.ensurePage(pageIndex, PRIORITY.RELEASED_RETRY', src.indexOf('onPageRendered(pageIndex: number): void')));
 	assert.ok(/record\.reason !== 'text-layer-not-rendered' && record\.reason !== 'extract-timeout'/.test(fn),
@@ -462,7 +461,7 @@ test('事件补回的两道新条件都在 (结构性回归闸, 2.9.3)', () => {
 });
 
 test('每一道闸挡掉多少次都要计数 (结构性回归闸, 2.9.4)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const src = readSource('src/translation/translationManager.ts');
 	const fn = src.slice(src.indexOf('onPageRendered(pageIndex: number): void'),
 		src.indexOf('void this.ensurePage(pageIndex, PRIORITY.RELEASED_RETRY', src.indexOf('onPageRendered(pageIndex: number): void')));
 	for (const kind of ['has-state', 'budget-spent', 'reason', 'too-far', 'already-queued']) {

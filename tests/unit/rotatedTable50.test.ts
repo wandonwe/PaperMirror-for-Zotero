@@ -2,8 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sidewaysBodyChars, ROTATED_TABLE_MIN_CHARS, buildBlocksFromSpans, type SpanItem } from '../../src/reader/spanBlockBuilder';
 import { capsuleStateFor, idleProgressFor, ROTATED_TABLE_NOTE } from '../../src/ui/statusCapsule';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readSource } from '../fixtures/sourceFamily';
 
 /** A run printed sideways: its box is tall and narrow. */
 const sideways = (text: string, x: number, y: number): SpanItem => ({ text, rect: [x, y, x + 7.5, y + text.length * 3.8], fontSize: 7.5 });
@@ -35,7 +34,7 @@ test('5.0: the capsule says the rotated table stays in the source language', () 
 });
 
 test('5.0: the session attaches the rotated-table note to the final placement and the resting ring (结构性回归闸)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	assert.match(src, /kept,\s*\.\.\.this\.pageNote\(pageIndex\)/);
 	assert.match(src, /placementTally\(stats\) : undefined, this\.pageNote\(pageIndex\)\.note\)/);
 	assert.match(src, /this\.extractor\.hasRotatedTable\(pageIndex\)/);

@@ -21,6 +21,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readSource } from '../fixtures/sourceFamily';
 
 // ---- 1. 等稳定,不是"有就读" -------------------------------------------------
 
@@ -186,7 +187,7 @@ test('抽不出文字时,"层不在"与"真没文字"必须分开 (结构性回�
 });
 
 test('预取页遇到"层不在"要重来,当前页要报错,都不许标完成 (结构性回归闸, 2.8.13)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const src = readSource('src/translation/translationManager.ts');
 	const start = src.indexOf("else if (err.code === 'EXTRACTION_FAILED' && err.retryable) {");
 	assert.ok(start > 0, '找不到"文本层未渲染"的分支');
 	const branch = src.slice(start, src.indexOf('// real extraction errors keep their error', start));

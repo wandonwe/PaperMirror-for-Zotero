@@ -28,6 +28,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { textContentItemRect } from '../../src/reader/zoteroReaderAdapter';
+import { readSource } from '../fixtures/sourceFamily';
 
 const read = (p: string): string => readFileSync(join(process.cwd(), p), 'utf8');
 
@@ -179,7 +180,7 @@ test('每一种退出都报一个原因 (2.9.9)', async () => {
 });
 
 test('路径 1.5 的结局分布进了导出 (结构性回归闸, 2.9.9)', () => {
-	assert.ok(/textContentPath: this\.extractor\.textContentOutcomes\(\)/.test(read('src/reader/readerSession.ts')),
+	assert.ok(/textContentPath: this\.extractor\.textContentOutcomes\(\)/.test(readSource('src/reader/readerSession.ts')),
 		'不进导出就等于没量');
 });
 

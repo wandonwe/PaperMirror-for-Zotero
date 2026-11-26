@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { nextSlotState, shouldRenderPartial, MIN_INTERVAL_MS } from '../../src/ui/translationPane';
+import { readSource } from '../fixtures/sourceFamily';
 
 const NOW = 1_700_000_000_000;
 
@@ -120,7 +121,7 @@ test('最后一个块一直不来时,前面已完成的块照样能显示 (2.8.2
 	assert.equal(rendered, 2, '已完成的两批停在画面上,不会被撤回');
 });
 test('readerSession 的半成品重建不结算、不报统计 (结构性回归闸, 2.7.10)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	const start = src.indexOf("const partial = !!(state && (state.status === 'translating'");
 	assert.ok(start > 0, '找不到 partial 判定');
 	const body = src.slice(start, src.indexOf("return partial ? 'partial' : 'translated';", start));
@@ -160,7 +161,7 @@ test('renderPage 的页视图真的走增量分支,且 done 仍无条件重建 (
 });
 
 test('渲染期间保留上一版页面: 不先清空、不先画遮罩 (结构性回归闸, 2.8.2 第三批)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	const start = src.indexOf('private async renderDocPage(');
 	const body = src.slice(start, src.indexOf('private auditPartialGeometry('));
 	// 唯一的两处 replaceChildren 都在结果**已经建好**之后;整个 renderDocPage

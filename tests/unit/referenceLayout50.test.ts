@@ -101,13 +101,12 @@ test('the last flow piece opens its block clip too', () => {
 	assert.ok(inkBleedOf(block) >= inkBleedOf(piece));
 });
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readSource } from '../fixtures/sourceFamily';
 
 // 联网校验 3064/3384: a shrink-only render that met an older render's in-flight
 // compress left the capsule on 「正在适配 · 排版 0/N」 forever.
 test('a shrink-only render blocked by an in-flight compress still gets its final placement report (结构性回归闸)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	const resolve = src.slice(src.indexOf('private resolveStrictUnfit('), src.indexOf('private runStrictCompress('));
 	// 5.0 step 4: compress state lives in the page ledger. A shrink-only render that
 	// meets an in-flight compress is deferred with an EMPTY unfit list…

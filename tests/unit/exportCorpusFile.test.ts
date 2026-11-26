@@ -20,6 +20,7 @@ import { checkStructure, mayAttachTranslations, BOX_TOLERANCE_PX, type Unverifia
 import { writeCorpusJsonl, type CorpusExportSource, type CorpusPageRecord } from '../../src/export/corpusJsonl';
 import type { JsonlSink, PageScopeEntry } from '../../src/export/jsonlWriter';
 import type { SourceBlock } from '../../src/types/models';
+import { readSource } from '../fixtures/sourceFamily';
 
 const SRC = 'Photon-counting CT improves spatial resolution.';
 const TGT = '光子计数 CT 提升了空间分辨率。';
@@ -384,7 +385,7 @@ test('导出期间不发翻译请求,不碰缓存写入 (结构性回归闸, 2.8
 });
 
 test('宿主接线: 内存里有原件就用原件,没有才重解析 (结构性回归闸, 2.8.12 真机修正)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	const start = src.indexOf('readPage: async (pageIndex: number): Promise<CorpusPageRecord>');
 	assert.ok(start > 0, '找不到语料的 readPage');
 	const body = src.slice(start, src.indexOf('pin: (pageIndex: number) => { this.exportPins.add(pageIndex); }', start));

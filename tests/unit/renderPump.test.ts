@@ -13,6 +13,7 @@ import {
 	RenderPump, orderRenderCandidates, shouldAbortInFlight, KEEP_PAGES
 } from '../../src/ui/renderPump';
 import type { PageRenderResult } from '../../src/ui/translationPane';
+import { readSource } from '../fixtures/sourceFamily';
 
 // ---- 排序 -------------------------------------------------------------------
 
@@ -223,7 +224,7 @@ test('泵送期间到达的更新不会被吞掉: 用满步数退出时补排一
 // ---- 接线的结构闸 -----------------------------------------------------------
 
 test('renderDocPage 把 signal 折进 current(),取消后不提交 DOM (结构性回归闸, 2.8.0)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	const start = src.indexOf('private async renderDocPage(');
 	assert.ok(start > 0, '找不到 renderDocPage');
 	assert.ok(/renderDocPage\(pageIndex: number, slot: HTMLElement, width: number, signal\?: AbortSignal\)/.test(src),

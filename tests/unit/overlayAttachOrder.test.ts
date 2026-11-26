@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readSource } from '../fixtures/sourceFamily';
 
 /**
  * 2.5.2: 覆盖模式的字号阶梯从来没真正跑过。
@@ -59,7 +60,7 @@ test('页节点在渲染期间被换掉时,层要撤走', () => {
 });
 
 test('覆盖层与面板共用同一个页面渲染器 (3.1.0)', () => {
-	const session = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const session = readSource('src/reader/readerSession.ts');
 	assert.match(session, /this\.overlay\.setPageRenderer\(\(pageIndex, host, width, signal\) => this\.renderDocPage\(pageIndex, host, width, signal\)\)/,
 		'两种模式必须走同一个 renderDocPage —— 否则同一页译出两种结果');
 	assert.match(session, /this\.pane\.setPageRenderer\(\(pageIndex, slot, width, signal\) => this\.renderDocPage\(pageIndex, slot, width, signal\)\)/);
@@ -70,7 +71,7 @@ test('覆盖层与面板共用同一个页面渲染器 (3.1.0)', () => {
 
 test('覆盖模式下隐藏的面板不泵 —— 两个表面共用渲染世代 (3.1.0)', () => {
 	const pane = readFileSync(join(process.cwd(), 'src/ui/translationPane.ts'), 'utf8');
-	const session = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const session = readSource('src/reader/readerSession.ts');
 	assert.match(pane, /windowOf: \(\) => \{\s*if \(!this\.surfaceActive \|\|/,
 		'display:none 的面板 clientHeight=0,可视范围仍会算出一页;不可见就不能进泵');
 	assert.match(pane, /setSurfaceActive\(active: boolean\): void \{[\s\S]*?this\.pump\.cancelAll\(\);[\s\S]*?this\.slotDirty\[i\] = true;/,

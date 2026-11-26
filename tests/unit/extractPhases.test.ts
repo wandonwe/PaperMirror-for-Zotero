@@ -29,6 +29,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { failureKind } from '../../src/export/jsonlWriter';
+import { readSource } from '../fixtures/sourceFamily';
 
 const read = (p: string): string => readFileSync(join(process.cwd(), p), 'utf8');
 
@@ -65,7 +66,7 @@ test('三条抽取路径各自计时,等待与建块分开 (结构性回归闸, 
 });
 
 test('分段计时只是毫秒数,不带任何文本 (隐私闸, 2.8.15)', () => {
-	const src = read('src/translation/translationManager.ts');
+	const src = readSource('src/translation/translationManager.ts');
 	const decl = src.slice(src.indexOf('extractPhases?: {'), src.indexOf('}', src.indexOf('extractPhases?: {')));
 	assert.ok(/^[^:]*(\s*\w+\??: number;)+/m.test(decl) && !/string/.test(decl),
 		'extractPhases 的每个字段都必须是 number —— 诊断文件不含原文,这条不能被一个字符串字段破掉');
@@ -144,7 +145,7 @@ test('两个探针都是同步的,不发 RPC (2.9.6)', () => {
 });
 
 test('出路探针进了导出 (结构性回归闸, 2.9.6)', () => {
-	const src = read('src/reader/readerSession.ts');
+	const src = readSource('src/reader/readerSession.ts');
 	assert.ok(/textContentApi: this\.extractor\.textContentApiState\(\)/.test(src),
 		'getTextContent 是公开 API 且不依赖渲染 —— 它可用与否决定下一步往哪走,必须进文件');
 });
@@ -166,7 +167,7 @@ test('路径 1 的结局只记枚举,不带原文或路径 (隐私闸, 2.9.5)', 
 });
 
 test('结局分布进了导出 (结构性回归闸, 2.9.5)', () => {
-	const src = read('src/reader/readerSession.ts');
+	const src = readSource('src/reader/readerSession.ts');
 	assert.ok(/charsPath: this\.extractor\.charsPathOutcomes\(\)/.test(src),
 		'不进导出就等于没量');
 });

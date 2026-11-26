@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { digestRows, buildPageDigest, diagnosticRows, type DigestSource } from '../../src/translation/pageBlockDigest';
 import { TranslationManager, type TranslationDeps } from '../../src/translation/translationManager';
 import type { SourceBlock } from '../../src/types/models';
+import { readSource } from '../fixtures/sourceFamily';
 
 const SRC = 'UNPUBLISHED_MANUSCRIPT_SENTINEL_TEXT';
 const TGT = '未发表稿件译文哨兵';
@@ -185,7 +186,7 @@ test('从没抽过的页标 none,不冒充"这页没有可译内容" (2.8.5 P0)'
 // ---- 接线的结构闸 -----------------------------------------------------------
 
 test('摘要必须在卸载现场、清空之前拍下 (结构性回归闸, 2.8.5)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const src = readSource('src/translation/translationManager.ts');
 	const evict = src.slice(src.indexOf('private evictColdPages()'), src.indexOf('private pageInUse('));
 	assert.ok(/state\.blockDigest = buildPageDigest\([\s\S]*?state\.blocks = \[\];/.test(evict),
 		'必须先拍摘要再清空 —— 清空之后 blocks 与两个 Map 都没了,拍不出来');
@@ -197,7 +198,7 @@ test('摘要必须在卸载现场、清空之前拍下 (结构性回归闸, 2.8.
 });
 
 test('宿主把抽取路径接上了 (结构性回归闸, 2.8.5)', () => {
-	const session = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const session = readSource('src/reader/readerSession.ts');
 	assert.ok(/extractPathOf: pageIndex => this\.extractor\.extractPathFor\(pageIndex\)/.test(session),
 		'诊断里的 extractPath 必须来自抽取器实际走通的那条路径');
 	const extractor = readFileSync(join(process.cwd(), 'src/reader/textExtractor.ts'), 'utf8');

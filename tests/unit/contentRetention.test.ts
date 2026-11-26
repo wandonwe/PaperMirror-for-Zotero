@@ -122,6 +122,7 @@ import { protectFormulas, restoreFormulas } from '../../src/reader/formulaGuard'
 import { buildBlocks } from '../../src/reader/blockBuilder';
 import type { PdfChar } from '../../src/types/models';
 import { digestRows, diagnosticRows } from '../../src/translation/pageBlockDigest';
+import { readSource } from '../fixtures/sourceFamily';
 
 test('classifyContent:自然语言一律翻译,标识保留并带原因,几何位置不决定翻不翻 (2.12.13)', () => {
 	const T = (s: string, rect?: [number, number, number, number]) => classifyContent(s, rect, 600, { fontSize: 7, bodySize: 10 });
@@ -223,7 +224,7 @@ function charsFor(lines: { text: string; y: number }[]) {
 test('3.0.0:参考文献默认翻译(prefs.js 与运行时默认值一致)', () => {
 	const prefs = readFileSync('prefs.js', 'utf8');
 	assert.match(prefs, /translateReferences', true\)/, 'prefs.js 默认 true');
-	const session = readFileSync('src/reader/readerSession.ts', 'utf8');
+	const session = readSource('src/reader/readerSession.ts');
 	assert.match(session, /getPref<boolean>\('translateReferences', true\)/, '运行时默认 true');
 });
 

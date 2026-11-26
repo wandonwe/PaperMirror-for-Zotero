@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TranslationManager, type TranslationDeps } from '../../src/translation/translationManager';
 import type { SourceBlock, TranslationRequest, TranslationResponse } from '../../src/types/models';
+import { readSource } from '../fixtures/sourceFamily';
 
 /**
  * P0-2 (2.0.1): 硬性不变量 —— 诊断导出绝不含原文与译文。
@@ -48,7 +49,7 @@ test('exportDiagnostics 不含原文、不含译文', async () => {
 test('会话侧的诊断载荷不再拼进 currentPageCorpus(结构性回归闸)', () => {
 	// copyDiagnostics 需要大量 Zotero 环境才能直调;这里用源码级断言钉住不变量,
 	// 防止有人再次把语料并回「诊断」。
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	// 2.3.0: copyDiagnostics 变 async(引擎自检需 await 服务商配置),签名两种都认。
 	const sigMatch = /private (?:async )?copyDiagnostics\(/.exec(src);
 	const start = sigMatch ? sigMatch.index : -1;
@@ -61,7 +62,7 @@ test('会话侧的诊断载荷不再拼进 currentPageCorpus(结构性回归闸)
 });
 
 test('语料导出仍然可用,且自我声明含原文', () => {
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	const start = src.indexOf('private copyLayoutCorpus(');
 	const body = src.slice(start, start + 1400);
 	assert.ok(/this\.layoutCorpus\(\)/.test(body), '语料按钮必须真的导出语料');
@@ -134,7 +135,7 @@ test('尝试去向明细只含枚举键与数字,错误消息一律不进诊断 
 });
 
 test('readerSession 把三个计量钩子原样转给适配器 (结构性回归闸, 2.7.9)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	const call = /provider\.translate\(outgoing,[^;]*?\);/s.exec(src);
 	assert.ok(call, '找不到 provider.translate 调用');
 	for (const hook of ['onAttempt', 'onUsage', 'onParamHeal']) {
@@ -219,7 +220,7 @@ test('extractPath 是枚举,永远装不下真实文件路径 (2.8.5 P0)', async
 test('诊断不再导出真实端点主机名 (2.8.6 P1)', () => {
 	// 2.3.0–2.8.5 期间诊断里带的是 endpointHost —— 用户自建网关的域名、公司内网
 	// 主机名会随一份"可以放心贴进 issue"的诊断一起公开。改为 endpointKind 枚举。
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	const start = src.indexOf('private async engineSelfCheck(');
 	assert.ok(start > 0, '找不到 engineSelfCheck');
 	const body = src.slice(start, src.indexOf('async diagnosticsExportSource('));
@@ -239,7 +240,7 @@ test('诊断不再导出真实端点主机名 (2.8.6 P1)', () => {
 // 于是「等名额」与「等服务端」分不开。这一组字段就是来分开它们的。
 
 test('请求级时序只有数字与布尔,不含任何文本 (2.11.0)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const src = readSource('src/translation/translationManager.ts');
 	const decl = src.slice(src.indexOf('export interface RequestTiming {'),
 		src.indexOf('}', src.indexOf('export interface RequestTiming {')));
 	const fields = [...decl.matchAll(/^\t(\w+):\s*([\w[\]]+);/gm)].map(m => [m[1]!, m[2]!]);
@@ -261,7 +262,7 @@ test('请求级时序只有数字与布尔,不含任何文本 (2.11.0)', () => {
 });
 
 test('服务商 id 过形状闸,自由文本进不了导出 (2.11.1)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const src = readSource('src/translation/translationManager.ts');
 	assert.ok(/function sanitizeProviderId\(lane: string\): string \{/.test(src));
 	assert.ok(/\/\^\[a-z0-9-\]\{1,32\}\$\/\.test\(lane\) \? lane : 'other'/.test(src),
 		'lane 是运行期拼出来的字符串 —— 哪天带上 @端点 或 #网关主机名,'
@@ -288,7 +289,7 @@ test('门内等待与实际发送分开量 (2.11.0)', () => {
 });
 
 test('时序进导出,且无请求时不写空数组 (2.11.0)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const src = readSource('src/translation/translationManager.ts');
 	assert.ok(/requestTimings\?: RequestTiming\[\];/.test(src), '要在 PageDiagnostics 上');
 	assert.ok(/\.\.\.\(metrics\.requestTimings\.length \? \{ requestTimings: metrics\.requestTimings \} : \{\}\)/.test(src),
 		'不进导出就等于没量;但没有请求的页不该塞一个空数组');
@@ -299,7 +300,7 @@ test('时序进导出,且无请求时不写空数组 (2.11.0)', () => {
 test('只有成功的请求进吞吐统计 (2.12.0)', () => {
 	// 快速失败的引擎看上去会很"快":一个一直 4xx 的服务 sendMs 极小。
 	// 不设这道门,加权会把页越分越多给一个一直在失败的服务。
-	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const src = readSource('src/translation/translationManager.ts');
 	assert.ok(/let succeeded = false;/.test(src), '要有成功标记');
 	assert.ok(/succeeded = true;\n\t{6,}return r;/.test(src) || /succeeded = true;/.test(src),
 		'只有拿回响应才置位');
@@ -310,7 +311,7 @@ test('只有成功的请求进吞吐统计 (2.12.0)', () => {
 });
 
 test('加权分页可审计:测量与权重都进导出 (2.12.0)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	// 会话级汇总有**三条**导出路径:诊断文件、语料文件、复制诊断。
 	// 只断言"存在"是不够的 —— 漏掉其中两条,断言照样为真(变异验证 M9b 就这么活下来的)。
 	// 拿 engineRotations 当基准:它是同一批汇总字段里最老的一个,
@@ -328,7 +329,7 @@ test('加权分页可审计:测量与权重都进导出 (2.12.0)', () => {
 });
 
 test('熔断轮换时不走加权,走确定的次序 (2.12.0)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	const fn = src.slice(src.indexOf('private providerForPage('), src.indexOf('\n\t}', src.indexOf('private providerForPage(')));
 	assert.ok(/if \(offset === 0\) \{/.test(fn),
 		'offset 非零意味着熔断/手动轮换正在让这一页退让,那时要的是"下一名"这个确定的序');

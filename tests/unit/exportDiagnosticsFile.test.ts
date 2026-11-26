@@ -21,6 +21,7 @@ import {
 	writeDiagnosticsJsonl, ExportStageError,
 	type JsonlSink, type DiagnosticsExportSource, type PageScopeEntry
 } from '../../src/export/diagnosticsJsonl';
+import { readSource } from '../fixtures/sourceFamily';
 
 // ---- 1. 命名 ----------------------------------------------------------------
 
@@ -287,7 +288,7 @@ test('逐页导出与整份导出走同一条口径 (2.8.6 P1)', async () => {
 });
 
 test('会话汇总不重复整份页数据 (2.8.6 P1, 结构性回归闸)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	const start = src.indexOf('async diagnosticsExportSource(');
 	assert.ok(start > 0, '找不到 diagnosticsExportSource');
 	const body = src.slice(start, src.indexOf('private async copyDiagnostics('));

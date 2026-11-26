@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TranslationManager, type TranslationDeps } from '../../src/translation/translationManager';
 import { pagesToEvict, RETAIN_LIMIT, KEEP_RADIUS, type RetainCandidate } from '../../src/translation/pageRetention';
+import { readSource } from '../fixtures/sourceFamily';
 
 function page(pageIndex: number, over: Partial<RetainCandidate> = {}): RetainCandidate {
 	return {
@@ -140,7 +141,7 @@ test('a complete page-cache hit remains durable without issuing a new request or
 });
 
 test('被卸过的页必须能重新装载,且淘汰只在翻页时做 (结构性回归闸, 2.8.3)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/translation/translationManager.ts'), 'utf8');
+	const src = readSource('src/translation/translationManager.ts');
 	assert.ok(/existing\.status === 'done' \|\| existing\.status === 'translating'\)\s*\n\s*&& existing\.evicted !== true/.test(src),
 		'ensurePage 对被卸过的已完成页不能早退 —— 否则翻回去只剩原文');
 	const evict = src.slice(src.indexOf('private evictColdPages()'), src.indexOf('private pageInUse('));
@@ -155,7 +156,7 @@ test('被卸过的页必须能重新装载,且淘汰只在翻页时做 (结构�
 });
 
 test('宿主把"在用"接上了面板与当前阅读页 (结构性回归闸, 2.8.3)', () => {
-	const session = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const session = readSource('src/reader/readerSession.ts');
 	assert.ok(/isPageInUse: \(pageIndex: number\) =>[\s\S]*?adapter\.getCurrentPageIndex\(this\.reader\)[\s\S]*?this\.pane\?\.hasMountedPage\(pageIndex\)/.test(session),
 		'当前阅读页与面板上挂着的页都算在用');
 	const pane = readFileSync(join(process.cwd(), 'src/ui/translationPane.ts'), 'utf8');

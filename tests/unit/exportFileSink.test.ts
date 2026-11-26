@@ -21,6 +21,7 @@ import {
 } from '../../src/export/fileSink';
 import { ExportStageError } from '../../src/export/jsonlWriter';
 import { setPluginVersion, pluginVersion } from '../../src/export/pluginVersion';
+import { readSource } from '../fixtures/sourceFamily';
 
 // ---- 平台桩 ------------------------------------------------------------------
 
@@ -272,7 +273,7 @@ test('保存对话框三级尝试的顺序不能乱 (结构性回归闸, 2.8.8 �
 	// 2.8.8 首版只走裸 nsIFilePicker.init(window, …),在真机上直接落到了
 	// "无法打开保存对话框" —— Firefox 111+ 起 init() 的第一个参数是
 	// BrowsingContext,不是 window。这个闸钉住三条路都在、且顺序对。
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	const body = src.slice(src.indexOf('private createSavePicker('), src.indexOf('/** `Zotero.File.reveal` 不一定存在'));
 	const zoteroWrapper = body.indexOf("importESModule('chrome://zotero/content/modules/filePicker.mjs')");
 	const rawComponent = body.indexOf("Components.classes['@mozilla.org/filepicker;1']");
@@ -296,7 +297,7 @@ test('保存对话框三级尝试的顺序不能乱 (结构性回归闸, 2.8.8 �
 });
 
 test('导出流程的四条规矩都在代码里 (结构性回归闸, 2.8.8)', () => {
-	const src = readFileSync(join(process.cwd(), 'src/reader/readerSession.ts'), 'utf8');
+	const src = readSource('src/reader/readerSession.ts');
 	// 兜底 catch: 调用方是 `void this.runExport(...)`,漏出去的 rejection 会被静默
 	// 吞掉 —— 真机上就成了"点了 Save 毫无反应"。导出可以失败,但不能没有回音。
 	const outer = src.slice(src.indexOf('private async runExport('), src.indexOf('private async runExportInner('));

@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { shortLangLabel } from '../../src/ui/barLabels';
+import { readSource } from '../fixtures/sourceFamily';
 
 const read = (p: string): string => readFileSync(join(process.cwd(), p), 'utf8');
 const CSS = (): string => read('src/ui/styles/translationPane.css');
@@ -311,7 +312,7 @@ test('破坏性动作的标签说清后果 (2.10.0)', () => {
 test('没有无人消费的死字符串 (2.10.0)', () => {
 	// papermirror-sync-on / sync-off 在三个语言包和兜底表里都有,却没有任何
 	// 代码读它们 —— 而窗格用的是 papermirror-prefs-syncscroll。
-	const consumers = PANE() + read('src/reader/readerSession.ts') + read('src/reader/readerToolbar.ts');
+	const consumers = PANE() + readSource('src/reader/readerSession.ts') + read('src/reader/readerToolbar.ts');
 	for (const loc of ['zh-CN', 'zh-TW', 'en-US']) {
 		const ftl = read(`locale/${loc}/papermirror.ftl`);
 		assert.ok(!/^papermirror-sync-(on|off) =/m.test(ftl), `${loc} 仍留着死字符串`);
@@ -325,7 +326,7 @@ test('主题变化有订阅,且会被拆除 (2.10.0)', () => {
 	const adapter = read('src/reader/zoteroReaderAdapter.ts');
 	assert.ok(/export function watchTheme\(/.test(adapter));
 	assert.ok(/addEventListener\('change'/.test(adapter.slice(adapter.indexOf('export function watchTheme('))));
-	const session = read('src/reader/readerSession.ts');
+	const session = readSource('src/reader/readerSession.ts');
 	assert.ok(/this\.disposeTheme = adapter\.watchTheme\(/.test(session),
 		'此前主题只在建窗格时读一次 —— 开着窗格切主题,窗格是唯一不变的那块');
 	assert.ok(/this\.disposeTheme\?\.\(\);/.test(session), '订阅必须在关闭时解掉,否则是泄漏');
@@ -352,7 +353,7 @@ test('视图切换按钮真的被创建,并接到 onToggleViewKind (3.0.2)', () 
 });
 
 test('切到文章流要把已有页面状态重新喂给面板,而不是留一片空白 (3.0.2)', () => {
-	const session = code(read('src/reader/readerSession.ts'));
+	const session = code(readSource('src/reader/readerSession.ts'));
 	// 偏好回调不能只写偏好 —— 3.0.1 之前 onToggleViewKind 只 setPref,视图本身不动。
 	assert.ok(/onToggleViewKind: kind => this\.applyPaneViewKind\(kind, \{ persist: true \}\)/.test(session));
 	const at = session.indexOf('private applyPaneViewKind(');
