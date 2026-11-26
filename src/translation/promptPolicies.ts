@@ -20,8 +20,10 @@ export const PROMPT_POLICIES = {
 	/** v2 (4.99.15): 人名保留原文拼写,不再音译。 */
 	personNames: 2,
 	/** v2 (5.1): 表格单元格带行 / 列标题作为语境,型号名原样保留。
-	 *  v3 (5.1 真机): 原样返回的型号名不再被判为没翻、被兜底强译(v2 期间缓存的「阿尔法」作废)。 */
-	tableCells: 4
+	 *  v3 (5.1 真机): 原样返回的型号名不再被判为没翻、被兜底强译(v2 期间缓存的「阿尔法」作废)。
+	 *  v4 (5.1 真机): 产品行里列出的名字作子行标签时也算型号名(3023 Force →「力」作废)。
+	 *  v5 (5.1 四相位对比): 只保留扫描仪 / 设备 / 软件的型号名,药名等照常翻译(3098「Gefitinib」作废)。 */
+	tableCells: 5
 } as const;
 
 export type PolicyName = keyof typeof PROMPT_POLICIES;

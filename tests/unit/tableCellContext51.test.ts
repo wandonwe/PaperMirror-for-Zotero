@@ -41,12 +41,12 @@ test('5.1: the prompt explains tableHeaders only when a block carries them, and 
 	const base: TranslationRequest = { sourceLanguage: 'en', targetLanguage: 'zh-CN', blocks: [{ id: 'a', type: 'paragraph', text: 'Alpha' }] } as TranslationRequest;
 	assert.ok(!buildSystemPrompt(base).includes('tableHeaders'));
 	const withHeaders = { ...base, blocks: [{ ...base.blocks[0]!, tableHeaders: { column: 'PCD-CT system', row: 'Scanner' } }] };
-	assert.match(buildSystemPrompt(withHeaders), /tableHeaders.*understanding only.*model names.*exactly as written/s);
+	assert.match(buildSystemPrompt(withHeaders), /tableHeaders.*understanding only.*model or version names.*exactly as written/s);
 	assert.deepEqual(JSON.parse(buildUserPayload(withHeaders)).blocks[0].tableHeaders, { column: 'PCD-CT system', row: 'Scanner' });
 });
 
 test('5.1: cells below the header row are re-translated once under the new rule; prose and header cells keep their keys', () => {
-	assert.equal(policyStampFor({ sourceText: 'Alpha', tableId: 't1', tableRow: 1 }), 'tableCells4');
+	assert.equal(policyStampFor({ sourceText: 'Alpha', tableId: 't1', tableRow: 1 }), 'tableCells5');
 	assert.equal(policyStampFor({ sourceText: 'Parameter', tableId: 't1', tableRow: 0 }), '');
 	assert.equal(policyStampFor({ sourceText: 'Body text.' }), '');
 });
@@ -126,4 +126,12 @@ test('5.1: a reused product name is flagged productName in the request, and the 
 	} finally { m.dispose(); }
 	const req = { sourceLanguage: 'en', targetLanguage: 'zh-CN', blocks: [{ id: 'a', type: 'paragraph', text: 'Force', tableHeaders: { column: 'Parameter', productName: true } }] } as TranslationRequest;
 	assert.match(buildSystemPrompt(req), /"productName": true.*unchanged/s);
+});
+
+test('5.1 (A/B 11-27, 3098 p7): only scanner, device and software names are kept; drug names in a table are translated', () => {
+	const req = { sourceLanguage: 'en', targetLanguage: 'zh-CN', blocks: [{ id: 'a', type: 'paragraph', text: 'AZD2171 and Gefitinib', tableHeaders: { column: 'Drug Therapy', row: 'Solid tumors' } }] } as TranslationRequest;
+	const prompt = buildSystemPrompt(req);
+	assert.match(prompt, /scanners, devices, software and their model or version names[\s\S]*?: copy them exactly/);
+	assert.match(prompt, /drug names, diseases, methods and measured quantities included/);
+	assert.ok(!/Product, device, scanner, software and model names/.test(prompt), 'the broad wording that let the model keep "Gefitinib" in English is gone');
 });
